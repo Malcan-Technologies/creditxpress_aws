@@ -81,7 +81,7 @@ export default function EmployeeMicroLoan() {
 				</div>
 
 				{/* Content */}
-				<div className="relative h-[calc(100vh-4rem)] max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+				<div className="relative min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 					<div className="h-full flex flex-col">
 						<div className="flex-1 flex flex-col lg:flex-row items-center gap-12">
 							{/* Left Column */}
@@ -95,7 +95,7 @@ export default function EmployeeMicroLoan() {
 									Your Pay, Your Way
 								</p>
 
-								<div className="flex gap-4 justify-center lg:justify-start mb-12">
+								<div className="flex gap-4 justify-center lg:justify-start mb-8">
 									<Link
 										href="/apply"
 										className="bg-white text-purple-900 px-4 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold hover:bg-purple-50 transition-all"
@@ -123,45 +123,45 @@ export default function EmployeeMicroLoan() {
 									</Link>
 								</div>
 
-								<p className="text-2xl text-gray-300 dark:text-gray-300 mb-12 max-w-2xl mx-auto lg:mx-0">
+								<p className="text-2xl text-gray-300 dark:text-gray-300 mb-8 max-w-2xl mx-auto lg:mx-0">
 									Access instant salary advances with low
 									interest. Manage unexpected expenses with
 									confidence.
 								</p>
 
 								{/* Benefits Grid */}
-								<div className="grid grid-cols-2 gap-6">
-									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-										<h3 className="text-lg font-semibold text-white dark:text-white mb-2">
+								<div className="grid grid-cols-2 gap-4 mb-8 lg:mb-0">
+									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
+										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
 											Quick Access
 										</h3>
-										<p className="text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
 											Apply in minutes, get approved in
 											hours
 										</p>
 									</div>
-									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-										<h3 className="text-lg font-semibold text-white dark:text-white mb-2">
+									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
+										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
 											Low Interest
 										</h3>
-										<p className="text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
 											Only up to 1.5% monthly
 										</p>
 									</div>
-									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-										<h3 className="text-lg font-semibold text-white dark:text-white mb-2">
+									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
+										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
 											Easy Repayment
 										</h3>
-										<p className="text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
 											Automatically deducted from your
 											salary
 										</p>
 									</div>
-									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-6 border border-white/10">
-										<h3 className="text-lg font-semibold text-white dark:text-white mb-2">
+									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
+										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
 											Quick Processing
 										</h3>
-										<p className="text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
 											Approval within minutes
 										</p>
 									</div>

@@ -172,7 +172,7 @@ export default function About() {
 			{/* Stats Section */}
 			<section className="pb-20 bg-gradient-to-b from-white to-purple-50">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+					{/* <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 						<div className="text-center p-8 bg-white rounded-2xl shadow-sm">
 							<div className="text-4xl font-bold text-purple-600 mb-2">
 								RM 30M+
@@ -191,7 +191,7 @@ export default function About() {
 							</div>
 							<p className="text-gray-600">Customer Rating</p>
 						</div>
-					</div>
+					</div> */}
 				</div>
 			</section>
 
@@ -199,7 +199,7 @@ export default function About() {
 			<section className="py-20 bg-purple-50">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="text-center mb-16">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6">
+						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
 							Our Values
 						</h2>
 						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
@@ -217,7 +217,7 @@ export default function About() {
 								priority
 							/>
 						</div>
-						<div className="grid grid-cols-2 gap-8">
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 							<div className="p-6">
 								<div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-4">
 									<MdGroups size={24} color="#9333EA" />
@@ -353,7 +353,7 @@ export default function About() {
 			<section className="py-20 bg-gradient-to-b from-white to-purple-50">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="text-center mb-16">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6">
+						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
 							Join Our Team
 						</h2>
 						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
@@ -363,7 +363,18 @@ export default function About() {
 						</p>
 					</div>
 					<div className="grid md:grid-cols-2 gap-8 items-center">
-						<div className="bg-white rounded-2xl p-8 shadow-sm">
+						{/* Image Section - Shown first on mobile */}
+						<div className="md:order-2 relative h-[250px] md:h-[400px]">
+							<Image
+								src="/team.svg"
+								alt="Happy team members"
+								fill
+								className="object-contain"
+								priority
+							/>
+						</div>
+						{/* Content Section */}
+						<div className="md:order-1 bg-white rounded-2xl p-8 shadow-sm">
 							<div className="flex items-start gap-4 mb-6">
 								<div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
 									<MdBolt size={24} color="#9333EA" />
@@ -399,15 +410,6 @@ export default function About() {
 							>
 								All Positions Filled
 							</button>
-						</div>
-						<div className="relative h-[250px] md:h-[400px]">
-							<Image
-								src="/team.svg"
-								alt="Happy team members"
-								fill
-								className="object-contain"
-								priority
-							/>
 						</div>
 					</div>
 				</div>
