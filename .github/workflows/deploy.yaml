@@ -70,10 +70,18 @@ jobs:
           script: |
             cd /var/www/growkapital
             npm ci --production
+            
+            # Configure Nginx
             sudo cp nginx.conf /etc/nginx/sites-available/growkapital
             sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
             sudo nginx -t
+
+            # Start/restart services
             pm2 delete growkapital || true
             pm2 start npm --name "growkapital" -- start
             pm2 save
-            sudo systemctl restart nginx 
+            sudo systemctl restart nginx
+
+            # Print status for debugging
+            echo "PM2 status:"
+            pm2 status 
