@@ -60,6 +60,12 @@ jobs:
           script: |
             cd /var/www/growkapital
             
+            # Cleanup any leftover temporary files
+            rm -rf /tmp/new-deploy /tmp/deploy.tar.gz node_modules_old
+            
+            # Memory optimization: Clear system cache
+            sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
+            
             # Check if app is already running
             if pm2 list | grep -q "growkapital"; then
               echo "Application is running, checking for changes..."
@@ -67,38 +73,40 @@ jobs:
               echo "Application not running, will start fresh..."
             fi
             
-            # Efficient dependency management with better error handling
+            # Memory-efficient dependency management
             HASH_FILE="node_modules/.package-json-hash"
             CURRENT_HASH=$(md5sum package.json | cut -d' ' -f1)
             CACHED_HASH=$(cat $HASH_FILE 2>/dev/null || echo "")
             
             if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
               echo "Installing dependencies..."
-              # Backup existing modules if they exist
-              if [ -d "node_modules" ]; then
-                mv node_modules node_modules_old
-              fi
               
-              # Try to use cached modules first
+              # Memory optimization: Clear npm cache first
+              npm cache clean --force
+              
+              # If cached modules exist, use them directly instead of copying
               if [ -d "/var/www/node_modules_cache/growkapital" ]; then
-                cp -r /var/www/node_modules_cache/growkapital node_modules
-              fi
-              
-              # Install missing dependencies
-              npm ci --omit=dev --quiet --no-audit --no-fund || {
+                echo "Using cached modules..."
+                rm -rf node_modules
+                ln -sf /var/www/node_modules_cache/growkapital node_modules
+                
+                # Only run npm ci if there are missing dependencies
+                if ! npm ls --prod --json >/dev/null 2>&1; then
+                  echo "Updating missing dependencies..."
+                  NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
+                fi
+              else
                 echo "Fresh install required..."
                 rm -rf node_modules
-                npm ci --omit=dev --quiet --no-audit --no-fund
-              }
+                mkdir -p /var/www/node_modules_cache
+                # Install with reduced memory usage
+                NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
+                rm -rf /var/www/node_modules_cache/growkapital
+                mv node_modules /var/www/node_modules_cache/growkapital
+                ln -sf /var/www/node_modules_cache/growkapital node_modules
+              fi
               
-              # Update cache
-              mkdir -p /var/www/node_modules_cache
-              rm -rf /var/www/node_modules_cache/growkapital
-              cp -r node_modules /var/www/node_modules_cache/growkapital
               echo "$CURRENT_HASH" > "$HASH_FILE"
-              
-              # Clean up backup
-              rm -rf node_modules_old
             else
               echo "Dependencies are up to date, skipping installation"
             fi
