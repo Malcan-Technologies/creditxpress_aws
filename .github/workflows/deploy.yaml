@@ -1,0 +1,53 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main  # or master, depending on your default branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Deploy to Digital Ocean
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          source: ".next/,public/,package.json,package-lock.json,nginx.conf"
+          target: "/var/www/growkapital"
+          strip_components: 0
+
+      - name: Execute deployment commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          script: |
+            cd /var/www/growkapital
+            npm ci --production
+            sudo cp nginx.conf /etc/nginx/sites-available/growkapital
+            sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
+            sudo nginx -t
+            pm2 delete growkapital || true
+            pm2 start npm --name "growkapital" -- start
+            pm2 save
+            sudo systemctl restart nginx 
