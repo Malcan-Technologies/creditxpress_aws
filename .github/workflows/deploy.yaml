@@ -32,17 +32,23 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Sync files to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          source: ".next/,public/,package.json,package-lock.json,nginx.conf"
-          target: "/var/www/growkapital"
-          strip_components: 0
-          rm: false
-          timeout: 300s
+      - name: Sync changed files
+        run: |
+          # Create archive of files to sync
+          tar -czf deploy.tar.gz .next/ public/ package.json package-lock.json nginx.conf
+          
+          # Copy archive to server
+          scp -i ~/.ssh/deploy_key deploy.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/
+          
+          # Extract and sync only changed files
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd /var/www/growkapital
+            mkdir -p /tmp/new-deploy
+            cd /tmp/new-deploy
+            tar xzf /tmp/deploy.tar.gz
+            rsync -av --delete --exclude="node_modules" --exclude=".git" . /var/www/growkapital/
+            rm -rf /tmp/new-deploy /tmp/deploy.tar.gz
+          '
 
       - name: Deploy
         uses: appleboy/ssh-action@v1.0.3
@@ -73,7 +79,8 @@ jobs:
               sudo nginx -t && sudo systemctl reload nginx
             fi
             
-            # Restart application
-            pm2 delete growkapital 2>/dev/null || true
-            NODE_ENV=production pm2 start npm --name "growkapital" -- start
-            pm2 save -s 
+            # Restart application only if files changed
+            if [ -f "/tmp/files-changed" ]; then
+              pm2 delete growkapital 2>/dev/null || true
+              NODE_ENV=production pm2 start npm --name "growkapital" -- start
+              pm2 save -s 
