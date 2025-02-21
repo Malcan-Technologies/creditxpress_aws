@@ -76,6 +76,7 @@ jobs:
             # Configure Nginx
             sudo cp nginx.conf /etc/nginx/sites-available/growkapital
             sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
+            sudo rm -f /etc/nginx/sites-enabled/default
             sudo nginx -t
             
             # Start/restart services
