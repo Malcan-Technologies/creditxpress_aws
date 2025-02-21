@@ -56,31 +56,73 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
+          command_timeout: "10m"
           script: |
             cd /var/www/growkapital
             
-            # Efficient dependency management
-            if [ ! -d "node_modules" ] || [ ! -f "node_modules/.package-json-hash" ] || \
-               [ "$(md5sum package.json | cut -d' ' -f1)" != "$(cat node_modules/.package-json-hash 2>/dev/null)" ]; then
-              rm -rf node_modules
-              [ -d "/var/www/node_modules_cache/growkapital" ] && cp -r /var/www/node_modules_cache/growkapital node_modules
-              npm ci --omit=dev --quiet
+            # Check if app is already running
+            if pm2 list | grep -q "growkapital"; then
+              echo "Application is running, checking for changes..."
+            else
+              echo "Application not running, will start fresh..."
+            fi
+            
+            # Efficient dependency management with better error handling
+            HASH_FILE="node_modules/.package-json-hash"
+            CURRENT_HASH=$(md5sum package.json | cut -d' ' -f1)
+            CACHED_HASH=$(cat $HASH_FILE 2>/dev/null || echo "")
+            
+            if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
+              echo "Installing dependencies..."
+              # Backup existing modules if they exist
+              if [ -d "node_modules" ]; then
+                mv node_modules node_modules_old
+              fi
+              
+              # Try to use cached modules first
+              if [ -d "/var/www/node_modules_cache/growkapital" ]; then
+                cp -r /var/www/node_modules_cache/growkapital node_modules
+              fi
+              
+              # Install missing dependencies
+              npm ci --omit=dev --quiet --no-audit --no-fund || {
+                echo "Fresh install required..."
+                rm -rf node_modules
+                npm ci --omit=dev --quiet --no-audit --no-fund
+              }
+              
+              # Update cache
               mkdir -p /var/www/node_modules_cache
-              md5sum package.json | cut -d' ' -f1 > node_modules/.package-json-hash
               rm -rf /var/www/node_modules_cache/growkapital
               cp -r node_modules /var/www/node_modules_cache/growkapital
+              echo "$CURRENT_HASH" > "$HASH_FILE"
+              
+              # Clean up backup
+              rm -rf node_modules_old
+            else
+              echo "Dependencies are up to date, skipping installation"
             fi
             
-            # Update Nginx config only if changed
-            if ! cmp -s nginx.conf /etc/nginx/sites-available/growkapital; then
+            # Quick Nginx config check and reload if needed
+            if ! cmp -s nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
+              echo "Updating Nginx configuration..."
               sudo cp nginx.conf /etc/nginx/sites-available/growkapital
               sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
-              sudo nginx -t && sudo systemctl reload nginx
+              if sudo nginx -t; then
+                sudo systemctl reload nginx
+              else
+                echo "Nginx config test failed, keeping previous config"
+                exit 1
+              fi
             fi
             
-            # Restart application only if files changed
+            # Efficient app restart only if needed
             if [ -f "/tmp/files-changed" ]; then
-              pm2 delete growkapital 2>/dev/null || true
-              NODE_ENV=production pm2 start npm --name "growkapital" -- start
-              pm2 save -s 
+              echo "Changes detected, restarting application..."
+              pm2 reload growkapital 2>/dev/null || pm2 start npm --name "growkapital" --silent -- start
+              pm2 save --silent
+              rm -f /tmp/files-changed
+              echo "Deployment completed successfully"
+            else
+              echo "No changes detected, skipping restart"
+            fi 
