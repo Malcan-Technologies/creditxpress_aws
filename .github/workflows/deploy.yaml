@@ -46,7 +46,11 @@ jobs:
             mkdir -p /tmp/new-deploy
             cd /tmp/new-deploy
             tar xzf /tmp/deploy.tar.gz
-            rsync -av --delete --exclude="node_modules" --exclude=".git" . /var/www/growkapital/
+            rsync -av --delete --exclude="node_modules" --exclude=".git" --exclude="node_modules_cache" . /var/www/growkapital/
+            # Ensure proper permissions for Next.js static files
+            chmod -R 755 /var/www/growkapital/.next/static
+            chmod -R 755 /var/www/growkapital/public
+            touch /tmp/files-changed
             rm -rf /tmp/new-deploy /tmp/deploy.tar.gz
           '
 
