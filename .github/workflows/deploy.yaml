@@ -27,12 +27,17 @@ jobs:
 
       - name: Setup SSH
         run: |
-          mkdir -p ~/.ssh/
-          echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/private_key
-          chmod 600 ~/.ssh/private_key
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          eval $(ssh-agent -s)
+          ssh-add ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
       - name: Deploy to Digital Ocean
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -43,6 +48,8 @@ jobs:
           strip_components: 0
 
       - name: Execute deployment commands
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
