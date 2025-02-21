@@ -20,7 +20,7 @@ export default function NotFound() {
 				<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
 					<div className="flex flex-col items-center text-center">
 						{/* 404 Image */}
-						<div className="relative w-96 h-96 mb-8">
+						<div className="relative w-64 h-64 md:w-96 md:h-96 mb-8">
 							<Image
 								src="/404.svg"
 								alt="404 Illustration"

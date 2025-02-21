@@ -170,7 +170,7 @@ export default function About() {
 			</section>
 
 			{/* Stats Section */}
-			<section className="pb-20 bg-gradient-to-b from-white to-purple-50">
+			<section className="pb-8 bg-gradient-to-b from-white to-purple-50">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					{/* <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
 						<div className="text-center p-8 bg-white rounded-2xl shadow-sm">
@@ -196,7 +196,7 @@ export default function About() {
 			</section>
 
 			{/* Values Section */}
-			<section className="py-20 bg-purple-50">
+			<section className="py-8 bg-purple-50">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="text-center mb-16">
 						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
@@ -217,7 +217,7 @@ export default function About() {
 								priority
 							/>
 						</div>
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-2">
 							<div className="p-6">
 								<div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mb-4">
 									<MdGroups size={24} color="#9333EA" />

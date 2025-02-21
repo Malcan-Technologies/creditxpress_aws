@@ -349,7 +349,7 @@ export default function Home() {
 			</section>
 
 			{/* Interactive Benefits Section */}
-			<section className="py-24 bg-gradient-to-b from-purple-50 to-white">
+			<section className="py-12 bg-gradient-to-b from-purple-50 to-white">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<div className="text-center mb-16">
 						<h2 className="text-4xl md:text-5xl font-bold mb-6">
@@ -369,7 +369,7 @@ export default function Home() {
 						{benefits.map((benefit) => (
 							<div
 								key={benefit.id}
-								className={`bg-white rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-lg transition-all ${
+								className={`bg-purple-50 rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-lg transition-all ${
 									benefit.size === "large"
 										? "md:col-span-2"
 										: ""
@@ -384,12 +384,12 @@ export default function Home() {
 											{benefit.description}
 										</p>
 									</div>
-									<div className="relative w-full md:w-1/3 h-[200px] order-1 md:order-2">
+									<div className="relative w-full md:w-1/3 h-[150px] order-1 md:order-2">
 										<Image
 											src={benefit.image}
 											alt={benefit.title}
 											fill
-											className="object-contain"
+											className="object-contain object-left md:object-center"
 										/>
 									</div>
 								</div>

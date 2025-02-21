@@ -271,10 +271,10 @@ export default function Products() {
 										</a>
 										<a
 											href="/pay-advance"
-											className={`flex-1 text-center backdrop-blur-lg px-6 py-3 rounded-full font-semibold hover:bg-opacity-20 transition-all ${
+											className={`flex-1 text-center px-6 py-3 rounded-full font-semibold transition-all border-2 ${
 												activeProduct === "business"
-													? "bg-blue-100/10 text-blue-700 hover:bg-blue-100/20"
-													: "bg-emerald-100/10 text-emerald-700 hover:bg-emerald-100/20"
+													? "border-blue-600 text-blue-700 hover:bg-blue-50"
+													: "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
 											}`}
 										>
 											Learn More
