@@ -30,20 +30,23 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEYS }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          ls -la ~/.ssh/deploy_key
+          echo "Content of deploy_key (first line):"
+          head -n 1 ~/.ssh/deploy_key
           eval $(ssh-agent -s)
           ssh-add -v ~/.ssh/deploy_key
           ssh-add -l
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
           echo "Testing SSH connection..."
-          ssh -v -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'echo "SSH connection successful"'
+          ssh -vvv -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'echo "SSH connection successful"'
 
       - name: Deploy to Digital Ocean
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key_path: ~/.ssh/deploy_key
+          key: ${{ secrets.SSH_KEYS }}
           source: ".next/,public/,package.json,package-lock.json,nginx.conf"
           target: "/var/www/growkapital"
           strip_components: 0
@@ -54,7 +57,7 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key_path: ~/.ssh/deploy_key
+          key: ${{ secrets.SSH_KEYS }}
           debug: true
           script: |
             cd /var/www/growkapital
