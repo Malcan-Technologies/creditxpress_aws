@@ -60,6 +60,20 @@ export default function Products() {
 					icon: <MdGroups size={24} />,
 				},
 				{
+					id: "equipment",
+					title: "Equipment Financing",
+					description:
+						"Specialized financing for business equipment with flexible terms and competitive rates",
+					features: [
+						"Up to RM 500,000 financing",
+						"6 to 24 months terms",
+						"1% monthly interest",
+						"Quick 3-day approval",
+					],
+					maxAmount: "Up to RM 500,000",
+					icon: <MdBusinessCenter size={24} />,
+				},
+				{
 					id: "auto",
 					title: "Auto Dealer Financing",
 					description:
@@ -189,7 +203,10 @@ export default function Products() {
 						<div
 							key={product.id}
 							className={`rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all flex flex-col h-full backdrop-blur-lg ${
-								product.id !== "employee" ? "opacity-60" : ""
+								product.id !== "employee" &&
+								product.id !== "equipment"
+									? "opacity-60"
+									: ""
 							} ${
 								activeProduct === "business"
 									? "bg-gradient-to-br from-blue-500/10 via-indigo-500/10 to-blue-500/10 hover:from-blue-500/20 hover:via-indigo-500/20 hover:to-blue-500/20 border border-blue-200/20"
@@ -257,7 +274,8 @@ export default function Products() {
 							</div>
 
 							<div className="mt-8">
-								{product.id === "employee" ? (
+								{product.id === "employee" ||
+								product.id === "equipment" ? (
 									<div className="flex gap-4">
 										<a
 											href="/apply"
@@ -270,7 +288,11 @@ export default function Products() {
 											Apply Now
 										</a>
 										<a
-											href="/pay-advance"
+											href={
+												product.id === "employee"
+													? "/pay-advance"
+													: "/equipment-financing"
+											}
 											className={`flex-1 text-center px-6 py-3 rounded-full font-semibold transition-all border-2 ${
 												activeProduct === "business"
 													? "border-blue-600 text-blue-700 hover:bg-blue-50"

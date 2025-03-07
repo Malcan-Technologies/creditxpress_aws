@@ -234,6 +234,33 @@ export default function Navbar({
 													</div>
 												</Link>
 												<Link
+													href="/equipment-financing"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+												>
+													<div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+														<MdBusinessCenter
+															size={24}
+															color="#059669"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center gap-2">
+															<h4 className="text-base font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+																Equipment
+																Financing
+															</h4>
+															<span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-full">
+																New
+															</span>
+														</div>
+														<p className="text-sm text-gray-500">
+															Finance your
+															business equipment
+															with flexible terms
+														</p>
+													</div>
+												</Link>
+												<Link
 													href="/products"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
 												>
@@ -675,6 +702,36 @@ export default function Navbar({
 														<p className="text-sm text-gray-500">
 															Instant salary
 															advances
+														</p>
+													</div>
+												</Link>
+												<Link
+													href="/equipment-financing"
+													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
+													onClick={() =>
+														setMobileMenuOpen(false)
+													}
+												>
+													<div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+														<MdBusinessCenter
+															size={20}
+															color="#059669"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center gap-2">
+															<h4 className="text-base font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
+																Equipment
+																Financing
+															</h4>
+															<span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-full">
+																New
+															</span>
+														</div>
+														<p className="text-sm text-gray-500">
+															Finance your
+															business equipment
+															with flexible terms
 														</p>
 													</div>
 												</Link>
