@@ -185,6 +185,111 @@ export default function EquipmentFinancing() {
 
 			{/* Main Content */}
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+				{/* Equipment Types Section */}
+				<div className="mb-16">
+					<div className="text-center mb-12">
+						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
+							Equipment We Finance
+						</h2>
+						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
+							From medical equipment to industrial machinery, we
+							finance a wide range of business equipment
+						</p>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+						{/* Medical & Dental */}
+						<div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 transition-all hover:shadow-lg">
+							<h3 className="text-xl font-semibold mb-4 text-emerald-800">
+								Medical & Dental Equipment
+							</h3>
+							<ul className="space-y-2 text-gray-600">
+								<li>• Dental Chairs & Units</li>
+								<li>• X-Ray Machines</li>
+								<li>• Diagnostic Equipment</li>
+								<li>• Sterilization Equipment</li>
+								<li>• Medical Imaging Systems</li>
+							</ul>
+						</div>
+
+						{/* Manufacturing */}
+						<div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 transition-all hover:shadow-lg">
+							<h3 className="text-xl font-semibold mb-4 text-emerald-800">
+								Manufacturing Equipment
+							</h3>
+							<ul className="space-y-2 text-gray-600">
+								<li>• CNC Machines</li>
+								<li>• 3D Printers</li>
+								<li>• Production Line Equipment</li>
+								<li>• Industrial Robots</li>
+								<li>• Packaging Machines</li>
+							</ul>
+						</div>
+
+						{/* Optical */}
+						<div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 transition-all hover:shadow-lg">
+							<h3 className="text-xl font-semibold mb-4 text-emerald-800">
+								Optical Equipment
+							</h3>
+							<ul className="space-y-2 text-gray-600">
+								<li>• Eye Testing Equipment</li>
+								<li>• Lens Edging Machines</li>
+								<li>• Auto Refractors</li>
+								<li>• Slit Lamps</li>
+								<li>• Optical Dispensing Tools</li>
+							</ul>
+						</div>
+
+						{/* Beauty & Wellness */}
+						<div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 transition-all hover:shadow-lg">
+							<h3 className="text-xl font-semibold mb-4 text-emerald-800">
+								Beauty & Wellness Equipment
+							</h3>
+							<ul className="space-y-2 text-gray-600">
+								<li>• Laser Treatment Machines</li>
+								<li>• Facial Treatment Equipment</li>
+								<li>• Hair Removal Systems</li>
+								<li>• Body Contouring Devices</li>
+								<li>• Spa & Massage Equipment</li>
+							</ul>
+						</div>
+
+						{/* Office & IT */}
+						<div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 transition-all hover:shadow-lg">
+							<h3 className="text-xl font-semibold mb-4 text-emerald-800">
+								Office & IT Equipment
+							</h3>
+							<ul className="space-y-2 text-gray-600">
+								<li>• Computer Systems</li>
+								<li>• Servers & Networking</li>
+								<li>• Printing Equipment</li>
+								<li>• Video Conferencing Systems</li>
+								<li>• Office Automation Tools</li>
+							</ul>
+						</div>
+
+						{/* And More */}
+						<div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-2xl p-6 transition-all hover:shadow-lg">
+							<h3 className="text-xl font-semibold mb-4 text-gray-800">
+								And More
+							</h3>
+							<p className="text-gray-600 mb-4">
+								These are just examples of equipment we commonly
+								finance. Contact us to discuss your specific
+								equipment needs - we&apos;re flexible and open
+								to financing various types of business
+								equipment.
+							</p>
+							<Link
+								href="/apply"
+								className="inline-block text-gray-600 hover:text-gray-700 font-semibold"
+							>
+								Discuss Your Requirements →
+							</Link>
+						</div>
+					</div>
+				</div>
+
 				{/* How It Works Section */}
 				<div id="how-it-works" className="mb-16 scroll-mt-20">
 					<div className="text-center mb-12">
