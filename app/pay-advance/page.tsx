@@ -25,11 +25,20 @@ export default function EmployeeMicroLoan() {
 		"employee"
 	);
 
-	const PROCESSING_FEE_RATE = 0.075; // 7.5%
 	const INTEREST_RATE = 0.015; // 1.5% per month
+	const ORIGINATION_FEE_RATE = 0.03; // 3%
+	const LEGAL_FEE_RATE = 0.02; // 2%
 
-	const calculateProcessingFee = () => {
-		return loanAmount * PROCESSING_FEE_RATE;
+	const calculateOriginationFee = () => {
+		return loanAmount * ORIGINATION_FEE_RATE;
+	};
+
+	const calculateLegalFee = () => {
+		return loanAmount * LEGAL_FEE_RATE;
+	};
+
+	const calculateTotalFees = () => {
+		return calculateOriginationFee() + calculateLegalFee();
 	};
 
 	const calculateMonthlyPayment = () => {
@@ -773,23 +782,25 @@ export default function EmployeeMicroLoan() {
 									<div className="space-y-4 mb-8">
 										<div className="flex items-center justify-between text-sm">
 											<span className="text-gray-600 dark:text-gray-600">
-												Processing Fee
+												Origination Fee
 											</span>
 											<span className="font-medium text-gray-700 dark:text-gray-700">
 												RM{" "}
-												{calculateProcessingFee().toFixed(
+												{calculateOriginationFee().toFixed(
 													2
 												)}
 											</span>
 										</div>
 										<div className="flex items-center justify-between text-sm">
 											<span className="text-gray-600 dark:text-gray-600">
-												Total Loan Amount
+												Legal Fee
 											</span>
 											<span className="font-medium text-gray-700 dark:text-gray-700">
-												RM {loanAmount.toFixed(2)}
+												RM{" "}
+												{calculateLegalFee().toFixed(2)}
 											</span>
 										</div>
+
 										<div className="flex items-center justify-between text-sm">
 											<span className="text-gray-600 dark:text-gray-600">
 												Net Disbursement
@@ -798,7 +809,7 @@ export default function EmployeeMicroLoan() {
 												RM{" "}
 												{(
 													loanAmount -
-													calculateProcessingFee()
+													calculateTotalFees()
 												).toFixed(2)}
 											</span>
 										</div>
