@@ -532,6 +532,9 @@ export default function EquipmentFinancing() {
 									<p className="text-gray-600 dark:text-gray-600">
 										Maximum: RM 500,000
 									</p>
+									<p className="text-gray-600 dark:text-gray-600 mt-1">
+										Up to 60% of equipment value
+									</p>
 								</div>
 								<div>
 									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2">
@@ -840,6 +843,33 @@ export default function EquipmentFinancing() {
 										strokeLinecap="round"
 										strokeLinejoin="round"
 										strokeWidth={2}
+										d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
+									/>
+								</svg>
+							</div>
+							<h4 className="text-xl font-semibold mb-4 text-black dark:text-black">
+								Company Information
+							</h4>
+							<ul className="text-gray-600 dark:text-gray-600 space-y-2">
+								<li>• Form 9</li>
+								<li>• Form 13 (If applicable)</li>
+								<li>• Form 24</li>
+								<li>• Business Registration (SSM)</li>
+							</ul>
+						</div>
+
+						<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
+							<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+								<svg
+									className="w-8 h-8 text-emerald-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
 										d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
 									/>
 								</svg>
@@ -874,6 +904,32 @@ export default function EquipmentFinancing() {
 							<p className="text-gray-600 dark:text-gray-600">
 								Latest Audited Accounts & Management Accounts
 							</p>
+						</div>
+
+						<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
+							<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+								<svg
+									className="w-8 h-8 text-emerald-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+									/>
+								</svg>
+							</div>
+							<h4 className="text-xl font-semibold mb-4 text-black dark:text-black">
+								Equipment Documentation
+							</h4>
+							<ul className="text-gray-600 dark:text-gray-600 space-y-2">
+								<li>• Equipment Quotation, or</li>
+								<li>• Purchase Order (PO), or</li>
+								<li>• Supplier Invoice</li>
+							</ul>
 						</div>
 					</div>
 				</div>
