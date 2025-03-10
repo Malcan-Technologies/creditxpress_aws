@@ -7,7 +7,6 @@ import Footer from "@/components/Footer";
 import {
 	MdGroups,
 	MdDirectionsCar,
-	MdCreditCard,
 	MdBusinessCenter,
 	MdAccountBalance,
 	MdApartment,
@@ -100,20 +99,20 @@ export default function Products() {
 					maxAmount: "Up to RM 1,000,000",
 					icon: <MdDirectionsCar size={24} />,
 				},
-				{
-					id: "loc",
-					title: "Business Line of Credit",
-					description:
-						"Flexible business line of credit for managing cash flow and unexpected expenses",
-					features: [
-						"Revolving credit",
-						"Pay interest only on what you use",
-						"Quick access to funds",
-						"Competitive rates",
-					],
-					maxAmount: "Up to RM 500,000",
-					icon: <MdCreditCard size={24} />,
-				},
+				// {
+				// 	id: "loc",
+				// 	title: "Business Line of Credit",
+				// 	description:
+				// 		"Flexible business line of credit for managing cash flow and unexpected expenses",
+				// 	features: [
+				// 		"Revolving credit",
+				// 		"Pay interest only on what you use",
+				// 		"Quick access to funds",
+				// 		"Competitive rates",
+				// 	],
+				// 	maxAmount: "Up to RM 500,000",
+				// 	icon: <MdCreditCard size={24} />,
+				// },
 			],
 		},
 		personal: {

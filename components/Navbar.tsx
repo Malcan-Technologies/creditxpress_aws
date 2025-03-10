@@ -9,7 +9,6 @@ import {
 	MdKeyboardArrowDown,
 	MdGroups,
 	MdDirectionsCar,
-	MdCreditCard,
 	MdBusinessCenter,
 	MdAccountBalance,
 	MdApartment,
@@ -304,7 +303,7 @@ export default function Navbar({
 														</p>
 													</div>
 												</Link>
-												<Link
+												{/* <Link
 													href="/products"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
 												>
@@ -324,7 +323,7 @@ export default function Navbar({
 															managing cash flow
 														</p>
 													</div>
-												</Link>
+												</Link> */}
 											</div>
 										</div>
 
@@ -787,7 +786,7 @@ export default function Navbar({
 														</p>
 													</div>
 												</Link>
-												<Link
+												{/* <Link
 													href="/products"
 													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
 													onClick={() =>
@@ -810,7 +809,7 @@ export default function Navbar({
 															cash flow
 														</p>
 													</div>
-												</Link>
+												</Link> */}
 											</div>
 										</div>
 
