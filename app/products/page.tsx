@@ -74,6 +74,20 @@ export default function Products() {
 					icon: <MdBusinessCenter size={24} />,
 				},
 				{
+					id: "sme",
+					title: "SME Term Loan",
+					description:
+						"Term loans for business expansion, working capital, and growth opportunities",
+					features: [
+						"Up to RM 1,000,000 financing",
+						"6 to 24 months terms",
+						"1.5% monthly interest",
+						"Quick 3-day approval",
+					],
+					maxAmount: "Up to RM 1,000,000",
+					icon: <MdAccountBalance size={24} />,
+				},
+				{
 					id: "auto",
 					title: "Auto Dealer Financing",
 					description:
@@ -99,19 +113,6 @@ export default function Products() {
 					],
 					maxAmount: "Up to RM 500,000",
 					icon: <MdCreditCard size={24} />,
-				},
-				{
-					id: "business",
-					title: "Business Term Loan",
-					description:
-						"Term loans for business expansion, equipment, or working capital",
-					features: [
-						"Fixed monthly payments",
-						"Competitive rates",
-						"Terms up to 5 years",
-					],
-					maxAmount: "Up to RM 2,000,000",
-					icon: <MdBusinessCenter size={24} />,
 				},
 			],
 		},
@@ -204,7 +205,8 @@ export default function Products() {
 							key={product.id}
 							className={`rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all flex flex-col h-full backdrop-blur-lg ${
 								product.id !== "employee" &&
-								product.id !== "equipment"
+								product.id !== "equipment" &&
+								product.id !== "sme"
 									? "opacity-60"
 									: ""
 							} ${
@@ -275,7 +277,8 @@ export default function Products() {
 
 							<div className="mt-8">
 								{product.id === "employee" ||
-								product.id === "equipment" ? (
+								product.id === "equipment" ||
+								product.id === "sme" ? (
 									<div className="flex gap-4">
 										<a
 											href="/apply"
@@ -291,7 +294,9 @@ export default function Products() {
 											href={
 												product.id === "employee"
 													? "/pay-advance"
-													: "/equipment-financing"
+													: product.id === "equipment"
+													? "/equipment-financing"
+													: "/sme-term-loan"
 											}
 											className={`flex-1 text-center px-6 py-3 rounded-full font-semibold transition-all border-2 ${
 												activeProduct === "business"

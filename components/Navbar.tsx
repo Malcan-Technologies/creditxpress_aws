@@ -261,6 +261,28 @@ export default function Navbar({
 													</div>
 												</Link>
 												<Link
+													href="/sme-term-loan"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
+												>
+													<div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+														<MdBusinessCenter
+															size={24}
+															color="#2563EB"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center gap-2">
+															<h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+																SME Term Loan
+															</h4>
+														</div>
+														<p className="text-sm text-gray-500">
+															Term loans for
+															business expansion
+														</p>
+													</div>
+												</Link>
+												<Link
 													href="/products"
 													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
 												>
@@ -300,26 +322,6 @@ export default function Navbar({
 														<p className="text-sm text-gray-500">
 															Flexible credit for
 															managing cash flow
-														</p>
-													</div>
-												</Link>
-												<Link
-													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
-												>
-													<div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-														<MdBusinessCenter
-															size={24}
-															color="#2563EB"
-														/>
-													</div>
-													<div>
-														<h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-															Business Term Loan
-														</h4>
-														<p className="text-sm text-gray-500">
-															Term loans for
-															business expansion
 														</p>
 													</div>
 												</Link>
@@ -736,6 +738,31 @@ export default function Navbar({
 													</div>
 												</Link>
 												<Link
+													href="/sme-term-loan"
+													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
+													onClick={() =>
+														setMobileMenuOpen(false)
+													}
+												>
+													<div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+														<MdBusinessCenter
+															size={20}
+															color="#2563EB"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center gap-2">
+															<h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+																SME Term Loan
+															</h4>
+														</div>
+														<p className="text-sm text-gray-500">
+															Term loans for
+															business expansion
+														</p>
+													</div>
+												</Link>
+												<Link
 													href="/products"
 													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
 													onClick={() =>
@@ -781,29 +808,6 @@ export default function Navbar({
 														<p className="text-sm text-gray-500">
 															Flexible credit for
 															cash flow
-														</p>
-													</div>
-												</Link>
-												<Link
-													href="/products"
-													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
-													onClick={() =>
-														setMobileMenuOpen(false)
-													}
-												>
-													<div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-														<MdBusinessCenter
-															size={20}
-															color="#2563EB"
-														/>
-													</div>
-													<div>
-														<span className="font-semibold">
-															Business Term Loan
-														</span>
-														<p className="text-sm text-gray-500">
-															Term loans for
-															expansion
 														</p>
 													</div>
 												</Link>

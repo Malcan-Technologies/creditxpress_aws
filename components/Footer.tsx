@@ -53,6 +53,14 @@ export default function Footer() {
 							</li>
 							<li>
 								<Link
+									href="/sme-term-loan"
+									className="text-gray-300 hover:text-white"
+								>
+									SME Term Loan
+								</Link>
+							</li>
+							<li>
+								<Link
 									href="/products"
 									className="text-gray-300 hover:text-white"
 								>
