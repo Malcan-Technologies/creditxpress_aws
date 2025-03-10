@@ -557,6 +557,7 @@ export default function EquipmentFinancing() {
 										1% per month
 									</p>
 								</div>
+
 								<div>
 									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2 flex items-center gap-2">
 										Origination Fee
@@ -590,6 +591,22 @@ export default function EquipmentFinancing() {
 									</h4>
 									<p className="text-gray-600 dark:text-gray-600">
 										2% of loan amount
+									</p>
+								</div>
+								<div>
+									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2 flex items-center gap-2">
+										Late Payment Fee
+										<div className="relative group">
+											<InformationCircleIcon className="h-4 w-4 text-gray-500 cursor-help" />
+											<div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 p-2 bg-gray-800 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+												Additional interest charged on
+												overdue amount
+												<div className="absolute left-1/2 -bottom-1 -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
+											</div>
+										</div>
+									</h4>
+									<p className="text-gray-600 dark:text-gray-600">
+										0.5% per day on amount in arrears
 									</p>
 								</div>
 								<div>
