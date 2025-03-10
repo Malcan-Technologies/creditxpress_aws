@@ -661,7 +661,7 @@ export default function EquipmentFinancing() {
 												MAX_FINANCING_PERCENTAGE,
 											MAX_LOAN_AMOUNT
 										)}
-										step="10000"
+										step="1000"
 										value={loanAmount}
 										onChange={(e) =>
 											setLoanAmount(
