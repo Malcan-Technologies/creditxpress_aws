@@ -99,6 +99,7 @@ jobs:
             # Check if app is already running
             if pm2 list | grep -q "growkapital"; then
               echo "Application is running, checking for changes..."
+              pm2 delete growkapital
             else
               echo "Application not running, will start fresh..."
             fi
@@ -141,9 +142,8 @@ jobs:
               echo "Dependencies are up to date, skipping installation"
             fi
             
-            cd ..
-            
             # Quick Nginx config check and reload if needed
+            cd ..
             if ! cmp -s config/nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
               echo "Updating Nginx configuration..."
               sudo cp config/nginx.conf /etc/nginx/sites-available/growkapital
@@ -156,14 +156,15 @@ jobs:
               fi
             fi
             
-            # Efficient app restart only if needed
+            # Start the application from the frontend directory
+            cd frontend
+            echo "Starting the application..."
+            pm2 start npm --name "growkapital" -- start
+            pm2 save --silent
+            
             if [ -f "/tmp/files-changed" ]; then
-              echo "Changes detected, restarting application..."
-              cd frontend
-              pm2 reload growkapital 2>/dev/null || pm2 start npm --name "growkapital" --silent -- start
-              pm2 save --silent
               rm -f /tmp/files-changed
               echo "Deployment completed successfully"
             else
-              echo "No changes detected, skipping restart"
+              echo "No changes detected, deployment completed"
             fi 
