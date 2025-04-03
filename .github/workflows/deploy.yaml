@@ -37,13 +37,28 @@ jobs:
 
       - name: Sync changed files
         run: |
-          # Create archive of files to sync
-          cd frontend
-          tar -czf ../deploy.tar.gz .next/ public/ package.json package-lock.json
+          # Create a temporary directory for organizing files
+          mkdir -p temp_deploy/frontend
+          mkdir -p temp_deploy/config
+          mkdir -p temp_deploy/scripts
+          
+          # Copy frontend files
+          cp -r frontend/.next temp_deploy/frontend/
+          cp -r frontend/public temp_deploy/frontend/
+          cp frontend/package.json temp_deploy/frontend/
+          cp frontend/package-lock.json temp_deploy/frontend/
+          
+          # Copy config and scripts
+          cp config/nginx.conf temp_deploy/config/
+          cp scripts/deploy.sh temp_deploy/scripts/
+          
+          # Create archive from the organized directory
+          cd temp_deploy
+          tar -czf ../deploy.tar.gz .
           cd ..
-          # Add config and scripts to the archive
-          tar -rf deploy.tar.gz config/nginx.conf scripts/deploy.sh
-          gzip -f deploy.tar
+          
+          # Clean up temporary directory
+          rm -rf temp_deploy
           
           # Copy archive to server
           scp -i ~/.ssh/deploy_key deploy.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/
@@ -56,8 +71,8 @@ jobs:
             tar xzf /tmp/deploy.tar.gz
             rsync -av --delete --exclude="node_modules" --exclude=".git" --exclude="node_modules_cache" . /var/www/growkapital/
             # Ensure proper permissions for Next.js static files
-            chmod -R 755 /var/www/growkapital/.next/static
-            chmod -R 755 /var/www/growkapital/public
+            chmod -R 755 /var/www/growkapital/frontend/.next/static
+            chmod -R 755 /var/www/growkapital/frontend/public
             touch /tmp/files-changed
             rm -rf /tmp/new-deploy /tmp/deploy.tar.gz
           '
@@ -77,6 +92,9 @@ jobs:
             
             # Memory optimization: Clear system cache
             sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
+            
+            # Change to frontend directory for npm operations
+            cd frontend
             
             # Check if app is already running
             if pm2 list | grep -q "growkapital"; then
@@ -123,6 +141,8 @@ jobs:
               echo "Dependencies are up to date, skipping installation"
             fi
             
+            cd ..
+            
             # Quick Nginx config check and reload if needed
             if ! cmp -s config/nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
               echo "Updating Nginx configuration..."
@@ -139,6 +159,7 @@ jobs:
             # Efficient app restart only if needed
             if [ -f "/tmp/files-changed" ]; then
               echo "Changes detected, restarting application..."
+              cd frontend
               pm2 reload growkapital 2>/dev/null || pm2 start npm --name "growkapital" --silent -- start
               pm2 save --silent
               rm -f /tmp/files-changed
