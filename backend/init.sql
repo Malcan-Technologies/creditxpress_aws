@@ -1,0 +1,32 @@
+CREATE USER postgres WITH PASSWORD 'postgres' SUPERUSER;
+ALTER USER postgres WITH SUPERUSER;
+CREATE DATABASE kapital;
+GRANT ALL PRIVILEGES ON DATABASE kapital TO postgres;
+
+-- Grant all privileges to the user
+ALTER USER kapital CREATEDB;
+GRANT ALL PRIVILEGES ON DATABASE kapital TO kapital;
+\c kapital;
+GRANT ALL ON SCHEMA public TO kapital;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO kapital;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO kapital;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO kapital;
+
+-- Create the prisma user
+CREATE USER prisma WITH PASSWORD 'prisma';
+
+-- Grant all privileges to prisma user
+GRANT ALL PRIVILEGES ON SCHEMA public TO prisma;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO prisma;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO prisma;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO prisma;
+
+-- Make prisma the owner of the public schema
+ALTER SCHEMA public OWNER TO prisma;
+
+-- Create the kapital user
+CREATE USER kapital WITH PASSWORD 'kapital123';
+
+-- Grant necessary permissions
+GRANT ALL PRIVILEGES ON SCHEMA public TO kapital;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO kapital; 

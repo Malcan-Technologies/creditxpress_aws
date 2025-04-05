@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install OpenSSL and other dependencies
+RUN apk add --no-cache openssl python3 make g++
+
+# Create uploads directory
+RUN mkdir -p uploads
+
+# Install dependencies
+COPY package*.json ./
+COPY prisma ./prisma/
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Generate Prisma client
+RUN npm run prisma:generate
+
+# Start development server
+CMD ["npm", "run", "dev"] 

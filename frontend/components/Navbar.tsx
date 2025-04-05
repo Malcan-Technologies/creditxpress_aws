@@ -186,7 +186,7 @@ export default function Navbar({
 								Sign in
 							</Link>
 							<Link
-								href="/apply"
+								href="/signup"
 								className="font-semibold bg-white text-purple-900 px-4 py-2 rounded-full hover:bg-purple-50 transition-all"
 							>
 								Get started
@@ -737,7 +737,7 @@ export default function Navbar({
 								Sign in
 							</Link>
 							<Link
-								href="/apply"
+								href="/signup"
 								className="flex-1 text-center bg-purple-600 text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
 								onClick={() => setMobileMenuOpen(false)}
 							>

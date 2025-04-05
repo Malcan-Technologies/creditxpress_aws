@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/multer": "^1.4.12",
+    "bcryptjs": "^3.0.2",
+    "multer": "^1.4.5-lts.2"
+  }
+}

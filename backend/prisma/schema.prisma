@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Product {
+    id                String   @id @default(cuid())
+    code              String   @unique // e.g. "payadvance", "equipment", "sme"
+    name              String // e.g. "PayAdvance™"
+    description       String
+    minAmount         Float
+    maxAmount         Float
+    repaymentTerms    Json // Array of available terms in months
+    interestRate      Float // Monthly interest rate in percentage
+    eligibility       Json[] // Array of eligibility criteria
+    lateFee           Float // Late payment fee in percentage
+    originationFee    Float // One-time fee in percentage
+    legalFee          Float // Fixed amount
+    applicationFee    Float // Fixed amount
+    requiredDocuments Json[] // Array of required document types
+    features          Json[] // Array of product features
+    loanTypes         Json[] // Array of available loan purpose types
+    isActive          Boolean  @default(true)
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+
+    // Relations
+    applications LoanApplication[]
+
+    @@map("products")
+}
+
+model User {
+    id                   String    @id @default(cuid())
+    phoneNumber          String    @unique
+    password             String
+    refreshToken         String?
+    fullName             String?
+    dateOfBirth          DateTime?
+    email                String?   @unique
+    address1             String?
+    address2             String?
+    city                 String?
+    state                String?
+    zipCode              String?
+    country              String?
+    nationality          String?
+    idNumber             String?
+    idType               String?
+    idExpiry             DateTime?
+    employmentStatus     String?
+    employerName         String?
+    monthlyIncome        String?
+    bankName             String?
+    accountNumber        String?
+    role                 String    @default("USER")
+    isOnboardingComplete Boolean   @default(false)
+    onboardingStep       Int       @default(0)
+    kycStatus            Boolean   @default(false)
+    lastLoginAt          DateTime? @updatedAt
+    createdAt            DateTime  @default(now())
+    updatedAt            DateTime  @updatedAt
+
+    // Relations
+    applications  LoanApplication[]
+    documents     UserDocument[]
+    notifications Notification[]
+
+    @@map("users")
+}
+
+model LoanApplication {
+    id               String   @id @default(cuid())
+    userId           String
+    productId        String
+    amount           Float?
+    term             Int? // Repayment term in months
+    purpose          String? // Loan purpose
+    monthlyRepayment Float? // Calculated monthly repayment amount
+    interestRate     Float? // Interest rate used for calculation
+    lateFee          Float? // Late payment fee
+    originationFee   Float? // Origination fee amount
+    legalFee         Float? // Legal fee amount
+    applicationFee   Float? // Application fee amount
+    netDisbursement  Float? // Net loan disbursement amount
+    acceptTerms      Boolean  @default(false) // Whether user accepted terms
+    paidAppFee       Boolean  @default(false) // Whether application fee is paid
+    appStep          Int      @default(0) // Current step in application process
+    urlLink          String?  @unique // Unique URL for returning to application
+    status           String   @default("INCOMPLETE") // INCOMPLETE, PENDING_APP_FEE, PENDING_KYC, PENDING_APPROVAL, APPROVED, DISBURSED, REJECTED, WITHDRAWN
+    createdAt        DateTime @default(now())
+    updatedAt        DateTime @updatedAt
+
+    // Relations
+    user      User           @relation(fields: [userId], references: [id])
+    product   Product        @relation(fields: [productId], references: [id])
+    documents UserDocument[]
+
+    @@map("loan_applications")
+}
+
+model UserDocument {
+    id            String   @id @default(cuid())
+    userId        String
+    applicationId String?
+    type          String // ID, PAYSLIP, BANK_STATEMENT, etc.
+    status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+    fileUrl       String
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    // Relations
+    user        User             @relation(fields: [userId], references: [id])
+    application LoanApplication? @relation(fields: [applicationId], references: [id])
+
+    @@map("user_documents")
+}
+
+model Notification {
+    id        String   @id @default(cuid())
+    userId    String
+    title     String
+    message   String
+    isRead    Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user User @relation(fields: [userId], references: [id])
+
+    @@map("notifications")
+}
