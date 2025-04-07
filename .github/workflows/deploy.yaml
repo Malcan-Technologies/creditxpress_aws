@@ -692,7 +692,101 @@ jobs:
             pm2 delete backend 2>/dev/null || true
             pm2 delete growkapital 2>/dev/null || true
 
-            # Create start script with explicit port binding for frontend (3002)
+            # Improved node_modules check and installation for frontend
+            echo "Checking frontend node_modules status..."
+            if [ ! -d "node_modules" ]; then
+              echo "⚠️ Frontend node_modules directory is missing!"
+              echo "Installing frontend dependencies with verbose output..."
+              
+              # First ensure package.json exists
+              if [ ! -f "package.json" ]; then
+                echo "❌ ERROR: package.json not found in frontend directory!"
+                ls -la
+              else
+                echo "✓ package.json found in frontend directory"
+                cat package.json | grep "dependencies" -A 5
+                echo "Installing dependencies..."
+                
+                # Clean any corrupted node_modules or cache
+                rm -rf node_modules package-lock.json .next/cache
+                
+                # Install with more debug info and fallbacks
+                npm install --production --verbose --legacy-peer-deps || {
+                  echo "❌ npm install failed with error code $?"
+                  echo "Trying alternative installation method..."
+                  npm install --no-optional --production --legacy-peer-deps || {
+                    echo "❌ Alternative installation also failed!"
+                    echo "Creating minimal node_modules to continue..."
+                    mkdir -p node_modules/.bin
+                    npm install next react react-dom --no-save
+                  }
+                }
+                
+                # Verify installation
+                if [ -d "node_modules" ]; then
+                  echo "✓ node_modules directory now exists"
+                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
+                else
+                  echo "❌ node_modules still missing after installation attempt!"
+                fi
+              fi
+            else
+              echo "✓ Frontend node_modules directory exists"
+              ls -la node_modules/.bin/ | grep next || {
+                echo "⚠️ next binary missing, reinstalling Next.js..."
+                npm install next --save
+              }
+            fi
+
+            # Start the admin application properly
+            echo "Starting the admin application..."
+            cd /var/www/growkapital/admin
+            pm2 delete growkapital-admin 2>/dev/null || true
+
+            # Check for node_modules in admin directory and install with more debug info
+            echo "Checking admin node_modules status..."
+            if [ ! -d "node_modules" ]; then
+              echo "⚠️ Admin node_modules directory is missing!"
+              echo "Installing admin dependencies with verbose output..."
+              # First ensure package.json exists
+              if [ ! -f "package.json" ]; then
+                echo "❌ ERROR: package.json not found in admin directory!"
+                ls -la
+              else
+                echo "✓ package.json found in admin directory"
+                cat package.json | grep "dependencies" -A 5
+                echo "Installing dependencies..."
+                # Clean any corrupted node_modules
+                rm -rf node_modules package-lock.json .next/cache
+                # Install with more debug info
+                npm install --production --verbose --legacy-peer-deps || {
+                  echo "❌ npm install failed with error code $?"
+                  echo "Trying alternative installation method..."
+                  npm install --no-optional --production --legacy-peer-deps || {
+                    echo "❌ Alternative installation also failed!"
+                    echo "Creating minimal node_modules to continue..."
+                    mkdir -p node_modules/.bin
+                    npm install next react react-dom --no-save
+                  }
+                }
+                
+                # Verify installation
+                if [ -d "node_modules" ]; then
+                  echo "✓ node_modules directory now exists"
+                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
+                else
+                  echo "❌ node_modules still missing after installation attempt!"
+                fi
+              fi
+            else
+              echo "✓ Admin node_modules directory exists"
+              ls -la node_modules/.bin/ | grep next || {
+                echo "⚠️ next binary missing, reinstalling Next.js..."
+                npm install next --save
+              }
+            fi
+
+            # Create start script with explicit port binding
             cat > start.sh << 'EOF'
             #!/bin/bash
             cd "$(dirname "$0")"
@@ -703,7 +797,7 @@ jobs:
             EOF
             chmod +x start.sh
 
-            # Start frontend on port 3002
+            # Start frontend
             echo "Starting frontend with explicit port 3002..."
             export NODE_OPTIONS="--max-old-space-size=256"
             pm2 start ./start.sh --name "growkapital-frontend"
@@ -719,12 +813,7 @@ jobs:
               pm2 start --name "growkapital-frontend" -- npx next start -p 3002 --hostname 0.0.0.0
             fi
 
-            # Start the admin application properly
-            echo "Starting the admin application..."
-            cd /var/www/growkapital/admin
-            pm2 delete growkapital-admin 2>/dev/null || true
-
-            # Create start script with explicit port binding for admin (3003)
+            # Create start script with explicit port binding
             cat > start.sh << 'EOF'
             #!/bin/bash
             cd "$(dirname "$0")"
@@ -735,7 +824,7 @@ jobs:
             EOF
             chmod +x start.sh
 
-            # Start admin on port 3003
+            # Start admin
             echo "Starting admin with explicit port 3003..."
             export NODE_OPTIONS="--max-old-space-size=256"
             pm2 start ./start.sh --name "growkapital-admin"
@@ -909,260 +998,146 @@ jobs:
             echo "============== TROUBLESHOOTING 502 BAD GATEWAY ==============="
             echo "Checking permissions and application status..."
 
-            # Check file permissions
+            # Check file permissions in critical directories
             echo "Checking file permissions..."
-            ls -la /var/www/growkapital/frontend/node_modules/.bin/next
-            ls -la /var/www/growkapital/admin/node_modules/.bin/next
+            ls -la /var/www/growkapital/frontend/node_modules/.bin/next 2>/dev/null || echo "Frontend next binary not found!"
+            ls -la /var/www/growkapital/admin/node_modules/.bin/next 2>/dev/null || echo "Admin next binary not found!"
 
-            # Check PM2 processes
+            # Check PM2 processes status
             echo "PM2 processes:"
             pm2 list
 
-            # Check for any standalone backend processes
+            # Kill any 'backend' process not in a container if it exists
             echo "Removing any standalone backend processes..."
-            pkill -f "node.*backend" || true
+            pm2 delete backend 2>/dev/null || true
 
             # Check port bindings
             echo "Port bindings:"
-            ss -tuln | grep -E ":(3001|3002|4000)"
+            ss -tuln | grep -E ':(3002|3003|4000)'
 
-            # Fix frontend
+            # Check if frontend is actually running and listening
             echo "Attempting to fix frontend..."
-            pm2 delete growkapital-frontend || true
             cd /var/www/growkapital/frontend
-            pm2 start npm --name "growkapital-frontend" -- start
 
-            # Fix admin
+            # Check for node_modules
+            if [ ! -d "node_modules" ]; then
+              echo "❌ Frontend node_modules not found, installing dependencies..."
+              npm install --production --no-progress
+            fi
+
+            # Check for Next.js binary
+            if [ ! -f "node_modules/.bin/next" ]; then
+              echo "❌ next binary not found, installing next..."
+              npm install next --save
+            fi
+
+            pm2 delete growkapital-frontend 2>/dev/null || true
+            export NODE_OPTIONS="--max-old-space-size=256"
+            # Use explicit next command with full path to avoid permission issues
+            pm2 start --name "growkapital-frontend" npm -- start -- --port 3002 --hostname 0.0.0.0
+            pm2 save --silent
+            sleep 5
+
+            # Check if admin is actually running and listening
             echo "Attempting to fix admin..."
-            pm2 delete growkapital-admin || true
             cd /var/www/growkapital/admin
 
-            # Check if admin has proper Next.js configuration
-            if [ ! -f "next.config.js" ]; then
-              echo "Creating admin next.config.js..."
-              cat > next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  output: 'standalone',
-  experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-}
-
-        module.exports = nextConfig
-          EOF
+            # Check for node_modules
+            if [ ! -d "node_modules" ]; then
+              echo "❌ Admin node_modules not found, installing dependencies..."
+              npm install --production --no-progress
             fi
 
-            # Start admin with proper environment variables
-            echo "Starting admin with proper environment variables..."
-            export PORT=3002
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
-            pm2 start npm --name "growkapital-admin" -- start
+            # Check for Next.js binary
+            if [ ! -f "node_modules/.bin/next" ]; then
+              echo "❌ next binary not found, installing next..."
+              npm install next --save
+            fi
 
-            # Fix backend
-            echo "Attempting to fix backend..."
+            pm2 delete growkapital-admin 2>/dev/null || true
+            export NODE_OPTIONS="--max-old-space-size=256"
+            # Use explicit next command with full path to avoid permission issues
+            pm2 start --name "growkapital-admin" npm -- start -- --port 3003 --hostname 0.0.0.0
+            pm2 save --silent
+            sleep 5
+
+            # Check Docker container for backend
+            echo "Docker containers:"
+            docker ps -a
+
+            # Check Docker networks
+            echo "Docker networks:"
+            docker network ls
+
+            # Check if there are any port conflicts
+            echo "Checking for port conflicts..."
+            netstat -tuln | grep -E ':(3002|3003|4000)' || echo "No conflicts found"
+
+            # Fix common Docker issues
+            echo "Attempting to resolve common Docker issues..."
+            echo "1. Removing orphaned containers..."
+            docker container prune -f
+            echo "2. Checking Docker service health..."
+            systemctl status docker
+            echo "3. Restarting the backend container with host network mode..."
             cd /var/www/growkapital/backend
+            sed -i 's/network_mode:.*$/network_mode: "host"/' docker-compose.prod.yml
+            docker-compose -f docker-compose.prod.yml down
+            docker-compose -f docker-compose.prod.yml up -d --build
 
-            # Stop any existing backend containers
-            docker-compose -f docker-compose.prod.yml down || true
-
-            # Check if port 4000 is in use
-            if ss -tuln | grep -q ":4000 "; then
-              echo "Port 4000 is already in use. Finding and stopping the process..."
-              PORT_PROCESS=$(ss -tulpn | grep ":4000" | awk '{print $7}' | cut -d"=" -f2 | cut -d"," -f1 || echo "")
-              if [ ! -z "$PORT_PROCESS" ]; then
-                echo "Found process $PORT_PROCESS using port 4000, stopping it..."
-                kill -9 $PORT_PROCESS 2>/dev/null || true
-              fi
-            fi
-
-            # Start backend with docker-compose
-            echo "Starting backend with docker-compose..."
-            docker-compose -f docker-compose.prod.yml up -d
-
-            # Wait for backend to start
+            # Wait for backend container to start
             echo "Waiting for backend to start..."
-            sleep 15
+            sleep 10
 
-            # Check final port bindings
+            # Final check on port bindings
             echo "Final port bindings:"
-            ss -tuln | grep -E ":(3001|3002|4000)"
-
-            # Fix Nginx configuration
-            echo "Fixing Nginx configuration..."
-            cat > /etc/nginx/sites-enabled/terraworld << 'EOF'
-server {
-    listen 80;
-    server_name growkapital.com www.growkapital.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    http2 on;
-    server_name growkapital.com www.growkapital.com;
-
-    ssl_certificate /etc/letsencrypt/live/growkapital.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/growkapital.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-
-    # Frontend
-    location / {
-        proxy_pass http://127.0.0.1:3002;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Admin
-    location /admin {
-        proxy_pass http://127.0.0.1:3002;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Backend API
-    location /api {
-        proxy_pass http://127.0.0.1:4000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-EOF
+            ss -tuln | grep -E ':(3002|3003|4000)'
 
             # Restart Nginx
             echo "Restarting Nginx..."
-            nginx -t && systemctl restart nginx
+            sudo systemctl restart nginx
+            sudo nginx -t
 
-            # Check frontend package.json
+            # Check package.json for frontend
             echo "Checking frontend package.json..."
-            if [ -f "/var/www/growkapital/frontend/package.json" ]; then
+            cd /var/www/growkapital/frontend
+            if [ -f "package.json" ]; then
               echo "Frontend package.json found, checking content..."
-              cat /var/www/growkapital/frontend/package.json | grep -A 10 '"scripts":'
-              cat /var/www/growkapital/frontend/package.json | grep -A 1 '"next":'
-              
-              # Create frontend next.config.js if missing
-              if [ ! -f "/var/www/growkapital/frontend/next.config.js" ]; then
-                echo "Frontend next.config.js not found! Creating basic config..."
-                cat > /var/www/growkapital/frontend/next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  output: 'standalone',
-  experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-}
-
-module.exports = nextConfig
-EOF
-              fi
+              grep -A 5 "\"scripts\"" package.json
+              grep "\"next\"" package.json || echo "next dependency not found in package.json!"
             else
-              echo "Frontend package.json not found!"
+              echo "❌ ERROR: Frontend package.json not found!"
             fi
 
-            # Check admin package.json
+            # Check package.json for admin
             echo "Checking admin package.json..."
-            if [ -f "/var/www/growkapital/admin/package.json" ]; then
+            cd /var/www/growkapital/admin
+            if [ -f "package.json" ]; then
               echo "Admin package.json found, checking content..."
-              cat /var/www/growkapital/admin/package.json | grep -A 10 '"scripts":'
-              cat /var/www/growkapital/admin/package.json | grep -A 1 '"next":'
-              
-              # Create admin next.config.js if missing
-              if [ ! -f "/var/www/growkapital/admin/next.config.js" ]; then
-                echo "Admin next.config.js not found! Creating basic config..."
-                cat > /var/www/growkapital/admin/next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  output: 'standalone',
-  experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-}
-
-module.exports = nextConfig
-EOF
-              fi
+              grep -A 5 "\"scripts\"" package.json
+              grep "\"next\"" package.json || echo "next dependency not found in package.json!"
             else
-              echo "Admin package.json not found!"
+              echo "❌ ERROR: Admin package.json not found!"
             fi
 
-            # Check Next.js configurations
+            # Check if Next.js configurations are correct
             echo "Checking Next.js configurations..."
-            if [ ! -f "/var/www/growkapital/frontend/next.config.js" ]; then
+            cd /var/www/growkapital/frontend
+            if [ -f "next.config.js" ]; then
+              echo "Frontend next.config.js found:"
+              cat next.config.js
+            else
               echo "Frontend next.config.js not found! Creating basic config..."
-              cat > /var/www/growkapital/frontend/next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  output: 'standalone',
-  experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-}
-
-module.exports = nextConfig
-EOF
+              echo "module.exports = { output: 'standalone', }" > next.config.js
             fi
 
-            if [ ! -f "/var/www/growkapital/admin/next.config.js" ]; then
+            cd /var/www/growkapital/admin
+            if [ -f "next.config.js" ]; then
+              echo "Admin next.config.js found:"
+              cat next.config.js
+            else
               echo "Admin next.config.js not found! Creating basic config..."
-              cat > /var/www/growkapital/admin/next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  output: 'standalone',
-  experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-}
-
-module.exports = nextConfig
-EOF
+              echo "module.exports = { output: 'standalone', }" > next.config.js
             fi
 
             echo "============== END TROUBLESHOOTING ==============" 
