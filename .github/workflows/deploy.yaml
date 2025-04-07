@@ -107,11 +107,11 @@ jobs:
           echo "Checking if frontend build created .next directory..."
           if [ -d "frontend/.next" ]; then
             echo "Frontend build succeeded"
-            # Copy frontend files
-            cp -r frontend/.next temp_deploy/frontend/
-            cp -r frontend/public temp_deploy/frontend/
-            cp frontend/package.json temp_deploy/frontend/
-            cp frontend/package-lock.json temp_deploy/frontend/
+          # Copy frontend files
+          cp -r frontend/.next temp_deploy/frontend/
+          cp -r frontend/public temp_deploy/frontend/
+          cp frontend/package.json temp_deploy/frontend/
+          cp frontend/package-lock.json temp_deploy/frontend/
           else
             echo "WARNING: Frontend build may have failed - .next directory not found"
             mkdir -p temp_deploy/frontend/.next
@@ -214,9 +214,14 @@ jobs:
           # Run post-deployment tasks in smaller chunks to avoid SSH timeouts
           echo "Setting permissions..."
           ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 -o ServerAliveCountMax=5 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            # Set ownership at directory level instead of recursively processing all files
             chown -R $USER:$USER /var/www/growkapital
-            find /var/www/growkapital -type d -exec chmod 755 {} \;
-            find /var/www/growkapital -type f -exec chmod 644 {} \;
+            
+            # Use targeted permission settings instead of recursive find
+            chmod 755 /var/www/growkapital
+            chmod 755 /var/www/growkapital/frontend /var/www/growkapital/admin /var/www/growkapital/backend /var/www/growkapital/config /var/www/growkapital/scripts
+            
+            # Only ensure scripts are executable
             chmod +x /var/www/growkapital/scripts/*.sh
           '
           
@@ -254,15 +259,8 @@ jobs:
               echo "✓ Nginx started"
             fi
             
-            cd /var/www/growkapital/backend
-            
-            if which pm2 > /dev/null && pm2 list | grep -q "backend"; then
-              pm2 restart backend || pm2 start npm --name "backend" -- start
-              echo "✓ Backend service restarted"
-            else
-              pm2 start npm --name "backend" -- start
-              echo "✓ Backend service started"
-            fi
+            # The backend runs in Docker, no PM2 needed
+            echo "✓ Backend already managed by Docker in the backend deployment step"
             
             touch /tmp/files-changed
           '
@@ -413,11 +411,20 @@ jobs:
             fi
             
             # Start or restart Docker containers
-            echo "Deploying backend services..."
+            echo "Deploying backend services with Docker..."
             export DOCKER_BUILDKIT=1
+            echo "Stopping any existing containers..."
             docker-compose -f docker-compose.prod.yml down
+            
+            echo "Adding TypeScript transpile-only flag to environment..."
             echo "export TS_NODE_TRANSPILE_ONLY=true" >> .env
-            docker-compose -f docker-compose.prod.yml up -d --build
+            
+            echo "Starting backend containers with build..."
+            docker-compose -f docker-compose.prod.yml up -d --build --force-recreate
+            
+            # Allow a few seconds for container to start properly
+            echo "Giving containers time to initialize..."
+            sleep 10
             
             # Verify backend is running
             echo "Verifying backend deployment..."
@@ -527,20 +534,62 @@ jobs:
           script: |
             cd /var/www/growkapital
             
-            # Start the applications with specific ports that won't conflict
-            echo "Starting the frontend application..."
-            # Use port 3002 for frontend to avoid conflict with terraworld
+            # Create start script for frontend to ensure correct port binding
+            echo "Creating optimized start script for frontend..."
+            cat > /var/www/growkapital/frontend/start.sh << 'EOF'
+            #!/bin/bash
+            cd "$(dirname "$0")"
             export PORT=3002
+            export NODE_ENV=production
+            export HOSTNAME=0.0.0.0
+            npx next start -p 3002 --hostname 0.0.0.0
+            EOF
+            chmod +x /var/www/growkapital/frontend/start.sh
+            
+            # Create start script for admin to ensure correct port binding
+            echo "Creating optimized start script for admin..."
+            cat > /var/www/growkapital/admin/start.sh << 'EOF'
+            #!/bin/bash
+            cd "$(dirname "$0")"
+            export PORT=3003
+            export NODE_ENV=production
+            export HOSTNAME=0.0.0.0
+            npx next start -p 3003 --hostname 0.0.0.0
+            EOF
+            chmod +x /var/www/growkapital/admin/start.sh
+            
+            # Start the applications with proper scripts
+            echo "Starting the frontend application..."
             pm2 delete growkapital-frontend 2>/dev/null || true
-            pm2 start npm --name "growkapital-frontend" -- start -- -p 3002
+            pm2 start /var/www/growkapital/frontend/start.sh --name "growkapital-frontend"
             
             echo "Starting the admin application..."
-            # Use port 3003 for admin to avoid conflict
-            export PORT=3003
             pm2 delete growkapital-admin 2>/dev/null || true
-            pm2 start npm --name "growkapital-admin" -- start -- -p 3003
+            pm2 start /var/www/growkapital/admin/start.sh --name "growkapital-admin"
             
+            # Save PM2 configuration for persistence across reboots
             pm2 save --silent
+            
+            # Check if apps are running
+            echo "Checking if applications started successfully..."
+            pm2 list
+            
+            # Give apps a moment to fully start
+            sleep 5
+            
+            # Verify ports are open
+            echo "Verifying port bindings:"
+            if ss -tuln | grep -q ":3002 "; then
+              echo "✅ Frontend is properly bound to port 3002"
+            else
+              echo "❌ WARNING: Frontend is not bound to port 3002!"
+            fi
+            
+            if ss -tuln | grep -q ":3003 "; then
+              echo "✅ Admin is properly bound to port 3003"
+            else
+              echo "❌ WARNING: Admin is not bound to port 3003!"
+            fi
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -680,4 +729,155 @@ jobs:
               echo "Deployment completed successfully"
             else
               echo "No changes detected, deployment completed"
-            fi 
+            fi
+
+      - name: Troubleshoot 502 Bad Gateway
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEYS }}
+          command_timeout: "5m"
+          script: |
+            cd /var/www/growkapital
+            
+            echo "============== TROUBLESHOOTING 502 BAD GATEWAY ==============="
+            echo "Checking if applications are running..."
+            
+            # Check PM2 processes for frontend and admin
+            echo "PM2 processes:"
+            pm2 list
+            
+            # Check if frontend is actually running and listening
+            echo "Port 3002 (frontend) status:"
+            if ss -tuln | grep -q ":3002 "; then
+              echo "✅ Frontend is listening on port 3002"
+            else
+              echo "❌ Frontend is NOT listening on port 3002! Attempting to restart..."
+              cd /var/www/growkapital/frontend
+              pm2 delete growkapital-frontend 2>/dev/null || true
+              pm2 start npm --name "growkapital-frontend" -- start -- -p 3002
+              pm2 save --silent
+              sleep 5
+              if ss -tuln | grep -q ":3002 "; then
+                echo "✅ Frontend successfully restarted and now listening"
+              else
+                echo "❌ Frontend still not listening after restart. Checking logs:"
+                pm2 logs growkapital-frontend --lines 20 --nostream
+              fi
+            fi
+            
+            # Check if admin is actually running and listening
+            echo "Port 3003 (admin) status:"
+            if ss -tuln | grep -q ":3003 "; then
+              echo "✅ Admin is listening on port 3003"
+            else
+              echo "❌ Admin is NOT listening on port 3003! Attempting to restart..."
+              cd /var/www/growkapital/admin
+              pm2 delete growkapital-admin 2>/dev/null || true
+              pm2 start npm --name "growkapital-admin" -- start -- -p 3003
+              pm2 save --silent
+              sleep 5
+              if ss -tuln | grep -q ":3003 "; then
+                echo "✅ Admin successfully restarted and now listening"
+              else
+                echo "❌ Admin still not listening after restart. Checking logs:"
+                pm2 logs growkapital-admin --lines 20 --nostream
+              fi
+            fi
+            
+            # Check backend port (from env file or default to 4000)
+            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 || echo "4000")
+            echo "Port $BACKEND_PORT (backend) status:"
+            if ss -tuln | grep -q ":$BACKEND_PORT "; then
+              echo "✅ Backend is listening on port $BACKEND_PORT"
+            else
+              echo "❌ Backend is NOT listening on port $BACKEND_PORT!"
+              echo "Docker containers running:"
+              docker ps
+              echo "Backend logs:"
+              cd /var/www/growkapital/backend
+              docker-compose -f docker-compose.prod.yml logs --tail=30
+              echo "Attempting to restart backend Docker container..."
+              docker-compose -f docker-compose.prod.yml restart
+              sleep 10
+              if ss -tuln | grep -q ":$BACKEND_PORT "; then
+                echo "✅ Backend successfully restarted and now listening"
+              else
+                echo "❌ Backend still not listening after restart."
+              fi
+            fi
+            
+            # Check Nginx configuration and status
+            echo "Nginx status and configuration:"
+            sudo systemctl status nginx
+            echo "Testing Nginx configuration..."
+            sudo nginx -t
+            
+            # Verify Nginx proxy settings match running ports
+            echo "Checking Nginx proxy settings against running ports..."
+            
+            # Verify frontend proxy points to port 3002
+            FRONTEND_PORT=$(ss -tuln | grep ":3002 " | wc -l)
+            if [ "$FRONTEND_PORT" -gt 0 ]; then
+              NGINX_FRONTEND=$(sudo grep -A 5 "location / {" /etc/nginx/sites-available/growkapital | grep "proxy_pass")
+              if echo "$NGINX_FRONTEND" | grep -q "proxy_pass http://127.0.0.1:3002"; then
+                echo "✅ Nginx frontend proxy correctly points to port 3002"
+              else
+                echo "❌ Nginx frontend proxy doesn't match! Current: $NGINX_FRONTEND"
+                echo "Fixing Nginx frontend proxy configuration..."
+                sudo sed -i 's|proxy_pass http://[^:]\+:[0-9]\+;|proxy_pass http://127.0.0.1:3002;|' /etc/nginx/sites-available/growkapital
+                FIXED=$(sudo grep -A 5 "location / {" /etc/nginx/sites-available/growkapital | grep "proxy_pass")
+                echo "Updated to: $FIXED"
+              fi
+            fi
+            
+            # Verify admin proxy points to port 3003
+            ADMIN_PORT=$(ss -tuln | grep ":3003 " | wc -l)
+            if [ "$ADMIN_PORT" -gt 0 ]; then
+              ADMIN_SERVER_BLOCK=$(sudo grep -A 200 "server_name admin.growkapital.com" /etc/nginx/sites-available/growkapital)
+              NGINX_ADMIN=$(echo "$ADMIN_SERVER_BLOCK" | grep -A 5 "location / {" | grep "proxy_pass")
+              if echo "$NGINX_ADMIN" | grep -q "proxy_pass http://127.0.0.1:3003"; then
+                echo "✅ Nginx admin proxy correctly points to port 3003"
+              else
+                echo "❌ Nginx admin proxy doesn't match! Current: $NGINX_ADMIN"
+                echo "Fixing Nginx admin proxy configuration..."
+                sudo sed -i '/server_name admin.growkapital.com/,/}/ s|proxy_pass http://[^:]\+:[0-9]\+;|proxy_pass http://127.0.0.1:3003;|' /etc/nginx/sites-available/growkapital
+                FIXED=$(sudo grep -A 200 "server_name admin.growkapital.com" /etc/nginx/sites-available/growkapital | grep -A 5 "location / {" | grep "proxy_pass")
+                echo "Updated to: $FIXED"
+              fi
+            fi
+            
+            # Verify backend proxy points to correct port
+            BACKEND_PORT_ACTIVE=$(ss -tuln | grep ":$BACKEND_PORT " | wc -l)
+            if [ "$BACKEND_PORT_ACTIVE" -gt 0 ]; then
+              NGINX_BACKEND=$(sudo grep -A 5 "location /api" /etc/nginx/sites-available/growkapital | grep "proxy_pass")
+              if echo "$NGINX_BACKEND" | grep -q "proxy_pass http://127.0.0.1:$BACKEND_PORT"; then
+                echo "✅ Nginx API proxy correctly points to port $BACKEND_PORT"
+              else
+                echo "❌ Nginx API proxy doesn't match! Current: $NGINX_BACKEND"
+                echo "Fixing Nginx API proxy configuration..."
+                sudo sed -i "s|proxy_pass http://[^:]\+:[0-9]\+/api;|proxy_pass http://127.0.0.1:$BACKEND_PORT/api;|" /etc/nginx/sites-available/growkapital
+                FIXED=$(sudo grep -A 5 "location /api" /etc/nginx/sites-available/growkapital | grep "proxy_pass")
+                echo "Updated to: $FIXED"
+              fi
+            fi
+            
+            # Reload Nginx if changes were made
+            if [ "$FRONTEND_PORT" -gt 0 ] || [ "$ADMIN_PORT" -gt 0 ] || [ "$BACKEND_PORT_ACTIVE" -gt 0 ]; then
+              echo "Testing and reloading Nginx configuration..."
+              if sudo nginx -t; then
+                sudo systemctl reload nginx
+                echo "✅ Nginx configuration tested and reloaded successfully"
+              else
+                echo "❌ Nginx configuration test failed!"
+              fi
+            fi
+            
+            # Final connectivity test
+            echo "Final connection tests:"
+            curl -I http://localhost:3002/ || echo "Cannot connect to frontend on port 3002"
+            curl -I http://localhost:3003/ || echo "Cannot connect to admin on port 3003"
+            curl -I http://localhost:$BACKEND_PORT/api/health || echo "Cannot connect to backend on port $BACKEND_PORT"
+            
+            echo "============== END TROUBLESHOOTING ==============" 
