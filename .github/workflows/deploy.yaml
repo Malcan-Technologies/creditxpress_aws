@@ -707,82 +707,43 @@ jobs:
             # Ensure frontend node_modules exists with required packages
             if [ ! -d "node_modules" ] || [ ! -d "node_modules/.bin" ] || [ ! -f "node_modules/.bin/next" ]; then
               echo "⚠️ Frontend node_modules missing or incomplete!"
-              echo "Performing clean installation of frontend dependencies with detailed logging..."
+              echo "Performing clean installation of frontend dependencies..."
               
-              # Remove any existing corrupted installations
+              # Clear any partial installations
               rm -rf node_modules package-lock.json .next/cache
               
-              # Create directory structure
-              mkdir -p node_modules/.bin
+              # Install next separately to ensure it's available
+              npm install next --save
               
-              # Install next.js first to ensure it's available
-              echo "Installing Next.js first..."
-              npm install next --no-save --loglevel verbose || echo "Error installing Next.js but continuing"
+              # Now install all dependencies
+              npm install --production --legacy-peer-deps || {
+                echo "⚠️ Full installation failed, installing minimal deps"
+                npm install react react-dom next --save
+              }
               
-              # Check if package.json exists and is valid
-              if [ -f "package.json" ]; then
-                echo "Package.json exists. Content:"
-                cat package.json | grep -A 15 "dependencies"
-                
-                # Install dependencies with detailed output
-                echo "Installing all dependencies with npm ci if possible..."
-                npm ci --production --loglevel verbose || {
-                  echo "npm ci failed, trying npm install..."
-                  npm install --production --legacy-peer-deps --loglevel verbose || {
-                    echo "Full install failed. Installing minimal set of packages..."
-                    npm install next react react-dom --save --loglevel verbose
-                  }
-                }
-              else
-                echo "⚠️ package.json missing! Creating minimal package.json"
-                echo '{
-                  "name": "growkapital-frontend",
-                  "version": "1.0.0",
-                  "private": true,
-                  "scripts": {
-                    "start": "next start"
-                  },
-                  "dependencies": {
-                    "next": "latest",
-                    "react": "latest",
-                    "react-dom": "latest"
-                  }
-                }' > package.json
-                npm install next react react-dom --save --loglevel verbose
-              fi
-              
-              # Create next binary if it doesn't exist
-              if [ ! -f "node_modules/.bin/next" ]; then
-                echo "Creating next binary wrapper..."
-                cat > node_modules/.bin/next << 'EOF'
-#!/bin/sh
-/usr/bin/env node "/var/www/growkapital/frontend/node_modules/next/dist/bin/next" "$@"
-EOF
+              # Verify critical files
+              if [ -f "node_modules/.bin/next" ]; then
+                echo "✅ Successfully installed next.js binary"
                 chmod +x node_modules/.bin/next
               else
+                echo "❌ Failed to install next.js binary"
+                mkdir -p node_modules/.bin
+                echo '#!/bin/sh
+/usr/bin/env node "/var/www/growkapital/frontend/node_modules/next/dist/bin/next"
+' > node_modules/.bin/next
                 chmod +x node_modules/.bin/next
-                echo "✅ next binary exists"
-              fi
-              
-              # Verify installation
-              if [ -d "node_modules/next" ] && [ -d "node_modules/react" ]; then
-                echo "✅ Core dependencies installed successfully"
-                ls -la node_modules/next/dist/bin/
-                ls -la node_modules/.bin/
-              else
-                echo "❌ Core dependencies installation failed"
               fi
             fi
 
             # Create start script with npm instead of direct next binary
             cat > start.sh << 'EOF'
-#!/bin/bash
-cd "$(dirname "$0")"
-export PORT=3002
-export NODE_ENV=production
-export HOSTNAME=0.0.0.0
-./node_modules/.bin/next start -p 3002 --hostname 0.0.0.0
-EOF
+            #!/bin/bash
+            cd "$(dirname "$0")"
+            export PORT=3002
+            export NODE_ENV=production
+            export HOSTNAME=0.0.0.0
+            npm start -- --port 3002 --hostname 0.0.0.0
+            EOF
             chmod +x start.sh
 
             # Ensure package.json has correct start script
@@ -829,82 +790,43 @@ EOF
             # Ensure admin node_modules exists with required packages
             if [ ! -d "node_modules" ] || [ ! -d "node_modules/.bin" ] || [ ! -f "node_modules/.bin/next" ]; then
               echo "⚠️ Admin node_modules missing or incomplete!"
-              echo "Performing clean installation of admin dependencies with detailed logging..."
+              echo "Performing clean installation of admin dependencies..."
               
-              # Remove any existing corrupted installations
+              # Clear any partial installations
               rm -rf node_modules package-lock.json .next/cache
               
-              # Create directory structure
-              mkdir -p node_modules/.bin
+              # Install next separately to ensure it's available
+              npm install next --save
               
-              # Install next.js first to ensure it's available
-              echo "Installing Next.js first..."
-              npm install next --no-save --loglevel verbose || echo "Error installing Next.js but continuing"
+              # Now install all dependencies
+              npm install --production --legacy-peer-deps || {
+                echo "⚠️ Full installation failed, installing minimal deps"
+                npm install react react-dom next --save
+              }
               
-              # Check if package.json exists and is valid
-              if [ -f "package.json" ]; then
-                echo "Package.json exists. Content:"
-                cat package.json | grep -A 15 "dependencies"
-                
-                # Install dependencies with detailed output
-                echo "Installing all dependencies with npm ci if possible..."
-                npm ci --production --loglevel verbose || {
-                  echo "npm ci failed, trying npm install..."
-                  npm install --production --legacy-peer-deps --loglevel verbose || {
-                    echo "Full install failed. Installing minimal set of packages..."
-                    npm install next react react-dom --save --loglevel verbose
-                  }
-                }
-              else
-                echo "⚠️ package.json missing! Creating minimal package.json"
-                echo '{
-                  "name": "growkapital-admin",
-                  "version": "1.0.0",
-                  "private": true,
-                  "scripts": {
-                    "start": "next start"
-                  },
-                  "dependencies": {
-                    "next": "latest",
-                    "react": "latest",
-                    "react-dom": "latest"
-                  }
-                }' > package.json
-                npm install next react react-dom --save --loglevel verbose
-              fi
-              
-              # Create next binary if it doesn't exist
-              if [ ! -f "node_modules/.bin/next" ]; then
-                echo "Creating next binary wrapper..."
-                cat > node_modules/.bin/next << 'EOF'
-#!/bin/sh
-/usr/bin/env node "/var/www/growkapital/admin/node_modules/next/dist/bin/next" "$@"
-EOF
+              # Verify critical files
+              if [ -f "node_modules/.bin/next" ]; then
+                echo "✅ Successfully installed next.js binary"
                 chmod +x node_modules/.bin/next
               else
+                echo "❌ Failed to install next.js binary"
+                mkdir -p node_modules/.bin
+                echo '#!/bin/sh
+/usr/bin/env node "/var/www/growkapital/admin/node_modules/next/dist/bin/next"
+' > node_modules/.bin/next
                 chmod +x node_modules/.bin/next
-                echo "✅ next binary exists"
-              fi
-              
-              # Verify installation
-              if [ -d "node_modules/next" ] && [ -d "node_modules/react" ]; then
-                echo "✅ Core dependencies installed successfully"
-                ls -la node_modules/next/dist/bin/
-                ls -la node_modules/.bin/
-              else
-                echo "❌ Core dependencies installation failed"
               fi
             fi
 
             # Create start script with npm instead of direct next binary
             cat > start.sh << 'EOF'
-#!/bin/bash
-cd "$(dirname "$0")"
-export PORT=3003
-export NODE_ENV=production
-export HOSTNAME=0.0.0.0
-./node_modules/.bin/next start -p 3003 --hostname 0.0.0.0
-EOF
+            #!/bin/bash
+            cd "$(dirname "$0")"
+            export PORT=3003
+            export NODE_ENV=production
+            export HOSTNAME=0.0.0.0
+            npm start -- --port 3003 --hostname 0.0.0.0
+            EOF
             chmod +x start.sh
 
             # Ensure package.json has correct start script
@@ -1055,15 +977,9 @@ EOF
               fi
               
               # Force renewal if there are issues
-              if ! curl -sI https://growkapital.com -o /dev/null -w "%{http_code}\n" | grep -q "200"; then
-                echo "⚠️ HTTPS check failed with non-200 status. Forcing certificate renewal..."
+              if ! curl -sI https://growkapital.com | grep -q "HTTP/.*200"; then
+                echo "⚠️ HTTPS check failed. Forcing certificate renewal..."
                 sudo certbot renew --force-renewal --nginx
-                sudo systemctl reload nginx
-              elif openssl x509 -checkend 2592000 -noout -in /etc/letsencrypt/live/growkapital.com/fullchain.pem; then
-                echo "✅ SSL certificate is valid and not expiring in the next 30 days. Skipping renewal."
-              else
-                echo "⚠️ SSL certificate will expire within 30 days. Allowing regular renewal..."
-                sudo certbot renew --nginx
                 sudo systemctl reload nginx
               fi
               
