@@ -954,8 +954,8 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
-EOF
+        module.exports = nextConfig
+          EOF
             fi
 
             # Start admin with proper environment variables
