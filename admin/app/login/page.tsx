@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Logo from "../components/Logo";
 import Cookies from "js-cookie";
@@ -15,11 +15,30 @@ interface CountryData {
 	name: string;
 }
 
+// Create a separate component for handling searchParams
+function LoginMessage() {
+	const searchParams = useSearchParams();
+	const [message, setMessage] = useState<string | null>(null);
+
+	useEffect(() => {
+		const urlMessage = searchParams?.get("message");
+		if (urlMessage) {
+			setMessage(urlMessage);
+		}
+	}, [searchParams]);
+
+	if (!message) return null;
+
+	return (
+		<div className="text-sm text-center text-green-600 bg-green-50 border border-green-200 rounded-md p-3">
+			{message}
+		</div>
+	);
+}
+
 export default function AdminLoginPage() {
 	const router = useRouter();
-	const searchParams = useSearchParams();
 	const [error, setError] = useState<string | null>(null);
-	const [message, setMessage] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [phoneNumber, setPhoneNumber] = useState("");
 
@@ -33,17 +52,9 @@ export default function AdminLoginPage() {
 
 	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
 
-	useEffect(() => {
-		const message = searchParams.get("message");
-		if (message) {
-			setMessage(message);
-		}
-	}, [searchParams]);
-
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		setError(null);
-		setMessage(null);
 		setLoading(true);
 
 		const formData = new FormData(e.currentTarget);
@@ -136,11 +147,10 @@ export default function AdminLoginPage() {
 						</p>
 					</div>
 
-					{message && (
-						<div className="text-sm text-center text-green-600 bg-green-50 border border-green-200 rounded-md p-3">
-							{message}
-						</div>
-					)}
+					{/* Wrap the component using searchParams in Suspense boundary */}
+					<Suspense fallback={<div className="h-10"></div>}>
+						<LoginMessage />
+					</Suspense>
 
 					<form className="mt-8 space-y-6" onSubmit={handleSubmit}>
 						<div className="space-y-4">
