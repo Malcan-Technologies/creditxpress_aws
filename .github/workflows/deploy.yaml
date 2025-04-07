@@ -25,7 +25,7 @@ jobs:
       # Build Frontend
       - name: Install frontend dependencies
         working-directory: ./frontend
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Build frontend application
         working-directory: ./frontend
@@ -34,7 +34,7 @@ jobs:
       # Build Admin
       - name: Install admin dependencies
         working-directory: ./admin
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Build admin application
         working-directory: ./admin
@@ -154,7 +154,7 @@ jobs:
             
             if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
               echo "Installing frontend dependencies..."
-              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
+              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline --legacy-peer-deps
               echo "$CURRENT_HASH" > "$HASH_FILE"
             else
               echo "Frontend dependencies are up to date, skipping installation"
@@ -181,7 +181,7 @@ jobs:
             
             if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
               echo "Installing admin dependencies..."
-              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
+              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline --legacy-peer-deps
               echo "$CURRENT_HASH" > "$HASH_FILE"
             else
               echo "Admin dependencies are up to date, skipping installation"
