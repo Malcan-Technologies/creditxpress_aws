@@ -403,16 +403,31 @@ jobs:
             # Note: We're only checking existence, not displaying sensitive values
             if grep -q "PORT" .env && grep -q "DATABASE_URL" .env && grep -q "JWT_SECRET" .env; then
               echo "✓ Backend environment includes required variables"
-              BACKEND_PORT=$(grep "PORT" .env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
+              # Extract PORT value and ensure it's just the number
+              BACKEND_PORT=$(grep "^PORT=" .env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
+              # Verify it's a valid number and not concatenated values
+              if ! [[ "$BACKEND_PORT" =~ ^[0-9]+$ ]]; then
+                echo "WARNING: PORT value '$BACKEND_PORT' is not a valid number. Using default 4000."
+                BACKEND_PORT="4000"
+              fi
               echo "Backend configured to use port: $BACKEND_PORT"
             else
               echo "⚠️ WARNING: Backend environment missing critical variables!"
               grep -v "PASSWORD\|SECRET" .env | grep "=" || echo "No readable variables found"
+              BACKEND_PORT="4000"
             fi
             
             # Start or restart Docker containers
             echo "Deploying backend services with Docker..."
-            export DOCKER_BUILDKIT=1
+            # Check if buildx is available, if not disable BUILDKIT
+            if docker buildx version >/dev/null 2>&1; then
+              export DOCKER_BUILDKIT=1
+              echo "BuildKit enabled - buildx component is available"
+            else
+              export DOCKER_BUILDKIT=0
+              echo "BuildKit disabled - buildx component is not available"
+            fi
+            
             echo "Stopping any existing containers..."
             docker-compose -f docker-compose.prod.yml down
             
@@ -493,7 +508,13 @@ jobs:
             fi
             
             # Get backend port for checking Nginx config
-            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
+            # Extract PORT value and ensure it's just the number
+            BACKEND_PORT=$(grep "^PORT=" /var/www/growkapital/backend/.env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
+            # Verify it's a valid number and not concatenated values
+            if ! [[ "$BACKEND_PORT" =~ ^[0-9]+$ ]]; then
+              echo "WARNING: PORT value '$BACKEND_PORT' is not a valid number. Using default 4000."
+              BACKEND_PORT="4000"
+            fi
             echo "Detected backend port: [$BACKEND_PORT]"
             
             # Check if nginx is using the correct ports
@@ -788,7 +809,13 @@ jobs:
             fi
             
             # Check backend port (from env file or default to 4000)
-            BACKEND_PORT=$(grep "PORT" /var/www/growkapital/backend/.env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
+            # Extract PORT value and ensure it's just the number
+            BACKEND_PORT=$(grep "^PORT=" /var/www/growkapital/backend/.env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
+            # Verify it's a valid number and not concatenated values
+            if ! [[ "$BACKEND_PORT" =~ ^[0-9]+$ ]]; then
+              echo "WARNING: PORT value '$BACKEND_PORT' is not a valid number. Using default 4000."
+              BACKEND_PORT="4000"
+            fi
             echo "Port $BACKEND_PORT (backend) status:"
             if ss -tuln | grep -q ":$BACKEND_PORT "; then
               echo "✅ Backend is listening on port $BACKEND_PORT"
