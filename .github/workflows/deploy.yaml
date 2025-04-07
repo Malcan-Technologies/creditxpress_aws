@@ -85,8 +85,17 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Sync changed files
+      - name: Prepare deployment files
         run: |
+          # Add descriptive name to package.json for easier identification
+          cd frontend
+          sed -i 's/"name": "frontend"/"name": "growkapital-frontend"/g' package.json
+          cd ..
+          
+          cd admin
+          sed -i 's/"name": "admin"/"name": "growkapital-admin"/g' package.json
+          cd ..
+          
           # Create a temporary directory for organizing files
           mkdir -p temp_deploy/frontend
           mkdir -p temp_deploy/admin
@@ -143,21 +152,56 @@ jobs:
           
           # Create archive from the organized directory
           cd temp_deploy
-          tar -czf ../deploy.tar.gz .
+          
+          # Check if /mnt has more space
+          if [ -d "/mnt" ] && [ -w "/mnt" ]; then
+            TEMP_TAR_DIR="/mnt"
+          else
+            TEMP_TAR_DIR="/tmp"
+          fi
+          
+          echo "Using $TEMP_TAR_DIR for temporary tar storage"
+          
+          # Split the archive into smaller pieces to avoid disk space issues
+          echo "Creating frontend archive..."
+          tar -czf $TEMP_TAR_DIR/frontend.tar.gz ./frontend
+          
+          echo "Creating admin archive..."
+          tar -czf $TEMP_TAR_DIR/admin.tar.gz ./admin
+          
+          echo "Creating backend archive..."
+          tar -czf $TEMP_TAR_DIR/backend.tar.gz ./backend
+          
+          echo "Creating config archive..."
+          tar -czf $TEMP_TAR_DIR/config.tar.gz ./config ./scripts
+          
           cd ..
           
           # Clean up temporary directory
           rm -rf temp_deploy
           
-          # Copy archive to server
-          scp -i ~/.ssh/deploy_key deploy.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/
+          # Copy archives to server
+          scp -i ~/.ssh/deploy_key $TEMP_TAR_DIR/frontend.tar.gz $TEMP_TAR_DIR/admin.tar.gz $TEMP_TAR_DIR/backend.tar.gz $TEMP_TAR_DIR/config.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/
           
-          # Extract and sync only changed files
+          # Extract files on server in chunks to avoid disk space issues
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital
-            mkdir -p /tmp/new-deploy
-            cd /tmp/new-deploy
-            tar xzf /tmp/deploy.tar.gz
+            mkdir -p /tmp/new-deploy-frontend
+            mkdir -p /tmp/new-deploy-admin
+            mkdir -p /tmp/new-deploy-backend
+            mkdir -p /tmp/new-deploy-config
+            
+            echo "Extracting frontend files..."
+            tar -xzf /tmp/frontend.tar.gz -C /tmp/new-deploy-frontend
+            
+            echo "Extracting admin files..."
+            tar -xzf /tmp/admin.tar.gz -C /tmp/new-deploy-admin
+            
+            echo "Extracting backend files..."
+            tar -xzf /tmp/backend.tar.gz -C /tmp/new-deploy-backend
+            
+            echo "Extracting config files..."
+            tar -xzf /tmp/config.tar.gz -C /tmp/new-deploy-config
             
             # Create backup of critical configuration files
             echo "Creating backup of critical files..."
@@ -180,20 +224,20 @@ jobs:
             
             # Frontend
             echo "Syncing frontend files..."
-            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy/frontend/ /var/www/growkapital/frontend/
+            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy-frontend/ /var/www/growkapital/frontend/
             
             # Admin
             echo "Syncing admin files..."
-            rsync -av --delete --exclude="node_modules" --exclude=".env.local" /tmp/new-deploy/admin/ /var/www/growkapital/admin/
+            rsync -av --delete --exclude="node_modules" --exclude=".env.local" /tmp/new-deploy-admin/ /var/www/growkapital/admin/
             
             # Backend
             echo "Syncing backend files..."
-            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy/backend/ /var/www/growkapital/backend/
+            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy-backend/ /var/www/growkapital/backend/
             
             # Config and scripts
             echo "Syncing config and scripts..."
-            rsync -av /tmp/new-deploy/config/ /var/www/growkapital/config/
-            rsync -av /tmp/new-deploy/scripts/ /var/www/growkapital/scripts/
+            rsync -av /tmp/new-deploy-config/config/ /var/www/growkapital/config/
+            rsync -av /tmp/new-deploy-config/scripts/ /var/www/growkapital/scripts/
             
             # Ensure proper permissions for Next.js static files
             chmod -R 755 /var/www/growkapital/frontend/.next/static
@@ -227,7 +271,7 @@ jobs:
             fi
             
             touch /tmp/files-changed
-            rm -rf /tmp/new-deploy /tmp/deploy.tar.gz
+            rm -rf /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config /tmp/frontend.tar.gz /tmp/admin.tar.gz /tmp/backend.tar.gz /tmp/config.tar.gz
           '
 
       - name: Deploy
@@ -247,6 +291,44 @@ jobs:
               sudo chown -R $USER:$USER /var/www/growkapital
             fi
             
+            # Check disk space
+            echo "Checking disk space..."
+            df -h
+            
+            # Clean up disk space if needed
+            FREE_SPACE_KB=$(df -k / | awk 'NR==2 {print $4}')
+            echo "Free space: ${FREE_SPACE_KB}KB"
+            
+            if [ ${FREE_SPACE_KB} -lt 1048576 ]; then  # Less than 1GB free
+              echo "Low disk space detected, cleaning up..."
+              
+              # Clean Docker
+              echo "Cleaning Docker resources..."
+              docker system prune -af --volumes || true
+              
+              # Clean npm caches
+              echo "Cleaning npm caches..."
+              npm cache clean --force || true
+              
+              # Clean temporary files
+              echo "Cleaning temporary files..."
+              sudo rm -rf /tmp/* || true
+              
+              # Clean old logs
+              echo "Cleaning old logs..."
+              sudo find /var/log -type f -name "*.gz" -delete || true
+              sudo find /var/log -type f -name "*.1" -delete || true
+              sudo find /var/log -type f -name "*.old" -delete || true
+              
+              # Clean old deployments
+              echo "Cleaning old deployment backups..."
+              find /var/www/growkapital -name "config_backup_*" -type d -mtime +7 -exec rm -rf {} \; 2>/dev/null || true
+              
+              # Check space after cleanup
+              echo "Space after cleanup:"
+              df -h
+            fi
+            
             # Install debugging tools if needed
             if ! command -v wkhtmltoimage > /dev/null; then
               echo "Installing wkhtmltopdf for debugging screenshots..."
@@ -261,13 +343,22 @@ jobs:
             # Verify this is the correct project by checking for unique identifiers
             if [ -f "/var/www/growkapital/frontend/package.json" ]; then
               echo "Verifying project identity..."
-              grep -q "growkapital" /var/www/growkapital/frontend/package.json
-              if [ $? -eq 0 ]; then
-                echo "✓ Confirmed target directory contains the correct project"
+              if grep -q "\"name\":" /var/www/growkapital/frontend/package.json; then
+                PROJECT_NAME=$(grep "\"name\":" /var/www/growkapital/frontend/package.json | cut -d '"' -f 4)
+                echo "Found project name: $PROJECT_NAME"
+                
+                # Accept either "growkapital", "growkapital-frontend", or just "frontend"
+                if [[ "$PROJECT_NAME" == "growkapital"* || "$PROJECT_NAME" == "frontend" ]]; then
+                  echo "✓ Confirmed target directory contains the correct project"
+                else
+                  echo "WARNING: Target directory may contain a different project!"
+                  echo "Project verification failed. Please check manually."
+                  grep "name" /var/www/growkapital/frontend/package.json
+                  exit 1
+                fi
               else
-                echo "WARNING: Target directory may contain a different project!"
-                echo "Project verification failed. Please check manually."
-                grep "name" /var/www/growkapital/frontend/package.json
+                echo "WARNING: Couldn't determine project name from package.json!"
+                cat /var/www/growkapital/frontend/package.json | head -5
                 exit 1
               fi
             fi
@@ -275,7 +366,7 @@ jobs:
             cd /var/www/growkapital
             
             # Cleanup any leftover temporary files
-            rm -rf /tmp/new-deploy /tmp/deploy.tar.gz node_modules_old
+            rm -rf /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config
             
             # Memory optimization: Clear system cache
             sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
