@@ -10,7 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@date-io/date-fns": "^3.2.1",
+    "@date-io/date-fns": "^2.16.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@heroicons/react": "^2.1.1",
@@ -21,7 +21,7 @@
     "@radix-ui/react-tooltip": "^1.1.8",
     "@types/js-cookie": "^3.0.6",
     "@types/next": "^8.0.7",
-    "date-fns": "2.29.3",
+    "date-fns": "^2.29.3",
     "formik": "^2.4.5",
     "framer-motion": "^11.18.2",
     "js-cookie": "^3.0.5",
