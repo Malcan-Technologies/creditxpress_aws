@@ -677,26 +677,14 @@ jobs:
             echo "Fixing permissions for frontend and admin..."
             cd /var/www/growkapital
             
-            echo "Verifying node_modules existence before setting permissions..."
-
-            # Check frontend node_modules
-            if [ -d "frontend/node_modules/.bin" ]; then
-              echo "Setting correct permissions for frontend node_modules..."
-              chmod -R 755 frontend/node_modules/.bin/
-              find frontend/node_modules/.bin/ -type f -exec chmod +x {} \;
-            else
-              echo "⚠️ Frontend node_modules/.bin directory does not exist!"
-            fi
-
-            # Check admin node_modules
-            if [ -d "admin/node_modules/.bin" ]; then
-              echo "Setting correct permissions for admin node_modules..."
-              chmod -R 755 admin/node_modules/.bin/
-              find admin/node_modules/.bin/ -type f -exec chmod +x {} \;
-            else
-              echo "⚠️ Admin node_modules/.bin directory does not exist!"
-            fi
-
+            echo "Setting correct permissions for frontend node_modules..."
+            chmod -R 755 frontend/node_modules/.bin/
+            find frontend/node_modules/.bin/ -type f -exec chmod +x {} \;
+            
+            echo "Setting correct permissions for admin node_modules..."
+            chmod -R 755 admin/node_modules/.bin/
+            find admin/node_modules/.bin/ -type f -exec chmod +x {} \;
+            
             # Start the frontend application properly
             echo "Starting the frontend application..."
             cd /var/www/growkapital/frontend
@@ -704,82 +692,50 @@ jobs:
             pm2 delete backend 2>/dev/null || true
             pm2 delete growkapital 2>/dev/null || true
 
-            # Ensure frontend node_modules exists with required packages
-            if [ ! -d "node_modules" ] || [ ! -d "node_modules/.bin" ] || [ ! -f "node_modules/.bin/next" ]; then
-              echo "⚠️ Frontend node_modules missing or incomplete!"
-              echo "Performing clean installation of frontend dependencies..."
+            # Improved node_modules check and installation for frontend
+            echo "Checking frontend node_modules status..."
+            if [ ! -d "node_modules" ]; then
+              echo "⚠️ Frontend node_modules directory is missing!"
+              echo "Installing frontend dependencies with verbose output..."
               
-              # Clear any partial installations
-              rm -rf node_modules package-lock.json .next/cache
-              
-              # Install next separately to ensure it's available
-              npm install next --save
-              
-              # Now install all dependencies
-              npm install --production --legacy-peer-deps || {
-                echo "⚠️ Full installation failed, installing minimal deps"
-                npm install react react-dom next --save
-              }
-              
-              # Verify critical files
-              if [ -f "node_modules/.bin/next" ]; then
-                echo "✅ Successfully installed next.js binary"
-                chmod +x node_modules/.bin/next
+              # First ensure package.json exists
+              if [ ! -f "package.json" ]; then
+                echo "❌ ERROR: package.json not found in frontend directory!"
+                ls -la
               else
-                echo "❌ Failed to install next.js binary"
-                mkdir -p node_modules/.bin
-                echo '#!/bin/sh
-/usr/bin/env node "/var/www/growkapital/frontend/node_modules/next/dist/bin/next"
-' > node_modules/.bin/next
-                chmod +x node_modules/.bin/next
-              fi
-            fi
-
-            # Create start script with npm instead of direct next binary
-            cat > start.sh << 'EOF'
-            #!/bin/bash
-            cd "$(dirname "$0")"
-            export PORT=3002
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
-            npm start -- --port 3002 --hostname 0.0.0.0
-            EOF
-            chmod +x start.sh
-
-            # Ensure package.json has correct start script
-            if ! grep -q '"start":' package.json || ! grep -q '"start": "next start"' package.json; then
-              echo "Updating package.json start script..."
-              sed -i 's/"scripts": {/"scripts": {\n    "start": "next start",/' package.json
-            fi
-
-            # Start frontend with npm instead of next binary
-            echo "Starting frontend with npm start script..."
-            export NODE_OPTIONS="--max-old-space-size=256"
-            pm2 start ./start.sh --name "growkapital-frontend"
-
-            # Verify port binding for frontend
-            sleep 10
-            if ss -tuln | grep -q ":3002 "; then
-              echo "✅ Frontend successfully bound to port 3002"
-            else
-              echo "⚠️ Frontend not bound to port 3002, trying alternative method..."
-              pm2 delete growkapital-frontend
-              cd /var/www/growkapital/frontend
-              echo "Starting frontend with npm directly..."
-              pm2 start npm --name "growkapital-frontend" -- start -- --port 3002 --hostname 0.0.0.0
-              
-              # Check again after second attempt
-              sleep 10
-              if ! ss -tuln | grep -q ":3002 "; then
-                echo "❌ Frontend still not running! Final fallback attempt..."
-                pm2 delete growkapital-frontend
-                # Use Node directly as final fallback
-                if [ -f "node_modules/next/dist/bin/next" ]; then
-                  pm2 start node --name "growkapital-frontend" -- ./node_modules/next/dist/bin/next start --port 3002 --hostname 0.0.0.0
+                echo "✓ package.json found in frontend directory"
+                cat package.json | grep "dependencies" -A 5
+                echo "Installing dependencies..."
+                
+                # Clean any corrupted node_modules or cache
+                rm -rf node_modules package-lock.json .next/cache
+                
+                # Install with more debug info and fallbacks
+                npm install --production --verbose --legacy-peer-deps || {
+                  echo "❌ npm install failed with error code $?"
+                  echo "Trying alternative installation method..."
+                  npm install --no-optional --production --legacy-peer-deps || {
+                    echo "❌ Alternative installation also failed!"
+                    echo "Creating minimal node_modules to continue..."
+                    mkdir -p node_modules/.bin
+                    npm install next react react-dom --no-save
+                  }
+                }
+                
+                # Verify installation
+                if [ -d "node_modules" ]; then
+                  echo "✓ node_modules directory now exists"
+                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
                 else
-                  echo "❌❌ Cannot start frontend - next.js not found!"
+                  echo "❌ node_modules still missing after installation attempt!"
                 fi
               fi
+            else
+              echo "✓ Frontend node_modules directory exists"
+              ls -la node_modules/.bin/ | grep next || {
+                echo "⚠️ next binary missing, reinstalling Next.js..."
+                npm install next --save
+              }
             fi
 
             # Start the admin application properly
@@ -787,106 +743,109 @@ jobs:
             cd /var/www/growkapital/admin
             pm2 delete growkapital-admin 2>/dev/null || true
 
-            # Ensure admin node_modules exists with required packages
-            if [ ! -d "node_modules" ] || [ ! -d "node_modules/.bin" ] || [ ! -f "node_modules/.bin/next" ]; then
-              echo "⚠️ Admin node_modules missing or incomplete!"
-              echo "Performing clean installation of admin dependencies..."
-              
-              # Clear any partial installations
-              rm -rf node_modules package-lock.json .next/cache
-              
-              # Install next separately to ensure it's available
-              npm install next --save
-              
-              # Now install all dependencies
-              npm install --production --legacy-peer-deps || {
-                echo "⚠️ Full installation failed, installing minimal deps"
-                npm install react react-dom next --save
-              }
-              
-              # Verify critical files
-              if [ -f "node_modules/.bin/next" ]; then
-                echo "✅ Successfully installed next.js binary"
-                chmod +x node_modules/.bin/next
+            # Check for node_modules in admin directory and install with more debug info
+            echo "Checking admin node_modules status..."
+            if [ ! -d "node_modules" ]; then
+              echo "⚠️ Admin node_modules directory is missing!"
+              echo "Installing admin dependencies with verbose output..."
+              # First ensure package.json exists
+              if [ ! -f "package.json" ]; then
+                echo "❌ ERROR: package.json not found in admin directory!"
+                ls -la
               else
-                echo "❌ Failed to install next.js binary"
-                mkdir -p node_modules/.bin
-                echo '#!/bin/sh
-/usr/bin/env node "/var/www/growkapital/admin/node_modules/next/dist/bin/next"
-' > node_modules/.bin/next
-                chmod +x node_modules/.bin/next
+                echo "✓ package.json found in admin directory"
+                cat package.json | grep "dependencies" -A 5
+                echo "Installing dependencies..."
+                # Clean any corrupted node_modules
+                rm -rf node_modules package-lock.json .next/cache
+                # Install with more debug info
+                npm install --production --verbose --legacy-peer-deps || {
+                  echo "❌ npm install failed with error code $?"
+                  echo "Trying alternative installation method..."
+                  npm install --no-optional --production --legacy-peer-deps || {
+                    echo "❌ Alternative installation also failed!"
+                    echo "Creating minimal node_modules to continue..."
+                    mkdir -p node_modules/.bin
+                    npm install next react react-dom --no-save
+                  }
+                }
+                
+                # Verify installation
+                if [ -d "node_modules" ]; then
+                  echo "✓ node_modules directory now exists"
+                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
+                else
+                  echo "❌ node_modules still missing after installation attempt!"
+                fi
               fi
+            else
+              echo "✓ Admin node_modules directory exists"
+              ls -la node_modules/.bin/ | grep next || {
+                echo "⚠️ next binary missing, reinstalling Next.js..."
+                npm install next --save
+              }
             fi
 
-            # Create start script with npm instead of direct next binary
+            # Create start script with explicit port binding
+            cat > start.sh << 'EOF'
+            #!/bin/bash
+            cd "$(dirname "$0")"
+            export PORT=3002
+            export NODE_ENV=production
+            export HOSTNAME=0.0.0.0
+            ./node_modules/.bin/next start -p 3002 --hostname 0.0.0.0
+            EOF
+            chmod +x start.sh
+
+            # Start frontend
+            echo "Starting frontend with explicit port 3002..."
+            export NODE_OPTIONS="--max-old-space-size=256"
+            pm2 start ./start.sh --name "growkapital-frontend"
+
+            # Verify port binding for frontend
+            sleep 5
+            if ss -tuln | grep -q ":3002 "; then
+              echo "✅ Frontend successfully bound to port 3002"
+            else
+              echo "⚠️ Frontend not bound to port 3002, trying alternative method..."
+              pm2 delete growkapital-frontend
+              cd /var/www/growkapital/frontend
+              pm2 start --name "growkapital-frontend" -- npx next start -p 3002 --hostname 0.0.0.0
+            fi
+
+            # Create start script with explicit port binding
             cat > start.sh << 'EOF'
             #!/bin/bash
             cd "$(dirname "$0")"
             export PORT=3003
             export NODE_ENV=production
             export HOSTNAME=0.0.0.0
-            npm start -- --port 3003 --hostname 0.0.0.0
+            ./node_modules/.bin/next start -p 3003 --hostname 0.0.0.0
             EOF
             chmod +x start.sh
 
-            # Ensure package.json has correct start script
-            if ! grep -q '"start":' package.json || ! grep -q '"start": "next start"' package.json; then
-              echo "Updating package.json start script..."
-              sed -i 's/"scripts": {/"scripts": {\n    "start": "next start",/' package.json
-            fi
-
-            # Start admin with npm instead of next binary
-            echo "Starting admin with npm start script..."
+            # Start admin
+            echo "Starting admin with explicit port 3003..."
             export NODE_OPTIONS="--max-old-space-size=256"
             pm2 start ./start.sh --name "growkapital-admin"
 
             # Verify port binding for admin
-            sleep 10  # Increased sleep time to allow more startup time
+            sleep 5
             if ss -tuln | grep -q ":3003 "; then
               echo "✅ Admin successfully bound to port 3003"
             else
               echo "⚠️ Admin not bound to port 3003, trying alternative method..."
               pm2 delete growkapital-admin
               cd /var/www/growkapital/admin
-              echo "Starting admin with npm directly..."
-              pm2 start npm --name "growkapital-admin" -- start -- --port 3003 --hostname 0.0.0.0
-              
-              # Check again after second attempt
-              sleep 10
-              if ! ss -tuln | grep -q ":3003 "; then
-                echo "❌ Admin still not running! Final fallback attempt..."
-                pm2 delete growkapital-admin
-                # Use Node directly as final fallback
-                if [ -f "node_modules/next/dist/bin/next" ]; then
-                  pm2 start node --name "growkapital-admin" -- ./node_modules/next/dist/bin/next start --port 3003 --hostname 0.0.0.0
-                else
-                  echo "❌❌ Cannot start admin - next.js not found!"
-                fi
-              fi
+              pm2 start --name "growkapital-admin" -- npx next start -p 3003 --hostname 0.0.0.0
             fi
 
-            # Ensure changes are saved and processes are stable
-            echo "Saving PM2 configuration and ensuring process stability..."
-            pm2 save --force || pm2 save --silent || echo "Failed to save PM2 configuration"
-            
-            # List all processes
-            echo "Current PM2 processes:"
-            pm2 list
-            
-            # Restart all processes to ensure clean state
+            # Save PM2 configuration for persistence across reboots
+            pm2 save --silent
+
+            # Restart all PM2 processes to ensure clean state
             echo "Restarting all PM2 processes to ensure clean state..."
-            pm2 restart all || echo "Failed to restart all processes"
-            
-            # Final verification
-            echo "Verifying ports after restart:"
-            ss -tuln | grep -E ':(3002|3003)'
-            
-            # Ensure PM2 startup persists across reboots
-            if command -v pm2 > /dev/null; then
-              echo "Setting up PM2 to start on system boot..."
-              pm2 startup || echo "Failed to setup PM2 startup"
-              pm2 save --force || echo "Failed to save PM2 configuration again"
-            fi
+            pm2 restart all
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
