@@ -26,15 +26,42 @@ jobs:
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: |
-          # Clean any existing node_modules
-          rm -rf node_modules package-lock.json
+          # Smart node_modules check
+          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ] || [ "$(find node_modules -type f -name "date-fns" -o -name "@date-io" | wc -l)" -eq 0 ]; then
+            echo "Cleaning node_modules due to missing dependencies or package-lock.json"
+            rm -rf node_modules package-lock.json
+          else
+            echo "✓ Existing node_modules found, checking for updates..."
+            # Check if package.json has changed
+            if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
+              echo "✓ package.json unchanged, skipping clean install"
+            else
+              echo "package.json changed, cleaning node_modules"
+              rm -rf node_modules package-lock.json
+            fi
+          fi
+          
+          # Save package.json hash for future checks
+          md5sum package.json > .package.json.hash
+          
           # Install dependencies with modern flags and handle conflicts
-          npm install --omit=dev --omit=optional --legacy-peer-deps
-          # Install Next.js with specific platform
-          npm install next@latest --platform=linux --arch=x64 --omit=optional
-          # Install specific versions to resolve conflicts
-          npm install date-fns@4.1.0 @date-io/date-fns@3.2.1 --omit=optional --legacy-peer-deps
-          npm install --save framer-motion recharts --omit=optional --legacy-peer-deps
+          if [ ! -d "node_modules" ]; then
+            echo "Performing fresh install..."
+            # First install date-fns at the correct version
+            npm install date-fns@4.1.0 --save-exact
+            # Install @date-io/date-fns after date-fns is installed
+            npm install @date-io/date-fns@3.2.1 --save-exact
+            # Install MUI packages with the new base component
+            npm install @base-ui-components/react --save
+            # Install remaining dependencies
+            npm install --omit=dev --omit=optional --legacy-peer-deps
+            # Install Next.js with specific platform
+            npm install next@latest --platform=linux --arch=x64 --omit=optional
+            npm install --save framer-motion recharts --omit=optional --legacy-peer-deps
+          else
+            echo "Updating existing dependencies..."
+            npm install --omit=dev --omit=optional --legacy-peer-deps
+          fi
 
       - name: Build frontend application
         working-directory: ./frontend
@@ -63,14 +90,41 @@ jobs:
       - name: Install admin dependencies
         working-directory: ./admin
         run: |
-          # Clean any existing node_modules
-          rm -rf node_modules package-lock.json
+          # Smart node_modules check
+          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ] || [ "$(find node_modules -type f -name "date-fns" -o -name "@date-io" | wc -l)" -eq 0 ]; then
+            echo "Cleaning node_modules due to missing dependencies or package-lock.json"
+            rm -rf node_modules package-lock.json
+          else
+            echo "✓ Existing node_modules found, checking for updates..."
+            # Check if package.json has changed
+            if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
+              echo "✓ package.json unchanged, skipping clean install"
+            else
+              echo "package.json changed, cleaning node_modules"
+              rm -rf node_modules package-lock.json
+            fi
+          fi
+          
+          # Save package.json hash for future checks
+          md5sum package.json > .package.json.hash
+          
           # Install dependencies with modern flags and handle conflicts
-          npm install --omit=dev --omit=optional --legacy-peer-deps
-          # Install Next.js with specific platform
-          npm install next@latest --platform=linux --arch=x64 --omit=optional
-          # Install specific versions to resolve conflicts
-          npm install date-fns@4.1.0 @date-io/date-fns@3.2.1 --omit=optional --legacy-peer-deps
+          if [ ! -d "node_modules" ]; then
+            echo "Performing fresh install..."
+            # First install date-fns at the correct version
+            npm install date-fns@4.1.0 --save-exact
+            # Install @date-io/date-fns after date-fns is installed
+            npm install @date-io/date-fns@3.2.1 --save-exact
+            # Install MUI packages with the new base component
+            npm install @base-ui-components/react --save
+            # Install remaining dependencies
+            npm install --omit=dev --omit=optional --legacy-peer-deps
+            # Install Next.js with specific platform
+            npm install next@latest --platform=linux --arch=x64 --omit=optional
+          else
+            echo "Updating existing dependencies..."
+            npm install --omit=dev --omit=optional --legacy-peer-deps
+          fi
 
       - name: Build admin application
         working-directory: ./admin
