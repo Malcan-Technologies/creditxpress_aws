@@ -144,6 +144,23 @@ jobs:
             chmod -R 755 /var/www/growkapital/frontend/public
             chmod -R 755 /var/www/growkapital/admin/.next/static
             chmod -R 755 /var/www/growkapital/admin/public
+            
+            # Verify public directories
+            echo "Verifying public directories..."
+            if [ -d "/var/www/growkapital/frontend/public" ]; then
+              echo "✓ Frontend public directory exists"
+              ls -la /var/www/growkapital/frontend/public | head -10
+            else
+              echo "✗ Frontend public directory is missing!"
+            fi
+            
+            if [ -d "/var/www/growkapital/admin/public" ]; then
+              echo "✓ Admin public directory exists"
+              ls -la /var/www/growkapital/admin/public | head -5
+            else
+              echo "✗ Admin public directory is missing!"
+            fi
+            
             touch /tmp/files-changed
             rm -rf /tmp/new-deploy /tmp/deploy.tar.gz
           '
@@ -174,6 +191,26 @@ jobs:
             echo "Deploying backend services..."
             docker-compose -f docker-compose.prod.yml down
             docker-compose -f docker-compose.prod.yml up -d --build
+            
+            # Verify backend is running
+            echo "Verifying backend deployment..."
+            sleep 10 # Give containers time to start
+            if docker ps | grep -q "backend"; then
+              echo "✅ Backend container is running"
+            else
+              echo "❌ WARNING: Backend container not found in docker ps output"
+              docker ps
+              docker-compose -f docker-compose.prod.yml logs
+            fi
+            
+            # Check if port 4000 is accessible
+            if netstat -tuln | grep -q ":4000 "; then
+              echo "✅ Port 4000 is open and listening"
+              curl -s http://localhost:4000/api/health || echo "Note: Health endpoint may not be implemented"
+            else
+              echo "❌ WARNING: Port 4000 is not open. Backend may not be accessible!"
+              sudo netstat -tuln
+            fi
             
             # Deploy Frontend
             cd ../frontend
@@ -255,6 +292,75 @@ jobs:
             pm2 start npm --name "growkapital-admin" -- start
             
             pm2 save --silent
+            
+            # Verify critical pages are accessible
+            echo "Verifying critical pages..."
+            LOGIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://growkapital.com/login)
+            echo "Login page status: $LOGIN_STATUS"
+            if [ "$LOGIN_STATUS" = "200" ]; then
+              echo "✓ Login page is accessible"
+            else
+              echo "✗ Login page returned status $LOGIN_STATUS"
+              # Check Next.js server logs
+              pm2 logs growkapital-frontend --lines 20 --nostream
+            fi
+            
+            # Verify SSL certificate for both domains
+            echo "Verifying SSL certificates..."
+            MAIN_SSL=$(curl -sI https://growkapital.com | grep -i "HTTP/")
+            ADMIN_SSL=$(curl -sI https://admin.growkapital.com | grep -i "HTTP/")
+            echo "Main domain SSL: $MAIN_SSL"
+            echo "Admin subdomain SSL: $ADMIN_SSL"
+            
+            # Check certificate expiration and domains
+            echo "SSL certificate details:"
+            CERT_INFO=$(echo | openssl s_client -showcerts -servername growkapital.com -connect growkapital.com:443 2>/dev/null | openssl x509 -noout -dates -subject -issuer -ext subjectAltName)
+            echo "$CERT_INFO"
+            
+            # Check if admin subdomain is covered by certificate
+            if echo "$CERT_INFO" | grep -q "admin.growkapital.com"; then
+              echo "✅ admin.growkapital.com is included in the SSL certificate"
+            else
+              echo "⚠️ admin.growkapital.com is NOT included in the SSL certificate!"
+              echo "Attempting to expand certificate to include admin subdomain..."
+              
+              # Only proceed with auto-expansion if explicitly allowed by environment variable
+              if [ "$AUTO_EXPAND_SSL" = "true" ]; then
+                echo "AUTO_EXPAND_SSL is enabled, proceeding with certificate expansion"
+                sudo certbot --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --non-interactive
+                if [ $? -eq 0 ]; then
+                  echo "Certificate expansion successful!"
+                  sudo systemctl reload nginx
+                else
+                  echo "Certificate expansion failed, please try manually:"
+                  echo "sudo certbot --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com"
+                fi
+              else
+                echo "AUTO_EXPAND_SSL is not enabled. To automatically expand the certificate, set AUTO_EXPAND_SSL=true"
+                echo "Manual command: sudo certbot --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com"
+              fi
+            fi
+            
+            # Check if certificate renewal is needed (if less than 30 days until expiration)
+            echo "Checking if certificate renewal is needed..."
+            EXPIRY_DATE=$(echo | openssl s_client -showcerts -servername growkapital.com -connect growkapital.com:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+            EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s)
+            NOW_EPOCH=$(date +%s)
+            DAYS_REMAINING=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
+            echo "SSL certificate expires in $DAYS_REMAINING days"
+            
+            if [ "$DAYS_REMAINING" -lt 30 ]; then
+              echo "Certificate expiring soon, attempting renewal..."
+              sudo certbot renew --quiet
+              if [ $? -eq 0 ]; then
+                echo "Certificate renewal successful"
+                sudo systemctl reload nginx
+              else
+                echo "Certificate renewal failed, please check manually"
+              fi
+            else
+              echo "Certificate is still valid for more than 30 days"
+            fi
             
             if [ -f "/tmp/files-changed" ]; then
               rm -f "/tmp/files-changed"
