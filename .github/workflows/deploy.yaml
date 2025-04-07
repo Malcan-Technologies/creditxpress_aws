@@ -47,10 +47,10 @@ jobs:
           # Install dependencies with modern flags and handle conflicts
           if [ ! -d "node_modules" ]; then
             echo "Performing fresh install..."
-            # First install date-fns at the correct version
-            npm install date-fns@4.1.0 --save-exact
+            # First install MUI packages with specific date-fns version
+            npm install @mui/x-date-pickers@6.20.2 date-fns@3.6.0 --save-exact --legacy-peer-deps
             # Install @date-io/date-fns after date-fns is installed
-            npm install @date-io/date-fns@3.2.1 --save-exact
+            npm install @date-io/date-fns@3.2.1 --save-exact --legacy-peer-deps
             # Install MUI packages with the new base component
             npm install @base-ui-components/react --save
             # Install remaining dependencies
@@ -111,10 +111,10 @@ jobs:
           # Install dependencies with modern flags and handle conflicts
           if [ ! -d "node_modules" ]; then
             echo "Performing fresh install..."
-            # First install date-fns at the correct version
-            npm install date-fns@4.1.0 --save-exact
+            # First install MUI packages with specific date-fns version
+            npm install @mui/x-date-pickers@6.20.2 date-fns@3.6.0 --save-exact --legacy-peer-deps
             # Install @date-io/date-fns after date-fns is installed
-            npm install @date-io/date-fns@3.2.1 --save-exact
+            npm install @date-io/date-fns@3.2.1 --save-exact --legacy-peer-deps
             # Install MUI packages with the new base component
             npm install @base-ui-components/react --save
             # Install remaining dependencies
