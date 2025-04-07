@@ -754,10 +754,10 @@ jobs:
               # Create next binary if it doesn't exist
               if [ ! -f "node_modules/.bin/next" ]; then
                 echo "Creating next binary wrapper..."
-                cat > node_modules/.bin/next << 'EOFNEXT'
+                cat > node_modules/.bin/next << 'EOF'
 #!/bin/sh
 /usr/bin/env node "/var/www/growkapital/frontend/node_modules/next/dist/bin/next" "$@"
-EOFNEXT
+EOF
                 chmod +x node_modules/.bin/next
               else
                 chmod +x node_modules/.bin/next
@@ -775,14 +775,14 @@ EOFNEXT
             fi
 
             # Create start script with npm instead of direct next binary
-            cat > start.sh << 'EOFSCRIPT'
-            #!/bin/bash
-            cd "$(dirname "$0")"
-            export PORT=3002
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
-            npm start -- --port 3002 --hostname 0.0.0.0
-EOFSCRIPT
+            cat > start.sh << 'EOF'
+#!/bin/bash
+cd "$(dirname "$0")"
+export PORT=3002
+export NODE_ENV=production
+export HOSTNAME=0.0.0.0
+./node_modules/.bin/next start -p 3002 --hostname 0.0.0.0
+EOF
             chmod +x start.sh
 
             # Ensure package.json has correct start script
@@ -876,10 +876,10 @@ EOFSCRIPT
               # Create next binary if it doesn't exist
               if [ ! -f "node_modules/.bin/next" ]; then
                 echo "Creating next binary wrapper..."
-                cat > node_modules/.bin/next << 'EOFNEXT'
+                cat > node_modules/.bin/next << 'EOF'
 #!/bin/sh
 /usr/bin/env node "/var/www/growkapital/admin/node_modules/next/dist/bin/next" "$@"
-EOFNEXT
+EOF
                 chmod +x node_modules/.bin/next
               else
                 chmod +x node_modules/.bin/next
@@ -897,14 +897,14 @@ EOFNEXT
             fi
 
             # Create start script with npm instead of direct next binary
-            cat > start.sh << 'EOFSCRIPT'
-            #!/bin/bash
-            cd "$(dirname "$0")"
-            export PORT=3003
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
-            npm start -- --port 3003 --hostname 0.0.0.0
-EOFSCRIPT
+            cat > start.sh << 'EOF'
+#!/bin/bash
+cd "$(dirname "$0")"
+export PORT=3003
+export NODE_ENV=production
+export HOSTNAME=0.0.0.0
+./node_modules/.bin/next start -p 3003 --hostname 0.0.0.0
+EOF
             chmod +x start.sh
 
             # Ensure package.json has correct start script
