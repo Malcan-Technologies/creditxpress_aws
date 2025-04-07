@@ -162,21 +162,47 @@ jobs:
           
           echo "Using $TEMP_TAR_DIR for temporary tar storage"
           
-          # Split the archive into smaller pieces to avoid disk space issues
+          # Create separate archives for each component to avoid disk space issues
+          echo "Creating archives for deployment..."
+          
+          # Create a temporary directory for each component
+          TEMP_STAGE_DIR="$TEMP_TAR_DIR/staging"
+          mkdir -p "$TEMP_STAGE_DIR/frontend"
+          mkdir -p "$TEMP_STAGE_DIR/admin"
+          mkdir -p "$TEMP_STAGE_DIR/backend"
+          mkdir -p "$TEMP_STAGE_DIR/config"
+          
+          # Copy files to staging with proper filtering
+          echo "Preparing frontend files..."
+          rsync -a --exclude="node_modules" --exclude=".git" frontend/ "$TEMP_STAGE_DIR/frontend/frontend/"
+          
+          echo "Preparing admin files..."
+          rsync -a --exclude="node_modules" --exclude=".git" admin/ "$TEMP_STAGE_DIR/admin/admin/"
+          
+          echo "Preparing backend files..."
+          rsync -a --exclude="node_modules" --exclude=".git" backend/ "$TEMP_STAGE_DIR/backend/backend/"
+          
+          echo "Preparing config and scripts files..."
+          rsync -a config/ "$TEMP_STAGE_DIR/config/config/"
+          rsync -a scripts/ "$TEMP_STAGE_DIR/config/scripts/"
+          
+          # Create tar files using consistent flags
           echo "Creating frontend archive..."
-          tar -czf $TEMP_TAR_DIR/frontend.tar.gz ./frontend
+          tar -czf "$TEMP_TAR_DIR/frontend.tar.gz" -C "$TEMP_STAGE_DIR/frontend" .
           
           echo "Creating admin archive..."
-          tar -czf $TEMP_TAR_DIR/admin.tar.gz ./admin
+          tar -czf "$TEMP_TAR_DIR/admin.tar.gz" -C "$TEMP_STAGE_DIR/admin" .
           
           echo "Creating backend archive..."
-          tar -czf $TEMP_TAR_DIR/backend.tar.gz ./backend
+          tar -czf "$TEMP_TAR_DIR/backend.tar.gz" -C "$TEMP_STAGE_DIR/backend" .
           
           echo "Creating config archive..."
-          tar -czf $TEMP_TAR_DIR/config.tar.gz ./config ./scripts
+          tar -czf "$TEMP_TAR_DIR/config.tar.gz" -C "$TEMP_STAGE_DIR/config" .
+          
+          # Cleanup staging directory
+          rm -rf "$TEMP_STAGE_DIR"
           
           cd ..
-          
           # Clean up temporary directory
           rm -rf temp_deploy
           
@@ -185,23 +211,22 @@ jobs:
           
           # Extract files on server in chunks to avoid disk space issues
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            cd /var/www/growkapital
-            mkdir -p /tmp/new-deploy-frontend
-            mkdir -p /tmp/new-deploy-admin
-            mkdir -p /tmp/new-deploy-backend
-            mkdir -p /tmp/new-deploy-config
+            # Set up extraction paths with proper cleanup first
+            echo "Setting up extraction directories..."
+            rm -rf /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config
+            mkdir -p /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config
             
             echo "Extracting frontend files..."
-            tar -xzf /tmp/frontend.tar.gz -C /tmp/new-deploy-frontend
+            tar -xzf /tmp/frontend.tar.gz -C /tmp/new-deploy-frontend || { echo "Frontend extraction failed"; exit 1; }
             
             echo "Extracting admin files..."
-            tar -xzf /tmp/admin.tar.gz -C /tmp/new-deploy-admin
+            tar -xzf /tmp/admin.tar.gz -C /tmp/new-deploy-admin || { echo "Admin extraction failed"; exit 1; }
             
             echo "Extracting backend files..."
-            tar -xzf /tmp/backend.tar.gz -C /tmp/new-deploy-backend
+            tar -xzf /tmp/backend.tar.gz -C /tmp/new-deploy-backend || { echo "Backend extraction failed"; exit 1; }
             
             echo "Extracting config files..."
-            tar -xzf /tmp/config.tar.gz -C /tmp/new-deploy-config
+            tar -xzf /tmp/config.tar.gz -C /tmp/new-deploy-config || { echo "Config extraction failed"; exit 1; }
             
             # Create backup of critical configuration files
             echo "Creating backup of critical files..."
@@ -219,55 +244,109 @@ jobs:
               cp /var/www/growkapital/backend/.env "$BACKUP_DIR/backend.env"
             fi
             
-            # Selective rsync with extra precautions
-            echo "Syncing files to /var/www/growkapital..."
+            # Create destination directories if they don't exist
+            echo "Creating destination directories..."
+            mkdir -p /var/www/growkapital/frontend
+            mkdir -p /var/www/growkapital/admin
+            mkdir -p /var/www/growkapital/backend
+            mkdir -p /var/www/growkapital/config
+            mkdir -p /var/www/growkapital/scripts
             
-            # Frontend
+            # Sync using rsync with proper flags for preserving permissions
             echo "Syncing frontend files..."
-            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy-frontend/ /var/www/growkapital/frontend/
+            rsync -av --delete /tmp/new-deploy-frontend/frontend/ /var/www/growkapital/frontend/
             
-            # Admin
             echo "Syncing admin files..."
-            rsync -av --delete --exclude="node_modules" --exclude=".env.local" /tmp/new-deploy-admin/ /var/www/growkapital/admin/
+            rsync -av --delete /tmp/new-deploy-admin/admin/ /var/www/growkapital/admin/
             
-            # Backend
             echo "Syncing backend files..."
-            rsync -av --delete --exclude="node_modules" --exclude=".env" /tmp/new-deploy-backend/ /var/www/growkapital/backend/
+            rsync -av --delete /tmp/new-deploy-backend/backend/ /var/www/growkapital/backend/
             
             # Config and scripts
             echo "Syncing config and scripts..."
-            rsync -av /tmp/new-deploy-config/config/ /var/www/growkapital/config/
-            rsync -av /tmp/new-deploy-config/scripts/ /var/www/growkapital/scripts/
+            rsync -av --delete /tmp/new-deploy-config/config/ /var/www/growkapital/config/
+            rsync -av --delete /tmp/new-deploy-config/scripts/ /var/www/growkapital/scripts/
             
-            # Ensure proper permissions for Next.js static files
-            chmod -R 755 /var/www/growkapital/frontend/.next/static
-            chmod -R 755 /var/www/growkapital/frontend/public
-            chmod -R 755 /var/www/growkapital/admin/.next/static
-            chmod -R 755 /var/www/growkapital/admin/public
+            # Verify critical directories exist
+            echo "Verifying critical directories..."
+            if [ ! -d "/var/www/growkapital/frontend/.next" ]; then
+              echo "⚠️ Frontend .next directory not found. Rebuilding..."
+              cd /var/www/growkapital/frontend
+              npm install --production
+              npm run build
+              cd -
+            else
+              echo "✓ Frontend .next directory exists"
+            fi
+            
+            if [ ! -d "/var/www/growkapital/frontend/public" ]; then
+              echo "⚠️ Frontend public directory not found. Creating..."
+              mkdir -p /var/www/growkapital/frontend/public
+            else
+              echo "✓ Frontend public directory exists"
+            fi
+            
+            if [ ! -d "/var/www/growkapital/admin/.next" ]; then
+              echo "⚠️ Admin .next directory not found. Rebuilding..."
+              cd /var/www/growkapital/admin
+              npm install --production
+              npm run build
+              cd -
+            else
+              echo "✓ Admin .next directory exists"
+            fi
+            
+            if [ ! -d "/var/www/growkapital/admin/public" ]; then
+              echo "⚠️ Admin public directory not found. Creating..."
+              mkdir -p /var/www/growkapital/admin/public
+            else
+              echo "✓ Admin public directory exists"
+            fi
+            
+            # Ensure proper permissions for all directories
+            echo "Setting permissions..."
+            chown -R $USER:$USER /var/www/growkapital
+            find /var/www/growkapital -type d -exec chmod 755 {} \;
+            find /var/www/growkapital -type f -exec chmod 644 {} \;
+            chmod +x /var/www/growkapital/scripts/*.sh
             
             # Verify and fix ownership if needed
-            OWNER=$(stat -c "%U:%G" /var/www/growkapital)
-            echo "Current ownership of /var/www/growkapital is $OWNER"
-            
-            if [ "$OWNER" != "$USER:$USER" ]; then
-              echo "Fixing ownership of deployment directory..."
-              sudo chown -R $USER:$USER /var/www/growkapital
-            fi
+            echo "Current ownership of /var/www/growkapital is $(stat -c "%U:%G" /var/www/growkapital)"
             
             # Verify public directories
             echo "Verifying public directories..."
             if [ -d "/var/www/growkapital/frontend/public" ]; then
               echo "✓ Frontend public directory exists"
-              ls -la /var/www/growkapital/frontend/public | head -10
             else
               echo "✗ Frontend public directory is missing!"
             fi
             
             if [ -d "/var/www/growkapital/admin/public" ]; then
               echo "✓ Admin public directory exists"
-              ls -la /var/www/growkapital/admin/public | head -5
             else
               echo "✗ Admin public directory is missing!"
+            fi
+            
+            # Restart services
+            echo "Restarting services..."
+            if systemctl is-active --quiet nginx; then
+              systemctl reload nginx
+              echo "✓ Nginx reloaded"
+            else
+              systemctl start nginx
+              echo "✓ Nginx started"
+            fi
+            
+            cd /var/www/growkapital/backend
+            
+            # If PM2 is running, restart the backend service
+            if which pm2 > /dev/null && pm2 list | grep -q "backend"; then
+              pm2 restart backend || pm2 start npm --name "backend" -- start
+              echo "✓ Backend service restarted"
+            else
+              # If PM2 is not running or backend not found, start it
+              pm2 start npm --name "backend" -- start
+              echo "✓ Backend service started"
             fi
             
             touch /tmp/files-changed
@@ -558,61 +637,85 @@ jobs:
             echo "Inspecting page source for style links..."
             curl -s https://growkapital.com | grep -i "<link.*rel=\"stylesheet\"" || echo "No style links found in page source"
             
-            # Verify SSL certificate for both domains
-            echo "Verifying SSL certificates..."
-            MAIN_SSL=$(curl -sI https://growkapital.com | grep -i "HTTP/")
-            ADMIN_SSL=$(curl -sI https://admin.growkapital.com | grep -i "HTTP/")
-            echo "Main domain SSL: $MAIN_SSL"
-            echo "Admin subdomain SSL: $ADMIN_SSL"
-            
-            # Check certificate expiration and domains
-            echo "SSL certificate details:"
-            CERT_INFO=$(echo | openssl s_client -showcerts -servername growkapital.com -connect growkapital.com:443 2>/dev/null | openssl x509 -noout -dates -subject -issuer -ext subjectAltName)
-            echo "$CERT_INFO"
-            
-            # Check if admin subdomain is covered by certificate
-            if echo "$CERT_INFO" | grep -q "admin.growkapital.com"; then
-              echo "✅ admin.growkapital.com is included in the SSL certificate"
+            # SSL certificate check and renewal
+            echo "Checking SSL certificates..."
+            if [ ! -d "/etc/letsencrypt/live/growkapital.com" ]; then
+              echo "⚠️ SSL certificate directory not found! Running certbot to get new certificate..."
+              sudo certbot --nginx -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --agree-tos --non-interactive --email ${{ secrets.SSL_EMAIL }} || {
+                echo "❌ Failed to obtain SSL certificates automatically"
+                echo "Manual command: sudo certbot --nginx -d growkapital.com -d www.growkapital.com -d admin.growkapital.com"
+              }
             else
-              echo "⚠️ admin.growkapital.com is NOT included in the SSL certificate!"
-              echo "Attempting to expand certificate to include admin subdomain..."
+              echo "✓ SSL certificate directory exists"
               
-              # Only proceed with auto-expansion if explicitly allowed by environment variable
-              if [ "$AUTO_EXPAND_SSL" = "true" ]; then
-                echo "AUTO_EXPAND_SSL is enabled, proceeding with certificate expansion"
-                sudo certbot --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --non-interactive
-                if [ $? -eq 0 ]; then
-                  echo "Certificate expansion successful!"
-                  sudo systemctl reload nginx
+              # Check certificate expiration and domains
+              echo "SSL certificate details:"
+              CERT_INFO=$(echo | openssl s_client -showcerts -servername growkapital.com -connect growkapital.com:443 2>/dev/null | openssl x509 -noout -dates -subject -issuer -ext subjectAltName)
+              
+              if [ -z "$CERT_INFO" ]; then
+                echo "⚠️ Unable to retrieve certificate info. Certificate may be missing or invalid."
+                echo "Attempting to renew/obtain certificates..."
+                sudo certbot --nginx -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --agree-tos --non-interactive --expand --email ${{ secrets.SSL_EMAIL }} || {
+                  echo "❌ Failed to renew/obtain SSL certificates automatically"
+                }
+              else
+                echo "$CERT_INFO"
+                
+                # Check if admin subdomain is covered by certificate
+                if echo "$CERT_INFO" | grep -q "admin.growkapital.com"; then
+                  echo "✅ admin.growkapital.com is included in the SSL certificate"
                 else
-                  echo "Certificate expansion failed, please try manually:"
-                  echo "sudo certbot --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com"
+                  echo "⚠️ admin.growkapital.com is NOT included in the SSL certificate!"
+                  echo "Expanding certificate to include admin subdomain..."
+                  sudo certbot --nginx --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --agree-tos --non-interactive --email ${{ secrets.SSL_EMAIL }} || {
+                    echo "❌ Certificate expansion failed"
+                  }
                 fi
-              else
-                echo "AUTO_EXPAND_SSL is not enabled. To automatically expand the certificate, set AUTO_EXPAND_SSL=true"
-                echo "Manual command: sudo certbot --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com"
               fi
-            fi
-            
-            # Check if certificate renewal is needed (if less than 30 days until expiration)
-            echo "Checking if certificate renewal is needed..."
-            EXPIRY_DATE=$(echo | openssl s_client -showcerts -servername growkapital.com -connect growkapital.com:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
-            EXPIRY_EPOCH=$(date -d "$EXPIRY_DATE" +%s)
-            NOW_EPOCH=$(date +%s)
-            DAYS_REMAINING=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
-            echo "SSL certificate expires in $DAYS_REMAINING days"
-            
-            if [ "$DAYS_REMAINING" -lt 30 ]; then
-              echo "Certificate expiring soon, attempting renewal..."
-              sudo certbot renew --quiet
-              if [ $? -eq 0 ]; then
-                echo "Certificate renewal successful"
+              
+              # Force renewal if there are issues
+              if ! curl -sI https://growkapital.com | grep -q "HTTP/.*200"; then
+                echo "⚠️ HTTPS check failed. Forcing certificate renewal..."
+                sudo certbot renew --force-renewal --nginx
                 sudo systemctl reload nginx
-              else
-                echo "Certificate renewal failed, please check manually"
               fi
-            else
-              echo "Certificate is still valid for more than 30 days"
+              
+              # Debug Nginx SSL configuration
+              echo "Checking Nginx SSL configuration..."
+              if sudo grep -q "ssl_certificate" /etc/nginx/sites-available/growkapital; then
+                echo "✓ SSL certificate paths found in Nginx config"
+                sudo grep "ssl_certificate" /etc/nginx/sites-available/growkapital
+              else
+                echo "✗ No SSL certificate paths found in Nginx config!"
+                echo "Adding SSL configuration manually..."
+                
+                # Backup current config
+                sudo cp /etc/nginx/sites-available/growkapital /etc/nginx/sites-available/growkapital.bak
+                
+                # Add SSL configuration if missing
+                sudo sed -i '/server_name growkapital.com www.growkapital.com;/a \
+                \    ssl_certificate /etc/letsencrypt/live/growkapital.com/fullchain.pem;\
+                \    ssl_certificate_key /etc/letsencrypt/live/growkapital.com/privkey.pem;\
+                \    ssl_trusted_certificate /etc/letsencrypt/live/growkapital.com/chain.pem;' /etc/nginx/sites-available/growkapital
+                
+                # Check if edit was successful
+                if sudo grep -q "ssl_certificate" /etc/nginx/sites-available/growkapital; then
+                  echo "✓ Successfully added SSL certificate paths to Nginx config"
+                  sudo nginx -t && sudo systemctl reload nginx
+                else
+                  echo "✗ Failed to add SSL certificate paths to Nginx config"
+                  echo "Restoring backup..."
+                  sudo cp /etc/nginx/sites-available/growkapital.bak /etc/nginx/sites-available/growkapital
+                fi
+              fi
+              
+              # Verify Nginx SSL listening
+              if sudo grep -q "listen 443 ssl" /etc/nginx/sites-available/growkapital; then
+                echo "✓ Nginx is configured to listen on SSL port 443"
+              else
+                echo "✗ Nginx is not configured to listen on SSL port 443!"
+                sudo grep "listen" /etc/nginx/sites-available/growkapital
+              fi
             fi
             
             if [ -f "/tmp/files-changed" ]; then
