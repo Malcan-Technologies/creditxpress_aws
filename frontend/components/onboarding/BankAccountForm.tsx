@@ -59,6 +59,10 @@ export default function BankAccountForm({
 		},
 	});
 
+	// Check if bank account details are empty
+	const isBankDetailsEmpty =
+		!formik.values.bankName || !formik.values.accountNumber;
+
 	return (
 		<form onSubmit={formik.handleSubmit}>
 			<Box className="space-y-6">
@@ -136,7 +140,12 @@ export default function BankAccountForm({
 						<Button
 							type="submit"
 							variant="contained"
-							className="bg-purple-600 hover:bg-purple-700 text-white"
+							disabled={isBankDetailsEmpty}
+							className={`${
+								isBankDetailsEmpty
+									? "bg-gray-300 text-gray-500"
+									: "bg-purple-600 hover:bg-purple-700 text-white"
+							}`}
 						>
 							{isLastStep ? "Complete" : "Next"}
 						</Button>

@@ -1,8 +1,47 @@
-import { Router } from "express";
+import {
+	Router,
+	Request,
+	Response,
+	NextFunction,
+	RequestHandler,
+} from "express";
 import { prisma } from "../lib/prisma";
-import { authenticateToken } from "../middleware/auth";
+import { authenticateToken, AuthRequest } from "../middleware/auth";
 
 const router = Router();
+
+interface ProductInput {
+	code: string;
+	name: string;
+	description: string;
+	minAmount: number;
+	maxAmount: number;
+	repaymentTerms: number[];
+	interestRate: number;
+	eligibility: string[];
+	lateFee: number;
+	originationFee: number;
+	legalFee: number;
+	applicationFee: number;
+	requiredDocuments: string[];
+	features: string[];
+	loanTypes: string[];
+	isActive?: boolean;
+}
+
+interface Product extends ProductInput {
+	id: string;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+interface GetProductsQuery {
+	code?: string;
+}
+
+interface ProductParams {
+	id: string;
+}
 
 /**
  * @swagger
@@ -37,7 +76,10 @@ const router = Router();
  *       500:
  *         description: Server error
  */
-router.get("/", async (req, res) => {
+const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
+	req,
+	res
+) => {
 	try {
 		const { code } = req.query;
 
@@ -65,6 +107,7 @@ router.get("/", async (req, res) => {
 					requiredDocuments: true,
 					features: true,
 					loanTypes: true,
+					isActive: true,
 				},
 			});
 
@@ -81,11 +124,8 @@ router.get("/", async (req, res) => {
 			});
 		}
 
-		// Otherwise return all active products
+		// Otherwise return all products
 		const products = await prisma.product.findMany({
-			where: {
-				isActive: true,
-			},
 			select: {
 				id: true,
 				code: true,
@@ -103,6 +143,7 @@ router.get("/", async (req, res) => {
 				requiredDocuments: true,
 				features: true,
 				loanTypes: true,
+				isActive: true,
 			},
 			orderBy: {
 				createdAt: "asc",
@@ -114,10 +155,34 @@ router.get("/", async (req, res) => {
 		console.error("Error fetching products:", error);
 		return res.status(500).json({ message: "Error fetching products" });
 	}
-});
+};
 
-// This endpoint is for admin use and should be protected
-router.post("/", authenticateToken, async (req, res) => {
+/**
+ * @swagger
+ * /api/products:
+ *   post:
+ *     summary: Create a new product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ProductInput'
+ *     responses:
+ *       201:
+ *         description: Product created successfully
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+const createProduct: RequestHandler<{}, any, ProductInput> = async (
+	req,
+	res
+) => {
 	try {
 		const data = req.body;
 
@@ -138,6 +203,7 @@ router.post("/", authenticateToken, async (req, res) => {
 				requiredDocuments: data.requiredDocuments,
 				features: data.features,
 				loanTypes: data.loanTypes,
+				isActive: data.isActive !== undefined ? data.isActive : true,
 			},
 		});
 
@@ -146,7 +212,140 @@ router.post("/", authenticateToken, async (req, res) => {
 		console.error("Error creating product:", error);
 		return res.status(500).json({ message: "Failed to create product" });
 	}
-});
+};
+
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   patch:
+ *     summary: Update a product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Product ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ProductInput'
+ *     responses:
+ *       200:
+ *         description: Product updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Server error
+ */
+const updateProduct: RequestHandler<ProductParams, any, ProductInput> = async (
+	req,
+	res
+) => {
+	try {
+		const { id } = req.params;
+		const data = req.body;
+
+		// Check if product exists
+		const existingProduct = await prisma.product.findUnique({
+			where: { id },
+		});
+
+		if (!existingProduct) {
+			return res.status(404).json({ message: "Product not found" });
+		}
+
+		// Update product
+		const updatedProduct = await prisma.product.update({
+			where: { id },
+			data: {
+				code: data.code,
+				name: data.name,
+				description: data.description,
+				minAmount: data.minAmount,
+				maxAmount: data.maxAmount,
+				repaymentTerms: data.repaymentTerms,
+				interestRate: data.interestRate,
+				eligibility: data.eligibility,
+				lateFee: data.lateFee,
+				originationFee: data.originationFee,
+				legalFee: data.legalFee,
+				applicationFee: data.applicationFee,
+				requiredDocuments: data.requiredDocuments,
+				features: data.features,
+				loanTypes: data.loanTypes,
+				isActive: data.isActive,
+			},
+		});
+
+		return res.json(updatedProduct);
+	} catch (error) {
+		console.error("Error updating product:", error);
+		return res.status(500).json({ message: "Failed to update product" });
+	}
+};
+
+/**
+ * @swagger
+ * /api/products/{id}:
+ *   delete:
+ *     summary: Delete a product
+ *     tags: [Products]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Product ID
+ *     responses:
+ *       200:
+ *         description: Product deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Server error
+ */
+const deleteProduct: RequestHandler<ProductParams> = async (req, res) => {
+	try {
+		const { id } = req.params;
+
+		// Check if product exists
+		const existingProduct = await prisma.product.findUnique({
+			where: { id },
+		});
+
+		if (!existingProduct) {
+			return res.status(404).json({ message: "Product not found" });
+		}
+
+		// Delete product
+		await prisma.product.delete({
+			where: { id },
+		});
+
+		return res.json({ message: "Product deleted successfully" });
+	} catch (error) {
+		console.error("Error deleting product:", error);
+		return res.status(500).json({ message: "Failed to delete product" });
+	}
+};
+
+router.get("/", getProducts);
+router.post("/", authenticateToken, createProduct);
+router.patch("/:id", authenticateToken, updateProduct);
+router.delete("/:id", authenticateToken, deleteProduct);
 
 /**
  * @swagger
@@ -197,6 +396,67 @@ router.post("/", authenticateToken, async (req, res) => {
  *           type: string
  *           format: date-time
  *           description: When the product was last updated
+ *     ProductInput:
+ *       type: object
+ *       properties:
+ *         code:
+ *           type: string
+ *           description: Product code
+ *         name:
+ *           type: string
+ *           description: Product name
+ *         description:
+ *           type: string
+ *           description: Product description
+ *         minAmount:
+ *           type: number
+ *           description: Minimum loan amount
+ *         maxAmount:
+ *           type: number
+ *           description: Maximum loan amount
+ *         repaymentTerms:
+ *           type: array
+ *           items:
+ *             type: number
+ *           description: Available repayment terms in months
+ *         interestRate:
+ *           type: number
+ *           description: Interest rate percentage
+ *         eligibility:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: Eligibility criteria
+ *         lateFee:
+ *           type: number
+ *           description: Late payment fee percentage
+ *         originationFee:
+ *           type: number
+ *           description: Origination fee percentage
+ *         legalFee:
+ *           type: number
+ *           description: Legal fee amount
+ *         applicationFee:
+ *           type: number
+ *           description: Application fee amount
+ *         requiredDocuments:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: Required document types
+ *         features:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: Product features
+ *         loanTypes:
+ *           type: array
+ *           items:
+ *             type: string
+ *           description: Available loan purpose types
+ *         isActive:
+ *           type: boolean
+ *           description: Whether the product is active
  *     Document:
  *       type: object
  *       properties:

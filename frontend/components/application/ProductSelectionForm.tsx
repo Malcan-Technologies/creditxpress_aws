@@ -19,6 +19,7 @@ interface Product {
 	originationFee: number;
 	legalFee: number;
 	applicationFee: number;
+	isActive: boolean;
 }
 
 interface ProductSelectionFormProps {
@@ -42,6 +43,9 @@ export default function ProductSelectionForm({
 	const [selected, setSelected] = useState<string>(selectedProduct?.id || "");
 	const [error, setError] = useState<string>("");
 	const [loading, setLoading] = useState(false);
+
+	// Filter to only show active products
+	const activeProducts = products.filter((product) => product.isActive);
 
 	useEffect(() => {
 		setSelected(selectedProduct?.id || "");
@@ -138,7 +142,7 @@ export default function ProductSelectionForm({
 					mb: 3,
 				}}
 			>
-				{products.map((product) => (
+				{activeProducts.map((product) => (
 					<Card
 						key={product.id}
 						sx={{

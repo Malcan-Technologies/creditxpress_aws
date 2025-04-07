@@ -42,6 +42,14 @@ export default function AddressForm({
 		},
 	});
 
+	// Check if mandatory fields are completed
+	const isFormValid =
+		formik.values.address1.trim() !== "" &&
+		formik.values.city.trim() !== "" &&
+		formik.values.state.trim() !== "" &&
+		formik.values.postalCode.trim() !== "" &&
+		!/^\d{5}$/.test(formik.values.postalCode) === false;
+
 	return (
 		<form onSubmit={formik.handleSubmit}>
 			<Box className="space-y-6">
@@ -135,7 +143,12 @@ export default function AddressForm({
 						<Button
 							type="submit"
 							variant="contained"
-							className="bg-purple-600 hover:bg-purple-700 text-white"
+							disabled={!isFormValid}
+							className={`${
+								!isFormValid
+									? "bg-gray-300 text-gray-500"
+									: "bg-purple-600 hover:bg-purple-700 text-white"
+							}`}
 						>
 							{isLastStep ? "Complete" : "Next"}
 						</Button>

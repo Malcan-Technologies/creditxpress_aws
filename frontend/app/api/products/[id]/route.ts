@@ -1,49 +1,38 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { RequiredDocument } from "@prisma/client";
+import { cookies } from "next/headers";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function GET(
 	request: Request,
 	{ params }: { params: { id: string } }
 ) {
 	try {
-		const product = await prisma.product.findUnique({
-			where: {
-				id: params.id,
-			},
-			select: {
-				id: true,
-				name: true,
-				description: true,
-				minAmount: true,
-				maxAmount: true,
-				interestRate: true,
-				repaymentTerms: true,
-				loanTypes: true,
-				requiredDocuments: true,
-			},
-		});
+		const cookieStore = cookies();
+		const token = cookieStore.get("token")?.value;
 
-		if (!product) {
+		if (!token) {
 			return NextResponse.json(
-				{ error: "Product not found" },
-				{ status: 404 }
+				{ error: "Unauthorized" },
+				{ status: 401 }
 			);
 		}
 
-		// Transform the data to match the expected format
-		const response = {
-			name: product.name,
-			requiredDocuments: product.requiredDocuments.map(
-				(doc: RequiredDocument) => ({
-					id: doc.id,
-					name: doc.name,
-					type: doc.type,
-				})
-			),
-		};
+		const response = await fetch(`${API_URL}/api/products/${params.id}`, {
+			headers: {
+				Authorization: `Bearer ${token}`,
+			},
+		});
 
-		return NextResponse.json(response);
+		if (!response.ok) {
+			return NextResponse.json(
+				{ error: "Failed to fetch product details" },
+				{ status: response.status }
+			);
+		}
+
+		const data = await response.json();
+		return NextResponse.json(data);
 	} catch (error) {
 		console.error("Error fetching product:", error);
 		return NextResponse.json(

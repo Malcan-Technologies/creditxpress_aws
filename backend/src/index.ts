@@ -8,6 +8,7 @@ import userRoutes from "./api/users";
 import onboardingRoutes from "./api/onboarding";
 import productRoutes from "./api/products";
 import loanApplicationRoutes from "./api/loan-applications";
+import adminRoutes from "./api/admin";
 
 dotenv.config();
 
@@ -17,7 +18,11 @@ const port = process.env.PORT || 3001;
 // Middleware
 app.use(
 	cors({
-		origin: ["http://localhost:3000", "http://localhost:3001"],
+		origin: [
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://localhost:3002",
+		],
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 		allowedHeaders: ["Content-Type", "Authorization"],
@@ -34,6 +39,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/loan-applications", loanApplicationRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Start server
 app.listen(port, () => {

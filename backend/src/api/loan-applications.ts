@@ -4,7 +4,6 @@ import { authenticateToken, AuthRequest } from "../middleware/auth";
 import { nanoid } from "nanoid";
 import multer from "multer";
 import path from "path";
-import { Request } from "express";
 
 const router = Router();
 const prisma = new PrismaClient();

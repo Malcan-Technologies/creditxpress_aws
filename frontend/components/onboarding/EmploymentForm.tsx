@@ -9,7 +9,7 @@ import {
 	RadioGroup,
 	FormControlLabel,
 	Radio,
-	MenuItem,
+	InputAdornment,
 } from "@mui/material";
 import { EmploymentInfo } from "@/types/onboarding";
 
@@ -28,15 +28,6 @@ const employmentStatuses = [
 	"Unemployed",
 ] as const;
 
-const incomeRanges = [
-	"Below RM2,000",
-	"RM2,000 - RM4,000",
-	"RM4,001 - RM6,000",
-	"RM6,001 - RM8,000",
-	"RM8,001 - RM10,000",
-	"Above RM10,000",
-] as const;
-
 const validationSchema = Yup.object({
 	employmentStatus: Yup.string()
 		.oneOf(employmentStatuses)
@@ -44,12 +35,24 @@ const validationSchema = Yup.object({
 	employerName: Yup.string().when("employmentStatus", {
 		is: (status: string) =>
 			status === "Employed" || status === "Self-Employed",
-		then: (schema) => schema.required("Employer name is required"),
+		then: (schema) => schema.optional(),
 		otherwise: (schema) => schema,
 	}),
-	monthlyIncome: Yup.string()
-		.oneOf(incomeRanges)
-		.required("Monthly income range is required"),
+	monthlyIncome: Yup.mixed()
+		.optional()
+		.nullable()
+		.test("is-number", "Please enter a valid number", (value) => {
+			if (value === undefined || value === null || value === "") {
+				return true; // Allow empty values
+			}
+			return !isNaN(Number(value));
+		})
+		.test("is-positive", "Monthly income cannot be negative", (value) => {
+			if (value === undefined || value === null || value === "") {
+				return true; // Allow empty values
+			}
+			return Number(value) >= 0;
+		}),
 });
 
 export default function EmploymentForm({
@@ -67,13 +70,24 @@ export default function EmploymentForm({
 		},
 		validationSchema,
 		onSubmit: (values) => {
-			onSubmit(values);
+			// Format the values before submission
+			const formattedValues = {
+				...values,
+				// Keep monthly income as a string, but ensure it's properly formatted
+				monthlyIncome: values.monthlyIncome
+					? String(values.monthlyIncome)
+					: "",
+			};
+			onSubmit(formattedValues);
 		},
 	});
 
 	const showEmployerField =
 		formik.values.employmentStatus === "Employed" ||
 		formik.values.employmentStatus === "Self-Employed";
+
+	// Check if mandatory fields are completed
+	const isFormValid = formik.values.employmentStatus !== "";
 
 	return (
 		<form onSubmit={formik.handleSubmit}>
@@ -121,6 +135,8 @@ export default function EmploymentForm({
 						helperText={
 							formik.touched.employerName &&
 							formik.errors.employerName
+								? formik.errors.employerName
+								: "Optional"
 						}
 						className="[&_.MuiOutlinedInput-root]:focus-within:ring-indigo-600 [&_.MuiOutlinedInput-root]:focus-within:border-indigo-600"
 					/>
@@ -128,10 +144,10 @@ export default function EmploymentForm({
 
 				<TextField
 					fullWidth
-					select
 					id="monthlyIncome"
 					name="monthlyIncome"
-					label="Monthly Income Range"
+					label="Monthly Income"
+					type="number"
 					value={formik.values.monthlyIncome}
 					onChange={formik.handleChange}
 					error={
@@ -141,15 +157,16 @@ export default function EmploymentForm({
 					helperText={
 						formik.touched.monthlyIncome &&
 						formik.errors.monthlyIncome
+							? formik.errors.monthlyIncome
+							: "Optional"
 					}
+					InputProps={{
+						startAdornment: (
+							<InputAdornment position="start">RM</InputAdornment>
+						),
+					}}
 					className="[&_.MuiOutlinedInput-root]:focus-within:ring-indigo-600 [&_.MuiOutlinedInput-root]:focus-within:border-indigo-600"
-				>
-					{incomeRanges.map((range) => (
-						<MenuItem key={range} value={range}>
-							{range}
-						</MenuItem>
-					))}
-				</TextField>
+				/>
 
 				{/* Navigation buttons */}
 				<Box className="flex justify-between items-center space-x-4 mt-6">
@@ -166,7 +183,12 @@ export default function EmploymentForm({
 						<Button
 							type="submit"
 							variant="contained"
-							className="bg-purple-600 hover:bg-purple-700 text-white"
+							disabled={!isFormValid}
+							className={`${
+								!isFormValid
+									? "bg-gray-300 text-gray-500"
+									: "bg-purple-600 hover:bg-purple-700 text-white"
+							}`}
 						>
 							{isLastStep ? "Complete" : "Next"}
 						</Button>

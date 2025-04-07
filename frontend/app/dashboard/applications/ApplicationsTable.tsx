@@ -409,7 +409,8 @@ export default function ApplicationsTable() {
 					<DialogContent>
 						<DialogContentText id="withdraw-dialog-description">
 							Are you sure you want to withdraw this loan
-							application? This action cannot be undone.
+							application? This action cannot be undone. Your loan
+							application fee will not be refunded.
 						</DialogContentText>
 					</DialogContent>
 					<DialogActions>

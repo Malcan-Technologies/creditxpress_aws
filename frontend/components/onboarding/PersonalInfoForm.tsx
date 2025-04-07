@@ -57,6 +57,13 @@ export default function PersonalInfoForm({
 		},
 	});
 
+	// Check if mandatory fields are completed
+	const isFormValid =
+		formik.values.fullName.trim() !== "" &&
+		formik.values.dateOfBirth !== null &&
+		formik.values.email.trim() !== "" &&
+		/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formik.values.email);
+
 	return (
 		<form onSubmit={formik.handleSubmit}>
 			<Box className="space-y-6">
@@ -130,7 +137,12 @@ export default function PersonalInfoForm({
 						<Button
 							type="submit"
 							variant="contained"
-							className="bg-purple-600 hover:bg-purple-700 text-white"
+							disabled={!isFormValid}
+							className={`${
+								!isFormValid
+									? "bg-gray-300 text-gray-500"
+									: "bg-purple-600 hover:bg-purple-700 text-white"
+							}`}
 						>
 							{isLastStep ? "Complete" : "Next"}
 						</Button>
