@@ -685,38 +685,28 @@ jobs:
             chmod -R 755 admin/node_modules/.bin/
             find admin/node_modules/.bin/ -type f -exec chmod +x {} \;
             
-            # Fix frontend
-            echo "Attempting to fix frontend..."
-            pm2 delete growkapital-frontend || true
+            # Start the frontend application properly
+            echo "Starting the frontend application..."
             cd /var/www/growkapital/frontend
+            pm2 delete growkapital-frontend 2>/dev/null || true
+            pm2 delete backend 2>/dev/null || true
+            pm2 delete growkapital 2>/dev/null || true
 
-            # Check if frontend has proper Next.js configuration
-            if [ ! -f "next.config.js" ]; then
-              echo "Creating frontend next.config.js..."
-              cat > next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  output: 'standalone',
-  experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-}
-
-module.exports = nextConfig
-EOF
-            fi
-
-            # Start frontend with proper environment variables
-            echo "Starting frontend with proper environment variables..."
+            # Create start script with explicit port binding for frontend (3002)
+            cat > start.sh << 'EOF'
+            #!/bin/bash
+            cd "$(dirname "$0")"
             export PORT=3002
             export NODE_ENV=production
             export HOSTNAME=0.0.0.0
-            pm2 start npm --name "growkapital-frontend" -- start
+            ./node_modules/.bin/next start -p 3002 --hostname 0.0.0.0
+            EOF
+            chmod +x start.sh
+
+            # Start frontend on port 3002
+            echo "Starting frontend with explicit port 3002..."
+            export NODE_OPTIONS="--max-old-space-size=256"
+            pm2 start ./start.sh --name "growkapital-frontend"
 
             # Verify port binding for frontend
             sleep 5
@@ -734,50 +724,7 @@ EOF
             cd /var/www/growkapital/admin
             pm2 delete growkapital-admin 2>/dev/null || true
 
-            # Check for node_modules in admin directory and install with more debug info
-            echo "Checking admin node_modules status..."
-            if [ ! -d "node_modules" ]; then
-              echo "⚠️ Admin node_modules directory is missing!"
-              echo "Installing admin dependencies with verbose output..."
-              # First ensure package.json exists
-              if [ ! -f "package.json" ]; then
-                echo "❌ ERROR: package.json not found in admin directory!"
-                ls -la
-              else
-                echo "✓ package.json found in admin directory"
-                cat package.json | grep "dependencies" -A 5
-                echo "Installing dependencies..."
-                # Clean any corrupted node_modules
-                rm -rf node_modules package-lock.json .next/cache
-                # Install with more debug info
-                npm install --production --verbose --legacy-peer-deps || {
-                  echo "❌ npm install failed with error code $?"
-                  echo "Trying alternative installation method..."
-                  npm install --no-optional --production --legacy-peer-deps || {
-                    echo "❌ Alternative installation also failed!"
-                    echo "Creating minimal node_modules to continue..."
-                    mkdir -p node_modules/.bin
-                    npm install next react react-dom --no-save
-                  }
-                }
-                
-                # Verify installation
-                if [ -d "node_modules" ]; then
-                  echo "✓ node_modules directory now exists"
-                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
-                else
-                  echo "❌ node_modules still missing after installation attempt!"
-                fi
-              fi
-            else
-              echo "✓ Admin node_modules directory exists"
-              ls -la node_modules/.bin/ | grep next || {
-                echo "⚠️ next binary missing, reinstalling Next.js..."
-                npm install next --save
-              }
-            fi
-
-            # Create start script with explicit port binding
+            # Create start script with explicit port binding for admin (3003)
             cat > start.sh << 'EOF'
             #!/bin/bash
             cd "$(dirname "$0")"
@@ -788,12 +735,10 @@ EOF
             EOF
             chmod +x start.sh
 
-            # Start admin with proper environment variables
-            echo "Starting admin with proper environment variables..."
-            export PORT=3003
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
-            pm2 start npm --name "growkapital-admin" -- start
+            # Start admin on port 3003
+            echo "Starting admin with explicit port 3003..."
+            export NODE_OPTIONS="--max-old-space-size=256"
+            pm2 start ./start.sh --name "growkapital-admin"
 
             # Verify port binding for admin
             sleep 5
@@ -853,17 +798,6 @@ EOF
               ls -la /var/www/growkapital/frontend/.next/static/css/ | head -5
             else
               echo "✗ No CSS files found in build directory!"
-            fi
-
-            # Check admin direct port access
-            ADMIN_DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login || echo "Failed")
-            echo "Admin login page via direct port status: $ADMIN_DIRECT_STATUS"
-            if [ "$ADMIN_DIRECT_STATUS" = "200" ]; then
-              echo "✓ Admin login page is accessible via direct port"
-            else
-              echo "✗ Admin login page returned status $ADMIN_DIRECT_STATUS via direct port"
-              # Check Next.js server logs
-              pm2 logs growkapital-admin --lines 20 --nostream
             fi
 
       - name: SSL Certificate Check
@@ -990,51 +924,13 @@ EOF
 
             # Check port bindings
             echo "Port bindings:"
-            ss -tuln | grep -E ":(3002|3003|4000)"
+            ss -tuln | grep -E ":(3000|3001|3002|4000)"
 
             # Fix frontend
             echo "Attempting to fix frontend..."
             pm2 delete growkapital-frontend || true
             cd /var/www/growkapital/frontend
-
-            # Check if frontend has proper Next.js configuration
-            if [ ! -f "next.config.js" ]; then
-              echo "Creating frontend next.config.js..."
-              cat > next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  output: 'standalone',
-  experimental: {
-    serverActions: true,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  },
-}
-
-module.exports = nextConfig
-EOF
-            fi
-
-            # Start frontend with proper environment variables
-            echo "Starting frontend with proper environment variables..."
-            export PORT=3002
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
             pm2 start npm --name "growkapital-frontend" -- start
-
-            # Verify port binding for frontend
-            sleep 5
-            if ss -tuln | grep -q ":3002 "; then
-              echo "✅ Frontend successfully bound to port 3002"
-            else
-              echo "⚠️ Frontend not bound to port 3002, trying alternative method..."
-              pm2 delete growkapital-frontend
-              cd /var/www/growkapital/frontend
-              pm2 start --name "growkapital-frontend" -- npx next start -p 3002 --hostname 0.0.0.0
-            fi
 
             # Fix admin
             echo "Attempting to fix admin..."
@@ -1064,21 +960,10 @@ EOF
 
             # Start admin with proper environment variables
             echo "Starting admin with proper environment variables..."
-            export PORT=3003
+            export PORT=3002
             export NODE_ENV=production
             export HOSTNAME=0.0.0.0
             pm2 start npm --name "growkapital-admin" -- start
-
-            # Verify port binding for admin
-            sleep 5
-            if ss -tuln | grep -q ":3003 "; then
-              echo "✅ Admin successfully bound to port 3003"
-            else
-              echo "⚠️ Admin not bound to port 3003, trying alternative method..."
-              pm2 delete growkapital-admin
-              cd /var/www/growkapital/admin
-              pm2 start --name "growkapital-admin" -- npx next start -p 3003 --hostname 0.0.0.0
-            fi
 
             # Fix backend
             echo "Attempting to fix backend..."
@@ -1107,7 +992,7 @@ EOF
 
             # Check final port bindings
             echo "Final port bindings:"
-            ss -tuln | grep -E ":(3002|3003|4000)"
+            ss -tuln | grep -E ":(3000|3001|3002|4000)"
 
             # Fix Nginx configuration
             echo "Fixing Nginx configuration..."
@@ -1146,7 +1031,7 @@ server {
 
     # Admin
     location /admin {
-        proxy_pass http://127.0.0.1:3003;
+        proxy_pass http://127.0.0.1:3002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
