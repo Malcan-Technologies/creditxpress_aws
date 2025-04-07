@@ -153,156 +153,67 @@ jobs:
           # Create archive from the organized directory
           cd temp_deploy
           
-          # Check if /mnt has more space
-          if [ -d "/mnt" ] && [ -w "/mnt" ]; then
-            TEMP_TAR_DIR="/mnt"
-          else
-            TEMP_TAR_DIR="/tmp"
-          fi
+          # Direct rsync deployment instead of creating archives
+          echo "Using direct rsync deployment to avoid disk space issues"
           
-          echo "Using $TEMP_TAR_DIR for temporary tar storage"
+          # Setup SSH for rsync
+          mkdir -p ~/.ssh
+          eval $(ssh-agent)
+          ssh-add ~/.ssh/deploy_key
           
-          # Create separate archives for each component to avoid disk space issues
-          echo "Creating archives for deployment..."
-          
-          # Create a temporary directory for each component
-          TEMP_STAGE_DIR="$TEMP_TAR_DIR/staging"
-          mkdir -p "$TEMP_STAGE_DIR/frontend"
-          mkdir -p "$TEMP_STAGE_DIR/admin"
-          mkdir -p "$TEMP_STAGE_DIR/backend"
-          mkdir -p "$TEMP_STAGE_DIR/config"
-          
-          # Copy files to staging with proper filtering
-          echo "Preparing frontend files..."
-          rsync -a --exclude="node_modules" --exclude=".git" frontend/ "$TEMP_STAGE_DIR/frontend/frontend/"
-          
-          echo "Preparing admin files..."
-          rsync -a --exclude="node_modules" --exclude=".git" admin/ "$TEMP_STAGE_DIR/admin/admin/"
-          
-          echo "Preparing backend files..."
-          rsync -a --exclude="node_modules" --exclude=".git" backend/ "$TEMP_STAGE_DIR/backend/backend/"
-          
-          echo "Preparing config and scripts files..."
-          rsync -a config/ "$TEMP_STAGE_DIR/config/config/"
-          rsync -a scripts/ "$TEMP_STAGE_DIR/config/scripts/"
-          
-          # Create tar files using consistent flags
-          echo "Creating frontend archive..."
-          tar -czf "$TEMP_TAR_DIR/frontend.tar.gz" -C "$TEMP_STAGE_DIR/frontend" .
-          
-          echo "Creating admin archive..."
-          tar -czf "$TEMP_TAR_DIR/admin.tar.gz" -C "$TEMP_STAGE_DIR/admin" .
-          
-          echo "Creating backend archive..."
-          tar -czf "$TEMP_TAR_DIR/backend.tar.gz" -C "$TEMP_STAGE_DIR/backend" .
-          
-          echo "Creating config archive..."
-          tar -czf "$TEMP_TAR_DIR/config.tar.gz" -C "$TEMP_STAGE_DIR/config" .
-          
-          # Cleanup staging directory
-          rm -rf "$TEMP_STAGE_DIR"
-          
-          cd ..
-          # Clean up temporary directory
-          rm -rf temp_deploy
-          
-          # Copy archives to server
-          scp -i ~/.ssh/deploy_key $TEMP_TAR_DIR/frontend.tar.gz $TEMP_TAR_DIR/admin.tar.gz $TEMP_TAR_DIR/backend.tar.gz $TEMP_TAR_DIR/config.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/
-          
-          # Extract files on server in chunks to avoid disk space issues
+          # Create destination directories on server via SSH
+          echo "Creating destination directories on server..."
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            # Set up extraction paths with proper cleanup first
-            echo "Setting up extraction directories..."
-            rm -rf /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config
-            mkdir -p /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config
-            
-            echo "Extracting frontend files..."
-            tar -xzf /tmp/frontend.tar.gz -C /tmp/new-deploy-frontend || { echo "Frontend extraction failed"; exit 1; }
-            
-            echo "Extracting admin files..."
-            tar -xzf /tmp/admin.tar.gz -C /tmp/new-deploy-admin || { echo "Admin extraction failed"; exit 1; }
-            
-            echo "Extracting backend files..."
-            tar -xzf /tmp/backend.tar.gz -C /tmp/new-deploy-backend || { echo "Backend extraction failed"; exit 1; }
-            
-            echo "Extracting config files..."
-            tar -xzf /tmp/config.tar.gz -C /tmp/new-deploy-config || { echo "Config extraction failed"; exit 1; }
-            
-            # Create backup of critical configuration files
-            echo "Creating backup of critical files..."
-            BACKUP_DIR="/var/www/growkapital/config_backup_$(date +%Y%m%d_%H%M%S)"
-            mkdir -p "$BACKUP_DIR"
-            
-            # Backup critical files before syncing
-            if [ -f "/var/www/growkapital/frontend/.env" ]; then
-              cp /var/www/growkapital/frontend/.env "$BACKUP_DIR/frontend.env"
-            fi
-            if [ -f "/var/www/growkapital/admin/.env.local" ]; then
-              cp /var/www/growkapital/admin/.env.local "$BACKUP_DIR/admin.env.local"
-            fi
-            if [ -f "/var/www/growkapital/backend/.env" ]; then
-              cp /var/www/growkapital/backend/.env "$BACKUP_DIR/backend.env"
-            fi
-            
-            # Create destination directories if they don't exist
-            echo "Creating destination directories..."
             mkdir -p /var/www/growkapital/frontend
             mkdir -p /var/www/growkapital/admin
             mkdir -p /var/www/growkapital/backend
             mkdir -p /var/www/growkapital/config
             mkdir -p /var/www/growkapital/scripts
-            
-            # Sync using rsync with proper flags for preserving permissions
-            echo "Syncing frontend files..."
-            rsync -av --delete /tmp/new-deploy-frontend/frontend/ /var/www/growkapital/frontend/
-            
-            echo "Syncing admin files..."
-            rsync -av --delete /tmp/new-deploy-admin/admin/ /var/www/growkapital/admin/
-            
-            echo "Syncing backend files..."
-            rsync -av --delete /tmp/new-deploy-backend/backend/ /var/www/growkapital/backend/
-            
-            # Config and scripts
-            echo "Syncing config and scripts..."
-            rsync -av --delete /tmp/new-deploy-config/config/ /var/www/growkapital/config/
-            rsync -av --delete /tmp/new-deploy-config/scripts/ /var/www/growkapital/scripts/
-            
-            # Verify critical directories exist
-            echo "Verifying critical directories..."
-            if [ ! -d "/var/www/growkapital/frontend/.next" ]; then
-              echo "⚠️ Frontend .next directory not found. Rebuilding..."
-              cd /var/www/growkapital/frontend
-              npm install --production
-              npm run build
-              cd -
-            else
-              echo "✓ Frontend .next directory exists"
-            fi
-            
-            if [ ! -d "/var/www/growkapital/frontend/public" ]; then
-              echo "⚠️ Frontend public directory not found. Creating..."
-              mkdir -p /var/www/growkapital/frontend/public
-            else
-              echo "✓ Frontend public directory exists"
-            fi
-            
-            if [ ! -d "/var/www/growkapital/admin/.next" ]; then
-              echo "⚠️ Admin .next directory not found. Rebuilding..."
-              cd /var/www/growkapital/admin
-              npm install --production
-              npm run build
-              cd -
-            else
-              echo "✓ Admin .next directory exists"
-            fi
-            
-            if [ ! -d "/var/www/growkapital/admin/public" ]; then
-              echo "⚠️ Admin public directory not found. Creating..."
-              mkdir -p /var/www/growkapital/admin/public
-            else
-              echo "✓ Admin public directory exists"
-            fi
-            
+          '
+          
+          # Direct rsync for each component
+          echo "Deploying frontend files via rsync..."
+          rsync -avz --delete --exclude=".next/cache" --exclude="node_modules" frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
+          
+          echo "Deploying admin files via rsync..."
+          rsync -avz --delete --exclude=".next/cache" --exclude="node_modules" admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
+          
+          echo "Deploying backend files via rsync..."
+          rsync -avz --delete --exclude="node_modules" backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          
+          echo "Deploying config files via rsync..."
+          rsync -avz --delete config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+          
+          echo "Deploying scripts files via rsync..."
+          rsync -avz --delete scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
+          
+          # Make scripts executable
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            chmod +x /var/www/growkapital/scripts/*.sh
+            touch /tmp/files-changed
+          '
+          
+          # Handle environment files
+          echo "Setting up environment files..."
+          
+          # Frontend .env
+          echo "${{ secrets.FRONTEND_ENV }}" > frontend.env
+          scp -i ~/.ssh/deploy_key frontend.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/.env
+          rm frontend.env
+          
+          # Admin .env.local
+          echo "${{ secrets.ADMIN_ENV }}" > admin.env
+          scp -i ~/.ssh/deploy_key admin.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/.env.local
+          rm admin.env
+          
+          # Backend .env
+          echo "${{ secrets.BACKEND_ENV }}" > backend.env
+          scp -i ~/.ssh/deploy_key backend.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/.env
+          rm backend.env
+          
+          # Run post-deployment tasks
+          echo "Running post-deployment tasks..."
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             # Ensure proper permissions for all directories
             echo "Setting permissions..."
             chown -R $USER:$USER /var/www/growkapital
@@ -310,21 +221,26 @@ jobs:
             find /var/www/growkapital -type f -exec chmod 644 {} \;
             chmod +x /var/www/growkapital/scripts/*.sh
             
-            # Verify and fix ownership if needed
-            echo "Current ownership of /var/www/growkapital is $(stat -c "%U:%G" /var/www/growkapital)"
-            
-            # Verify public directories
-            echo "Verifying public directories..."
-            if [ -d "/var/www/growkapital/frontend/public" ]; then
-              echo "✓ Frontend public directory exists"
+            # Verify critical directories exist
+            echo "Verifying critical directories..."
+            if [ ! -d "/var/www/growkapital/frontend/.next" ]; then
+              echo "⚠️ Frontend .next directory not found. Rebuilding..."
+              cd /var/www/growkapital/frontend
+              npm install --production --no-progress
+              npm run build
+              cd -
             else
-              echo "✗ Frontend public directory is missing!"
+              echo "✓ Frontend .next directory exists"
             fi
             
-            if [ -d "/var/www/growkapital/admin/public" ]; then
-              echo "✓ Admin public directory exists"
+            if [ ! -d "/var/www/growkapital/admin/.next" ]; then
+              echo "⚠️ Admin .next directory not found. Rebuilding..."
+              cd /var/www/growkapital/admin
+              npm install --production --no-progress
+              npm run build
+              cd -
             else
-              echo "✗ Admin public directory is missing!"
+              echo "✓ Admin .next directory exists"
             fi
             
             # Restart services
@@ -348,10 +264,11 @@ jobs:
               pm2 start npm --name "backend" -- start
               echo "✓ Backend service started"
             fi
-            
-            touch /tmp/files-changed
-            rm -rf /tmp/new-deploy-frontend /tmp/new-deploy-admin /tmp/new-deploy-backend /tmp/new-deploy-config /tmp/frontend.tar.gz /tmp/admin.tar.gz /tmp/backend.tar.gz /tmp/config.tar.gz
           '
+          
+          cd ..
+          # Clean up temporary directory
+          rm -rf temp_deploy
 
       - name: Deploy
         uses: appleboy/ssh-action@v1.0.3
