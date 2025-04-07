@@ -132,7 +132,7 @@ jobs:
         working-directory: ./admin
         run: |
           # Smart node_modules check
-          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ] || [ "$(find node_modules -type f -name "date-fns" -o -name "@date-io" | wc -l)" -eq 0 ]; then
+          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
             echo "Cleaning node_modules due to missing dependencies or package-lock.json"
             rm -rf node_modules package-lock.json
           else
@@ -149,24 +149,13 @@ jobs:
           # Save package.json hash for future checks
           md5sum package.json > .package.json.hash
           
-          # Install dependencies with modern flags and handle conflicts
+          # Install dependencies with legacy peer deps
           if [ ! -d "node_modules" ]; then
             echo "Performing fresh install..."
-            # First install date-fns at a compatible version
-            npm install date-fns@3.2.0 --save-exact --legacy-peer-deps
-            # Install MUI packages with compatible versions
-            npm install @mui/x-date-pickers@6.20.2 @mui/material@5.15.6 @emotion/react @emotion/styled --save-exact --legacy-peer-deps
-            # Install @date-io/date-fns after date-fns is installed
-            npm install @date-io/date-fns@3.2.1 --save-exact --legacy-peer-deps
-            # Install MUI packages with the new base component
-            npm install @base-ui-components/react --save
-            # Install remaining dependencies
-            npm install --omit=dev --omit=optional --legacy-peer-deps
-            # Install Next.js with specific platform
-            npm install next@latest --platform=linux --arch=x64 --omit=optional
+            npm install --legacy-peer-deps
           else
             echo "Updating existing dependencies..."
-            npm install --omit=dev --omit=optional --legacy-peer-deps
+            npm install --legacy-peer-deps
           fi
 
       - name: Build admin application
