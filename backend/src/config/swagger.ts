@@ -152,6 +152,98 @@ const options = {
 					},
 				},
 			},
+			"/api/admin/users/{id}": {
+				put: {
+					tags: ["Admin"],
+					summary: "Update a user",
+					description: "Update a user's information (admin only)",
+					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							in: "path",
+							name: "id",
+							required: true,
+							schema: {
+								type: "string",
+							},
+							description: "User ID",
+						},
+					],
+					requestBody: {
+						required: true,
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									properties: {
+										fullName: { type: "string" },
+										email: { type: "string" },
+										phoneNumber: { type: "string" },
+										role: {
+											type: "string",
+											enum: ["USER", "ADMIN"],
+										},
+									},
+								},
+							},
+						},
+					},
+					responses: {
+						200: {
+							description: "User updated successfully",
+							content: {
+								"application/json": {
+									schema: {
+										$ref: "#/components/schemas/User",
+									},
+								},
+							},
+						},
+						403: { description: "Not authorized as admin" },
+						404: { description: "User not found" },
+						500: { description: "Internal server error" },
+					},
+				},
+				delete: {
+					tags: ["Admin"],
+					summary: "Delete a user",
+					description: "Delete a user from the system (admin only)",
+					security: [{ bearerAuth: [] }],
+					parameters: [
+						{
+							in: "path",
+							name: "id",
+							required: true,
+							schema: {
+								type: "string",
+							},
+							description: "User ID",
+						},
+					],
+					responses: {
+						200: {
+							description: "User deleted successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											message: {
+												type: "string",
+												example:
+													"User deleted successfully",
+											},
+										},
+									},
+								},
+							},
+						},
+						403: { description: "Not authorized as admin" },
+						404: { description: "User not found" },
+						500: { description: "Internal server error" },
+					},
+				},
+			},
 			"/api/admin/dashboard": {
 				get: {
 					tags: ["Admin"],

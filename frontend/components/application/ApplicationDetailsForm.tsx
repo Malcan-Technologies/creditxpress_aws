@@ -74,9 +74,7 @@ export default function ApplicationDetailsForm({
 
 				// Get application ID from URL params
 				const applicationId = searchParams.get("applicationId");
-				if (!applicationId) {
-					throw new Error("Application ID not found in URL");
-				}
+				console.log("Application ID from URL:", applicationId);
 
 				// Get product code from URL params
 				const productCode = searchParams.get("productCode");

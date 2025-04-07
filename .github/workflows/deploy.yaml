@@ -18,14 +18,26 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            admin/package-lock.json
 
-      - name: Install dependencies
+      # Build Frontend
+      - name: Install frontend dependencies
         working-directory: ./frontend
         run: npm ci
 
-      - name: Build application
+      - name: Build frontend application
         working-directory: ./frontend
+        run: npm run build
+        
+      # Build Admin
+      - name: Install admin dependencies
+        working-directory: ./admin
+        run: npm ci
+
+      - name: Build admin application
+        working-directory: ./admin
         run: npm run build
 
       - name: Setup SSH
@@ -39,6 +51,8 @@ jobs:
         run: |
           # Create a temporary directory for organizing files
           mkdir -p temp_deploy/frontend
+          mkdir -p temp_deploy/admin
+          mkdir -p temp_deploy/backend
           mkdir -p temp_deploy/config
           mkdir -p temp_deploy/scripts
           
@@ -47,6 +61,22 @@ jobs:
           cp -r frontend/public temp_deploy/frontend/
           cp frontend/package.json temp_deploy/frontend/
           cp frontend/package-lock.json temp_deploy/frontend/
+          
+          # Copy admin files
+          cp -r admin/.next temp_deploy/admin/
+          cp -r admin/public temp_deploy/admin/
+          cp admin/package.json temp_deploy/admin/
+          cp admin/package-lock.json temp_deploy/admin/
+          
+          # Copy backend files
+          cp -r backend/src temp_deploy/backend/
+          cp -r backend/prisma temp_deploy/backend/
+          cp backend/package.json temp_deploy/backend/
+          cp backend/package-lock.json temp_deploy/backend/
+          cp backend/tsconfig.json temp_deploy/backend/
+          cp backend/.env.example temp_deploy/backend/
+          cp -r backend/docker-compose.prod.yml temp_deploy/backend/
+          cp -r backend/Dockerfile.prod temp_deploy/backend/
           
           # Copy config and scripts
           cp config/nginx.conf temp_deploy/config/
@@ -73,6 +103,8 @@ jobs:
             # Ensure proper permissions for Next.js static files
             chmod -R 755 /var/www/growkapital/frontend/.next/static
             chmod -R 755 /var/www/growkapital/frontend/public
+            chmod -R 755 /var/www/growkapital/admin/.next/static
+            chmod -R 755 /var/www/growkapital/admin/public
             touch /tmp/files-changed
             rm -rf /tmp/new-deploy /tmp/deploy.tar.gz
           '
@@ -83,7 +115,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "10m"
+          command_timeout: "15m"
           script: |
             cd /var/www/growkapital
             
@@ -93,15 +125,26 @@ jobs:
             # Memory optimization: Clear system cache
             sync && echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null
             
-            # Change to frontend directory for npm operations
-            cd frontend
+            # Deploy Backend
+            cd backend
+            
+            # Create .env file from secrets
+            echo "${{ secrets.BACKEND_ENV }}" > .env
+            
+            # Start or restart Docker containers
+            echo "Deploying backend services..."
+            docker-compose -f docker-compose.prod.yml down
+            docker-compose -f docker-compose.prod.yml up -d --build
+            
+            # Deploy Frontend
+            cd ../frontend
             
             # Check if app is already running
-            if pm2 list | grep -q "growkapital"; then
-              echo "Application is running, checking for changes..."
-              pm2 delete growkapital
+            if pm2 list | grep -q "growkapital-frontend"; then
+              echo "Frontend is running, restarting..."
+              pm2 delete growkapital-frontend
             else
-              echo "Application not running, will start fresh..."
+              echo "Frontend not running, will start fresh..."
             fi
             
             # Memory-efficient dependency management
@@ -110,37 +153,42 @@ jobs:
             CACHED_HASH=$(cat $HASH_FILE 2>/dev/null || echo "")
             
             if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
-              echo "Installing dependencies..."
-              
-              # Memory optimization: Clear npm cache first
-              npm cache clean --force
-              
-              # If cached modules exist, use them directly instead of copying
-              if [ -d "/var/www/node_modules_cache/growkapital" ]; then
-                echo "Using cached modules..."
-                rm -rf node_modules
-                ln -sf /var/www/node_modules_cache/growkapital node_modules
-                
-                # Only run npm ci if there are missing dependencies
-                if ! npm ls --prod --json >/dev/null 2>&1; then
-                  echo "Updating missing dependencies..."
-                  NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
-                fi
-              else
-                echo "Fresh install required..."
-                rm -rf node_modules
-                mkdir -p /var/www/node_modules_cache
-                # Install with reduced memory usage
-                NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
-                rm -rf /var/www/node_modules_cache/growkapital
-                mv node_modules /var/www/node_modules_cache/growkapital
-                ln -sf /var/www/node_modules_cache/growkapital node_modules
-              fi
-              
+              echo "Installing frontend dependencies..."
+              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
               echo "$CURRENT_HASH" > "$HASH_FILE"
             else
-              echo "Dependencies are up to date, skipping installation"
+              echo "Frontend dependencies are up to date, skipping installation"
             fi
+            
+            # Create .env file from secrets
+            echo "${{ secrets.FRONTEND_ENV }}" > .env
+            
+            # Deploy Admin
+            cd ../admin
+            
+            # Check if admin app is already running
+            if pm2 list | grep -q "growkapital-admin"; then
+              echo "Admin is running, restarting..."
+              pm2 delete growkapital-admin
+            else
+              echo "Admin not running, will start fresh..."
+            fi
+            
+            # Memory-efficient dependency management
+            HASH_FILE="node_modules/.package-json-hash"
+            CURRENT_HASH=$(md5sum package.json | cut -d' ' -f1)
+            CACHED_HASH=$(cat $HASH_FILE 2>/dev/null || echo "")
+            
+            if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$CACHED_HASH" ]; then
+              echo "Installing admin dependencies..."
+              NODE_OPTIONS="--max-old-space-size=512" npm ci --omit=dev --no-audit --no-fund --prefer-offline
+              echo "$CURRENT_HASH" > "$HASH_FILE"
+            else
+              echo "Admin dependencies are up to date, skipping installation"
+            fi
+            
+            # Create .env file from secrets
+            echo "${{ secrets.ADMIN_ENV }}" > .env.local
             
             # Quick Nginx config check and reload if needed
             cd ..
@@ -156,14 +204,19 @@ jobs:
               fi
             fi
             
-            # Start the application from the frontend directory
+            # Start the applications
             cd frontend
-            echo "Starting the application..."
-            pm2 start npm --name "growkapital" -- start
+            echo "Starting the frontend application..."
+            pm2 start npm --name "growkapital-frontend" -- start
+            
+            cd ../admin
+            echo "Starting the admin application..."
+            pm2 start npm --name "growkapital-admin" -- start
+            
             pm2 save --silent
             
             if [ -f "/tmp/files-changed" ]; then
-              rm -f /tmp/files-changed
+              rm -f "/tmp/files-changed"
               echo "Deployment completed successfully"
             else
               echo "No changes detected, deployment completed"

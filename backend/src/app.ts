@@ -1,8 +1,5 @@
 import express from "express";
 import cors from "cors";
-import authRoutes from "./routes/auth";
-import userRoutes from "./routes/user";
-import adminRoutes from "./routes/admin";
 
 const app = express();
 
@@ -30,10 +27,5 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 app.use(express.json());
-
-// Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/admin", adminRoutes);
 
 export default app;

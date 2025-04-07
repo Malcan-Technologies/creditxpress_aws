@@ -216,7 +216,7 @@ export default function AdminProductsPage() {
 					</h1>
 					<button
 						onClick={handleCreate}
-						className="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+						className="bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
 					>
 						Add New Product
 					</button>
@@ -230,7 +230,7 @@ export default function AdminProductsPage() {
 
 				{loading ? (
 					<div className="flex justify-center items-center h-64">
-						<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+						<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
 					</div>
 				) : (
 					<div className="bg-white shadow-md rounded-lg overflow-hidden">
@@ -391,7 +391,7 @@ export default function AdminProductsPage() {
 													name: e.target.value,
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div className="md:col-span-2">

@@ -5,7 +5,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function POST(req: NextRequest) {
 	try {
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
 	try {
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const token = cookieStore.get("token")?.value;
 
 		if (!token) {

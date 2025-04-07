@@ -32,7 +32,7 @@ interface User {
 export default function AdminUsersPage() {
 	const [users, setUsers] = useState<User[]>([]);
 	const [loading, setLoading] = useState(true);
-	const [searchTerm, setSearchTerm] = useState("");
+	const [search, setSearch] = useState("");
 	const [userName, setUserName] = useState("Admin");
 
 	// Dialog states
@@ -124,11 +124,15 @@ export default function AdminUsersPage() {
 		});
 	};
 
-	const filteredUsers = users.filter(
-		(user) =>
-			user.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-			user.email.toLowerCase().includes(searchTerm.toLowerCase())
-	);
+	const filteredUsers = users.filter((user) => {
+		const searchTerm = search.toLowerCase();
+		return (
+			(user.fullName?.toLowerCase() || "").includes(searchTerm) ||
+			(user.email?.toLowerCase() || "").includes(searchTerm) ||
+			(user.phoneNumber?.toLowerCase() || "").includes(searchTerm) ||
+			(user.role?.toLowerCase() || "").includes(searchTerm)
+		);
+	});
 
 	// Handle edit user
 	const handleEditClick = (user: User) => {
@@ -183,15 +187,16 @@ export default function AdminUsersPage() {
 			);
 
 			if (!response.ok) {
-				throw new Error("Failed to update user");
+				const errorData = await response.json();
+				throw new Error(errorData.message || "Failed to update user");
 			}
 
-			// Update the local state to reflect the changes
+			const updatedUser = await response.json();
+
+			// Update the local state with the complete updated user data
 			setUsers(
 				users.map((user) =>
-					user.id === selectedUser.id
-						? { ...user, ...editForm }
-						: user
+					user.id === selectedUser.id ? updatedUser : user
 				)
 			);
 
@@ -237,42 +242,47 @@ export default function AdminUsersPage() {
 		}));
 	};
 
-	const handleCreateSubmit = async () => {
+	const handleCreateSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
 		try {
-			setIsSubmitting(true);
-			const token =
-				localStorage.getItem("adminToken") || Cookies.get("adminToken");
-
-			if (!token) {
-				return;
-			}
-
 			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users`,
+				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`,
 				{
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
+						Authorization: `Bearer ${localStorage.getItem(
+							"token"
+						)}`,
 					},
-					body: JSON.stringify(createForm),
+					body: JSON.stringify({
+						fullName: createForm.fullName,
+						email: createForm.email,
+						phoneNumber: createForm.phoneNumber,
+						password: createForm.password,
+						role: createForm.role,
+					}),
 				}
 			);
 
 			if (!response.ok) {
-				throw new Error("Failed to create user");
+				const errorData = await response.json();
+				throw new Error(errorData.message || "Failed to create user");
 			}
 
 			const newUser = await response.json();
-
-			// Update the local state to include the new user
 			setUsers([...users, newUser]);
-
 			setCreateDialogOpen(false);
+			setCreateForm({
+				fullName: "",
+				email: "",
+				phoneNumber: "",
+				password: "",
+				role: "USER",
+			});
 		} catch (error) {
 			console.error("Error creating user:", error);
-		} finally {
-			setIsSubmitting(false);
+			// You might want to show an error message to the user here
 		}
 	};
 
@@ -309,12 +319,12 @@ export default function AdminUsersPage() {
 			);
 
 			if (!response.ok) {
-				throw new Error("Failed to delete user");
+				const errorData = await response.json();
+				throw new Error(errorData.message || "Failed to delete user");
 			}
 
 			// Update the local state to remove the deleted user
 			setUsers(users.filter((user) => user.id !== selectedUser.id));
-
 			setDeleteDialogOpen(false);
 			setSelectedUser(null);
 		} catch (error) {
@@ -363,8 +373,8 @@ export default function AdminUsersPage() {
 						<input
 							type="text"
 							placeholder="Search users..."
-							value={searchTerm}
-							onChange={(e) => setSearchTerm(e.target.value)}
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
 							className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
 						/>
 					</div>
@@ -469,7 +479,7 @@ export default function AdminUsersPage() {
 									</tr>
 								))
 							) : (
-								<tr>
+								<tr key="no-users">
 									<td
 										colSpan={6}
 										className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center"
