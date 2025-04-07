@@ -27,7 +27,7 @@ jobs:
         working-directory: ./frontend
         run: |
           # Smart node_modules check
-          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ] || [ "$(find node_modules -type f -name "date-fns" -o -name "@date-io" | wc -l)" -eq 0 ]; then
+          if [ ! -d "node_modules" ] || [ ! -f "package-lock.json" ]; then
             echo "Cleaning node_modules due to missing dependencies or package-lock.json"
             rm -rf node_modules package-lock.json
           else
@@ -47,19 +47,11 @@ jobs:
           # Install dependencies with modern flags and handle conflicts
           if [ ! -d "node_modules" ]; then
             echo "Performing fresh install..."
-            # First install date-fns at a compatible version
-            npm install date-fns@2.30.0 --save-exact --legacy-peer-deps
-            # Install MUI packages with compatible versions
-            npm install @mui/x-date-pickers@6.18.6 @mui/material@5.15.6 @emotion/react @emotion/styled --save-exact --legacy-peer-deps
-            # Install @date-io/date-fns after date-fns is installed
-            npm install @date-io/date-fns@2.16.0 --save-exact --legacy-peer-deps
-            # Install MUI packages with the new base component
-            npm install @base-ui-components/react --save
-            # Install remaining dependencies
-            npm install --omit=dev --omit=optional --legacy-peer-deps
-            # Install Next.js with specific platform
-            npm install next@latest --platform=linux --arch=x64 --omit=optional
-            npm install --save framer-motion recharts --omit=optional --legacy-peer-deps
+            # Install all dependencies from package-lock.json with legacy peer deps
+            npm ci --omit=dev --omit=optional --legacy-peer-deps || {
+              echo "npm ci failed, falling back to npm install..."
+              npm install --omit=dev --omit=optional --legacy-peer-deps
+            }
           else
             echo "Updating existing dependencies..."
             npm install --omit=dev --omit=optional --legacy-peer-deps
@@ -74,8 +66,8 @@ jobs:
           # Extract API URL from secrets for build environment
           API_URL=$(grep NEXT_PUBLIC_API_URL .env.build | cut -d '=' -f2 || echo "https://growkapital.com/api")
           
-          echo "Package.json date-fns version:"
-          cat package.json | grep date-fns
+          echo "Package.json dependencies:"
+          cat package.json | grep -A 20 "\"dependencies\""
           echo "Using API URL: $API_URL"
           
           export NODE_OPTIONS="--max-old-space-size=4096"
