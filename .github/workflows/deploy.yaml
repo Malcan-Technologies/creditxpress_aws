@@ -255,8 +255,21 @@ jobs:
               exit 1
             fi
             
-            # Check if Docker Compose is installed
-            if ! command -v docker-compose &> /dev/null; then
+            # Install Docker Compose if not already installed
+            echo "Checking Docker Compose installation..."
+            
+            # Try to find Docker Compose in common locations
+            DOCKER_COMPOSE_PATH=""
+            for path in "/usr/local/bin/docker-compose" "/usr/bin/docker-compose" "/usr/libexec/docker/cli-plugins/docker-compose"; do
+              if [ -x "$path" ]; then
+                DOCKER_COMPOSE_PATH="$path"
+                echo "Found Docker Compose at: $DOCKER_COMPOSE_PATH"
+                break
+              fi
+            done
+            
+            # If not found, install it
+            if [ -z "$DOCKER_COMPOSE_PATH" ]; then
               echo "Docker Compose not found. Installing Docker Compose..."
               
               # Try to install Docker Compose using package manager first
@@ -264,11 +277,19 @@ jobs:
                 echo "Installing Docker Compose using apt..."
                 sudo apt-get update
                 sudo apt-get install -y docker-compose-plugin
-                sudo ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+                DOCKER_COMPOSE_PATH="/usr/libexec/docker/cli-plugins/docker-compose"
+                if [ ! -x "$DOCKER_COMPOSE_PATH" ]; then
+                  sudo ln -s "$DOCKER_COMPOSE_PATH" /usr/local/bin/docker-compose
+                  DOCKER_COMPOSE_PATH="/usr/local/bin/docker-compose"
+                fi
               elif command -v yum &> /dev/null; then
                 echo "Installing Docker Compose using yum..."
                 sudo yum install -y docker-compose-plugin
-                sudo ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+                DOCKER_COMPOSE_PATH="/usr/libexec/docker/cli-plugins/docker-compose"
+                if [ ! -x "$DOCKER_COMPOSE_PATH" ]; then
+                  sudo ln -s "$DOCKER_COMPOSE_PATH" /usr/local/bin/docker-compose
+                  DOCKER_COMPOSE_PATH="/usr/local/bin/docker-compose"
+                fi
               else
                 # Fallback to direct download
                 echo "Installing Docker Compose using direct download..."
@@ -283,22 +304,24 @@ jobs:
                   exit 1
                 fi
                 
-                sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${COMPOSE_ARCH}" -o /usr/local/bin/docker-compose
-                sudo chmod +x /usr/local/bin/docker-compose
+                DOCKER_COMPOSE_PATH="/usr/local/bin/docker-compose"
+                sudo curl -L "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${COMPOSE_ARCH}" -o "$DOCKER_COMPOSE_PATH"
+                sudo chmod +x "$DOCKER_COMPOSE_PATH"
               fi
               
               # Verify installation
-              if ! command -v docker-compose &> /dev/null; then
+              if [ ! -x "$DOCKER_COMPOSE_PATH" ]; then
                 echo "❌ Failed to install Docker Compose. Please install it manually."
                 exit 1
               fi
               
-              echo "✅ Docker Compose installed successfully: $(docker-compose --version)"
+              echo "✅ Docker Compose installed successfully at: $DOCKER_COMPOSE_PATH"
+              echo "Docker Compose version: $($DOCKER_COMPOSE_PATH --version)"
             fi
             
             # Stop existing containers if they exist
             echo "Stopping existing backend containers..."
-            docker-compose -f docker-compose.prod.yml down || true
+            $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml down || true
             
             # Build and start containers
             echo "Building and starting backend containers..."
@@ -308,9 +331,9 @@ jobs:
             export DOCKER_BUILDKIT=1
             
             # Try to build and start containers
-            if ! docker-compose -f docker-compose.prod.yml up -d --build; then
+            if ! $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml up -d --build; then
               echo "❌ Failed to build and start containers. Showing logs:"
-              docker-compose -f docker-compose.prod.yml logs
+              $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml logs
               exit 1
             fi
             
@@ -323,7 +346,7 @@ jobs:
               echo "✅ Backend containers started successfully"
             else
               echo "❌ Backend container failed to start"
-              docker-compose -f docker-compose.prod.yml logs
+              $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml logs
               exit 1
             fi
           '
