@@ -34,105 +34,58 @@ jobs:
           echo "${{ secrets.ADMIN_ENV }}" > admin/.env.local
           echo "${{ secrets.BACKEND_ENV }}" > backend/.env
 
-      - name: Check for changed files
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            frontend/**
+            admin/**
+            backend/**
+            config/**
+
+      - name: Set deployment flags
         run: |
-          # Get the list of changed files using GitHub's context
-          echo "GitHub event: ${{ github.event_name }}"
-          echo "Current commit: ${{ github.sha }}"
-          echo "Previous commit: ${{ github.event.before }}"
-          
-          # List all files in the repository to see what we have
-          echo "All files in repository:"
-          find . -type f -not -path "*/\.*" | sort
-          
-          # Try to get the list of changed files
-          if [ "${{ github.event_name }}" = "push" ]; then
-            # For push events, try to compare with the previous commit
-            echo "Attempting to get changed files using git diff..."
-            
-            # First try the standard approach
-            if git rev-parse --verify ${{ github.event.before }} >/dev/null 2>&1; then
-              echo "Previous commit found, using git diff"
-              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
-            else
-              echo "Previous commit not found, trying alternative approaches"
-              
-              # Try to get the last commit
-              LAST_COMMIT=$(git rev-parse HEAD~1 2>/dev/null || echo "")
-              if [ -n "$LAST_COMMIT" ]; then
-                echo "Using last commit: $LAST_COMMIT"
-                CHANGED_FILES=$(git diff --name-only $LAST_COMMIT ${{ github.sha }} || echo "")
-              else
-                echo "No previous commits found, this might be the first commit"
-                
-                # If this is the first commit, list all files
-                if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-                  echo "This appears to be the first commit, listing all files"
-                  CHANGED_FILES=$(find . -type f -not -path "*/\.*" | sed 's|^\./||' | tr '\n' ' ')
-                else
-                  # Try to get the last 10 commits and check what changed
-                  echo "Checking recent changes"
-                  CHANGED_FILES=$(git log --name-only --pretty=format: -n 10 | sort | uniq || echo "all")
-                fi
-              fi
-            fi
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            # For pull requests, compare with the base branch
-            echo "Pull request detected, comparing with base branch"
-            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }} || echo "")
+          # Check if any frontend files changed
+          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^frontend/"; then
+            echo "FRONTEND_CHANGED=true" >> $GITHUB_ENV
           else
-            # For other events, assume all files changed
-            echo "Unknown event type, assuming all files changed"
-            CHANGED_FILES="all"
+            echo "FRONTEND_CHANGED=false" >> $GITHUB_ENV
           fi
           
-          # If we still don't have any changes, assume all components need deployment
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "No changes detected, deploying all components"
-            CHANGED_FILES="all"
+          # Check if any admin files changed
+          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^admin/"; then
+            echo "ADMIN_CHANGED=true" >> $GITHUB_ENV
+          else
+            echo "ADMIN_CHANGED=false" >> $GITHUB_ENV
           fi
           
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
-          echo "$CHANGED_FILES" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          
-          # Determine which components need deployment
-          FRONTEND_CHANGED=false
-          ADMIN_CHANGED=false
-          BACKEND_CHANGED=false
-          CONFIG_CHANGED=false
-          
-          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^frontend/"; then
-            FRONTEND_CHANGED=true
+          # Check if any backend files changed
+          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^backend/"; then
+            echo "BACKEND_CHANGED=true" >> $GITHUB_ENV
+          else
+            echo "BACKEND_CHANGED=false" >> $GITHUB_ENV
           fi
           
-          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^admin/"; then
-            ADMIN_CHANGED=true
-          fi
-          
-          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^backend/"; then
-            BACKEND_CHANGED=true
-          fi
-          
-          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^config/"; then
-            CONFIG_CHANGED=true
+          # Check if any config files changed
+          if echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -q "^config/"; then
+            echo "CONFIG_CHANGED=true" >> $GITHUB_ENV
+          else
+            echo "CONFIG_CHANGED=false" >> $GITHUB_ENV
           fi
           
           # If no specific changes detected, assume all need deployment
-          if [ "$FRONTEND_CHANGED" = "false" ] && [ "$ADMIN_CHANGED" = "false" ] && [ "$BACKEND_CHANGED" = "false" ] && [ "$CONFIG_CHANGED" = "false" ]; then
+          if [ "${{ env.FRONTEND_CHANGED }}" = "false" ] && [ "${{ env.ADMIN_CHANGED }}" = "false" ] && [ "${{ env.BACKEND_CHANGED }}" = "false" ] && [ "${{ env.CONFIG_CHANGED }}" = "false" ]; then
             echo "No specific changes detected, deploying all components"
-            FRONTEND_CHANGED=true
-            ADMIN_CHANGED=true
-            BACKEND_CHANGED=true
-            CONFIG_CHANGED=true
+            echo "FRONTEND_CHANGED=true" >> $GITHUB_ENV
+            echo "ADMIN_CHANGED=true" >> $GITHUB_ENV
+            echo "BACKEND_CHANGED=true" >> $GITHUB_ENV
+            echo "CONFIG_CHANGED=true" >> $GITHUB_ENV
           fi
           
-          echo "FRONTEND_CHANGED=$FRONTEND_CHANGED" >> $GITHUB_ENV
-          echo "ADMIN_CHANGED=$ADMIN_CHANGED" >> $GITHUB_ENV
-          echo "BACKEND_CHANGED=$BACKEND_CHANGED" >> $GITHUB_ENV
-          echo "CONFIG_CHANGED=$CONFIG_CHANGED" >> $GITHUB_ENV
+          # Print the changed files for debugging
+          echo "Changed files:"
+          echo "${{ steps.changed-files.outputs.all_changed_files }}"
 
       - name: Deploy frontend
         if: env.FRONTEND_CHANGED == 'true'
@@ -142,13 +95,39 @@ jobs:
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/frontend'
           
-          # Copy frontend files
-          rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
-          
-          # Copy environment file
+          # Always copy environment file
           scp -i ~/.ssh/deploy_key frontend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
+          
+          # Check if we need to copy all files or just changed ones
+          if [ "${{ steps.changed-files.outputs.all_changed_files }}" = "all" ]; then
+            echo "Copying all frontend files..."
+            rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
+              -e "ssh -i ~/.ssh/deploy_key" \
+              frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
+          else
+            echo "Copying only changed frontend files..."
+            # Create a temporary file with the list of changed files
+            echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep "^frontend/" > changed-frontend-files.txt
+            
+            # Copy each changed file individually
+            while IFS= read -r file; do
+              if [ -n "$file" ]; then
+                echo "Copying: $file"
+                # Create the directory structure if it doesn't exist
+                ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /var/www/growkapital/$(dirname $file)"
+                # Copy the file
+                scp -i ~/.ssh/deploy_key $file ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/$file
+              fi
+            done < changed-frontend-files.txt
+            
+            # If no files were copied, fall back to copying all files
+            if [ ! -s changed-frontend-files.txt ]; then
+              echo "No specific frontend files changed, copying all files..."
+              rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
+                -e "ssh -i ~/.ssh/deploy_key" \
+                frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
+            fi
+          fi
           
           # Install dependencies and build on server with improved timeout handling
           ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -238,13 +217,14 @@ jobs:
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/admin'
           
-          # Copy admin files
+          # Always copy environment file
+          scp -i ~/.ssh/deploy_key admin/.env.local ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
+          
+          # For admin, we'll do a fresh copy of all files to ensure consistency
+          echo "Copying all admin files..."
           rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
             -e "ssh -i ~/.ssh/deploy_key" \
             admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
-          
-          # Copy environment file
-          scp -i ~/.ssh/deploy_key admin/.env.local ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
           # Install dependencies and build on server with improved timeout handling
           ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -337,13 +317,39 @@ jobs:
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/backend'
           
-          # Copy backend files
-          rsync -avz --delete --exclude="node_modules" --exclude="dist" \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
-          
-          # Copy environment file
+          # Always copy environment file
           scp -i ~/.ssh/deploy_key backend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          
+          # Check if we need to copy all files or just changed ones
+          if [ "${{ steps.changed-files.outputs.all_changed_files }}" = "all" ]; then
+            echo "Copying all backend files..."
+            rsync -avz --delete --exclude="node_modules" --exclude="dist" \
+              -e "ssh -i ~/.ssh/deploy_key" \
+              backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+          else
+            echo "Copying only changed backend files..."
+            # Create a temporary file with the list of changed files
+            echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep "^backend/" > changed-backend-files.txt
+            
+            # Copy each changed file individually
+            while IFS= read -r file; do
+              if [ -n "$file" ]; then
+                echo "Copying: $file"
+                # Create the directory structure if it doesn't exist
+                ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /var/www/growkapital/$(dirname $file)"
+                # Copy the file
+                scp -i ~/.ssh/deploy_key $file ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/$file
+              fi
+            done < changed-backend-files.txt
+            
+            # If no files were copied, fall back to copying all files
+            if [ ! -s changed-backend-files.txt ]; then
+              echo "No specific backend files changed, copying all files..."
+              rsync -avz --delete --exclude="node_modules" --exclude="dist" \
+                -e "ssh -i ~/.ssh/deploy_key" \
+                backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+            fi
+          fi
           
           # Build and start backend containers
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -381,12 +387,42 @@ jobs:
           # Create destination directory
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/config'
           
-          # Copy config files
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+          # Always copy nginx configuration
+          echo "Copying nginx configuration..."
+          scp -i ~/.ssh/deploy_key config/nginx.conf ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
           
-          # Copy nginx configuration
+          # Check if we need to copy all files or just changed ones
+          if [ "${{ steps.changed-files.outputs.all_changed_files }}" = "all" ]; then
+            echo "Copying all config files..."
+            rsync -avz --delete \
+              -e "ssh -i ~/.ssh/deploy_key" \
+              config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+          else
+            echo "Copying only changed config files..."
+            # Create a temporary file with the list of changed files
+            echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep "^config/" > changed-config-files.txt
+            
+            # Copy each changed file individually
+            while IFS= read -r file; do
+              if [ -n "$file" ]; then
+                echo "Copying: $file"
+                # Create the directory structure if it doesn't exist
+                ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /var/www/growkapital/$(dirname $file)"
+                # Copy the file
+                scp -i ~/.ssh/deploy_key $file ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/$file
+              fi
+            done < changed-config-files.txt
+            
+            # If no files were copied, fall back to copying all files
+            if [ ! -s changed-config-files.txt ]; then
+              echo "No specific config files changed, copying all files..."
+              rsync -avz --delete \
+                -e "ssh -i ~/.ssh/deploy_key" \
+                config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+            fi
+          fi
+          
+          # Apply nginx configuration
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             echo "Copying nginx configuration..."
             sudo cp /var/www/growkapital/config/nginx.conf /etc/nginx/sites-enabled/growkapital.conf
@@ -397,7 +433,7 @@ jobs:
             
             # Reload nginx
             echo "Reloading nginx..."
-                sudo systemctl reload nginx
+            sudo systemctl reload nginx
           '
 
       - name: Verify deployment
