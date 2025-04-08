@@ -234,7 +234,7 @@ jobs:
             
             # Build and start containers
             echo "Building and starting backend containers..."
-            export NODE_OPTIONS="--transpileOnly"
+            export NODE_OPTIONS="--skipLibCheck --noEmit --noErrorTruncation"
             export DOCKER_BUILDKIT=1
             
             # Try to build and start containers
