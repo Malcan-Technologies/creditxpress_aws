@@ -55,6 +55,7 @@ jobs:
           FRONTEND_CHANGED=false
           ADMIN_CHANGED=false
           BACKEND_CHANGED=false
+          CONFIG_CHANGED=false
           
           if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^frontend/"; then
             FRONTEND_CHANGED=true
@@ -68,17 +69,23 @@ jobs:
             BACKEND_CHANGED=true
           fi
           
+          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^config/"; then
+            CONFIG_CHANGED=true
+          fi
+          
           # If no specific changes detected, assume all need deployment
-          if [ "$FRONTEND_CHANGED" = "false" ] && [ "$ADMIN_CHANGED" = "false" ] && [ "$BACKEND_CHANGED" = "false" ]; then
+          if [ "$FRONTEND_CHANGED" = "false" ] && [ "$ADMIN_CHANGED" = "false" ] && [ "$BACKEND_CHANGED" = "false" ] && [ "$CONFIG_CHANGED" = "false" ]; then
             echo "No specific changes detected, deploying all components"
             FRONTEND_CHANGED=true
             ADMIN_CHANGED=true
             BACKEND_CHANGED=true
+            CONFIG_CHANGED=true
           fi
           
           echo "FRONTEND_CHANGED=$FRONTEND_CHANGED" >> $GITHUB_ENV
           echo "ADMIN_CHANGED=$ADMIN_CHANGED" >> $GITHUB_ENV
           echo "BACKEND_CHANGED=$BACKEND_CHANGED" >> $GITHUB_ENV
+          echo "CONFIG_CHANGED=$CONFIG_CHANGED" >> $GITHUB_ENV
 
       - name: Deploy frontend
         if: env.FRONTEND_CHANGED == 'true'
@@ -317,6 +324,33 @@ jobs:
               docker-compose -f docker-compose.prod.yml logs
               exit 1
             fi
+          '
+
+      - name: Deploy config files
+        if: env.CONFIG_CHANGED == 'true'
+        run: |
+          echo "Deploying config files..."
+          
+          # Create destination directory
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/config'
+          
+          # Copy config files
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+          
+          # Copy nginx configuration
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            echo "Copying nginx configuration..."
+            sudo cp /var/www/growkapital/config/nginx.conf /etc/nginx/sites-enabled/growkapital.conf
+            
+            # Test nginx configuration
+            echo "Testing nginx configuration..."
+            sudo nginx -t
+            
+            # Reload nginx
+            echo "Reloading nginx..."
+            sudo systemctl reload nginx
           '
 
       - name: Verify deployment
