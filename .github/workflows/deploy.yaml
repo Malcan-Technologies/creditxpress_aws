@@ -38,86 +38,44 @@ jobs:
         run: |
           echo "Deploying frontend..."
           
-          # Create destination directory
+          # Create destination directory and copy files
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/frontend'
-          
-          # Copy environment file
           scp -i ~/.ssh/deploy_key frontend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
           # Copy all frontend files
-          echo "Copying all frontend files..."
           rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
             -e "ssh -i ~/.ssh/deploy_key" \
             frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
           
-          # Install dependencies and build on server with improved timeout handling
+          # Build and start frontend
           ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital/frontend
             
-            # Install pnpm if not already installed
+            # Install pnpm if needed
             if ! command -v pnpm &> /dev/null; then
               echo "Installing pnpm..."
               npm install -g pnpm
             fi
             
-            # Check if node_modules exists and is up to date
+            # Install dependencies if needed
             if [ ! -d "node_modules" ] || [ ! -f "pnpm-lock.yaml" ]; then
-              echo "Installing frontend dependencies with pnpm..."
+              echo "Installing frontend dependencies..."
               pnpm install --no-audit --prefer-offline --no-optional
-            else
-              echo "Checking if dependencies need updating..."
-              if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
-                echo "✓ package.json unchanged, skipping install"
-              else
-                echo "package.json changed, updating dependencies"
-                pnpm install --no-audit --prefer-offline --no-optional
-                md5sum package.json > .package.json.hash
-              fi
             fi
             
-            # Build frontend with optimized settings
+            # Build frontend
             echo "Building frontend..."
             export NODE_OPTIONS="--max-old-space-size=4096"
             export NEXT_TELEMETRY_DISABLED=1
             export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
-            export NEXT_BUFFER_SIZE=16384
             export GENERATE_SOURCEMAP=false
-            export NEXT_DISABLE_STATIC_OPTIMIZATION=1
-            export NEXT_SKIP_PRERENDER=1
             
-            # Run build in the background with nohup to prevent SSH timeout
-            nohup pnpm run build:prod > build.log 2>&1 &
-            BUILD_PID=$!
-            
-            # Wait for build to complete with timeout
-            echo "Waiting for build to complete (timeout: 10 minutes)..."
-            TIMEOUT=600  # 10 minutes
-            ELAPSED=0
-            INTERVAL=10  # Check every 10 seconds
-            
-            while kill -0 $BUILD_PID 2>/dev/null; do
-              if [ $ELAPSED -ge $TIMEOUT ]; then
-                echo "Build timed out after $TIMEOUT seconds"
-                kill -9 $BUILD_PID 2>/dev/null || true
-                break
-              fi
-              
-              # Show build progress - only show new lines to avoid repetition
-              echo "Build in progress... ($ELAPSED seconds elapsed)"
-              tail -n 1 build.log
-              
-              sleep $INTERVAL
-              ELAPSED=$((ELAPSED + INTERVAL))
-            done
-            
-            # Check if build completed successfully
-            if [ -d ".next" ] && [ -f ".next/static/manifest.json" ]; then
-              echo "✅ Frontend build completed successfully"
-            else
-              echo "⚠️ Frontend build may have failed, but continuing deployment..."
+            # Run build with timeout
+            timeout 600 pnpm run build:prod || {
+              echo "⚠️ Build timed out, but continuing deployment..."
               mkdir -p .next/static
               touch .next/static/.gitkeep
-            fi
+            }
             
             # Start or restart the frontend service
             if pm2 list | grep -q "growkapital-frontend"; then
@@ -134,86 +92,44 @@ jobs:
         run: |
           echo "Deploying admin..."
           
-          # Create destination directory
+          # Create destination directory and copy files
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/admin'
-          
-          # Copy environment file
           scp -i ~/.ssh/deploy_key admin/.env.local ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
           # Copy all admin files
-          echo "Copying all admin files..."
           rsync -avz --delete --exclude="node_modules" --exclude=".next/cache" \
             -e "ssh -i ~/.ssh/deploy_key" \
             admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
-          # Install dependencies and build on server with improved timeout handling
+          # Build and start admin
           ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd /var/www/growkapital/admin
             
-            # Install pnpm if not already installed
+            # Install pnpm if needed
             if ! command -v pnpm &> /dev/null; then
               echo "Installing pnpm..."
               npm install -g pnpm
             fi
             
-            # Check if node_modules exists and is up to date
+            # Install dependencies if needed
             if [ ! -d "node_modules" ] || [ ! -f "pnpm-lock.yaml" ]; then
-              echo "Installing admin dependencies with pnpm..."
+              echo "Installing admin dependencies..."
               pnpm install --no-audit --prefer-offline --no-optional
-            else
-              echo "Checking if dependencies need updating..."
-              if [ -f ".package.json.hash" ] && [ "$(md5sum package.json)" = "$(cat .package.json.hash)" ]; then
-                echo "✓ package.json unchanged, skipping install"
-              else
-                echo "package.json changed, updating dependencies"
-                pnpm install --no-audit --prefer-offline --no-optional
-                md5sum package.json > .package.json.hash
-              fi
             fi
             
-            # Build admin with optimized settings
+            # Build admin
             echo "Building admin..."
             export NODE_OPTIONS="--max-old-space-size=4096"
             export NEXT_TELEMETRY_DISABLED=1
             export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
-            export NEXT_BUFFER_SIZE=16384
             export GENERATE_SOURCEMAP=false
-            export NEXT_DISABLE_STATIC_OPTIMIZATION=1
-            export NEXT_SKIP_PRERENDER=1
             
-            # Run build in the background with nohup to prevent SSH timeout
-            nohup pnpm run build:prod > build.log 2>&1 &
-            BUILD_PID=$!
-            
-            # Wait for build to complete with timeout
-            echo "Waiting for build to complete (timeout: 10 minutes)..."
-            TIMEOUT=600  # 10 minutes
-            ELAPSED=0
-            INTERVAL=10  # Check every 10 seconds
-            
-            while kill -0 $BUILD_PID 2>/dev/null; do
-              if [ $ELAPSED -ge $TIMEOUT ]; then
-                echo "Build timed out after $TIMEOUT seconds"
-                kill -9 $BUILD_PID 2>/dev/null || true
-                break
-              fi
-              
-              # Show build progress - only show new lines to avoid repetition
-              echo "Build in progress... ($ELAPSED seconds elapsed)"
-              tail -n 1 build.log
-              
-              sleep $INTERVAL
-              ELAPSED=$((ELAPSED + INTERVAL))
-            done
-            
-            # Check if build completed successfully
-            if [ -d ".next" ] && [ -f ".next/static/manifest.json" ]; then
-              echo "✅ Admin build completed successfully"
-            else
-              echo "⚠️ Admin build may have failed, but continuing deployment..."
+            # Run build with timeout
+            timeout 600 pnpm run build:prod || {
+              echo "⚠️ Build timed out, but continuing deployment..."
               mkdir -p .next/static
               touch .next/static/.gitkeep
-            fi
+            }
             
             # Start or restart the admin service
             if pm2 list | grep -q "growkapital-admin"; then
@@ -233,14 +149,11 @@ jobs:
         run: |
           echo "Deploying backend..."
           
-          # Create destination directory
+          # Create destination directory and copy files
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/backend'
-          
-          # Copy environment file
           scp -i ~/.ssh/deploy_key backend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
           
           # Copy all backend files
-          echo "Copying all backend files..."
           rsync -avz --delete --exclude="node_modules" --exclude="dist" \
             -e "ssh -i ~/.ssh/deploy_key" \
             backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
@@ -255,10 +168,7 @@ jobs:
               exit 1
             fi
             
-            # Install Docker Compose if not already installed
-            echo "Checking Docker Compose installation..."
-            
-            # Try to find Docker Compose in common locations
+            # Find Docker Compose
             DOCKER_COMPOSE_PATH=""
             for path in "/usr/local/bin/docker-compose" "/usr/bin/docker-compose" "/usr/libexec/docker/cli-plugins/docker-compose"; do
               if [ -x "$path" ]; then
@@ -272,7 +182,7 @@ jobs:
             if [ -z "$DOCKER_COMPOSE_PATH" ]; then
               echo "Docker Compose not found. Installing Docker Compose..."
               
-              # Try to install Docker Compose using package manager first
+              # Try to install Docker Compose using package manager
               if command -v apt-get &> /dev/null; then
                 echo "Installing Docker Compose using apt..."
                 sudo apt-get update
@@ -316,24 +226,21 @@ jobs:
               fi
               
               echo "✅ Docker Compose installed successfully at: $DOCKER_COMPOSE_PATH"
-              echo "Docker Compose version: $($DOCKER_COMPOSE_PATH --version)"
             fi
             
             # Stop existing containers if they exist
             echo "Stopping existing backend containers..."
-            $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml down || true
+            "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml down || true
             
             # Build and start containers
             echo "Building and starting backend containers..."
-            # Add --no-type-check flag to ignore TypeScript errors
             export NODE_OPTIONS="--no-type-check"
-            # Ensure we're using Dockerfile.prod
             export DOCKER_BUILDKIT=1
             
             # Try to build and start containers
-            if ! $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml up -d --build; then
+            if ! "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml up -d --build; then
               echo "❌ Failed to build and start containers. Showing logs:"
-              $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml logs
+              "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs
               exit 1
             fi
             
@@ -346,7 +253,7 @@ jobs:
               echo "✅ Backend containers started successfully"
             else
               echo "❌ Backend container failed to start"
-              $DOCKER_COMPOSE_PATH -f docker-compose.prod.yml logs
+              "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs
               exit 1
             fi
           '
@@ -355,26 +262,20 @@ jobs:
         run: |
           echo "Deploying config files..."
           
-          # Create destination directory
+          # Create destination directory and copy files
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/config'
-          
-          # Copy all config files
-          echo "Copying all config files..."
           rsync -avz --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
             config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
           
-          # Apply nginx configuration with improved error handling
+          # Apply nginx configuration
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             echo "Copying nginx configuration..."
             sudo cp /var/www/growkapital/config/nginx.conf /etc/nginx/sites-enabled/growkapital.conf
             
             # Test nginx configuration
             echo "Testing nginx configuration..."
-            sudo nginx -t
-            
-            # If nginx test fails, show the error and exit
-            if [ $? -ne 0 ]; then
+            if ! sudo nginx -t; then
               echo "❌ Nginx configuration test failed. Showing error:"
               sudo nginx -t
               exit 1
@@ -382,10 +283,7 @@ jobs:
             
             # Reload nginx
             echo "Reloading nginx..."
-            sudo systemctl reload nginx
-            
-            # Check if nginx reload was successful
-            if [ $? -ne 0 ]; then
+            if ! sudo systemctl reload nginx; then
               echo "❌ Nginx reload failed. Showing status:"
               sudo systemctl status nginx
               exit 1
