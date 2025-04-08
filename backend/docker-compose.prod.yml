@@ -13,10 +13,14 @@ services:
         volumes:
             - postgres_data:/var/lib/postgresql/data
         healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-            interval: 30s
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}",
+                ]
+            interval: 10s
             timeout: 5s
-            retries: 3
+            retries: 5
         deploy:
             resources:
                 limits:
@@ -32,19 +36,19 @@ services:
         ports:
             - "4001:4001"
         environment:
-            - DATABASE_URL=${DATABASE_URL}
             - NODE_ENV=production
+            - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
             - JWT_SECRET=${JWT_SECRET}
+            - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
             - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://growkapital.com,https://admin.growkapital.com}
-            - PORT=4001
         depends_on:
             postgres:
                 condition: service_healthy
         deploy:
             resources:
                 limits:
+                    cpus: "1"
                     memory: 1G
-            replicas: 2
         networks:
             - app_network
 
