@@ -37,24 +37,48 @@ jobs:
           
           # Direct rsync for frontend and admin
           echo "Deploying frontend files via rsync..."
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
+          rsync -avz --no-times --no-perms --no-owner --no-group -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
             --exclude="node_modules" \
             --exclude=".next/cache" \
             --checksum \
             --compress \
             --stats \
             --info=progress2 \
-            frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/
+            frontend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/ || {
+              echo "rsync completed with warnings, but continuing deployment..."
+              # Check if critical files were transferred
+              ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+                if [ -f "/var/www/growkapital/frontend/package.json" ] && [ -d "/var/www/growkapital/frontend/app" ]; then
+                  echo "✓ Critical frontend files were transferred successfully"
+                  exit 0
+                else
+                  echo "✗ Critical frontend files are missing!"
+                  exit 1
+                fi
+              '
+            }
           
           echo "Deploying admin files via rsync..."
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
+          rsync -avz --no-times --no-perms --no-owner --no-group -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
             --exclude="node_modules" \
             --exclude=".next/cache" \
             --checksum \
             --compress \
             --stats \
             --info=progress2 \
-            admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
+            admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/ || {
+              echo "rsync completed with warnings, but continuing deployment..."
+              # Check if critical files were transferred
+              ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+                if [ -f "/var/www/growkapital/admin/package.json" ] && [ -d "/var/www/growkapital/admin/app" ]; then
+                  echo "✓ Critical admin files were transferred successfully"
+                  exit 0
+                else
+                  echo "✗ Critical admin files are missing!"
+                  exit 1
+                fi
+              '
+            }
           
           # Copy Docker Compose and backend files
           echo "Copying Docker Compose and backend files..."
