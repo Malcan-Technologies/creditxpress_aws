@@ -37,19 +37,66 @@ jobs:
       - name: Check for changed files
         run: |
           # Get the list of changed files using GitHub's context
+          echo "GitHub event: ${{ github.event_name }}"
+          echo "Current commit: ${{ github.sha }}"
+          echo "Previous commit: ${{ github.event.before }}"
+          
+          # List all files in the repository to see what we have
+          echo "All files in repository:"
+          find . -type f -not -path "*/\.*" | sort
+          
+          # Try to get the list of changed files
           if [ "${{ github.event_name }}" = "push" ]; then
-            # For push events, compare with the previous commit
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
+            # For push events, try to compare with the previous commit
+            echo "Attempting to get changed files using git diff..."
+            
+            # First try the standard approach
+            if git rev-parse --verify ${{ github.event.before }} >/dev/null 2>&1; then
+              echo "Previous commit found, using git diff"
+              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
+            else
+              echo "Previous commit not found, trying alternative approaches"
+              
+              # Try to get the last commit
+              LAST_COMMIT=$(git rev-parse HEAD~1 2>/dev/null || echo "")
+              if [ -n "$LAST_COMMIT" ]; then
+                echo "Using last commit: $LAST_COMMIT"
+                CHANGED_FILES=$(git diff --name-only $LAST_COMMIT ${{ github.sha }} || echo "")
+              else
+                echo "No previous commits found, this might be the first commit"
+                
+                # If this is the first commit, list all files
+                if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+                  echo "This appears to be the first commit, listing all files"
+                  CHANGED_FILES=$(find . -type f -not -path "*/\.*" | sed 's|^\./||' | tr '\n' ' ')
+                else
+                  # Try to get the last 10 commits and check what changed
+                  echo "Checking recent changes"
+                  CHANGED_FILES=$(git log --name-only --pretty=format: -n 10 | sort | uniq || echo "all")
+                fi
+              fi
+            fi
           elif [ "${{ github.event_name }}" = "pull_request" ]; then
             # For pull requests, compare with the base branch
+            echo "Pull request detected, comparing with base branch"
             CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }} || echo "")
           else
             # For other events, assume all files changed
+            echo "Unknown event type, assuming all files changed"
+            CHANGED_FILES="all"
+          fi
+          
+          # If we still don't have any changes, assume all components need deployment
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes detected, deploying all components"
             CHANGED_FILES="all"
           fi
           
           echo "Changed files:"
           echo "$CHANGED_FILES"
+          echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
+          echo "$CHANGED_FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
           
           # Determine which components need deployment
           FRONTEND_CHANGED=false
