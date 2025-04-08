@@ -35,7 +35,7 @@ jobs:
             chmod -R 755 /var/www/growkapital
           '
           
-          # Direct rsync for each component with explicit SSH options
+          # Direct rsync for frontend and admin
           echo "Deploying frontend files via rsync..."
           rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
             --exclude="node_modules" \
@@ -56,32 +56,24 @@ jobs:
             --info=progress2 \
             admin/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/admin/
           
-          echo "Deploying backend files via rsync..."
+          # Copy Docker Compose and backend files
+          echo "Copying Docker Compose and backend files..."
           rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
-            --exclude="node_modules" \
             --checksum \
             --compress \
             --stats \
             --info=progress2 \
-            backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
+            docker-compose.yml backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/
           
-          echo "Deploying config files via rsync..."
+          # Copy config and scripts
+          echo "Copying config and scripts..."
           rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
             --delete \
             --checksum \
             --compress \
             --stats \
             --info=progress2 \
-            config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
-          
-          echo "Deploying scripts files via rsync..."
-          rsync -avz -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key" \
-            --delete \
-            --checksum \
-            --compress \
-            --stats \
-            --info=progress2 \
-            scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
+            config/ scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/
 
       # Build Frontend
       - name: Install frontend dependencies
@@ -110,7 +102,6 @@ jobs:
             echo "Performing fresh install..."
             # First install critical dependencies
             npm install tailwindcss postcss autoprefixer --save-dev
-            npm install @next/swc-linux-x64-gnu @next/swc-linux-x64-musl --save-dev
             # Install all dependencies from package-lock.json with legacy peer deps
             npm ci --omit=dev --omit=optional --legacy-peer-deps || {
               echo "npm ci failed, falling back to npm install..."
@@ -127,57 +118,21 @@ jobs:
           # Create temporary .env file for build
           echo "${{ secrets.FRONTEND_ENV }}" > .env.build
           
-          # Extract API URL from secrets for build environment
-          API_URL=$(grep NEXT_PUBLIC_API_URL .env.build | cut -d '=' -f2 || echo "https://growkapital.com/api")
+          # Extract API URL from secrets for build environment  
+          FRONTEND_API_URL=$(grep NEXT_PUBLIC_API_URL .env.build | cut -d '=' -f2 || echo "https://growkapital.com/api")
           
-          echo "Package.json dependencies:"
-          cat package.json | grep -A 20 "\"dependencies\""
-          echo "Using API URL: $API_URL"
+          echo "Using Frontend API URL: $FRONTEND_API_URL"
           
-          # Add environment variables to handle Next.js build errors
           export NODE_OPTIONS="--max-old-space-size=4096"
           export NEXT_TELEMETRY_DISABLED=1
-          export NEXT_PUBLIC_API_URL=$API_URL
+          export NEXT_PUBLIC_API_URL=$FRONTEND_API_URL
           export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
           export NEXT_BUFFER_SIZE=16384
           export GENERATE_SOURCEMAP=false
-          # Enable build cache
-          export NEXT_CACHE=true
           # Disable static optimization for dynamic routes
           export NEXT_DISABLE_STATIC_OPTIMIZATION=1
           # Skip prerendering for pages with useSearchParams
           export NEXT_SKIP_PRERENDER=1
-          
-          # Create components directory if it doesn't exist
-          mkdir -p components
-          
-          # Create minimal components if they don't exist
-          if [ ! -f "components/Navbar.tsx" ]; then
-            echo "Creating minimal Navbar component..."
-            cat > components/Navbar.tsx << 'EOF'
-            export default function Navbar() {
-              return <nav>Navigation</nav>;
-            }
-            EOF
-          fi
-          
-          if [ ! -f "components/Footer.tsx" ]; then
-            echo "Creating minimal Footer component..."
-            cat > components/Footer.tsx << 'EOF'
-            export default function Footer() {
-              return <footer>Footer</footer>;
-            }
-            EOF
-          fi
-          
-          if [ ! -f "components/AdminLayout.tsx" ]; then
-            echo "Creating minimal AdminLayout component..."
-            cat > components/AdminLayout.tsx << 'EOF'
-            export default function AdminLayout({ children }) {
-              return <div>{children}</div>;
-            }
-            EOF
-          fi
           
           # Run build with error handling
           npm run build:prod || {
@@ -255,7 +210,7 @@ jobs:
 
       - name: Copy built files to server
         run: |
-          # Copy built files to server
+          # Copy built frontend files
           echo "Copying built frontend files..."
           rsync -avz --exclude="node_modules" --exclude=".next/cache" frontend/.next/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/frontend/.next/
           
@@ -269,9 +224,6 @@ jobs:
             npm install --legacy-peer-deps
             
             cd /var/www/growkapital/admin
-            npm install --legacy-peer-deps
-            
-            cd /var/www/growkapital/backend
             npm install --legacy-peer-deps
           '
 
@@ -444,418 +396,31 @@ jobs:
             fi
             
             # Check Docker build tools and run Docker Compose for backend
-            echo "Building and starting backend container..."
+            echo "Starting backend with Docker Compose..."
             cd /var/www/growkapital/backend
+            docker-compose -f docker-compose.prod.yml up -d --build backend postgres
             
-            # Stop any existing processes using port 4000
-            echo "Checking for existing processes on port 4000..."
-            PORT_PROCESS=$(ss -tulpn | grep ":4000" | awk '{print $7}' | cut -d"=" -f2 | cut -d"," -f1 || echo "")
-            if [ ! -z "$PORT_PROCESS" ]; then
-              echo "Found process $PORT_PROCESS using port 4000, stopping it..."
-              kill -9 $PORT_PROCESS 2>/dev/null || true
-            fi
-            
-            # Update Dockerfile.prod to properly install OpenSSL
-            if [ -f "Dockerfile.prod" ]; then
-              echo "Updating Dockerfile.prod to include OpenSSL..."
-              # Backup original Dockerfile
-              cp Dockerfile.prod Dockerfile.prod.bak
-              
-              # Add OpenSSL to the Dockerfile if not present
-              if ! grep -q "openssl" Dockerfile.prod; then
-                sed -i '/RUN apk add --no-cache python3 make g++/c\RUN apk add --no-cache python3 make g++ openssl openssl-dev' Dockerfile.prod
-                echo "✅ Added OpenSSL to Dockerfile.prod"
-              fi
-              
-              # Add TypeScript skip configuration if not present
-              if ! grep -q "skipLibCheck" Dockerfile.prod; then
-                sed -i '/RUN npx prisma generate/a \\\nRUN echo \\"{ \\\\\\"compilerOptions\\\\\\": { \\\\\\"skipLibCheck\\\\\\": true, \\\\\\"noEmitOnError\\\\\\": false } }\\" > tsconfig.build.json\nRUN npm run build || mkdir -p dist && cp -r src/* dist/' Dockerfile.prod
-                echo "✅ Updated Dockerfile.prod to skip TypeScript errors"
-              fi
-            fi
-            
-            # Make sure node_modules exists and prisma is installed
-            if [ ! -d "node_modules" ]; then
-              echo "Installing backend dependencies..."
-              npm install --production
-            fi
-            
-            # Fix Prisma schema to include ALL necessary binary targets
-            echo "Updating Prisma schema to support multiple targets..."
-            cat > prisma/schema.prisma << 'EOF'
-            generator client {
-              provider        = "prisma-client-js"
-              binaryTargets   = ["native", "linux-musl", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x", "debian-openssl-1.1.x"]
-            }
-            
-            datasource db {
-              provider = "postgresql"
-              url      = env("DATABASE_URL")
-            }
-            
-            // Rest of your schema remains unchanged
-            EOF
-            
-            # Add the rest of the schema
-            cat >> prisma/schema.prisma << 'EOF'
-            model User {
-              id        String   @id @default(uuid())
-              email     String   @unique
-              password  String
-              name      String?
-              role      String   @default("user")
-              createdAt DateTime @default(now())
-              updatedAt DateTime @updatedAt
-            }
-            EOF
-            
-            # Generate Prisma client before Docker build
-            echo "Generating Prisma client..."
-            npx prisma generate
-            
-            # Check if buildx is available
-            if docker buildx version >/dev/null 2>&1; then
-              export DOCKER_BUILDKIT=1
-              echo "✅ BuildKit enabled"
-            else
-              echo "WARNING: Docker buildx not available, disabling BuildKit"
-              export DOCKER_BUILDKIT=0
-            fi
-            
-            # Modify docker-compose to ensure just one instance of backend container
-            echo "Updating docker-compose.prod.yml to use only one backend instance..."
-            if grep -q "scale: 2" docker-compose.prod.yml; then
-              sed -i '/scale: 2/d' docker-compose.prod.yml
-              echo "✅ Removed scale: 2 from docker-compose.prod.yml"
-            fi
-            
-            # Stop and remove any existing containers
-            echo "Stopping and removing existing containers..."
-            docker-compose -f docker-compose.prod.yml down
-            docker rm -f backend_backend_1 backend_backend_2 2>/dev/null || true
-            
-            # Modify docker-compose to add host networking
-            echo "Updating docker-compose.prod.yml to use host networking..."
-            if ! grep -q "network_mode: \"host\"" docker-compose.prod.yml; then
-              sed -i '/^\s*services:/,/^\s*[a-z]/ s/^\(\s*\)backend:/\1backend:\n\1  network_mode: "host"/' docker-compose.prod.yml
-            fi
-            
-            # Start Docker containers with rebuild
-            echo "Starting Docker containers..."
-            docker-compose -f docker-compose.prod.yml up -d --build
-            
-            # Give backend time to start
+            # Wait for backend to start
             echo "Waiting for backend to start..."
-            sleep 15
+            sleep 10
             
-            # Verify backend is running
-            echo "Checking backend logs..."
-            docker-compose -f docker-compose.prod.yml logs --tail=50
-            
-            # Verify backend is running
-            echo "Checking if backend is running on port $BACKEND_PORT..."
-            if ss -tuln | grep -q ":$BACKEND_PORT "; then
-              echo "✅ Backend is listening on port $BACKEND_PORT"
+            # Check if backend is running
+            if docker ps | grep -q "growkapital_backend"; then
+              echo "✅ Backend container is running"
             else
-              echo "❌ WARNING: Backend is NOT listening on port $BACKEND_PORT!"
-              echo "Restarting backend container..."
-              docker-compose -f docker-compose.prod.yml restart
-              sleep 10
-              if ss -tuln | grep -q ":$BACKEND_PORT "; then
-                echo "✅ Backend restarted successfully and is now listening"
-              else
-                echo "❌ Backend still not listening after restart!"
-                
-                # Try fallback method with direct Docker run
-                echo "Trying fallback method with direct Docker run..."
-                cd /var/www/growkapital/backend
-                docker-compose -f docker-compose.prod.yml down
-                
-                # Build the image directly
-                docker build -t growkapital-backend -f Dockerfile.prod .
-                
-                # Run the container directly
-                docker run -d --name growkapital-backend \
-                  --network host \
-                  -e DATABASE_URL="$(grep DATABASE_URL .env | cut -d '=' -f2-)" \
-                  -e PORT="$BACKEND_PORT" \
-                  -e JWT_SECRET="$(grep JWT_SECRET .env | cut -d '=' -f2-)" \
-                  -p $BACKEND_PORT:$BACKEND_PORT \
-                  growkapital-backend
-                  
-                sleep 5
-                if ss -tuln | grep -q ":$BACKEND_PORT "; then
-                  echo "✅ Fallback method successful, backend is now listening"
-                else
-                  echo "❌ All attempts to start backend failed!"
-                fi
-              fi
-            fi
-
-      - name: Nginx configuration
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
-          script: |
-            cd /var/www/growkapital
-            
-            # Quick Nginx config check and reload if needed
-            if ! cmp -s config/nginx.conf /etc/nginx/sites-available/growkapital 2>/dev/null; then
-              echo "Updating Nginx configuration..."
-              sudo cp config/nginx.conf /etc/nginx/sites-available/growkapital
-              sudo ln -sf /etc/nginx/sites-available/growkapital /etc/nginx/sites-enabled/
-              if sudo nginx -t; then
-                sudo systemctl reload nginx
-              else
-                echo "Nginx config test failed, keeping previous config"
-                exit 1
-              fi
+              echo "❌ Backend container failed to start"
+              docker logs growkapital_backend
+              exit 1
             fi
             
-            # Verify nginx configuration is pointing to the correct directories
-            echo "Verifying nginx configuration paths..."
-            NGINX_CONFIG=$(sudo cat /etc/nginx/sites-available/growkapital)
-            
-            if echo "$NGINX_CONFIG" | grep -q "/var/www/growkapital/frontend"; then
-              echo "✓ Nginx config correctly references /var/www/growkapital/frontend"
+            # Check if postgres is running
+            if docker ps | grep -q "growkapital_postgres"; then
+              echo "✅ Postgres container is running"
             else
-              echo "✗ WARNING: Nginx config does not reference /var/www/growkapital/frontend!"
-              echo "This might be causing the layout issues - check for incorrect paths"
+              echo "❌ Postgres container failed to start"
+              docker logs growkapital_postgres
+              exit 1
             fi
-            
-            if echo "$NGINX_CONFIG" | grep -q "/var/www/growkapital/admin"; then
-              echo "✓ Nginx config correctly references /var/www/growkapital/admin"
-            else
-              echo "✗ WARNING: Nginx config does not reference /var/www/growkapital/admin!"
-            fi
-            
-            # Get backend port for checking Nginx config
-            # Extract PORT value and ensure it's just the number
-            BACKEND_PORT=$(grep "^PORT=" /var/www/growkapital/backend/.env | cut -d '=' -f2 | tr -d '\r\n \t' || echo "4000")
-            # Verify it's a valid number and not concatenated values
-            if ! [[ "$BACKEND_PORT" =~ ^[0-9]+$ ]]; then
-              echo "WARNING: PORT value '$BACKEND_PORT' is not a valid number. Using default 4000."
-              BACKEND_PORT="4000"
-            fi
-            echo "Detected backend port: [$BACKEND_PORT]"
-            
-            # Check if nginx is using the correct ports
-            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://127.0.0.1:3002"; then
-              echo "✓ Nginx config correctly uses port 3002 for frontend"
-            else
-              echo "✗ WARNING: Nginx config is not using port 3002 for frontend!"
-              echo "Current frontend proxy_pass:"
-              echo "$NGINX_CONFIG" | grep -A1 "# Proxy settings for main application" | grep "proxy_pass"
-            fi
-            
-            if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://127.0.0.1:3003"; then
-              echo "✓ Nginx config correctly uses port 3003 for admin"
-            else
-              echo "✗ WARNING: Nginx config is not using port 3003 for admin!"
-              echo "Current admin proxy_pass:"
-              echo "$NGINX_CONFIG" | grep -A1 "# Proxy settings for admin application" | grep "proxy_pass"
-            fi
-            
-            # Check if nginx is properly configured for backend API
-            if [ ! -z "$BACKEND_PORT" ]; then
-              if echo "$NGINX_CONFIG" | grep -q "proxy_pass http://127.0.0.1:$BACKEND_PORT"; then
-                echo "✓ Nginx config correctly uses port $BACKEND_PORT for backend API"
-              else
-                echo "⚠️ WARNING: Nginx configuration may not match backend port!"
-                echo "Backend is configured for port $BACKEND_PORT"
-                echo "Current nginx backend proxy_pass:"
-                echo "$NGINX_CONFIG" | grep -A1 "# Backend API proxy" | grep "proxy_pass"
-              fi
-            fi
-
-      - name: Start applications
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEYS }}
-          command_timeout: "5m"
-          script: |
-            cd /var/www/growkapital
-            
-            # Ensure correct permissions on frontend and admin directories
-            echo "Fixing permissions for frontend and admin..."
-            cd /var/www/growkapital
-            
-            echo "Setting correct permissions for frontend node_modules..."
-            chmod -R 755 frontend/node_modules/.bin/
-            find frontend/node_modules/.bin/ -type f -exec chmod +x {} \;
-            
-            echo "Setting correct permissions for admin node_modules..."
-            chmod -R 755 admin/node_modules/.bin/
-            find admin/node_modules/.bin/ -type f -exec chmod +x {} \;
-            
-            # Start the frontend application properly
-            echo "Starting the frontend application..."
-            cd /var/www/growkapital/frontend
-            pm2 delete growkapital-frontend 2>/dev/null || true
-            pm2 delete backend 2>/dev/null || true
-            pm2 delete growkapital 2>/dev/null || true
-
-            # Improved node_modules check and installation for frontend
-            echo "Checking frontend node_modules status..."
-            if [ ! -d "node_modules" ]; then
-              echo "⚠️ Frontend node_modules directory is missing!"
-              echo "Installing frontend dependencies with verbose output..."
-              
-              # First ensure package.json exists
-              if [ ! -f "package.json" ]; then
-                echo "❌ ERROR: package.json not found in frontend directory!"
-                ls -la
-              else
-                echo "✓ package.json found in frontend directory"
-                cat package.json | grep "dependencies" -A 5
-                echo "Installing dependencies..."
-                
-                # Clean any corrupted node_modules or cache
-                rm -rf node_modules package-lock.json .next/cache
-                
-                # Install with more debug info and fallbacks
-                npm install --production --no-optional --verbose --legacy-peer-deps || {
-                  echo "❌ npm install failed with error code $?"
-                  echo "Trying alternative installation method..."
-                  npm install --no-optional --production --legacy-peer-deps || {
-                    echo "❌ Alternative installation also failed!"
-                    echo "Creating minimal node_modules to continue..."
-                    mkdir -p node_modules/.bin
-                    npm install next@latest --platform=linux --arch=x64 --no-optional
-                    npm install react react-dom --no-optional
-                  }
-                }
-                
-                # Verify installation
-                if [ -d "node_modules" ]; then
-                  echo "✓ node_modules directory now exists"
-                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
-                else
-                  echo "❌ node_modules still missing after installation attempt!"
-                fi
-              fi
-            else
-              echo "✓ Frontend node_modules directory exists"
-              ls -la node_modules/.bin/ | grep next || {
-                echo "⚠️ next binary missing, reinstalling Next.js..."
-                npm install next --save
-              }
-            fi
-
-            # Start the admin application properly
-            echo "Starting the admin application..."
-            cd /var/www/growkapital/admin
-            pm2 delete growkapital-admin 2>/dev/null || true
-
-            # Check for node_modules in admin directory and install with more debug info
-            echo "Checking admin node_modules status..."
-            if [ ! -d "node_modules" ]; then
-              echo "⚠️ Admin node_modules directory is missing!"
-              echo "Installing admin dependencies with verbose output..."
-              # First ensure package.json exists
-              if [ ! -f "package.json" ]; then
-                echo "❌ ERROR: package.json not found in admin directory!"
-                ls -la
-              else
-                echo "✓ package.json found in admin directory"
-                cat package.json | grep "dependencies" -A 5
-                echo "Installing dependencies..."
-                # Clean any corrupted node_modules
-                rm -rf node_modules package-lock.json .next/cache
-                # Install with more debug info
-                npm install --production --no-optional --verbose --legacy-peer-deps || {
-                  echo "❌ npm install failed with error code $?"
-                  echo "Trying alternative installation method..."
-                  npm install --no-optional --production --legacy-peer-deps || {
-                    echo "❌ Alternative installation also failed!"
-                    echo "Creating minimal node_modules to continue..."
-                    mkdir -p node_modules/.bin
-                    npm install next@latest --platform=linux --arch=x64 --no-optional
-                    npm install react react-dom --no-optional
-                  }
-                }
-                
-                # Verify installation
-                if [ -d "node_modules" ]; then
-                  echo "✓ node_modules directory now exists"
-                  ls -la node_modules/.bin/ | grep next || echo "⚠️ next binary not found!"
-                else
-                  echo "❌ node_modules still missing after installation attempt!"
-                fi
-              fi
-            else
-              echo "✓ Admin node_modules directory exists"
-              ls -la node_modules/.bin/ | grep next || {
-                echo "⚠️ next binary missing, reinstalling Next.js..."
-                npm install next --save
-              }
-            fi
-
-            # Create start script with explicit port binding
-            cat > start.sh << 'EOF'
-            #!/bin/bash
-            cd "$(dirname "$0")"
-            export PORT=3002
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
-            ./node_modules/.bin/next start -p 3002 --hostname 0.0.0.0
-            EOF
-            chmod +x start.sh
-
-            # Start frontend
-            echo "Starting frontend with explicit port 3002..."
-            export NODE_OPTIONS="--max-old-space-size=256"
-            pm2 start ./start.sh --name "growkapital-frontend"
-
-            # Verify port binding for frontend
-            sleep 5
-            if ss -tuln | grep -q ":3002 "; then
-              echo "✅ Frontend successfully bound to port 3002"
-            else
-              echo "⚠️ Frontend not bound to port 3002, trying alternative method..."
-              pm2 delete growkapital-frontend
-              cd /var/www/growkapital/frontend
-              pm2 start --name "growkapital-frontend" -- npx next start -p 3002 --hostname 0.0.0.0
-            fi
-
-            # Create start script with explicit port binding
-            cat > start.sh << 'EOF'
-            #!/bin/bash
-            cd "$(dirname "$0")"
-            export PORT=3003
-            export NODE_ENV=production
-            export HOSTNAME=0.0.0.0
-            ./node_modules/.bin/next start -p 3003 --hostname 0.0.0.0
-            EOF
-            chmod +x start.sh
-
-            # Start admin
-            echo "Starting admin with explicit port 3003..."
-            export NODE_OPTIONS="--max-old-space-size=256"
-            pm2 start ./start.sh --name "growkapital-admin"
-
-            # Verify port binding for admin
-            sleep 5
-            if ss -tuln | grep -q ":3003 "; then
-              echo "✅ Admin successfully bound to port 3003"
-            else
-              echo "⚠️ Admin not bound to port 3003, trying alternative method..."
-              pm2 delete growkapital-admin
-              cd /var/www/growkapital/admin
-              pm2 start --name "growkapital-admin" -- npx next start -p 3003 --hostname 0.0.0.0
-            fi
-
-            # Save PM2 configuration for persistence across reboots
-            pm2 save --silent
-
-            # Restart all PM2 processes to ensure clean state
-            echo "Restarting all PM2 processes to ensure clean state..."
-            pm2 restart all
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
@@ -917,92 +482,51 @@ jobs:
                 echo "❌ Failed to obtain SSL certificates automatically"
                 echo "Manual command: sudo certbot --nginx -d growkapital.com -d www.growkapital.com -d admin.growkapital.com"
               }
+            fi
+            
+            # Check if SSL certificates are properly configured in Nginx
+            echo "Checking Nginx SSL configuration..."
+            if sudo grep -q "ssl_certificate" /etc/nginx/sites-available/growkapital; then
+              echo "✓ SSL certificates are configured in Nginx"
+              
+              # Check if certificates are valid
+              echo "Checking certificate validity..."
+              if sudo openssl x509 -noout -dates -in /etc/letsencrypt/live/growkapital.com/fullchain.pem | grep -q "notAfter"; then
+                echo "✓ SSL certificates are valid"
+                sudo openssl x509 -noout -dates -in /etc/letsencrypt/live/growkapital.com/fullchain.pem
+              else
+                echo "✗ SSL certificates are invalid or missing!"
+                echo "Running certbot renewal..."
+                sudo certbot renew --nginx --non-interactive
+              fi
             else
-              echo "✓ SSL certificate directory exists"
+              echo "✗ No SSL certificate paths found in Nginx config!"
+              echo "Adding SSL configuration manually..."
               
-              # Check certificate expiration and domains
-              echo "SSL certificate details:"
-              CERT_INFO=$(echo | openssl s_client -showcerts -servername growkapital.com -connect growkapital.com:443 2>/dev/null | openssl x509 -noout -dates -subject -issuer -ext subjectAltName)
+              # Backup current config
+              sudo cp /etc/nginx/sites-available/growkapital /etc/nginx/sites-available/growkapital.bak
               
-              if [ -z "$CERT_INFO" ]; then
-                echo "⚠️ Unable to retrieve certificate info. Certificate may be missing or invalid."
-                echo "Attempting to renew/obtain certificates..."
-                sudo certbot --nginx -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --agree-tos --non-interactive --expand --email ${{ secrets.SSL_EMAIL }} || {
-                  echo "❌ Failed to renew/obtain SSL certificates automatically"
-                }
-              else
-                echo "$CERT_INFO"
-                
-                # Check if admin subdomain is covered by certificate
-                if echo "$CERT_INFO" | grep -q "admin.growkapital.com"; then
-                  echo "✅ admin.growkapital.com is included in the SSL certificate"
-                else
-                  echo "⚠️ admin.growkapital.com is NOT included in the SSL certificate!"
-                  echo "Expanding certificate to include admin subdomain..."
-                  sudo certbot --nginx --expand -d growkapital.com -d www.growkapital.com -d admin.growkapital.com --agree-tos --non-interactive --email ${{ secrets.SSL_EMAIL }} || {
-                    echo "❌ Certificate expansion failed"
-                  }
-                fi
-              fi
+              # Add SSL configuration if missing
+              sudo sed -i '/server_name growkapital.com www.growkapital.com;/a \
+              \    ssl_certificate /etc/letsencrypt/live/growkapital.com/fullchain.pem;\
+              \    ssl_certificate_key /etc/letsencrypt/live/growkapital.com/privkey.pem;\
+              \    ssl_trusted_certificate /etc/letsencrypt/live/growkapital.com/chain.pem;' /etc/nginx/sites-available/growkapital
               
-              # Only force renewal if certificate is expired or about to expire (within 30 days)
-              CERT_EXPIRY=$(echo "$CERT_INFO" | grep "notAfter" | cut -d'=' -f2)
-              if [ ! -z "$CERT_EXPIRY" ]; then
-                EXPIRY_DATE=$(date -d "$CERT_EXPIRY" +%s)
-                CURRENT_DATE=$(date +%s)
-                DAYS_LEFT=$(( ($EXPIRY_DATE - $CURRENT_DATE) / 86400 ))
-                
-                if [ $DAYS_LEFT -lt 30 ]; then
-                  echo "⚠️ Certificate expires in $DAYS_LEFT days. Renewing..."
-                  sudo certbot renew --force-renewal --nginx
-                  sudo systemctl reload nginx
-                else
-                  echo "✓ Certificate valid for $DAYS_LEFT more days"
-                fi
-              fi
-              
-              # Debug Nginx SSL configuration
-              echo "Checking Nginx SSL configuration..."
+              # Check if edit was successful
               if sudo grep -q "ssl_certificate" /etc/nginx/sites-available/growkapital; then
-                echo "✓ SSL certificate paths found in Nginx config"
-                sudo grep "ssl_certificate" /etc/nginx/sites-available/growkapital
+                echo "✓ Successfully added SSL certificate paths to Nginx config"
+                sudo nginx -t && sudo systemctl reload nginx
               else
-                echo "✗ No SSL certificate paths found in Nginx config!"
-                echo "Adding SSL configuration manually..."
-                
-                # Backup current config
-                sudo cp /etc/nginx/sites-available/growkapital /etc/nginx/sites-available/growkapital.bak
-                
-                # Add SSL configuration if missing
-                sudo sed -i '/server_name growkapital.com www.growkapital.com;/a \
-                \    ssl_certificate /etc/letsencrypt/live/growkapital.com/fullchain.pem;\
-                \    ssl_certificate_key /etc/letsencrypt/live/growkapital.com/privkey.pem;\
-                \    ssl_trusted_certificate /etc/letsencrypt/live/growkapital.com/chain.pem;' /etc/nginx/sites-available/growkapital
-                
-                # Check if edit was successful
-                if sudo grep -q "ssl_certificate" /etc/nginx/sites-available/growkapital; then
-                  echo "✓ Successfully added SSL certificate paths to Nginx config"
-                  sudo nginx -t && sudo systemctl reload nginx
-                else
-                  echo "✗ Failed to add SSL certificate paths to Nginx config"
-                  echo "Restoring backup..."
-                  sudo cp /etc/nginx/sites-available/growkapital.bak /etc/nginx/sites-available/growkapital
-                fi
-              fi
-              
-              # Verify Nginx SSL listening
-              if sudo grep -q "listen 443 ssl" /etc/nginx/sites-available/growkapital; then
-                echo "✓ Nginx is configured to listen on SSL port 443"
-              else
-                echo "✗ Nginx is not configured to listen on SSL port 443!"
-                sudo grep "listen" /etc/nginx/sites-available/growkapital
+                echo "✗ Failed to add SSL certificate paths to Nginx config"
+                echo "Restoring backup..."
+                sudo cp /etc/nginx/sites-available/growkapital.bak /etc/nginx/sites-available/growkapital
               fi
             fi
             
             if [ -f "/tmp/files-changed" ]; then
               rm -f "/tmp/files-changed"
               echo "Deployment completed successfully"
-            else
+            
               echo "No changes detected, deployment completed"
             fi 
 
