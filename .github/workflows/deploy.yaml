@@ -36,8 +36,18 @@ jobs:
 
       - name: Check for changed files
         run: |
-          # Get the list of changed files
-          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          # Get the list of changed files using GitHub's context
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # For push events, compare with the previous commit
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For pull requests, compare with the base branch
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }} || echo "")
+          else
+            # For other events, assume all files changed
+            CHANGED_FILES="all"
+          fi
+          
           echo "Changed files:"
           echo "$CHANGED_FILES"
           
@@ -46,15 +56,15 @@ jobs:
           ADMIN_CHANGED=false
           BACKEND_CHANGED=false
           
-          if echo "$CHANGED_FILES" | grep -q "^frontend/"; then
+          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^frontend/"; then
             FRONTEND_CHANGED=true
           fi
           
-          if echo "$CHANGED_FILES" | grep -q "^admin/"; then
+          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^admin/"; then
             ADMIN_CHANGED=true
           fi
           
-          if echo "$CHANGED_FILES" | grep -q "^backend/"; then
+          if [ "$CHANGED_FILES" = "all" ] || echo "$CHANGED_FILES" | grep -q "^backend/"; then
             BACKEND_CHANGED=true
           fi
           
