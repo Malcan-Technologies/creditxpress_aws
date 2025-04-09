@@ -244,18 +244,56 @@ jobs:
               exit 1
             fi
             
-            # Wait for containers to start
+            # Wait for containers to start with more detailed status checks
             echo "Waiting for containers to start..."
-            sleep 10
+            MAX_WAIT=60
+            WAIT_COUNT=0
+            CONTAINER_STARTED=false
             
-            # Check if containers are running
-            if docker ps | grep -q "backend_backend"; then
-              echo "✅ Backend containers started successfully"
-            else
-              echo "❌ Backend container failed to start"
+            while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+              if docker ps | grep -q "backend_backend"; then
+                CONTAINER_STARTED=true
+                echo "✅ Backend container is running"
+                break
+              fi
+              
+              # Check if container exists but exited
+              if docker ps -a | grep -q "backend_backend.*Exited"; then
+                echo "❌ Backend container started but exited. Showing logs:"
+                "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend
+                echo "Container status:"
+                docker ps -a | grep backend
+                echo "Container inspect:"
+                docker inspect backend_backend_1
+                exit 1
+              fi
+              
+              echo "Waiting for backend container to start... ($WAIT_COUNT/$MAX_WAIT seconds)"
+              sleep 5
+              WAIT_COUNT=$((WAIT_COUNT + 5))
+            done
+            
+            if [ "$CONTAINER_STARTED" = false ]; then
+              echo "❌ Backend container failed to start within $MAX_WAIT seconds"
+              echo "Showing all container logs:"
               "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs
+              echo "Showing all running containers:"
+              docker ps -a
+              echo "Showing Docker system info:"
+              docker info
               exit 1
             fi
+            
+            # Additional health checks
+            echo "Performing additional health checks..."
+            echo "Checking container logs for errors..."
+            if "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend | grep -i "error\|exception\|fatal"; then
+              echo "⚠️ Found errors in container logs:"
+              "$DOCKER_COMPOSE_PATH" -f docker-compose.prod.yml logs backend | grep -i "error\|exception\|fatal"
+            fi
+            
+            echo "Checking container resource usage..."
+            docker stats --no-stream backend_backend_1
           '
 
       - name: Deploy config files
