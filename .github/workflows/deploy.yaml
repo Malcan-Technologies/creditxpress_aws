@@ -268,11 +268,48 @@ jobs:
             WAIT_COUNT=0
             DB_READY=false
             
+            # First check if the postgres container is running
+            if ! docker ps | grep -q "backend-postgres-1"; then
+              echo "❌ PostgreSQL container is not running"
+              echo "Showing container logs:"
+              docker logs backend-postgres-1
+              exit 1
+            fi
+            
+            echo "✅ PostgreSQL container is running"
+            
+            # Wait for PostgreSQL to be ready
             while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-              if docker exec backend-postgres-1 pg_isready -U "$DB_USER" -d "$DB_NAME"; then
-                DB_READY=true
-                echo "✅ PostgreSQL is ready"
-                break
+              # Check if we can connect to PostgreSQL with the default postgres user
+              if docker exec backend-postgres-1 pg_isready -U postgres 2>/dev/null; then
+                echo "✅ PostgreSQL is accepting connections with default postgres user"
+                
+                # Check if our specific user exists
+                if docker exec backend-postgres-1 psql -U postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" 2>/dev/null | grep -q 1; then
+                  echo "✅ User $DB_USER exists"
+                else
+                  echo "Creating user $DB_USER..."
+                  docker exec backend-postgres-1 psql -U postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null
+                fi
+                
+                # Check if our database exists
+                if docker exec backend-postgres-1 psql -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null | grep -q 1; then
+                  echo "✅ Database $DB_NAME exists"
+                else
+                  echo "Creating database $DB_NAME..."
+                  docker exec backend-postgres-1 psql -U postgres -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null
+                fi
+                
+                # Grant privileges
+                echo "Granting privileges to $DB_USER on $DB_NAME..."
+                docker exec backend-postgres-1 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null
+                
+                # Now check if we can connect with our user
+                if docker exec backend-postgres-1 pg_isready -U "$DB_USER" -d "$DB_NAME" 2>/dev/null; then
+                  DB_READY=true
+                  echo "✅ PostgreSQL is ready with user $DB_USER and database $DB_NAME"
+                  break
+                fi
               fi
               
               echo "Waiting for PostgreSQL to be ready... ($WAIT_COUNT/$MAX_WAIT seconds)"
@@ -284,21 +321,9 @@ jobs:
               echo "❌ PostgreSQL failed to become ready within $MAX_WAIT seconds"
               echo "Showing PostgreSQL logs:"
               docker logs backend-postgres-1
-              
-              # Try to create the database and user if they don't exist
-              echo "Attempting to create database and user..."
-              docker exec backend-postgres-1 psql -U postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" || true
-              docker exec backend-postgres-1 psql -U postgres -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" || true
-              docker exec backend-postgres-1 psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" || true
-              
-              # Check again
-              if docker exec backend-postgres-1 pg_isready -U "$DB_USER" -d "$DB_NAME"; then
-                echo "✅ PostgreSQL is now ready after manual setup"
-                DB_READY=true
-              else
-                echo "❌ PostgreSQL still not ready after manual setup"
-                exit 1
-              fi
+              echo "Showing PostgreSQL container status:"
+              docker inspect backend-postgres-1
+              exit 1
             fi
             
             # Wait for containers to start with more detailed status checks
