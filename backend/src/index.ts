@@ -40,7 +40,7 @@ app.use(express.json());
 
 // Log all requests in development mode
 if (isDevelopment) {
-	app.use((req, res, next) => {
+	app.use((req, _res, next) => {
 		console.log(`${req.method} ${req.path} - Body:`, req.body);
 		next();
 	});
@@ -50,7 +50,7 @@ if (isDevelopment) {
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check endpoint
-app.get("/api/health", (req, res) => {
+app.get("/api/health", (_req, res) => {
 	res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 

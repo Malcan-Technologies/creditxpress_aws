@@ -41,3 +41,46 @@ export async function PATCH(
 		);
 	}
 }
+
+export async function DELETE(
+	req: NextRequest,
+	{ params }: { params: { id: string; documentId: string } }
+) {
+	try {
+		const cookieStore = cookies();
+		const token = cookieStore.get("token")?.value;
+
+		if (!token) {
+			return NextResponse.json(
+				{ message: "Unauthorized" },
+				{ status: 401 }
+			);
+		}
+
+		const response = await fetch(
+			`${API_URL}/api/loan-applications/${params.id}/documents/${params.documentId}`,
+			{
+				method: "DELETE",
+				headers: {
+					Authorization: `Bearer ${token}`,
+				},
+			}
+		);
+
+		if (!response.ok) {
+			const error = await response.json();
+			return NextResponse.json(error, { status: response.status });
+		}
+
+		return NextResponse.json(
+			{ message: "Document deleted successfully" },
+			{ status: 200 }
+		);
+	} catch (error) {
+		console.error("Error deleting document:", error);
+		return NextResponse.json(
+			{ message: "Failed to delete document" },
+			{ status: 500 }
+		);
+	}
+}

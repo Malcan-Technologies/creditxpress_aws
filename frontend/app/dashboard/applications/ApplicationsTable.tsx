@@ -26,7 +26,14 @@ interface LoanApplication {
 	product: {
 		name: string;
 		code: string;
+		requiredDocuments?: string[];
 	};
+	documents?: Array<{
+		id: string;
+		name: string;
+		type: string;
+		status: string;
+	}>;
 }
 
 export default function ApplicationsTable() {
@@ -220,6 +227,10 @@ export default function ApplicationsTable() {
 		? applications.filter((app) => app.status === activeFilter)
 		: applications;
 
+	const handleViewDetails = (appId: string) => {
+		router.push(`/dashboard/applications/${appId}`);
+	};
+
 	return (
 		<DashboardLayout userName={userName}>
 			<div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -354,12 +365,16 @@ export default function ApplicationsTable() {
 												</Link>
 											) : (
 												<div className="flex items-center gap-2">
-													<Link
-														href={`/dashboard/applications/${app.id}`}
+													<button
+														onClick={() =>
+															handleViewDetails(
+																app.id
+															)
+														}
 														className="text-indigo-600 hover:text-indigo-900"
 													>
 														View Details
-													</Link>
+													</button>
 													{[
 														"PENDING_APP_FEE",
 														"PENDING_KYC",

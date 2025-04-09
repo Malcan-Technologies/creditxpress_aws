@@ -1,12 +1,6 @@
-import {
-	Router,
-	Request,
-	Response,
-	NextFunction,
-	RequestHandler,
-} from "express";
+import { Router, RequestHandler } from "express";
 import { prisma } from "../lib/prisma";
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
 
@@ -29,11 +23,11 @@ interface ProductInput {
 	isActive?: boolean;
 }
 
-interface Product extends ProductInput {
-	id: string;
-	createdAt: Date;
-	updatedAt: Date;
-}
+// interface Product extends ProductInput {
+// 	id: string;
+// 	createdAt: Date;
+// 	updatedAt: Date;
+// }
 
 interface GetProductsQuery {
 	code?: string;
@@ -343,9 +337,17 @@ const deleteProduct: RequestHandler<ProductParams> = async (req, res) => {
 };
 
 router.get("/", getProducts);
-router.post("/", authenticateToken, createProduct);
-router.patch("/:id", authenticateToken, updateProduct);
-router.delete("/:id", authenticateToken, deleteProduct);
+router.post("/", authenticateToken, createProduct as unknown as RequestHandler);
+router.patch(
+	"/:id",
+	authenticateToken,
+	updateProduct as unknown as RequestHandler
+);
+router.delete(
+	"/:id",
+	authenticateToken,
+	deleteProduct as unknown as RequestHandler
+);
 
 /**
  * @swagger

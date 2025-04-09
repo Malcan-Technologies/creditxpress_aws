@@ -1,15 +1,14 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, {
+	Request,
+	Response,
+	NextFunction,
+	RequestHandler,
+} from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { authenticateToken } from "../middleware/auth";
-
-interface AuthRequest extends Request {
-	user?: {
-		userId: string;
-		role: string;
-	};
-}
+import { AuthRequest } from "../middleware/auth";
 
 /**
  * @swagger
@@ -91,7 +90,7 @@ router.post("/login", async (req: Request, res: Response) => {
 		console.log("Admin login successful:", phoneNumber);
 
 		// Return tokens and user data
-		res.json({
+		return res.json({
 			accessToken,
 			refreshToken,
 			role: user.role,
@@ -104,7 +103,7 @@ router.post("/login", async (req: Request, res: Response) => {
 		});
 	} catch (error) {
 		console.error("Admin login error:", error);
-		res.status(500).json({ error: "Internal server error" });
+		return res.status(500).json({ error: "Internal server error" });
 	}
 });
 
@@ -113,7 +112,7 @@ router.post("/login", async (req: Request, res: Response) => {
 router.get(
 	"/dashboard",
 	authenticateToken,
-	isAdmin,
+	isAdmin as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
@@ -158,38 +157,32 @@ router.get(
 
 // Get all users (protected admin route)
 // @ts-ignore
-router.get(
-	"/users",
-	authenticateToken,
-	isAdmin,
-	// @ts-ignore
-	async (req: AuthRequest, res: Response) => {
-		try {
-			const users = await prisma.user.findMany({
-				select: {
-					id: true,
-					fullName: true,
-					email: true,
-					phoneNumber: true,
-					role: true,
-					createdAt: true,
-				},
-			});
+router.get("/users", authenticateToken, async (req: Request, res: Response) => {
+	try {
+		const users = await prisma.user.findMany({
+			select: {
+				id: true,
+				fullName: true,
+				email: true,
+				phoneNumber: true,
+				role: true,
+				createdAt: true,
+			},
+		});
 
-			res.json(users);
-		} catch (error) {
-			console.error("Get users error:", error);
-			res.status(500).json({ error: "Internal server error" });
-		}
+		res.json(users);
+	} catch (error) {
+		console.error("Get users error:", error);
+		res.status(500).json({ error: "Internal server error" });
 	}
-);
+});
 
 // Update user (protected admin route)
 // @ts-ignore
 router.put(
 	"/users/:id",
 	authenticateToken,
-	isAdmin,
+	isAdmin as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
@@ -232,7 +225,7 @@ router.put(
 router.delete(
 	"/users/:id",
 	authenticateToken,
-	isAdmin,
+	isAdmin as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {

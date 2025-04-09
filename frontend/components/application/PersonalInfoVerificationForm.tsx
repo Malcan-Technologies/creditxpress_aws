@@ -209,6 +209,14 @@ function PersonalInfoVerificationFormContent({
 			}
 		};
 
+	const handleBack = () => {
+		const currentStep = parseInt(searchParams.get("step") || "0", 10);
+		const newStep = Math.max(currentStep - 1, 0);
+		const newUrl = new URL(window.location.href);
+		newUrl.searchParams.set("step", newStep.toString());
+		window.location.href = newUrl.toString();
+	};
+
 	return (
 		<Box component="form" onSubmit={handleSubmit} className="space-y-6">
 			<Typography variant="h6" className="text-gray-900 mb-4">
@@ -398,7 +406,7 @@ function PersonalInfoVerificationFormContent({
 				<Button
 					type="button"
 					variant="outlined"
-					onClick={onBack}
+					onClick={handleBack}
 					className="text-gray-700 border-gray-300 hover:bg-gray-50"
 				>
 					Back

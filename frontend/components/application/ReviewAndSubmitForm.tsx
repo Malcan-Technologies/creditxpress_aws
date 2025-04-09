@@ -14,6 +14,28 @@ import { useSearchParams } from "next/navigation";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import Cookies from "js-cookie";
 
+interface ApplicationData {
+	productId: string;
+	loanAmount: string;
+	loanPurpose: string;
+	loanTerm: string;
+	monthlyRepayment: string;
+	interestRate: string;
+	legalFee: string;
+	netDisbursement: string;
+	documents: Array<{
+		id: string;
+		name: string;
+		type: string;
+		status: string;
+		fileUrl: string;
+	}>;
+	product: {
+		code: string;
+		name: string;
+	};
+}
+
 interface ReviewAndSubmitFormProps {
 	onSubmit: (values: { termsAccepted: boolean }) => void;
 	onBack: () => void;
@@ -39,6 +61,7 @@ interface ProductDetails {
 	name: string;
 	interestRate: number;
 	code: string;
+	requiredDocuments?: string[];
 }
 
 // Create a client component for handling searchParams
@@ -55,25 +78,8 @@ function ReviewAndSubmitFormContent({
 	);
 	const [isLoading, setIsLoading] = useState(true);
 	const [openTooltip, setOpenTooltip] = useState<string | null>(null);
-	const [applicationData, setApplicationData] = useState<{
-		productId: string;
-		loanAmount: string;
-		loanPurpose: string;
-		loanTerm: string;
-		monthlyRepayment: string;
-		interestRate: string;
-		legalFee: string;
-		netDisbursement: string;
-		documents: Array<{
-			id: string;
-			name: string;
-			status: string;
-		}>;
-		product: {
-			code: string;
-			name: string;
-		};
-	} | null>(null);
+	const [applicationData, setApplicationData] =
+		useState<ApplicationData | null>(null);
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -164,7 +170,7 @@ function ReviewAndSubmitFormContent({
 				}
 
 				// Transform the data to match our expected format
-				const transformedData = {
+				const transformedData: ApplicationData = {
 					productId: data.productId,
 					loanAmount: data.amount.toString(),
 					loanPurpose: data.purpose,
@@ -280,11 +286,13 @@ function ReviewAndSubmitFormContent({
 
 				console.log("Setting product details:", productData);
 				setProductDetails(productData);
+				return; // Add explicit return statement
 			} catch (err) {
 				console.error("Detailed error in fetchData:", err);
 				setError(
 					"Failed to load application details. Please try again."
 				);
+				return; // Add explicit return statement for error case
 			} finally {
 				setIsLoading(false);
 			}
@@ -403,6 +411,14 @@ function ReviewAndSubmitFormContent({
 
 	const handleTooltipClick = (tooltipId: string) => {
 		setOpenTooltip(openTooltip === tooltipId ? null : tooltipId);
+	};
+
+	const handleBack = () => {
+		const currentStep = parseInt(searchParams.get("step") || "1", 10);
+		const newStep = Math.max(currentStep - 1, 1);
+		const newUrl = new URL(window.location.href);
+		newUrl.searchParams.set("step", newStep.toString());
+		window.location.href = newUrl.toString();
 	};
 
 	if (isLoading) {
@@ -919,31 +935,89 @@ function ReviewAndSubmitFormContent({
 				</Paper>
 
 				<Paper className="p-6">
-					<Typography variant="h6" className="text-gray-900 mb-4">
+					<Typography variant="h6" gutterBottom>
 						Documents
 					</Typography>
-					<div className="space-y-2">
-						{applicationData.documents.map((doc) => (
-							<div
-								key={doc.id}
-								className="flex justify-between items-center"
-							>
-								<Typography className="text-gray-600">
-									{doc.name}
-								</Typography>
-								<Typography
-									className={
-										doc.status === "success"
-											? "text-green-600"
-											: "text-yellow-600"
-									}
-								>
-									{doc.status === "success"
-										? "Uploaded"
-										: "Pending"}
-								</Typography>
-							</div>
-						))}
+					<Typography
+						variant="body1"
+						className="text-gray-600 mb-2 leading-relaxed"
+					>
+						While documents can be submitted at a later stage,
+						providing them now will expedite your loan application
+						review process and help us serve you faster.
+					</Typography>
+					<div className="space-y-0">
+						{productDetails?.requiredDocuments?.map(
+							(docType: string, index: number) => {
+								const uploadedDocs =
+									applicationData.documents.filter(
+										(doc) => doc.type === docType
+									);
+								const hasUploads = uploadedDocs.length > 0;
+								return (
+									<div key={docType}>
+										<div className="py-4 space-y-2">
+											<div className="flex justify-between items-center">
+												<Typography
+													variant="body1"
+													className="text-gray-700 font-medium"
+												>
+													{docType}
+												</Typography>
+												<div
+													className={`px-3 py-1 rounded-full text-sm font-medium ${
+														hasUploads
+															? "bg-green-100 text-green-800"
+															: "bg-yellow-100 text-yellow-800"
+													}`}
+												>
+													{hasUploads
+														? `${uploadedDocs.length} file(s) uploaded`
+														: "Not Uploaded"}
+												</div>
+											</div>
+											{hasUploads && (
+												<div className="pl-4 space-y-2">
+													{uploadedDocs.map((doc) => (
+														<div
+															key={doc.id}
+															className="flex justify-between items-center text-sm"
+														>
+															<span className="text-gray-500">
+																{doc.fileUrl
+																	.split("/")
+																	.pop()}
+															</span>
+															<Link
+																href={`${
+																	process.env
+																		.NEXT_PUBLIC_API_URL
+																}/api/loan-applications/${searchParams.get(
+																	"applicationId"
+																)}/documents/${
+																	doc.id
+																}`}
+																target="_blank"
+																rel="noopener noreferrer"
+																className="text-indigo-600 hover:text-indigo-500"
+															>
+																View
+															</Link>
+														</div>
+													))}
+												</div>
+											)}
+										</div>
+										{index <
+											(productDetails?.requiredDocuments
+												?.length ?? 0) -
+												1 && (
+											<div className="border-b border-gray-200"></div>
+										)}
+									</div>
+								);
+							}
+						)}
 					</div>
 				</Paper>
 
@@ -985,7 +1059,7 @@ function ReviewAndSubmitFormContent({
 				<Button
 					type="button"
 					variant="outlined"
-					onClick={onBack}
+					onClick={handleBack}
 					disabled={isLoading}
 					className="text-gray-700 border-gray-300 hover:bg-gray-50"
 				>

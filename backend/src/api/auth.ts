@@ -232,10 +232,10 @@ router.post("/signup", async (req, res) => {
 // Logout
 router.post("/logout", authenticateToken, async (req: AuthRequest, res) => {
 	try {
-		if (!req.user?.phoneNumber) {
+		if (!req.user?.userId) {
 			return res.status(401).json({ message: "User not authenticated" });
 		}
-		const user = await User.findByPhoneNumber(req.user.phoneNumber);
+		const user = await User.findById(req.user.userId);
 		if (user) {
 			await user.updateRefreshToken(null);
 		}
@@ -255,7 +255,7 @@ router.post("/logout", authenticateToken, async (req: AuthRequest, res) => {
  *       200:
  *         description: Bcrypt test results
  */
-router.get("/test-bcrypt", async (req, res) => {
+router.get("/test-bcrypt", async (_req, res) => {
 	try {
 		// Generate a test password hash
 		const testPassword = "test123";

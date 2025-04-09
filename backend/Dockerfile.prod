@@ -34,6 +34,9 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
+# Create uploads directory with proper permissions
+RUN mkdir -p uploads && chmod 777 uploads
+
 # Expose the port the app runs on
 EXPOSE 4001
 

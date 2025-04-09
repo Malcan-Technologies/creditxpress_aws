@@ -21,8 +21,8 @@ interface Product {
 	maxAmount: number;
 	minAmount: number;
 	features: string[];
-	requirements: string[];
-	loanTypes: string[];
+	requirements?: string[];
+	loanTypes?: string[];
 	repaymentTerms: number[]; // Array of months
 	interestRate: number; // Monthly interest rate in percentage
 	legalFee: number; // Legal fee in percentage
@@ -168,7 +168,10 @@ function ApplicationDetailsFormContent({
 			}
 		}
 
-		if (selectedProduct.loanTypes?.length > 0 && !formValues.loanPurpose) {
+		if (
+			(selectedProduct.loanTypes ?? []).length > 0 &&
+			!formValues.loanPurpose
+		) {
 			newErrors.loanPurpose = "Loan purpose is required";
 			isValid = false;
 		}
@@ -213,7 +216,7 @@ function ApplicationDetailsFormContent({
 				originationFee: originationFeeValue.toFixed(2),
 				netDisbursement: netDisbursementValue.toFixed(2),
 				loanPurpose:
-					selectedProduct.loanTypes?.length > 0
+					(selectedProduct.loanTypes ?? []).length > 0
 						? formValues.loanPurpose
 						: "",
 			};
@@ -243,6 +246,14 @@ function ApplicationDetailsFormContent({
 		return monthlyPayment.toFixed(2);
 	};
 
+	const handleBack = () => {
+		const currentStep = parseInt(searchParams.get("step") || "1", 10);
+		const newStep = Math.max(currentStep - 1, 1);
+		const newUrl = new URL(window.location.href);
+		newUrl.searchParams.set("step", newStep.toString());
+		window.location.href = newUrl.toString();
+	};
+
 	return (
 		<Box component="form" onSubmit={handleSubmit} className="space-y-6">
 			<Typography variant="h6" className="text-gray-900 mb-4">
@@ -269,29 +280,28 @@ function ApplicationDetailsFormContent({
 					}}
 				/>
 
-				{selectedProduct.loanTypes &&
-					selectedProduct.loanTypes.length > 0 && (
-						<FormControl fullWidth error={!!errors.loanPurpose}>
-							<InputLabel>Loan Purpose</InputLabel>
-							<Select
-								name="loanPurpose"
-								value={formValues.loanPurpose}
-								onChange={handleSelectChange}
-								label="Loan Purpose"
-							>
-								{selectedProduct.loanTypes.map((type) => (
-									<MenuItem key={type} value={type}>
-										{type}
-									</MenuItem>
-								))}
-							</Select>
-							{errors.loanPurpose && (
-								<FormHelperText>
-									{errors.loanPurpose}
-								</FormHelperText>
-							)}
-						</FormControl>
-					)}
+				{(selectedProduct.loanTypes ?? []).length > 0 && (
+					<FormControl fullWidth error={!!errors.loanPurpose}>
+						<InputLabel>Loan Purpose</InputLabel>
+						<Select
+							name="loanPurpose"
+							value={formValues.loanPurpose}
+							onChange={handleSelectChange}
+							label="Loan Purpose"
+						>
+							{(selectedProduct.loanTypes ?? []).map((type) => (
+								<MenuItem key={type} value={type}>
+									{type}
+								</MenuItem>
+							))}
+						</Select>
+						{errors.loanPurpose && (
+							<FormHelperText>
+								{errors.loanPurpose}
+							</FormHelperText>
+						)}
+					</FormControl>
+				)}
 
 				<FormControl fullWidth error={!!errors.loanTerm}>
 					<InputLabel>Loan Term</InputLabel>
@@ -339,7 +349,7 @@ function ApplicationDetailsFormContent({
 				<Button
 					type="button"
 					variant="outlined"
-					onClick={onBack}
+					onClick={handleBack}
 					className="text-gray-700 border-gray-300 hover:bg-gray-50"
 				>
 					Back

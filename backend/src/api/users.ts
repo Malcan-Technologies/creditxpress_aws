@@ -1,14 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { authenticateToken } from "../middleware/auth";
-import { Request, Response } from "express";
-
-interface AuthenticatedRequest extends Request {
-	user?: {
-		userId: string;
-		phoneNumber: string;
-	};
-}
+import { Response } from "express";
+import { AuthRequest } from "../middleware/auth";
 
 const router = Router();
 
@@ -93,7 +87,7 @@ const router = Router();
 router.get(
 	"/me",
 	authenticateToken,
-	async (req: AuthenticatedRequest, res: Response) => {
+	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;
 			if (!userId) {
@@ -192,7 +186,7 @@ router.get(
 router.put(
 	"/me",
 	authenticateToken,
-	async (req: AuthenticatedRequest, res: Response) => {
+	async (req: AuthRequest, res: Response) => {
 		try {
 			const userId = req.user?.userId;
 			if (!userId) {

@@ -3,22 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
-import {
-	Box,
-	Typography,
-	Paper,
-	Alert,
-	Button,
-	Dialog,
-	DialogActions,
-	DialogContent,
-	DialogContentText,
-	DialogTitle,
-} from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import * as Tooltip from "@radix-ui/react-tooltip";
 import Cookies from "js-cookie";
+import { Box, Button, Typography, Dialog, IconButton } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import EditIcon from "@mui/icons-material/Edit";
+import CloseIcon from "@mui/icons-material/Close";
+import DocumentUploadForm from "@/components/application/DocumentUploadForm";
 
 interface LoanApplication {
 	id: string;
@@ -28,6 +18,11 @@ interface LoanApplication {
 	term: number;
 	purpose: string;
 	createdAt: string;
+	updatedAt: string;
+	monthlyRepayment: number;
+	interestRate: number;
+	legalFee: number;
+	netDisbursement: number;
 	product: {
 		name: string;
 		code: string;
@@ -35,16 +30,28 @@ interface LoanApplication {
 		legalFee: number;
 		applicationFee: number;
 		interestRate: number;
+		requiredDocuments?: string[];
 	};
-	monthlyRepayment: number;
-	interestRate: number;
-	legalFee: number;
-	netDisbursement: number;
-	documents: Array<{
+	documents?: Array<{
 		id: string;
 		name: string;
+		type: string;
 		status: string;
+		fileUrl: string;
 	}>;
+	user?: {
+		fullName: string;
+		email: string;
+		phoneNumber: string;
+		employmentStatus: string;
+		employerName?: string;
+		monthlyIncome?: string;
+		address1: string;
+		address2?: string;
+		city: string;
+		state: string;
+		postalCode: string;
+	};
 }
 
 export default function ApplicationDetails({
@@ -57,11 +64,8 @@ export default function ApplicationDetails({
 		null
 	);
 	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
 	const [userName, setUserName] = useState<string>("");
-	const [openTooltip, setOpenTooltip] = useState<string | null>(null);
-	const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
-	const [withdrawing, setWithdrawing] = useState(false);
+	const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -92,8 +96,8 @@ export default function ApplicationDetails({
 						"Guest"
 				);
 
-				// Fetch application data
-				const applicationResponse = await fetch(
+				// Fetch application details
+				const response = await fetch(
 					`/api/loan-applications/${params.id}`,
 					{
 						headers: {
@@ -102,26 +106,21 @@ export default function ApplicationDetails({
 					}
 				);
 
-				if (!applicationResponse.ok) {
-					throw new Error("Failed to fetch application details");
+				if (!response.ok) {
+					throw new Error("Failed to fetch application");
 				}
 
-				const applicationData = await applicationResponse.json();
-				setApplication(applicationData);
-			} catch (err) {
-				console.error("Error:", err);
-				setError(
-					err instanceof Error
-						? err.message
-						: "Failed to load application details"
-				);
+				const data = await response.json();
+				setApplication(data);
+			} catch (error) {
+				console.error("Error:", error);
 			} finally {
 				setLoading(false);
 			}
 		};
 
 		fetchData();
-	}, [params.id, router]);
+	}, [router, params.id]);
 
 	const formatCurrency = (amount: number) => {
 		return new Intl.NumberFormat("en-MY", {
@@ -152,6 +151,8 @@ export default function ApplicationDetails({
 				return "bg-red-100 text-red-800";
 			case "DISBURSED":
 				return "bg-purple-100 text-purple-800";
+			case "WITHDRAWN":
+				return "bg-gray-100 text-gray-800";
 			default:
 				return "bg-gray-100 text-gray-800";
 		}
@@ -173,85 +174,14 @@ export default function ApplicationDetails({
 				return "Rejected";
 			case "DISBURSED":
 				return "Disbursed";
+			case "WITHDRAWN":
+				return "Withdrawn";
 			default:
 				return status;
 		}
 	};
 
-	const handleWithdrawClick = () => {
-		setWithdrawDialogOpen(true);
-	};
-
-	const handleWithdrawConfirm = async () => {
-		if (!application) return;
-
-		try {
-			setWithdrawing(true);
-			const token = localStorage.getItem("token") || Cookies.get("token");
-
-			if (!token) {
-				router.push("/login");
-				return;
-			}
-
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${application.id}/status`,
-				{
-					method: "PATCH",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
-					body: JSON.stringify({
-						status: "WITHDRAWN",
-					}),
-				}
-			);
-
-			if (!response.ok) {
-				throw new Error("Failed to withdraw application");
-			}
-
-			// Update the local state to reflect the withdrawn status
-			setApplication({ ...application, status: "WITHDRAWN" });
-
-			setWithdrawDialogOpen(false);
-		} catch (error) {
-			console.error("Error withdrawing application:", error);
-			setError("Failed to withdraw application. Please try again.");
-		} finally {
-			setWithdrawing(false);
-		}
-	};
-
-	const handleWithdrawCancel = () => {
-		setWithdrawDialogOpen(false);
-	};
-
-	if (loading) {
-		return (
-			<DashboardLayout userName={userName}>
-				<Box className="flex justify-center items-center p-6">
-					<Typography>Loading application details...</Typography>
-				</Box>
-			</DashboardLayout>
-		);
-	}
-
-	if (error || !application) {
-		return (
-			<DashboardLayout userName={userName}>
-				<Box className="p-6">
-					<Alert severity="error" className="mb-4">
-						{error ||
-							"Failed to load application details. Please try again later."}
-					</Alert>
-				</Box>
-			</DashboardLayout>
-		);
-	}
-
-	const calculateFees = () => {
+	const calculateFees = (application: LoanApplication) => {
 		const amount = application.amount;
 		const legalFee = application.legalFee;
 		const netDisbursement = application.netDisbursement;
@@ -268,327 +198,504 @@ export default function ApplicationDetails({
 		};
 	};
 
-	const fees = calculateFees();
+	const handleDocumentUpdate = async () => {
+		try {
+			const token = localStorage.getItem("token") || Cookies.get("token");
+			if (!token || !application) return;
+
+			// Fetch updated application details
+			const response = await fetch(
+				`/api/loan-applications/${params.id}`,
+				{
+					headers: {
+						Authorization: `Bearer ${token}`,
+					},
+				}
+			);
+
+			if (!response.ok) {
+				throw new Error("Failed to fetch updated application");
+			}
+
+			const data = await response.json();
+			setApplication(data);
+		} catch (error) {
+			console.error("Error updating documents:", error);
+		}
+	};
 
 	return (
 		<DashboardLayout userName={userName}>
-			<Box className="space-y-6">
-				<div className="flex justify-between items-center">
-					<div className="flex items-center gap-4">
-						<Button
-							variant="text"
-							startIcon={<ArrowBackIcon fontSize="small" />}
-							onClick={() =>
-								router.push("/dashboard/applications")
-							}
-							className="text-gray-500 hover:text-gray-700 text-sm"
-							size="small"
+			<div className="bg-white rounded-lg shadow-sm border border-gray-200">
+				{loading ? (
+					<div className="flex justify-center items-center p-8">
+						<div
+							className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-indigo-600 border-r-transparent align-[-0.125em]"
+							role="status"
 						>
-							Back
-						</Button>
-						<Typography variant="h6" className="text-gray-900">
-							Application Details
-						</Typography>
+							<span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">
+								Loading...
+							</span>
+						</div>
 					</div>
-					<div className="flex items-center gap-4">
-						<span
-							className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(
-								application.status
-							)}`}
-						>
-							{getStatusLabel(application.status)}
-						</span>
-						{application &&
-							[
-								"PENDING_APP_FEE",
-								"PENDING_KYC",
-								"PENDING_APPROVAL",
-							].includes(application.status) && (
+				) : application ? (
+					<div className="space-y-6 p-6">
+						<div className="flex items-center justify-between border-b border-gray-200 pb-4">
+							<div>
+								<Button
+									startIcon={<ArrowBackIcon />}
+									onClick={() => router.back()}
+									className="mb-4"
+								>
+									Back to Applications
+								</Button>
+								<h1 className="text-2xl font-semibold text-gray-900">
+									Loan Application Details
+								</h1>
+							</div>
+							<span
+								className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(
+									application.status
+								)}`}
+							>
+								{getStatusLabel(application.status)}
+							</span>
+						</div>
+
+						{/* Loan Details Section */}
+						<div className="bg-white rounded-lg border border-gray-200 p-6">
+							<h2 className="text-lg font-medium text-gray-900 mb-6">
+								Loan Details
+							</h2>
+							<div className="space-y-6">
+								<div className="space-y-4">
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Product
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.product.name}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Loan Amount
+										</span>
+										<span className="text-gray-900 font-medium">
+											{formatCurrency(application.amount)}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Loan Purpose
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.purpose}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Loan Term
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.term} months
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Interest Rate
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.product.interestRate}%
+											monthly
+										</span>
+									</div>
+								</div>
+
+								{/* Fees Section */}
+								{application && (
+									<>
+										<div className="pt-4 border-t border-gray-200">
+											<div className="space-y-4">
+												<div className="flex justify-between">
+													<span className="text-gray-600">
+														Origination Fee (
+														{
+															application.product
+																.originationFee
+														}
+														%)
+													</span>
+													<span className="text-red-600">
+														(
+														{formatCurrency(
+															calculateFees(
+																application
+															).originationFee
+														)}
+														)
+													</span>
+												</div>
+												<div className="flex justify-between">
+													<span className="text-gray-600">
+														Legal Fee (
+														{
+															application.product
+																.legalFee
+														}
+														%)
+													</span>
+													<span className="text-red-600">
+														(
+														{formatCurrency(
+															calculateFees(
+																application
+															).legalFee
+														)}
+														)
+													</span>
+												</div>
+												<div className="flex justify-between">
+													<span className="text-gray-600">
+														Application Fee (paid
+														upfront)
+													</span>
+													<span className="text-red-600">
+														(
+														{formatCurrency(
+															calculateFees(
+																application
+															).applicationFee
+														)}
+														)
+													</span>
+												</div>
+											</div>
+										</div>
+
+										<div className="pt-4 border-t border-gray-200">
+											<div className="space-y-4">
+												<div className="flex justify-between">
+													<span className="text-gray-900 font-bold">
+														Net Loan Disbursement
+													</span>
+													<span className="text-green-600 font-bold">
+														{formatCurrency(
+															calculateFees(
+																application
+															).netDisbursement
+														)}
+													</span>
+												</div>
+												<div className="flex justify-between">
+													<span className="text-gray-900 font-bold">
+														Monthly Repayment
+													</span>
+													<span className="text-red-600 font-bold">
+														(
+														{formatCurrency(
+															application.monthlyRepayment
+														)}
+														)
+													</span>
+												</div>
+											</div>
+										</div>
+									</>
+								)}
+							</div>
+						</div>
+
+						{/* Personal Information Section */}
+						{application.user && (
+							<div className="bg-white rounded-lg border border-gray-200 p-6">
+								<h2 className="text-lg font-medium text-gray-900 mb-6">
+									Personal Information
+								</h2>
+								<div className="space-y-4">
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Full Name
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.user.fullName}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Email
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.user.email}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Phone Number
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.user.phoneNumber}
+										</span>
+									</div>
+									<div className="flex justify-between">
+										<span className="text-gray-600">
+											Employment Status
+										</span>
+										<span className="text-gray-900 font-medium">
+											{application.user.employmentStatus}
+										</span>
+									</div>
+									{application.user.employerName && (
+										<div className="flex justify-between">
+											<span className="text-gray-600">
+												Employer
+											</span>
+											<span className="text-gray-900 font-medium">
+												{application.user.employerName}
+											</span>
+										</div>
+									)}
+									{application.user.monthlyIncome && (
+										<div className="flex justify-between">
+											<span className="text-gray-600">
+												Monthly Income
+											</span>
+											<span className="text-gray-900 font-medium">
+												{formatCurrency(
+													Number(
+														application.user
+															.monthlyIncome
+													)
+												)}
+											</span>
+										</div>
+									)}
+									<div className="pt-4 border-t border-gray-200">
+										<span className="text-gray-900 font-medium block mb-2">
+											Address
+										</span>
+										<span className="text-gray-600 block">
+											{application.user.address1}
+											{application.user.address2 && (
+												<>
+													<br />
+													{application.user.address2}
+												</>
+											)}
+											<br />
+											{application.user.city},{" "}
+											{application.user.state}{" "}
+											{application.user.postalCode}
+										</span>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{/* Documents Section */}
+						<div className="bg-white rounded-lg border border-gray-200 p-6">
+							<div className="flex justify-between items-center mb-4">
+								<h2 className="text-lg font-medium text-gray-900">
+									Required Documents
+								</h2>
 								<Button
 									variant="outlined"
-									color="error"
-									size="small"
-									onClick={handleWithdrawClick}
-								>
-									Withdraw Application
-								</Button>
-							)}
-					</div>
-				</div>
-
-				<Paper className="p-6">
-					<Typography variant="h6" className="text-gray-900 mb-6">
-						Loan Details
-					</Typography>
-					<div className="space-y-4">
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Product
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{application.product.name}
-							</Typography>
-						</div>
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Loan Amount
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{formatCurrency(application.amount)}
-							</Typography>
-						</div>
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Loan Purpose
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{application.purpose}
-							</Typography>
-						</div>
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Loan Term
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{application.term} months
-							</Typography>
-						</div>
-						<div className="flex justify-between">
-							<Typography className="text-gray-600">
-								Interest Rate
-							</Typography>
-							<Typography className="text-gray-900 font-medium">
-								{application.interestRate}% monthly
-							</Typography>
-						</div>
-
-						<div className="pt-4 border-t border-gray-200">
-							<div className="space-y-4">
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<Typography className="text-gray-600">
-											Origination Fee (
-											{application.product.originationFee}
-											%)
-										</Typography>
-										<Tooltip.Provider>
-											<Tooltip.Root>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs">
-														A one-time fee charged
-														by the lender for
-														processing your loan
-														application.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
-									</div>
-									<Typography className="text-red-600">
-										({formatCurrency(fees.originationFee)})
-									</Typography>
-								</div>
-
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<Typography className="text-gray-600">
-											Legal Fee (
-											{application.product.legalFee}%)
-										</Typography>
-										<Tooltip.Provider>
-											<Tooltip.Root>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs">
-														A fee charged to cover
-														the legal costs
-														associated with
-														preparing and processing
-														your loan documents.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
-									</div>
-									<Typography className="text-red-600">
-										({formatCurrency(fees.legalFee)})
-									</Typography>
-								</div>
-
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<Typography className="text-gray-600">
-											Application Fee (paid upfront)
-										</Typography>
-										<Tooltip.Provider>
-											<Tooltip.Root>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs">
-														A non-refundable fee
-														charged when you submit
-														your loan application.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
-									</div>
-									<Typography className="text-red-600">
-										({formatCurrency(fees.applicationFee)})
-									</Typography>
-								</div>
-							</div>
-						</div>
-
-						<div className="pt-4 border-t border-gray-200">
-							<div className="space-y-4">
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<Typography className="text-gray-900 font-bold">
-											Net Loan Disbursement
-										</Typography>
-										<Tooltip.Provider>
-											<Tooltip.Root>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs">
-														The actual amount you
-														will receive after
-														deducting all fees.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
-									</div>
-									<Typography className="text-green-600 font-bold">
-										{formatCurrency(fees.netDisbursement)}
-									</Typography>
-								</div>
-
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<Typography className="text-gray-900 font-bold">
-											Monthly Repayment
-										</Typography>
-										<Tooltip.Provider>
-											<Tooltip.Root>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs">
-														The amount you need to
-														pay each month,
-														including principal and
-														interest.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
-									</div>
-									<Typography className="text-red-600 font-bold">
-										(
-										{formatCurrency(
-											application.monthlyRepayment
-										)}
-										)
-									</Typography>
-								</div>
-							</div>
-						</div>
-					</div>
-				</Paper>
-
-				<Paper className="p-6">
-					<Typography variant="h6" className="text-gray-900 mb-4">
-						Documents
-					</Typography>
-					<div className="space-y-2">
-						{application.documents.map((doc) => (
-							<div
-								key={doc.id}
-								className="flex justify-between items-center"
-							>
-								<Typography className="text-gray-600">
-									{doc.name}
-								</Typography>
-								<Typography
-									className={
-										doc.status === "success"
-											? "text-green-600"
-											: "text-yellow-600"
+									startIcon={<EditIcon />}
+									onClick={() =>
+										setIsDocumentDialogOpen(true)
+									}
+									className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
+									disabled={
+										application.status === "WITHDRAWN"
 									}
 								>
-									{doc.status === "success"
-										? "Uploaded"
-										: "Pending"}
-								</Typography>
+									Edit Documents
+								</Button>
 							</div>
-						))}
-					</div>
-				</Paper>
+							<div className="divide-y divide-gray-200">
+								{application.product.requiredDocuments &&
+								application.product.requiredDocuments.length >
+									0 ? (
+									application.product.requiredDocuments.map(
+										(docType) => {
+											const uploadedDocs =
+												application.documents?.filter(
+													(doc) =>
+														doc.type === docType
+												) || [];
+											return (
+												<div
+													key={docType}
+													className="flex flex-col py-3"
+												>
+													<div className="flex justify-between items-center mb-2">
+														<span className="text-sm text-gray-900">
+															{docType}
+														</span>
+														<span
+															className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+																uploadedDocs.length >
+																0
+																	? "bg-green-100 text-green-800"
+																	: "bg-yellow-100 text-yellow-800"
+															}`}
+														>
+															{uploadedDocs.length >
+															0
+																? `${uploadedDocs.length} file(s) uploaded`
+																: "Not Uploaded"}
+														</span>
+													</div>
+													{uploadedDocs.length >
+														0 && (
+														<div className="pl-4 space-y-2">
+															{uploadedDocs.map(
+																(doc) => (
+																	<div
+																		key={
+																			doc.id
+																		}
+																		className="flex justify-between items-center"
+																	>
+																		<span className="text-sm text-gray-600">
+																			{doc.fileUrl
+																				?.split(
+																					"/"
+																				)
+																				.pop() ||
+																				doc.name ||
+																				"Unknown file"}
+																		</span>
+																		<a
+																			href={`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${application.id}/documents/${doc.id}`}
+																			target="_blank"
+																			rel="noopener noreferrer"
+																			className="text-indigo-600 hover:text-indigo-500 text-sm"
+																		>
+																			View
+																		</a>
+																	</div>
+																)
+															)}
+														</div>
+													)}
+												</div>
+											);
+										}
+									)
+								) : (
+									<div className="py-3">
+										<p className="text-sm text-gray-500">
+											No required documents found
+										</p>
+									</div>
+								)}
+							</div>
+							{application.status === "WITHDRAWN" && (
+								<Typography className="text-sm text-gray-500 mt-4">
+									Document uploads are disabled for withdrawn
+									applications.
+								</Typography>
+							)}
+						</div>
 
-				{/* Withdraw Confirmation Dialog */}
-				<Dialog
-					open={withdrawDialogOpen}
-					onClose={handleWithdrawCancel}
-					aria-labelledby="withdraw-dialog-title"
-					aria-describedby="withdraw-dialog-description"
-				>
-					<DialogTitle id="withdraw-dialog-title">
-						Withdraw Application
-					</DialogTitle>
-					<DialogContent>
-						<DialogContentText id="withdraw-dialog-description">
-							Are you sure you want to withdraw this loan
-							application? This action cannot be undone. Your loan
-							application fee will not be refunded.
-						</DialogContentText>
-					</DialogContent>
-					<DialogActions>
-						<Button onClick={handleWithdrawCancel} color="primary">
-							Cancel
-						</Button>
-						<Button
-							onClick={handleWithdrawConfirm}
-							color="error"
-							variant="contained"
-							disabled={withdrawing}
+						{/* Document Upload Dialog */}
+						<Dialog
+							open={isDocumentDialogOpen}
+							onClose={() => setIsDocumentDialogOpen(false)}
+							maxWidth="md"
+							fullWidth
 						>
-							{withdrawing ? "Withdrawing..." : "Withdraw"}
-						</Button>
-					</DialogActions>
-				</Dialog>
-			</Box>
+							<div className="p-6">
+								<div className="flex justify-between items-center mb-6">
+									<Typography
+										variant="h6"
+										className="text-gray-900"
+									>
+										Edit Documents
+									</Typography>
+									<IconButton
+										onClick={() =>
+											setIsDocumentDialogOpen(false)
+										}
+										size="small"
+										className="text-gray-500 hover:text-gray-700"
+									>
+										<CloseIcon />
+									</IconButton>
+								</div>
+								{application && (
+									<DocumentUploadForm
+										applicationId={application.id}
+										productCode={application.product.code}
+										onSuccess={() => {
+											handleDocumentUpdate();
+											setIsDocumentDialogOpen(false);
+										}}
+										existingDocuments={
+											application.documents || []
+										}
+									/>
+								)}
+							</div>
+						</Dialog>
+
+						{/* Application Timeline */}
+						<div className="bg-white rounded-lg border border-gray-200 p-6">
+							<h2 className="text-lg font-medium text-gray-900 mb-4">
+								Application Timeline
+							</h2>
+							<div className="space-y-4">
+								<div className="flex items-center gap-3">
+									<div className="flex-shrink-0 w-2 h-2 rounded-full bg-green-500" />
+									<div className="flex-1">
+										<p className="text-sm font-medium text-gray-900">
+											Application Started
+										</p>
+										<p className="text-sm text-gray-500">
+											{formatDate(application.createdAt)}
+										</p>
+									</div>
+								</div>
+								{application.status !== "INCOMPLETE" && (
+									<div className="flex items-center gap-3">
+										<div className="flex-shrink-0 w-2 h-2 rounded-full bg-green-500" />
+										<div className="flex-1">
+											<p className="text-sm font-medium text-gray-900">
+												Application Submitted
+											</p>
+											<p className="text-sm text-gray-500">
+												{formatDate(
+													application.updatedAt
+												)}
+											</p>
+										</div>
+									</div>
+								)}
+								{application.status === "WITHDRAWN" && (
+									<div className="flex items-center gap-3">
+										<div className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500" />
+										<div className="flex-1">
+											<p className="text-sm font-medium text-gray-900">
+												Application Withdrawn
+											</p>
+											<p className="text-sm text-gray-500">
+												{formatDate(
+													application.updatedAt
+												)}
+											</p>
+										</div>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
+				) : (
+					<div className="p-6">
+						<p className="text-gray-500">Application not found</p>
+					</div>
+				)}
+			</div>
 		</DashboardLayout>
 	);
 }

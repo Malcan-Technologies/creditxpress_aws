@@ -45,3 +45,11 @@ declare module "multer" {
 	export function memoryStorage(): StorageEngine;
 	export default function multer(options?: any): any;
 }
+
+declare global {
+	namespace Express {
+		interface Request {
+			files?: Multer.File[] | { [fieldname: string]: Multer.File[] };
+		}
+	}
+}

@@ -19,7 +19,7 @@ import ReviewAndSubmitForm from "@/components/application/ReviewAndSubmitForm";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import Info from "@mui/icons-material/Info";
-import { ProductType } from "@/types";
+import { ProductType } from "@/types/product";
 
 const steps = [
 	"Select Product",
@@ -89,18 +89,15 @@ interface Document {
 	status: string;
 }
 
-// Local interface for backward compatibility
-interface Product extends ProductType {}
-
 // Create a client component for handling searchParams
 function ApplyPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [activeStep, setActiveStep] = useState(0);
-	const [selectedProduct, setSelectedProduct] = useState<Product | null>(
+	const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(
 		null
 	);
-	const [products, setProducts] = useState<Product[]>([]);
+	const [products, setProducts] = useState<ProductType[]>([]);
 	const [userData, setUserData] = useState<PersonalInfo>(defaultUserData);
 	const [applicationData, setApplicationData] = useState<{
 		productId: string;
@@ -453,11 +450,13 @@ function ApplyPageContent() {
 
 			// Update the selected product in state
 			setSelectedProduct(selectedProductDetails);
+			return; // Add explicit return statement for success case
 		} catch (error) {
 			console.error("Error creating/updating loan application:", error);
 			setError(
 				error instanceof Error ? error.message : "An error occurred"
 			);
+			return; // Add explicit return statement for error case
 		} finally {
 			setLoading(false);
 		}
@@ -521,8 +520,10 @@ function ApplyPageContent() {
 
 			// Move to next step after successful update
 			setActiveStep(2); // This is correct as it's 0-based for internal state
+			return; // Add explicit return statement for success case
 		} catch (error) {
 			console.error("Error updating loan application details:", error);
+			return; // Add explicit return statement for error case
 		}
 	};
 
@@ -586,21 +587,32 @@ function ApplyPageContent() {
 
 			// Move to next step after successful update
 			setActiveStep(3); // This is correct as it's 0-based for internal state
+			return; // Add explicit return statement for success case
 		} catch (error) {
 			console.error("Error updating personal information:", error);
+			return; // Add explicit return statement for error case
 		}
 	};
 
-	const handleDocumentUpload = async (values: { documents: File[] }) => {
+	const handleDocumentUpload = async (values: {
+		documents: File[];
+		documentTypes: string[];
+	}) => {
 		const applicationId = searchParams.get("applicationId");
 		if (!applicationId) return;
 
 		try {
 			const token = localStorage.getItem("token") || Cookies.get("token");
 			const formData = new FormData();
+
+			// Add files and their corresponding types
 			values.documents.forEach((file) => {
 				formData.append("documents", file);
 			});
+			formData.append(
+				"documentTypes",
+				JSON.stringify(values.documentTypes)
+			);
 
 			// Upload documents
 			const uploadResponse = await fetch(
@@ -644,8 +656,10 @@ function ApplyPageContent() {
 
 			// Move to next step after successful update
 			setActiveStep(4); // This is correct as it's 0-based for internal state
+			return; // Add explicit return statement for success case
 		} catch (error) {
 			console.error("Error uploading documents:", error);
+			return; // Add explicit return statement for error case
 		}
 	};
 
@@ -674,11 +688,13 @@ function ApplyPageContent() {
 
 			if (response.ok) {
 				router.push("/dashboard/applications");
+				return; // Add explicit return statement for success case
 			} else {
 				throw new Error("Failed to submit application");
 			}
 		} catch (error) {
 			console.error("Error submitting application:", error);
+			return; // Add explicit return statement for error case
 		}
 	};
 

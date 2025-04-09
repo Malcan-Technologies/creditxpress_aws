@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import * as jwt from "jsonwebtoken";
-import { ParamsDictionary } from "express-serve-static-core";
-import { ParsedQs } from "qs";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const JWT_REFRESH_SECRET =
@@ -12,30 +10,42 @@ export interface JwtPayload {
 	phoneNumber: string;
 }
 
-export interface AuthRequest
-	extends Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>> {
-	user?: JwtPayload;
+// Base AuthRequest without files
+export interface AuthRequest extends Request {
+	user?: {
+		userId: string;
+	};
+	files?: any;
 }
 
-export const authenticateToken = async (
+// AuthRequest with file uploads
+export interface FileAuthRequest extends Omit<AuthRequest, "files"> {
+	files?:
+		| Express.Multer.File[]
+		| { [fieldname: string]: Express.Multer.File[] };
+}
+
+export const authenticateToken = (
 	req: AuthRequest,
 	res: Response,
 	next: NextFunction
-): Promise<void> => {
+) => {
 	const authHeader = req.headers["authorization"];
 	const token = authHeader && authHeader.split(" ")[1];
 
 	if (!token) {
-		res.status(401).json({ message: "Authentication token required" });
-		return;
+		return res.status(401).json({ message: "Unauthorized" });
 	}
 
 	try {
-		const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-		req.user = decoded;
-		next();
+		const decoded = jwt.verify(
+			token,
+			process.env.JWT_SECRET || "your-secret-key"
+		) as { userId: string };
+		req.user = { userId: decoded.userId };
+		return next();
 	} catch (error) {
-		res.status(403).json({ message: "Invalid or expired token" });
+		return res.status(403).json({ message: "Invalid token" });
 	}
 };
 

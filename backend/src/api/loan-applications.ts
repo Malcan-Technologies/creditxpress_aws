@@ -1,29 +1,39 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { authenticateToken, AuthRequest } from "../middleware/auth";
+import {
+	authenticateToken,
+	AuthRequest,
+	FileAuthRequest,
+} from "../middleware/auth";
 import { nanoid } from "nanoid";
 import multer from "multer";
 import path from "path";
+import fs from "fs";
+import { RequestHandler } from "express";
 
 const router = Router();
 const prisma = new PrismaClient();
 
 // Configure multer for file uploads
 const storage = (multer as any).diskStorage({
-	destination: function (_req: any, _file: any, cb: any) {
+	destination: (
+		_req: Request,
+		_file: Express.Multer.File,
+		cb: (error: Error | null, destination: string) => void
+	) => {
 		cb(null, "uploads/");
 	},
-	filename: function (_req: any, file: any, cb: any) {
-		cb(null, Date.now() + path.extname(file.originalname));
+	filename: (
+		_req: Request,
+		file: Express.Multer.File,
+		cb: (error: Error | null, filename: string) => void
+	) => {
+		const ext = path.extname(file.originalname);
+		cb(null, `${Date.now()}${ext}`);
 	},
 });
 
-const upload = (multer as any)({ storage: storage });
-
-// Extend AuthRequest to include files
-interface DocumentUploadRequest extends AuthRequest {
-	files?: any[];
-}
+const upload = multer({ storage });
 
 /**
  * @swagger
@@ -184,12 +194,12 @@ router.get("/:id", authenticateToken, async (req: AuthRequest, res) => {
 				.json({ message: "Loan application not found" });
 		}
 
-		res.json(loanApplication);
+		return res.json(loanApplication);
 	} catch (error) {
 		console.error("Error retrieving loan application:", error);
-		res.status(500).json({
-			message: "Failed to retrieve loan application",
-		});
+		return res
+			.status(500)
+			.json({ message: "Failed to retrieve loan application" });
 	}
 });
 
@@ -226,10 +236,10 @@ router.get("/", authenticateToken, async (req: AuthRequest, res) => {
 			orderBy: { createdAt: "desc" },
 		});
 
-		res.json(loanApplications);
+		return res.json(loanApplications);
 	} catch (error) {
 		console.error("Error retrieving loan applications:", error);
-		res.status(500).json({
+		return res.status(500).json({
 			message: "Failed to retrieve loan applications",
 		});
 	}
@@ -311,10 +321,12 @@ router.patch("/:id", authenticateToken, async (req: AuthRequest, res) => {
 			data: updateData,
 		});
 
-		res.json(updatedApplication);
+		return res.json(updatedApplication);
 	} catch (error) {
 		console.error("Error updating loan application:", error);
-		res.status(500).json({ message: "Failed to update loan application" });
+		return res
+			.status(500)
+			.json({ message: "Failed to update loan application" });
 	}
 });
 
@@ -384,10 +396,12 @@ router.patch("/:id/step", authenticateToken, async (req: AuthRequest, res) => {
 			data: { appStep: step },
 		});
 
-		res.json(updatedApplication);
+		return res.json(updatedApplication);
 	} catch (error) {
 		console.error("Error updating application step:", error);
-		res.status(500).json({ message: "Failed to update application step" });
+		return res
+			.status(500)
+			.json({ message: "Failed to update application step" });
 	}
 });
 
@@ -461,10 +475,10 @@ router.patch(
 				data: { status },
 			});
 
-			res.json(updatedApplication);
+			return res.json(updatedApplication);
 		} catch (error) {
 			console.error("Error updating application status:", error);
-			res.status(500).json({
+			return res.status(500).json({
 				message: "Failed to update application status",
 			});
 		}
@@ -506,43 +520,86 @@ router.patch(
  *       500:
  *         description: Server error
  */
-// Upload documents for a loan application
+// Document upload endpoint
 router.post(
 	"/:id/documents",
 	authenticateToken,
 	upload.array("documents"),
-	async (req: DocumentUploadRequest, res) => {
+	async (req: FileAuthRequest, res) => {
 		try {
 			const { id } = req.params;
-			const userId = req.user!.userId;
+			const files = req.files as Express.Multer.File[];
 
-			// Check if the application exists and belongs to the user
-			const existingApplication = await prisma.loanApplication.findFirst({
+			// Ensure user is authenticated
+			if (!req.user || !req.user.userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			const userId = req.user.userId;
+
+			// Parse documentTypes from JSON string if it's a string
+			let documentTypes: string[] = [];
+			if (req.body.documentTypes) {
+				try {
+					documentTypes =
+						typeof req.body.documentTypes === "string"
+							? JSON.parse(req.body.documentTypes)
+							: req.body.documentTypes;
+				} catch (e) {
+					console.error("Error parsing documentTypes:", e);
+					return res.status(400).json({
+						message: "Invalid document types format",
+					});
+				}
+			}
+
+			// Allow empty document submissions
+			if (!files || files.length === 0) {
+				return res.json([]); // Return empty array for no documents
+			}
+
+			// Validate file sizes (50MB limit)
+			const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+			const oversizedFiles = files.filter(
+				(file) => file.size > MAX_FILE_SIZE
+			);
+			if (oversizedFiles.length > 0) {
+				return res.status(400).json({
+					message: `Some files exceed the 50MB size limit: ${oversizedFiles
+						.map((f) => f.originalname)
+						.join(", ")}`,
+				});
+			}
+
+			// Validate document types if files are present
+			if (files.length !== documentTypes.length) {
+				return res.status(400).json({
+					message: "Number of files and document types must match",
+				});
+			}
+
+			// Check if loan application exists and belongs to user
+			const loanApplication = await prisma.loanApplication.findFirst({
 				where: {
-					OR: [{ id }, { urlLink: id }],
+					id,
 					userId,
 				},
 			});
 
-			if (!existingApplication) {
+			if (!loanApplication) {
 				return res
 					.status(404)
 					.json({ message: "Loan application not found" });
 			}
 
-			// Create document records for uploaded files
-			const documents = req.files || [];
-			const documentRecords = await Promise.all(
-				documents.map(async (file: any) => {
+			// Create document records
+			const documents = await Promise.all(
+				files.map(async (file, index) => {
 					return prisma.userDocument.create({
 						data: {
 							userId,
-							applicationId: existingApplication.id,
-							type:
-								file.originalname
-									.split(".")
-									.pop()
-									?.toUpperCase() || "UNKNOWN",
+							applicationId: id,
+							type: documentTypes[index],
 							fileUrl: `/uploads/${file.filename}`,
 							status: "PENDING",
 						},
@@ -550,10 +607,12 @@ router.post(
 				})
 			);
 
-			res.json(documentRecords);
+			return res.json(documents);
 		} catch (error) {
 			console.error("Error uploading documents:", error);
-			res.status(500).json({ message: "Failed to upload documents" });
+			return res
+				.status(500)
+				.json({ message: "Error uploading documents" });
 		}
 	}
 );
@@ -611,10 +670,12 @@ router.get(
 				},
 			});
 
-			res.json(documents);
+			return res.json(documents);
 		} catch (error) {
 			console.error("Error retrieving documents:", error);
-			res.status(500).json({ message: "Failed to retrieve documents" });
+			return res
+				.status(500)
+				.json({ message: "Failed to retrieve documents" });
 		}
 	}
 );
@@ -693,12 +754,104 @@ router.patch(
 				data: { status },
 			});
 
-			res.json(updatedDocument);
+			return res.json(updatedDocument);
 		} catch (error) {
 			console.error("Error updating document status:", error);
-			res.status(500).json({
+			return res.status(500).json({
 				message: "Failed to update document status",
 			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/loan-applications/{id}/documents/{documentId}:
+ *   delete:
+ *     summary: Delete a document from a loan application
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan application ID
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Document ID
+ *     responses:
+ *       200:
+ *         description: Document deleted successfully
+ *       404:
+ *         description: Loan application or document not found
+ *       500:
+ *         description: Server error
+ */
+// Delete document
+router.delete(
+	"/:id/documents/:documentId",
+	authenticateToken,
+	async (req: AuthRequest, res) => {
+		try {
+			const { id, documentId } = req.params;
+			const userId = req.user!.userId;
+
+			// Check if the application exists and belongs to the user
+			const existingApplication = await prisma.loanApplication.findFirst({
+				where: {
+					OR: [{ id }, { urlLink: id }],
+					userId,
+				},
+			});
+
+			if (!existingApplication) {
+				return res
+					.status(404)
+					.json({ message: "Loan application not found" });
+			}
+
+			// Find and delete the document
+			const document = await prisma.userDocument.findFirst({
+				where: {
+					id: documentId,
+					applicationId: existingApplication.id,
+					userId,
+				},
+			});
+
+			if (!document) {
+				return res.status(404).json({ message: "Document not found" });
+			}
+
+			// Delete the document from storage and database
+			const filePath = path.join(process.cwd(), document.fileUrl);
+
+			try {
+				if (fs.existsSync(filePath)) {
+					fs.unlinkSync(filePath);
+				}
+			} catch (err) {
+				console.error("Error deleting file from storage:", err);
+			}
+
+			await prisma.userDocument.delete({
+				where: {
+					id: documentId,
+				},
+			});
+
+			return res.json({ message: "Document deleted successfully" });
+		} catch (error) {
+			console.error("Error deleting document:", error);
+			return res
+				.status(500)
+				.json({ message: "Failed to delete document" });
 		}
 	}
 );
@@ -780,5 +933,130 @@ router.patch(
  *           items:
  *             $ref: '#/components/schemas/Document'
  */
+
+/**
+ * @swagger
+ * /api/loan-applications/{id}/documents/{documentId}:
+ *   get:
+ *     summary: Get a specific document for a loan application
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the loan application
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the document to retrieve
+ *     responses:
+ *       200:
+ *         description: Document file stream
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       403:
+ *         description: Not authorized to access this document
+ *       404:
+ *         description: Document or file not found
+ *       500:
+ *         description: Server error
+ */
+// Get a specific document
+router.get("/:id/documents/:documentId", (async (
+	req: Request,
+	res: Response
+) => {
+	try {
+		const { documentId } = req.params;
+
+		// Get the document by its ID
+		const document = await prisma.userDocument.findUnique({
+			where: {
+				id: documentId,
+			},
+		});
+
+		if (!document) {
+			return res.status(404).json({ error: "Document not found" });
+		}
+
+		// Get the file path
+		const filePath = path.join(
+			process.cwd(),
+			document.fileUrl.replace(/^\//, "") // Remove leading slash if present
+		);
+
+		// Check if file exists
+		if (!fs.existsSync(filePath)) {
+			console.error("File not found at path:", filePath);
+			return res.status(404).json({ error: "File not found" });
+		}
+
+		// Get file extension and set appropriate content type
+		const fileExtension = path.extname(document.fileUrl).toLowerCase();
+		let contentType = "application/octet-stream";
+
+		switch (fileExtension) {
+			case ".pdf":
+				contentType = "application/pdf";
+				break;
+			case ".jpg":
+			case ".jpeg":
+				contentType = "image/jpeg";
+				break;
+			case ".png":
+				contentType = "image/png";
+				break;
+			case ".doc":
+			case ".docx":
+				contentType =
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+				break;
+			case ".xls":
+			case ".xlsx":
+				contentType =
+					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+				break;
+		}
+
+		// Set appropriate headers
+		res.setHeader("Content-Type", contentType);
+		res.setHeader(
+			"Content-Disposition",
+			`inline; filename="${path.basename(
+				document.fileUrl
+			)}${fileExtension}"`
+		);
+
+		// Stream the file
+		const fileStream = fs.createReadStream(filePath);
+		fileStream.pipe(res);
+
+		// Handle errors
+		fileStream.on("error", (error) => {
+			console.error("Error streaming file:", error);
+			if (!res.headersSent) {
+				res.status(500).json({ error: "Error streaming file" });
+			}
+		});
+
+		return res;
+	} catch (error) {
+		console.error("Error serving document:", error);
+		if (!res.headersSent) {
+			return res.status(500).json({ error: "Internal server error" });
+		}
+		return res;
+	}
+}) as RequestHandler);
 
 export default router;
