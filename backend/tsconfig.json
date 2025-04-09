@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2018",
+    "target": "ES2022",
     "module": "CommonJS",
-    "lib": ["ES2018", "ESNext.AsyncIterable"],
+    "lib": ["ES2022", "ESNext.AsyncIterable"],
     "skipLibCheck": true,
     "sourceMap": true,
     "outDir": "./dist",
@@ -23,9 +23,9 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["src/*"]
     }
   },
-  "exclude": ["node_modules"],
+  "exclude": ["node_modules", "dist"],
   "include": ["./src/**/*.ts", "./prisma/**/*.ts"]
 } 
