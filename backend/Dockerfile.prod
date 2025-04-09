@@ -14,11 +14,20 @@ RUN npm install
 # Copy source code and config files
 COPY . .
 
-# Build the application (includes cleaning, Prisma generation, and TypeScript compilation)
-RUN npm run build
+# Debug: List source files
+RUN echo "Source files:" && ls -la src/
 
-# Verify the build output exists
-RUN ls -la dist && echo "Build output verification"
+# Generate Prisma client
+RUN npx prisma generate
+
+# Compile TypeScript directly
+RUN npx tsc --project tsconfig.json
+
+# Debug: Check if dist directory exists and what it contains
+RUN echo "Dist directory after build:" && ls -la dist/ || echo "Dist directory not found"
+
+# Debug: Check if index.js exists in dist
+RUN echo "Looking for index.js:" && find . -name "index.js" || echo "index.js not found"
 
 # Production stage
 FROM node:20-alpine
@@ -39,8 +48,8 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy compiled JavaScript
 COPY --from=builder /app/dist ./dist
 
-# Verify the files were copied correctly
-RUN ls -la dist && echo "Production files verification"
+# Debug: Check if dist directory exists in production stage
+RUN echo "Dist directory in production:" && ls -la dist/ || echo "Dist directory not found in production"
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chmod 777 uploads
@@ -49,4 +58,4 @@ RUN mkdir -p uploads && chmod 777 uploads
 EXPOSE 4001
 
 # Start the application
-CMD ["node", "dist/index.js"] 
+CMD ["node", "dist/src/index.js"] 
