@@ -35,11 +35,14 @@ services:
         restart: always
         network_mode: "host"
         environment:
-            - NODE_ENV=production
+            - NODE_ENV=${NODE_ENV:-production}
             - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
             - JWT_SECRET=${JWT_SECRET}
             - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-            - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://growkapital.com,https://admin.growkapital.com}
+            - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+            - PORT=${PORT:-4001}
+            - BASE_URL=${BASE_URL}
+            - DOCUMENT_STORAGE_PATH=${DOCUMENT_STORAGE_PATH}
         depends_on:
             postgres:
                 condition: service_healthy
