@@ -1,4 +1,5 @@
 import swaggerJsdoc from "swagger-jsdoc";
+import path from "path";
 
 // Get base URL from environment or use the port-based localhost as fallback
 const port = process.env.PORT || 3001;
@@ -95,7 +96,10 @@ const options = {
 			},
 		],
 	},
-	apis: ["./src/api/*.ts"], // ONLY include this path, remove the manual paths definition
+	apis: [
+		path.resolve(__dirname, "../api/*.ts"),
+		path.resolve(__dirname, "../api/*.js"),
+	], // Include both .ts and .js files to work in both dev and production
 };
 
 export const swaggerSpec = swaggerJsdoc(options);
