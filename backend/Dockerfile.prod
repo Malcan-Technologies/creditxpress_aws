@@ -17,6 +17,9 @@ COPY . .
 # Build the application (includes cleaning, Prisma generation, and TypeScript compilation)
 RUN npm run build
 
+# Verify the build output exists
+RUN ls -la dist && echo "Build output verification"
+
 # Production stage
 FROM node:20-alpine
 
@@ -35,6 +38,9 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy compiled JavaScript
 COPY --from=builder /app/dist ./dist
+
+# Verify the files were copied correctly
+RUN ls -la dist && echo "Production files verification"
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chmod 777 uploads
