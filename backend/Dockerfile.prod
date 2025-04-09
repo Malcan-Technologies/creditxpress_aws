@@ -14,11 +14,8 @@ RUN npm install
 # Copy source code and config files
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
-
-# Compile TypeScript
-RUN npx tsc
+# Build the application (includes cleaning, Prisma generation, and TypeScript compilation)
+RUN npm run build
 
 # Production stage
 FROM node:20-alpine
