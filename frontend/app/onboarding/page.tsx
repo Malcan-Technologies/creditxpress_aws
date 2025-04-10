@@ -16,6 +16,7 @@ import EmploymentForm from "../../components/onboarding/EmploymentForm";
 import BankAccountForm from "../../components/onboarding/BankAccountForm";
 import { OnboardingFormData } from "@/types/onboarding";
 import Cookies from "js-cookie";
+import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
 
 const steps = [
 	"Personal Information",
@@ -32,41 +33,12 @@ function OnboardingPageContent() {
 	const [formData, setFormData] = useState<Partial<OnboardingFormData>>({});
 
 	useEffect(() => {
-		const checkAuth = async () => {
+		const fetchUserData = async () => {
 			try {
-				// Check for token in localStorage
-				let token = localStorage.getItem("token");
+				// Use our new checkAuth utility to verify authentication
+				const isAuthenticated = await checkAuth();
 
-				// If not in localStorage, check cookies
-				if (!token) {
-					const cookieToken = Cookies.get("token");
-					if (cookieToken) {
-						token = cookieToken;
-					}
-				}
-
-				console.log("Onboarding - Auth check token:", token);
-
-				if (!token) {
-					console.log(
-						"Onboarding - No token found, redirecting to login"
-					);
-					router.push("/login");
-					return;
-				}
-
-				const response = await fetch("/api/users/me", {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
-
-				console.log("Onboarding - Auth check response:", {
-					status: response.status,
-					ok: response.ok,
-				});
-
-				if (!response.ok) {
+				if (!isAuthenticated) {
 					console.log(
 						"Onboarding - Auth check failed, redirecting to login"
 					);
@@ -74,10 +46,15 @@ function OnboardingPageContent() {
 					return;
 				}
 
-				const data = await response.json();
-				console.log("Onboarding - Auth check data:", data);
+				// Fetch user data using our fetchWithTokenRefresh utility
+				const userData = await fetchWithTokenRefresh<{
+					isOnboardingComplete?: boolean;
+					onboardingStep?: number;
+				}>("/api/users/me");
 
-				if (data?.isOnboardingComplete) {
+				console.log("Onboarding - Auth check data:", userData);
+
+				if (userData?.isOnboardingComplete) {
 					console.log(
 						"Onboarding - User completed onboarding, redirecting to dashboard"
 					);
@@ -87,18 +64,9 @@ function OnboardingPageContent() {
 
 				// Only fetch onboarding data if auth check passes
 				try {
-					const onboardingResponse = await fetch(`/api/onboarding`, {
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					});
-
-					if (!onboardingResponse.ok) {
-						console.error("Failed to fetch onboarding data");
-						return;
-					}
-
-					const onboardingData = await onboardingResponse.json();
+					const onboardingData = await fetchWithTokenRefresh<
+						Partial<OnboardingFormData>
+					>("/api/onboarding");
 					setFormData(onboardingData);
 					if (onboardingData.onboardingStep) {
 						setActiveStep(onboardingData.onboardingStep);
@@ -107,12 +75,12 @@ function OnboardingPageContent() {
 					console.error("Error fetching onboarding data:", error);
 				}
 			} catch (error) {
-				console.error("Onboarding - Auth check error:", error);
+				console.error("Error fetching user data:", error);
 				router.push("/login");
 			}
 		};
 
-		checkAuth();
+		fetchUserData();
 	}, [router]);
 
 	useEffect(() => {

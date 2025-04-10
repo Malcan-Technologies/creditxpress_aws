@@ -4,51 +4,50 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export async function POST(request: Request) {
 	try {
-		console.log(
-			`[Login Route] Starting login process with backend URL: ${BACKEND_URL}`
-		);
+		console.log("[Refresh Token Route] Starting token refresh process");
 
 		const body = await request.json();
-		const { phoneNumber, password } = body;
+		const { refreshToken } = body;
+
+		if (!refreshToken) {
+			console.log("[Refresh Token Route] No refresh token provided");
+			return NextResponse.json(
+				{ error: "Refresh token is required" },
+				{ status: 400 }
+			);
+		}
 
 		console.log(
-			`[Login Route] Forwarding login request for phone: ${phoneNumber}`
+			"[Refresh Token Route] Forwarding refresh request to backend"
 		);
 
 		// Forward the request to the backend API
-		const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+		const response = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({ phoneNumber, password }),
+			body: JSON.stringify({ refreshToken }),
 			cache: "no-store",
 			next: { revalidate: 0 },
 		});
 
 		console.log(
-			`[Login Route] Received response with status: ${response.status}`
+			`[Refresh Token Route] Received response with status: ${response.status}`
 		);
 
 		// Get the response body
 		const data = await response.json();
-		console.log(
-			`[Login Route] Response data:`,
-			data.message
-				? { message: data.message }
-				: { error: data.error || "Unknown error" }
-		);
 
 		if (!response.ok) {
 			return NextResponse.json(
-				{ error: data.message || "Invalid credentials" },
+				{ error: data.message || "Failed to refresh token" },
 				{ status: response.status }
 			);
 		}
 
-		// Create response with tokens
+		// Create response with the new tokens
 		const jsonResponse = NextResponse.json({
-			message: data.message,
 			accessToken: data.accessToken,
 			refreshToken: data.refreshToken,
 			isOnboardingComplete: data.isOnboardingComplete,
@@ -72,12 +71,11 @@ export async function POST(request: Request) {
 
 		return jsonResponse;
 	} catch (error) {
-		console.error("[Login Route] Error details:", error);
+		console.error("[Refresh Token Route] Error details:", error);
 
-		// Try to provide more specific error information
-		let errorMessage = "Failed to authenticate";
+		let errorMessage = "Failed to refresh token";
 		if (error instanceof Error) {
-			errorMessage = `Authentication error: ${error.message}`;
+			errorMessage = `Refresh token error: ${error.message}`;
 		}
 
 		return NextResponse.json({ error: errorMessage }, { status: 500 });

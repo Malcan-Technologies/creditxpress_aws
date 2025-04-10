@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import DashboardNav from "./DashboardNav";
 import UserProfileButton from "./UserProfileButton";
 import NotificationsButton from "./NotificationsButton";
 import Link from "next/link";
+import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
 
 export default function DashboardLayout({
 	children,
@@ -12,6 +15,54 @@ export default function DashboardLayout({
 	title?: string;
 	userName?: string;
 }) {
+	const router = useRouter();
+	const [isLoading, setIsLoading] = useState(true);
+
+	useEffect(() => {
+		// Verify authentication on component mount
+		const verifyAuth = async () => {
+			try {
+				setIsLoading(true);
+				const isAuthenticated = await checkAuth();
+
+				if (!isAuthenticated) {
+					// Redirect to login if not authenticated or token refresh fails
+					router.push("/login");
+					return;
+				}
+
+				setIsLoading(false);
+			} catch (error) {
+				console.error("Auth verification error:", error);
+				router.push("/login");
+			}
+		};
+
+		verifyAuth();
+
+		// Set up periodic token refresh (every 10 minutes)
+		const refreshInterval = setInterval(async () => {
+			const isAuthenticated = await checkAuth();
+			if (!isAuthenticated) {
+				// Only redirect if we're still on the dashboard
+				router.push("/login");
+			}
+		}, 10 * 60 * 1000); // 10 minutes
+
+		return () => clearInterval(refreshInterval);
+	}, [router]);
+
+	if (isLoading) {
+		return (
+			<div className="flex h-screen items-center justify-center bg-gray-50">
+				<div className="text-center">
+					<div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+					<p className="mt-4 text-gray-600">Loading...</p>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="flex h-screen bg-gray-50">
 			{/* Mobile menu button */}

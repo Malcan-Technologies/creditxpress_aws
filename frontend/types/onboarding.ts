@@ -23,7 +23,13 @@ export interface BankInfo {
 	accountNumber: string;
 }
 
+export interface OnboardingMetadata {
+	onboardingStep?: number;
+	isOnboardingComplete?: boolean;
+}
+
 export type OnboardingFormData = PersonalInfo &
 	AddressInfo &
 	EmploymentInfo &
-	BankInfo;
+	BankInfo &
+	OnboardingMetadata;

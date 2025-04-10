@@ -20,6 +20,7 @@ import ArrowBack from "@mui/icons-material/ArrowBack";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import Info from "@mui/icons-material/Info";
 import { ProductType } from "@/types/product";
+import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 
 const steps = [
 	"Select Product",
@@ -132,22 +133,10 @@ function ApplyPageContent() {
 			if (!applicationId) return;
 
 			try {
-				const token =
-					localStorage.getItem("token") || Cookies.get("token");
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${applicationId}`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
+				// Fetch application data using token refresh utility
+				const data = await fetchWithTokenRefresh<any>(
+					`/api/loan-applications/${applicationId}`
 				);
-
-				if (!response.ok) {
-					throw new Error("Failed to fetch application data");
-				}
-
-				const data = await response.json();
 
 				// Set the selected product
 				const product = products.find((p) => p.id === data.productId);
@@ -211,32 +200,19 @@ function ApplyPageContent() {
 	}, []);
 
 	useEffect(() => {
-		const checkAuth = async () => {
+		const verifyUserAndFetchData = async () => {
 			try {
-				const token =
-					localStorage.getItem("token") || Cookies.get("token");
+				// Check authentication using our utility
+				const isAuthenticated = await checkAuth();
 
-				if (!token) {
+				if (!isAuthenticated) {
 					router.push("/login");
 					return;
 				}
 
-				// Fetch user data
-				const response = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
-				);
+				// Fetch user data using token refresh utility
+				const data = await fetchWithTokenRefresh<any>("/api/users/me");
 
-				if (!response.ok) {
-					router.push("/login");
-					return;
-				}
-
-				const data = await response.json();
 				setUserData({
 					...defaultUserData,
 					...data,
@@ -253,7 +229,7 @@ function ApplyPageContent() {
 			}
 		};
 
-		checkAuth();
+		verifyUserAndFetchData();
 	}, [router]);
 
 	const handleNext = async () => {

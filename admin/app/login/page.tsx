@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Logo from "../components/Logo";
-import Cookies from "js-cookie";
+import { AdminTokenStorage } from "../../lib/authUtils";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 
@@ -84,18 +84,27 @@ export default function AdminLoginPage() {
 				throw new Error("Access denied. Admin privileges required.");
 			}
 
-			// Store tokens in localStorage
-			localStorage.setItem("adminToken", data.accessToken);
-			localStorage.setItem("adminRefreshToken", data.refreshToken);
+			console.log("Admin Login - Storing tokens");
+			// Use AdminTokenStorage to store tokens with proper expiration
+			AdminTokenStorage.setAccessToken(data.accessToken);
+			AdminTokenStorage.setRefreshToken(data.refreshToken);
 
-			// Store tokens in cookies
-			Cookies.set("adminToken", data.accessToken, { expires: 1 }); // 1 day
-			Cookies.set("adminRefreshToken", data.refreshToken, { expires: 7 }); // 7 days
+			// Verify tokens were properly stored
+			const storedAccessToken = AdminTokenStorage.getAccessToken();
+			const storedRefreshToken = AdminTokenStorage.getRefreshToken();
+
+			console.log("Admin Login - Tokens stored:", {
+				accessToken: !!storedAccessToken,
+				refreshToken: !!storedRefreshToken,
+			});
 
 			console.log("Admin Login - Successful, redirecting to dashboard");
 
-			// Redirect to admin dashboard
-			router.push("/dashboard");
+			// Add a small delay to ensure token storage is complete before navigation
+			setTimeout(() => {
+				// Redirect to admin dashboard
+				router.push("/dashboard");
+			}, 100);
 		} catch (error) {
 			console.error("Admin Login - Error:", error);
 			if (error instanceof Error) {

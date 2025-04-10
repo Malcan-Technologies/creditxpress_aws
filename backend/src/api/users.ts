@@ -118,6 +118,7 @@ router.get(
 					lastLoginAt: true,
 					createdAt: true,
 					updatedAt: true,
+					role: true,
 				},
 			});
 
@@ -229,6 +230,7 @@ router.put(
 					lastLoginAt: true,
 					createdAt: true,
 					updatedAt: true,
+					role: true,
 				},
 			});
 

@@ -9,7 +9,7 @@ import {
 	CurrencyDollarIcon,
 	BanknotesIcon,
 } from "@heroicons/react/24/outline";
-import Cookies from "js-cookie";
+import { fetchWithAdminTokenRefresh } from "../../lib/authUtils";
 
 interface DashboardStats {
 	totalUsers: number;
@@ -42,50 +42,23 @@ export default function AdminDashboardPage() {
 	useEffect(() => {
 		const fetchDashboardData = async () => {
 			try {
-				// Get token from localStorage or cookies
-				let token = localStorage.getItem("adminToken");
-				if (!token) {
-					const cookieToken = Cookies.get("adminToken");
-					if (cookieToken) {
-						token = cookieToken;
-					}
-				}
-
-				if (!token) {
-					return;
-				}
-
-				// Fetch user data
-				const userResponse = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
-				);
-
-				if (userResponse.ok) {
-					const userData = await userResponse.json();
+				// Fetch user data with token refresh
+				try {
+					const userData = await fetchWithAdminTokenRefresh<any>(
+						"/api/users/me"
+					);
 					if (userData.fullName) {
 						setUserName(userData.fullName);
 					}
+				} catch (error) {
+					console.error("Error fetching user data:", error);
 				}
 
-				// Fetch dashboard stats
-				const statsResponse = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/admin/dashboard`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
+				// Fetch dashboard stats with token refresh
+				const data = await fetchWithAdminTokenRefresh<DashboardStats>(
+					"/api/admin/dashboard"
 				);
-
-				if (statsResponse.ok) {
-					const data = await statsResponse.json();
-					setStats(data);
-				}
+				setStats(data);
 			} catch (error) {
 				console.error("Error fetching dashboard data:", error);
 			} finally {

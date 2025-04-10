@@ -14,7 +14,11 @@ import {
 	Bars3Icon,
 	XMarkIcon,
 } from "@heroicons/react/24/outline";
-import Cookies from "js-cookie";
+import {
+	AdminTokenStorage,
+	fetchWithAdminTokenRefresh,
+	checkAdminAuth,
+} from "../../lib/authUtils";
 
 interface AdminLayoutProps {
 	children: React.ReactNode;
@@ -36,44 +40,83 @@ export default function AdminLayout({
 
 	useEffect(() => {
 		// Check if user is authenticated
-		const token =
-			localStorage.getItem("adminToken") || Cookies.get("adminToken");
-		if (!token) {
-			router.push("/admin/login");
-		} else {
-			// Fetch admin user information
-			const fetchAdminInfo = async () => {
-				try {
-					const response = await fetch(
-						`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-						{
-							headers: {
-								Authorization: `Bearer ${token}`,
-							},
-						}
-					);
+		const checkAuthentication = async () => {
+			try {
+				console.log("AdminLayout - Starting authentication check");
+				const accessToken = AdminTokenStorage.getAccessToken();
+				const refreshToken = AdminTokenStorage.getRefreshToken();
 
-					if (response.ok) {
-						const userData = await response.json();
-						if (userData.fullName) {
-							setAdminName(userData.fullName);
-						}
+				console.log("AdminLayout - Tokens exist:", {
+					accessToken: !!accessToken,
+					refreshToken: !!refreshToken,
+				});
+
+				const isAuthenticated = await checkAdminAuth();
+				console.log("AdminLayout - isAuthenticated:", isAuthenticated);
+
+				if (!isAuthenticated) {
+					console.log(
+						"AdminLayout - Not authenticated, redirecting to login"
+					);
+					router.push("/login");
+					return;
+				}
+
+				// Fetch admin user information
+				try {
+					console.log("AdminLayout - Fetching user data");
+					const userData = await fetchWithAdminTokenRefresh<any>(
+						"/api/users/me"
+					);
+					console.log("AdminLayout - User data:", userData);
+
+					if (userData.fullName) {
+						setAdminName(userData.fullName);
 					}
 				} catch (error) {
-					console.error("Error fetching admin info:", error);
+					console.error(
+						"AdminLayout - Error fetching admin info:",
+						error
+					);
 				} finally {
 					setLoading(false);
 				}
-			};
+			} catch (error) {
+				console.error("AdminLayout - Auth check failed:", error);
+				router.push("/login");
+			}
+		};
 
-			fetchAdminInfo();
-		}
+		checkAuthentication();
 	}, [router]);
 
-	const handleLogout = () => {
-		localStorage.removeItem("adminToken");
-		Cookies.remove("adminToken");
-		router.push("/login");
+	const handleLogout = async () => {
+		try {
+			const refreshToken = AdminTokenStorage.getRefreshToken();
+
+			if (refreshToken) {
+				// Call the logout API
+				await fetch("/api/admin/logout", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${
+							AdminTokenStorage.getAccessToken() || ""
+						}`,
+					},
+					body: JSON.stringify({ refreshToken }),
+				});
+			}
+
+			// Clear tokens regardless of API response
+			AdminTokenStorage.clearTokens();
+			router.push("/login");
+		} catch (error) {
+			console.error("Logout error:", error);
+			// Clear tokens even if the API call fails
+			AdminTokenStorage.clearTokens();
+			router.push("/login");
+		}
 	};
 
 	const navigation = [

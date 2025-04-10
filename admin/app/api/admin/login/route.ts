@@ -25,7 +25,25 @@ export async function POST(request: Request) {
 			);
 		}
 
-		return NextResponse.json(data);
+		// Create response with tokens
+		const jsonResponse = NextResponse.json(data);
+
+		// Set cookies with proper expiration
+		// Access token - 15 minutes
+		jsonResponse.cookies.set("adminToken", data.accessToken, {
+			expires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+			maxAge: 15 * 60, // 15 minutes in seconds
+			path: "/",
+		});
+
+		// Refresh token - 30 days
+		jsonResponse.cookies.set("adminRefreshToken", data.refreshToken, {
+			expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+			maxAge: 30 * 24 * 60 * 60, // 30 days in seconds as a fallback
+			path: "/",
+		});
+
+		return jsonResponse;
 	} catch (error) {
 		console.log("Admin API Route - Error details:", error);
 		return NextResponse.json(

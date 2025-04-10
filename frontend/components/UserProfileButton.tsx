@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Cookies from "js-cookie";
+import { TokenStorage } from "@/lib/authUtils";
 
 export default function UserProfileButton() {
 	const [isOpen, setIsOpen] = useState(false);
@@ -23,15 +23,24 @@ export default function UserProfileButton() {
 			document.removeEventListener("mousedown", handleClickOutside);
 	}, []);
 
-	const handleLogout = () => {
-		// Remove tokens from localStorage
-		localStorage.removeItem("token");
-		localStorage.removeItem("refreshToken");
+	const handleLogout = async () => {
+		// Clear tokens using our utility
+		TokenStorage.clearTokens();
 
-		// Remove tokens from cookies
-		Cookies.remove("token");
-		Cookies.remove("refreshToken");
+		// Call logout API to invalidate refresh token on server
+		try {
+			await fetch("/api/auth/logout", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${TokenStorage.getAccessToken()}`,
+				},
+			});
+		} catch (error) {
+			console.error("Error during logout:", error);
+		}
 
+		// Redirect to login page
 		router.push("/login");
 	};
 

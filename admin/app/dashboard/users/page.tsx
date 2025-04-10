@@ -3,7 +3,7 @@
 import React from "react";
 import { useEffect, useState } from "react";
 import AdminLayout from "../../components/AdminLayout";
-import Cookies from "js-cookie";
+import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 import {
 	Button,
 	Dialog,
@@ -62,50 +62,25 @@ export default function AdminUsersPage() {
 	useEffect(() => {
 		const fetchUsers = async () => {
 			try {
-				// Get token from localStorage or cookies
-				let token = localStorage.getItem("adminToken");
-				if (!token) {
-					const cookieToken = Cookies.get("adminToken");
-					if (cookieToken) {
-						token = cookieToken;
-					}
-				}
+				setLoading(true);
 
-				if (!token) {
-					return;
-				}
-
-				// Fetch user data
-				const userResponse = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
-				);
-
-				if (userResponse.ok) {
-					const userData = await userResponse.json();
+				// Fetch user data with token refresh
+				try {
+					const userData = await fetchWithAdminTokenRefresh<any>(
+						"/api/users/me"
+					);
 					if (userData.fullName) {
 						setUserName(userData.fullName);
 					}
+				} catch (error) {
+					console.error("Error fetching user data:", error);
 				}
 
-				// Fetch all users
-				const usersResponse = await fetch(
-					`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users`,
-					{
-						headers: {
-							Authorization: `Bearer ${token}`,
-						},
-					}
+				// Fetch all users with token refresh
+				const users = await fetchWithAdminTokenRefresh<User[]>(
+					"/api/admin/users"
 				);
-
-				if (usersResponse.ok) {
-					const data = await usersResponse.json();
-					setUsers(data);
-				}
+				setUsers(users);
 			} catch (error) {
 				console.error("Error fetching users:", error);
 			} finally {
@@ -167,31 +142,15 @@ export default function AdminUsersPage() {
 
 		try {
 			setIsSubmitting(true);
-			const token =
-				localStorage.getItem("adminToken") || Cookies.get("adminToken");
 
-			if (!token) {
-				return;
-			}
-
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${selectedUser.id}`,
+			// Update user with token refresh
+			const updatedUser = await fetchWithAdminTokenRefresh<User>(
+				`/api/admin/users/${selectedUser.id}`,
 				{
 					method: "PUT",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
 					body: JSON.stringify(editForm),
 				}
 			);
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.message || "Failed to update user");
-			}
-
-			const updatedUser = await response.json();
 
 			// Update the local state with the complete updated user data
 			setUsers(
@@ -245,16 +204,13 @@ export default function AdminUsersPage() {
 	const handleCreateSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		try {
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`,
+			setIsSubmitting(true);
+
+			// Create user with token refresh
+			const newUser = await fetchWithAdminTokenRefresh<User>(
+				"/api/auth/signup",
 				{
 					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${localStorage.getItem(
-							"token"
-						)}`,
-					},
 					body: JSON.stringify({
 						fullName: createForm.fullName,
 						email: createForm.email,
@@ -265,12 +221,6 @@ export default function AdminUsersPage() {
 				}
 			);
 
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.message || "Failed to create user");
-			}
-
-			const newUser = await response.json();
 			setUsers([...users, newUser]);
 			setCreateDialogOpen(false);
 			setCreateForm({
@@ -282,7 +232,8 @@ export default function AdminUsersPage() {
 			});
 		} catch (error) {
 			console.error("Error creating user:", error);
-			// You might want to show an error message to the user here
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
@@ -301,27 +252,14 @@ export default function AdminUsersPage() {
 
 		try {
 			setIsSubmitting(true);
-			const token =
-				localStorage.getItem("adminToken") || Cookies.get("adminToken");
 
-			if (!token) {
-				return;
-			}
-
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${selectedUser.id}`,
+			// Delete user with token refresh
+			await fetchWithAdminTokenRefresh<void>(
+				`/api/admin/users/${selectedUser.id}`,
 				{
 					method: "DELETE",
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
 				}
 			);
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.message || "Failed to delete user");
-			}
 
 			// Update the local state to remove the deleted user
 			setUsers(users.filter((user) => user.id !== selectedUser.id));

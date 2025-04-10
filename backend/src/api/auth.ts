@@ -197,6 +197,51 @@ router.post("/refresh", async (req, res) => {
 	}
 });
 
+/**
+ * @swagger
+ * /api/auth/signup:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *               - password
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *                 example: "+1234567890"
+ *               password:
+ *                 type: string
+ *                 example: "securepassword"
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *                 isOnboardingComplete:
+ *                   type: boolean
+ *                 onboardingStep:
+ *                   type: number
+ *       400:
+ *         description: User already exists
+ *       500:
+ *         description: Server error
+ */
 // Sign up
 router.post("/signup", async (req, res) => {
 	try {
@@ -229,6 +274,30 @@ router.post("/signup", async (req, res) => {
 	}
 });
 
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: Logout a user and invalidate their refresh token
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Logged out successfully"
+ *       401:
+ *         description: User not authenticated
+ *       500:
+ *         description: Server error
+ */
 // Logout
 router.post("/logout", authenticateToken, async (req: AuthRequest, res) => {
 	try {

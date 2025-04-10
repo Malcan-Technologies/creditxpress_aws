@@ -167,8 +167,8 @@ export default function ProductSelectionForm({
 								{product.description}
 							</Typography>
 							<Typography variant="body2">
-								Loan Amount: $
-								{product.minAmount.toLocaleString()} - $
+								Loan Amount: RM
+								{product.minAmount.toLocaleString()} - RM
 								{product.maxAmount.toLocaleString()}
 							</Typography>
 							<Typography variant="body2">

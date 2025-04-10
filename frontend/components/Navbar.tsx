@@ -18,6 +18,7 @@ import {
 	MdArticle,
 	MdHelp,
 	MdPhone,
+	MdDashboard,
 } from "react-icons/md";
 
 type NavbarProps = {
@@ -35,9 +36,21 @@ export default function Navbar({
 	const [activeMobileSections, setActiveMobileSections] = useState<string[]>(
 		[]
 	);
+	const [isLoggedIn, setIsLoggedIn] = useState(false);
 	const navRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
+		// Check if user is logged in by checking cookies or localStorage
+		const checkUserLoggedIn = () => {
+			const token =
+				document.cookie.includes("token=") ||
+				localStorage.getItem("token");
+			const refreshToken =
+				document.cookie.includes("refreshToken=") ||
+				localStorage.getItem("refreshToken");
+			setIsLoggedIn(!!(token || refreshToken));
+		};
+
 		const handleScroll = () => {
 			setIsScrolled(window.scrollY > 0);
 		};
@@ -53,6 +66,7 @@ export default function Navbar({
 			}
 		};
 
+		checkUserLoggedIn();
 		window.addEventListener("scroll", handleScroll);
 		document.addEventListener("mousedown", handleClickOutside);
 
@@ -179,18 +193,31 @@ export default function Navbar({
 									</div>
 								</div>
 							</div>
-							<Link
-								href="/login"
-								className="text-gray-200 hover:text-white px-4 py-2 rounded-full transition-colors"
-							>
-								Sign in
-							</Link>
-							<Link
-								href="/signup"
-								className="font-semibold bg-white text-purple-900 px-4 py-2 rounded-full hover:bg-purple-50 transition-all"
-							>
-								Get started
-							</Link>
+
+							{isLoggedIn ? (
+								<Link
+									href="/dashboard"
+									className="inline-flex items-center gap-2 font-semibold bg-white text-purple-900 px-4 py-2 rounded-full hover:bg-purple-50 transition-all"
+								>
+									<MdDashboard size={20} />
+									Go to Dashboard
+								</Link>
+							) : (
+								<>
+									<Link
+										href="/login"
+										className="text-gray-200 hover:text-white px-4 py-2 rounded-full transition-colors"
+									>
+										Sign in
+									</Link>
+									<Link
+										href="/signup"
+										className="font-semibold bg-white text-purple-900 px-4 py-2 rounded-full hover:bg-purple-50 transition-all"
+									>
+										Get started
+									</Link>
+								</>
+							)}
 						</div>
 
 						{/* Mobile Menu Button */}
@@ -729,20 +756,33 @@ export default function Navbar({
 					{/* Action Buttons - Fixed at bottom */}
 					<div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 z-[102]">
 						<div className="flex gap-4">
-							<Link
-								href="/login"
-								className="flex-1 text-center text-gray-600 px-6 py-3 rounded-full border-2 border-gray-200 hover:bg-gray-50 transition-colors font-semibold"
-								onClick={() => setMobileMenuOpen(false)}
-							>
-								Sign in
-							</Link>
-							<Link
-								href="/signup"
-								className="flex-1 text-center bg-purple-600 text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
-								onClick={() => setMobileMenuOpen(false)}
-							>
-								Get started
-							</Link>
+							{isLoggedIn ? (
+								<Link
+									href="/dashboard"
+									className="flex-1 text-center flex items-center justify-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
+									onClick={() => setMobileMenuOpen(false)}
+								>
+									<MdDashboard size={20} />
+									Go to Dashboard
+								</Link>
+							) : (
+								<>
+									<Link
+										href="/login"
+										className="flex-1 text-center text-gray-600 px-6 py-3 rounded-full border-2 border-gray-200 hover:bg-gray-50 transition-colors font-semibold"
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Sign in
+									</Link>
+									<Link
+										href="/signup"
+										className="flex-1 text-center bg-purple-600 text-white px-6 py-3 rounded-full hover:bg-purple-700 transition-colors font-semibold"
+										onClick={() => setMobileMenuOpen(false)}
+									>
+										Get started
+									</Link>
+								</>
+							)}
 						</div>
 					</div>
 

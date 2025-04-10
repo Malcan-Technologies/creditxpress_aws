@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
-import Cookies from "js-cookie";
 import { PencilIcon } from "@heroicons/react/24/outline";
+import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 
 interface UserProfile {
 	id: string;
@@ -59,25 +59,19 @@ export default function ProfilePage() {
 	useEffect(() => {
 		const fetchProfile = async () => {
 			try {
-				const token =
-					localStorage.getItem("token") || Cookies.get("token");
+				// Check authentication using our utility
+				const isAuthenticated = await checkAuth();
 
-				if (!token) {
+				if (!isAuthenticated) {
 					router.push("/login");
 					return;
 				}
 
-				const response = await fetch("/api/users/me", {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
+				// Fetch profile data using our token refresh utility
+				const data = await fetchWithTokenRefresh<UserProfile>(
+					"/api/users/me"
+				);
 
-				if (!response.ok) {
-					throw new Error("Failed to fetch profile");
-				}
-
-				const data = await response.json();
 				if (data.dateOfBirth) {
 					data.dateOfBirth = new Date(data.dateOfBirth)
 						.toISOString()
@@ -87,6 +81,7 @@ export default function ProfilePage() {
 				setFormData(data);
 			} catch (error) {
 				console.error("Error fetching profile:", error);
+				router.push("/login");
 			} finally {
 				setLoading(false);
 			}
@@ -119,8 +114,6 @@ export default function ProfilePage() {
 
 		setSaving(true);
 		try {
-			const token = localStorage.getItem("token") || Cookies.get("token");
-
 			const dataToSend = { ...formData };
 
 			if (dataToSend.dateOfBirth) {
@@ -128,22 +121,15 @@ export default function ProfilePage() {
 				// The API will handle the conversion to UTC
 			}
 
-			const response = await fetch("/api/users/me", {
-				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${token}`,
-				},
-				body: JSON.stringify(dataToSend),
-			});
+			// Use token refresh utility to update the profile
+			const updatedData = await fetchWithTokenRefresh<UserProfile>(
+				"/api/users/me",
+				{
+					method: "PUT",
+					body: JSON.stringify(dataToSend),
+				}
+			);
 
-			if (!response.ok) {
-				throw new Error(
-					`Failed to update profile: ${response.status} ${response.statusText}`
-				);
-			}
-
-			const updatedData = await response.json();
 			if (updatedData.dateOfBirth) {
 				updatedData.dateOfBirth = new Date(updatedData.dateOfBirth)
 					.toISOString()

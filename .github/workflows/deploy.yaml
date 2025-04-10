@@ -260,7 +260,7 @@ jobs:
               fi
               
               echo "Checking backend health endpoint..."
-              if curl -s http://127.0.0.1:4001/api/health | grep -q "ok"; then
+              if curl -s https://growkapital.com/api/health | grep -q "ok"; then
                 BACKEND_OK=true
                 echo "✅ Backend is accessible"
               else

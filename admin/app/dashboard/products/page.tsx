@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { useRouter } from "next/navigation";
-import Cookies from "js-cookie";
+import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
 interface Product {
 	id: string;
@@ -47,27 +47,10 @@ export default function AdminProductsPage() {
 	const fetchProducts = async () => {
 		try {
 			setLoading(true);
-			const token = Cookies.get("adminToken");
-
-			if (!token) {
-				router.push("/login");
-				return;
-			}
-
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/products`,
-				{
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				}
+			// Fetch products with token refresh
+			const data = await fetchWithAdminTokenRefresh<Product[]>(
+				"/api/products"
 			);
-
-			if (!response.ok) {
-				throw new Error("Failed to fetch products");
-			}
-
-			const data = await response.json();
 			setProducts(data);
 		} catch (err) {
 			console.error("Error fetching products:", err);
@@ -116,13 +99,6 @@ export default function AdminProductsPage() {
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		try {
-			const token = Cookies.get("adminToken");
-
-			if (!token) {
-				router.push("/login");
-				return;
-			}
-
 			// Convert repayment terms to numbers before submitting
 			const submissionData = {
 				...formData,
@@ -136,23 +112,16 @@ export default function AdminProductsPage() {
 			};
 
 			const url = editingProduct
-				? `${process.env.NEXT_PUBLIC_API_URL}/api/products/${editingProduct.id}`
-				: `${process.env.NEXT_PUBLIC_API_URL}/api/products`;
+				? `/api/products/${editingProduct.id}`
+				: `/api/products`;
 
 			const method = editingProduct ? "PATCH" : "POST";
 
-			const response = await fetch(url, {
+			// Use fetchWithAdminTokenRefresh for submission
+			await fetchWithAdminTokenRefresh(url, {
 				method,
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${token}`,
-				},
 				body: JSON.stringify(submissionData),
 			});
-
-			if (!response.ok) {
-				throw new Error("Failed to save product");
-			}
 
 			setIsModalOpen(false);
 			fetchProducts();
@@ -168,26 +137,10 @@ export default function AdminProductsPage() {
 		}
 
 		try {
-			const token = Cookies.get("adminToken");
-
-			if (!token) {
-				router.push("/login");
-				return;
-			}
-
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/products/${id}`,
-				{
-					method: "DELETE",
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				}
-			);
-
-			if (!response.ok) {
-				throw new Error("Failed to delete product");
-			}
+			// Use fetchWithAdminTokenRefresh for deletion
+			await fetchWithAdminTokenRefresh(`/api/products/${id}`, {
+				method: "DELETE",
+			});
 
 			fetchProducts();
 		} catch (err) {

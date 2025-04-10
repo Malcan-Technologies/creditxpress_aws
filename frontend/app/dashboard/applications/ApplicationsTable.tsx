@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import Link from "next/link";
-import Cookies from "js-cookie";
 import {
 	Button,
 	Dialog,
@@ -13,6 +12,7 @@ import {
 	DialogContentText,
 	DialogTitle,
 } from "@mui/material";
+import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 
 interface LoanApplication {
 	id: string;
@@ -48,56 +48,41 @@ export default function ApplicationsTable() {
 	const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
 	useEffect(() => {
-		const checkAuth = async () => {
+		const fetchUserDataAndApplications = async () => {
 			try {
-				let token =
-					localStorage.getItem("token") || Cookies.get("token");
+				// Verify authentication using our utility
+				const isAuthenticated = await checkAuth();
 
-				if (!token) {
+				if (!isAuthenticated) {
 					router.push("/login");
 					return;
 				}
 
-				// Fetch user data
-				const userResponse = await fetch("/api/users/me", {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
+				// Fetch user data using token refresh utility
+				const userData = await fetchWithTokenRefresh<any>(
+					"/api/users/me"
+				);
 
-				if (!userResponse.ok) {
-					router.push("/login");
-					return;
-				}
-
-				const userData = await userResponse.json();
 				setUserName(
 					userData.firstName ||
 						userData.fullName?.split(" ")[0] ||
 						"Guest"
 				);
 
-				// Fetch applications
-				const response = await fetch("/api/loan-applications", {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
-
-				if (!response.ok) {
-					throw new Error("Failed to fetch applications");
-				}
-
-				const data = await response.json();
+				// Fetch applications using token refresh utility
+				const data = await fetchWithTokenRefresh<LoanApplication[]>(
+					"/api/loan-applications"
+				);
 				setApplications(data);
 			} catch (error) {
 				console.error("Error:", error);
+				router.push("/login");
 			} finally {
 				setLoading(false);
 			}
 		};
 
-		checkAuth();
+		fetchUserDataAndApplications();
 	}, [router]);
 
 	const getStatusColor = (status: string) => {
@@ -169,30 +154,17 @@ export default function ApplicationsTable() {
 
 		try {
 			setWithdrawing(true);
-			const token = localStorage.getItem("token") || Cookies.get("token");
 
-			if (!token) {
-				router.push("/login");
-				return;
-			}
-
-			const response = await fetch(
+			// Use token refresh utility for the PATCH request
+			await fetchWithTokenRefresh(
 				`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${selectedApplication.id}`,
 				{
 					method: "PATCH",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
 					body: JSON.stringify({
 						status: "WITHDRAWN",
 					}),
 				}
 			);
-
-			if (!response.ok) {
-				throw new Error("Failed to withdraw application");
-			}
 
 			// Update the local state to reflect the withdrawn status
 			setApplications(

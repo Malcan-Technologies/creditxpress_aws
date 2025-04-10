@@ -7,7 +7,11 @@ import Link from "next/link";
 import PieChart from "@/components/PieChart";
 import CreditScoreGauge from "@/components/CreditScoreGauge";
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
-import Cookies from "js-cookie";
+import {
+	TokenStorage,
+	fetchWithTokenRefresh,
+	checkAuth,
+} from "@/lib/authUtils";
 
 export default function DashboardPage() {
 	const router = useRouter();
@@ -19,41 +23,12 @@ export default function DashboardPage() {
 	const [loading, setLoading] = useState<boolean>(true);
 
 	useEffect(() => {
-		const checkAuth = async () => {
+		const checkAuthAndLoadData = async () => {
 			try {
-				// Check for token in localStorage
-				let token = localStorage.getItem("token");
+				// Use the checkAuth utility to verify authentication
+				const isAuthenticated = await checkAuth();
 
-				// If not in localStorage, check cookies
-				if (!token) {
-					const cookieToken = Cookies.get("token");
-					if (cookieToken) {
-						token = cookieToken;
-					}
-				}
-
-				console.log("Dashboard - Auth check token:", token);
-
-				if (!token) {
-					console.log(
-						"Dashboard - No token found, redirecting to login"
-					);
-					router.push("/login");
-					return;
-				}
-
-				const response = await fetch("/api/users/me", {
-					headers: {
-						Authorization: `Bearer ${token}`,
-					},
-				});
-
-				console.log("Dashboard - Auth check response:", {
-					status: response.status,
-					ok: response.ok,
-				});
-
-				if (!response.ok) {
+				if (!isAuthenticated) {
 					console.log(
 						"Dashboard - Auth check failed, redirecting to login"
 					);
@@ -61,7 +36,8 @@ export default function DashboardPage() {
 					return;
 				}
 
-				const data = await response.json();
+				// Fetch user data with automatic token refresh
+				const data = await fetchWithTokenRefresh<any>("/api/users/me");
 				console.log("Dashboard - Auth check data:", data);
 
 				if (!data?.isOnboardingComplete) {
@@ -102,7 +78,7 @@ export default function DashboardPage() {
 				}
 
 				// Fetch incomplete applications
-				fetchIncompleteApplications(token);
+				fetchIncompleteApplications();
 			} catch (error) {
 				console.error("Dashboard - Auth check error:", error);
 				router.push("/login");
@@ -111,22 +87,16 @@ export default function DashboardPage() {
 			}
 		};
 
-		checkAuth();
+		checkAuthAndLoadData();
 	}, [router]);
 
-	const fetchIncompleteApplications = async (token: string) => {
+	const fetchIncompleteApplications = async () => {
 		try {
-			const response = await fetch("/api/loan-applications", {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+			// Use fetchWithTokenRefresh for API calls
+			const data = await fetchWithTokenRefresh<any[]>(
+				"/api/loan-applications"
+			);
 
-			if (!response.ok) {
-				throw new Error("Failed to fetch applications");
-			}
-
-			const data = await response.json();
 			// Filter for incomplete and pending applications
 			const filteredApps = data.filter((app: any) =>
 				[

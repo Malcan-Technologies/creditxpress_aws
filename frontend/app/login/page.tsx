@@ -7,6 +7,7 @@ import Logo from "../../components/Logo";
 import Cookies from "js-cookie";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
+import { TokenStorage } from "@/lib/authUtils";
 
 interface CountryData {
 	countryCode: string;
@@ -65,13 +66,9 @@ function LoginPageContent() {
 				throw new Error(data.error || "Invalid credentials");
 			}
 
-			// Store tokens in localStorage
-			localStorage.setItem("token", data.accessToken);
-			localStorage.setItem("refreshToken", data.refreshToken);
-
-			// Store tokens in cookies
-			Cookies.set("token", data.accessToken, { expires: 1 }); // 1 day
-			Cookies.set("refreshToken", data.refreshToken, { expires: 7 }); // 7 days
+			// Store tokens using our utility functions
+			TokenStorage.setAccessToken(data.accessToken);
+			TokenStorage.setRefreshToken(data.refreshToken);
 
 			console.log("Login - Successful, redirecting to appropriate page");
 
