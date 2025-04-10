@@ -29,8 +29,8 @@ export const TokenStorage = {
 		);
 	},
 
-	// 30 days expiration, matching the backend JWT refresh token expiration
-	setRefreshToken: (token: string, expiresInDays: number = 30): void => {
+	// 90 days expiration, matching the backend JWT refresh token expiration
+	setRefreshToken: (token: string, expiresInDays: number = 90): void => {
 		localStorage.setItem("refreshToken", token);
 		Cookies.set("refreshToken", token, { expires: expiresInDays });
 	},

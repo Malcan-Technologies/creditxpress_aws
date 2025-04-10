@@ -172,10 +172,9 @@ jobs:
             echo "Waiting for containers to be healthy..."
             sleep 30
             
-            # Run database migrations and seed
-            echo "Running database migrations and seed..."
+            # Run database migrations
+            echo "Running database migrations..."
             docker compose -f docker-compose.prod.yml exec -T backend npx prisma migrate deploy
-            docker compose -f docker-compose.prod.yml exec -T backend npx prisma db seed
           '
 
       - name: Deploy config files

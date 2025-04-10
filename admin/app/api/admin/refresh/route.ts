@@ -64,10 +64,10 @@ export async function POST(request: Request) {
 			path: "/",
 		});
 
-		// Refresh token - 30 days
+		// Refresh token - 90 days
 		jsonResponse.cookies.set("adminRefreshToken", data.refreshToken, {
-			expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-			maxAge: 30 * 24 * 60 * 60, // 30 days in seconds as a fallback
+			expires: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+			maxAge: 90 * 24 * 60 * 60, // 90 days in seconds as a fallback
 			path: "/",
 		});
 

@@ -129,7 +129,7 @@ router.post("/login", async (req: Request, res: Response) => {
 		const refreshToken = jwt.sign(
 			{ userId: user.id, role: user.role },
 			process.env.JWT_REFRESH_SECRET!,
-			{ expiresIn: "30d" }
+			{ expiresIn: "90d" }
 		);
 
 		console.log("Admin login successful:", phoneNumber);
@@ -500,7 +500,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
 		const newRefreshToken = jwt.sign(
 			{ userId: user.id, role: user.role },
 			process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key",
-			{ expiresIn: "30d" }
+			{ expiresIn: "90d" }
 		);
 
 		res.json({
