@@ -179,7 +179,7 @@ export default function DashboardPage() {
 		<DashboardLayout userName={userName}>
 			<div className="columns-1 md:columns-2 lg:columns-3 gap-6 space-y-6">
 				{/* Wallet Card */}
-				<div className="break-inside-avoid bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+				{/* <div className="break-inside-avoid bg-white rounded-lg shadow-sm border border-gray-200 p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h2 className="text-lg font-medium text-gray-900">
 							Wallet
@@ -228,10 +228,10 @@ export default function DashboardPage() {
 							<span className="text-sm text-gray-900">$0.00</span>
 						</div>
 					</div>
-				</div>
+				</div> */}
 
 				{/* Credit Score Card */}
-				<div className="break-inside-avoid bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+				{/* <div className="break-inside-avoid bg-white rounded-lg shadow-sm border border-gray-200 p-6">
 					<div className="flex items-center justify-between mb-4">
 						<h2 className="text-lg font-medium text-gray-900">
 							Credit Score
@@ -284,7 +284,7 @@ export default function DashboardPage() {
 							Get Latest Report
 						</button>
 					</div>
-				</div>
+				</div> */}
 
 				{/* Active Loans Card */}
 				<div className="break-inside-avoid bg-white rounded-lg shadow-sm border border-gray-200 p-6">
