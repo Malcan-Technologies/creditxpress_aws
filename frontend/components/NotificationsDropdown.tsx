@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
 interface Notification {
 	id: string;
@@ -31,6 +32,7 @@ export function NotificationsDropdown() {
 	const [unreadCount, setUnreadCount] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [open, setOpen] = useState(false);
+	const [error, setError] = useState(false);
 	const { toast } = useToast();
 	const router = useRouter();
 
@@ -39,23 +41,49 @@ export function NotificationsDropdown() {
 	}, []);
 
 	const fetchNotifications = async () => {
-		try {
-			const response = await fetch("/api/notifications?limit=10");
-			const data = await response.json();
+		// If we already encountered an error, don't keep trying
+		if (error) return;
 
-			if (!response.ok) throw new Error(data.error);
+		setLoading(true);
+		try {
+			// Check if we have an access token first
+			const token = TokenStorage.getAccessToken();
+			if (!token) {
+				console.log("No access token available for notifications");
+				setError(true);
+				setLoading(false);
+				return;
+			}
+
+			// Use fetchWithTokenRefresh for automatic token handling
+			const data = await fetchWithTokenRefresh<{
+				notifications: Notification[];
+			}>("/api/notifications?limit=10");
 
 			console.log("Raw notifications response:", data);
-			setNotifications(data.notifications);
+			setNotifications(data.notifications || []);
 			setUnreadCount(
-				data.notifications.filter((n: Notification) => !n.isRead).length
+				(data.notifications || []).filter(
+					(n: Notification) => !n.isRead
+				).length
 			);
+			setError(false);
 		} catch (error) {
-			toast({
-				title: "Error",
-				description: "Failed to fetch notifications",
-				variant: "destructive",
-			});
+			console.error("Error fetching notifications:", error);
+			setError(true);
+			// Don't show toast for auth errors to avoid spam
+			if (
+				!(
+					error instanceof Error &&
+					error.message.includes("access token")
+				)
+			) {
+				toast({
+					title: "Error",
+					description: "Failed to fetch notifications",
+					variant: "destructive",
+				});
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -63,9 +91,14 @@ export function NotificationsDropdown() {
 
 	const markAsRead = async (notificationIds: string[]) => {
 		try {
+			const headers = {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${TokenStorage.getAccessToken()}`,
+			};
+
 			const response = await fetch("/api/notifications", {
 				method: "PATCH",
-				headers: { "Content-Type": "application/json" },
+				headers,
 				body: JSON.stringify({ notificationIds }),
 			});
 
@@ -83,6 +116,7 @@ export function NotificationsDropdown() {
 				Math.max(0, prev - notificationIds.length)
 			);
 		} catch (error) {
+			console.error("Error marking as read:", error);
 			toast({
 				title: "Error",
 				description: "Failed to mark notifications as read",
@@ -93,8 +127,13 @@ export function NotificationsDropdown() {
 
 	const deleteNotification = async (id: string) => {
 		try {
+			const headers = {
+				Authorization: `Bearer ${TokenStorage.getAccessToken()}`,
+			};
+
 			const response = await fetch(`/api/notifications/${id}`, {
 				method: "DELETE",
+				headers,
 			});
 
 			if (!response.ok) throw new Error("Failed to delete notification");
@@ -109,6 +148,7 @@ export function NotificationsDropdown() {
 				description: "Notification deleted",
 			});
 		} catch (error) {
+			console.error("Error deleting notification:", error);
 			toast({
 				title: "Error",
 				description: "Failed to delete notification",
@@ -214,6 +254,20 @@ export function NotificationsDropdown() {
 								<Skeleton className="h-3 w-full bg-gray-700" />
 							</div>
 						))
+					) : error ? (
+						<div className="p-4 text-center text-gray-400">
+							Unable to load notifications
+							<div className="mt-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={fetchNotifications}
+									className="text-xs bg-gray-700 hover:bg-gray-600 border-gray-600"
+								>
+									Retry
+								</Button>
+							</div>
+						</div>
 					) : notifications.length === 0 ? (
 						<div className="p-4 text-center text-gray-400">
 							No notifications
@@ -255,36 +309,36 @@ export function NotificationsDropdown() {
 													"MMM d, h:mm a"
 												)}
 											</span>
-											<div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+											<div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
 												{!notification.isRead && (
 													<Button
 														variant="ghost"
 														size="icon"
-														className="h-6 w-6 text-gray-400 hover:text-gray-100 hover:bg-gray-600"
+														className="h-6 w-6 text-gray-400 hover:text-blue-400"
 														onClick={(e) => {
-															e.preventDefault();
 															e.stopPropagation();
 															markAsRead([
 																notification.id,
 															]);
 														}}
+														title="Mark as read"
 													>
-														<Check className="h-4 w-4" />
+														<Check className="h-3 w-3" />
 													</Button>
 												)}
 												<Button
 													variant="ghost"
 													size="icon"
-													className="h-6 w-6 text-gray-400 hover:text-red-400 hover:bg-gray-600"
+													className="h-6 w-6 text-gray-400 hover:text-red-400"
 													onClick={(e) => {
-														e.preventDefault();
 														e.stopPropagation();
 														deleteNotification(
 															notification.id
 														);
 													}}
+													title="Delete"
 												>
-													<Trash2 className="h-4 w-4" />
+													<Trash2 className="h-3 w-3" />
 												</Button>
 											</div>
 										</div>
