@@ -127,9 +127,11 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 		};
 
 		res.json(walletData);
+		return;
 	} catch (error) {
 		console.error("Error fetching wallet data:", error);
 		res.status(500).json({ error: "Internal server error" });
+		return;
 	}
 });
 
@@ -175,9 +177,11 @@ router.get(
 					pages: Math.ceil(total / limit),
 				},
 			});
+			return;
 		} catch (error) {
 			console.error("Error fetching transactions:", error);
 			res.status(500).json({ error: "Internal server error" });
+			return;
 		}
 	}
 );
@@ -226,9 +230,11 @@ router.post(
 			});
 
 			res.status(201).json(transaction);
+			return;
 		} catch (error) {
 			console.error("Error creating deposit:", error);
 			res.status(500).json({ error: "Internal server error" });
+			return;
 		}
 	}
 );
@@ -283,9 +289,11 @@ router.post(
 			});
 
 			res.status(201).json(transaction);
+			return;
 		} catch (error) {
 			console.error("Error creating withdrawal:", error);
 			res.status(500).json({ error: "Internal server error" });
+			return;
 		}
 	}
 );
@@ -442,9 +450,11 @@ router.post(
 						? "Loan repayment processed successfully"
 						: "Loan repayment request submitted. Awaiting fund transfer confirmation.",
 			});
+			return;
 		} catch (error) {
 			console.error("Error creating loan repayment:", error);
 			res.status(500).json({ error: "Internal server error" });
+			return;
 		}
 	}
 );
@@ -553,9 +563,11 @@ router.patch(
 			});
 
 			res.json(updatedTransaction);
+			return;
 		} catch (error) {
 			console.error("Error processing transaction:", error);
 			res.status(500).json({ error: "Internal server error" });
+			return;
 		}
 	}
 );

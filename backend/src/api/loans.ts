@@ -128,9 +128,11 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 		});
 
 		res.json({ loans: loansWithDetails });
+		return;
 	} catch (error) {
 		console.error("Error fetching loans:", error);
 		res.status(500).json({ error: "Internal server error" });
+		return;
 	}
 });
 
@@ -215,9 +217,11 @@ router.get(
 			};
 
 			res.json(loanWithDetails);
+			return;
 		} catch (error) {
 			console.error("Error fetching loan details:", error);
 			res.status(500).json({ error: "Internal server error" });
+			return;
 		}
 	}
 );
@@ -305,9 +309,11 @@ router.get(
 			});
 
 			res.json({ repayments });
+			return;
 		} catch (error) {
 			console.error("Error fetching loan repayments:", error);
 			res.status(500).json({ error: "Internal server error" });
+			return;
 		}
 	}
 );
