@@ -2963,7 +2963,7 @@ router.get(
 	"/notification-templates",
 	authenticateToken,
 	isAdmin as unknown as RequestHandler,
-	async (req: AuthRequest, res: Response) => {
+	async (_req: AuthRequest, res: Response) => {
 		try {
 			const templates = await prisma.notificationTemplate.findMany({
 				orderBy: { createdAt: "desc" },
@@ -3176,7 +3176,7 @@ router.get(
 	"/notification-groups",
 	authenticateToken,
 	isAdmin as unknown as RequestHandler,
-	async (req: AuthRequest, res: Response) => {
+	async (_req: AuthRequest, res: Response) => {
 		try {
 			const groups = await prisma.notificationGroup.findMany({
 				orderBy: { createdAt: "desc" },

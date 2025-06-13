@@ -29,14 +29,14 @@ RUN if [ -f tsconfig.json ]; then \
 # Generate Prisma client
 RUN npx prisma generate
 
-# Compile TypeScript directly with more lenient options
-RUN npx tsc --project tsconfig.json || echo "TypeScript compilation had warnings but we'll continue"
+# Compile TypeScript
+RUN echo "Starting TypeScript compilation..." && \
+    npx tsc --project tsconfig.json && \
+    echo "TypeScript compilation completed successfully"
 
 # Debug: Check if dist directory exists and what it contains
-RUN echo "Dist directory after build:" && ls -la dist/ || echo "Dist directory not found"
-
-# Debug: Check if index.js exists in dist
-RUN echo "Looking for index.js:" && find . -name "index.js" || echo "index.js not found"
+RUN echo "Dist directory after build:" && ls -la dist/ && \
+    echo "Contents of dist:" && find dist/ -type f -name "*.js" | head -10
 
 # Production stage
 FROM node:20-alpine

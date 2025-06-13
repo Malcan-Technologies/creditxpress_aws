@@ -27,5 +27,5 @@
     }
   },
   "exclude": ["node_modules", "dist", "**/*.missing.ts"],
-  "include": ["./src/api/**/*.ts", "./src/config/**/*.ts", "./src/middleware/**/*.ts", "./src/models/**/*.ts", "./src/types/**/*.ts", "./prisma/**/*.ts", "./lib/**/*.ts"]
+  "include": ["./src/**/*.ts", "./prisma/**/*.ts", "./lib/**/*.ts"]
 } 
