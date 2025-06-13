@@ -99,7 +99,7 @@ jobs:
                 npm install -g pnpm
               fi
               
-              # Use cached node_modules if package.json hasn't changed
+              # Use cached node_modules if package.json has not changed
               if [ -f "package.json.deployed" ] && cmp -s package.json package.json.deployed; then
                 echo "📦 Using cached dependencies (package.json unchanged)"
               else
@@ -177,7 +177,7 @@ jobs:
                 npm install -g pnpm
               fi
               
-              # Use cached node_modules if package.json hasn't changed
+              # Use cached node_modules if package.json has not changed
               if [ -f "package.json.deployed" ] && cmp -s package.json package.json.deployed; then
                 echo "📦 Using cached dependencies (package.json unchanged)"
               else
