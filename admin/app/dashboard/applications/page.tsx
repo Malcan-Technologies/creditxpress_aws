@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
@@ -111,7 +111,7 @@ interface DashboardStats {
 	}[];
 }
 
-export default function AdminApplicationsPage() {
+function AdminApplicationsPageContent() {
 	const searchParams = useSearchParams();
 	const filterParam = searchParams.get("filter");
 
@@ -2056,5 +2056,13 @@ export default function AdminApplicationsPage() {
 				</div>
 			</div>
 		</AdminLayout>
+	);
+}
+
+export default function AdminApplicationsPage() {
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<AdminApplicationsPageContent />
+		</Suspense>
 	);
 }
