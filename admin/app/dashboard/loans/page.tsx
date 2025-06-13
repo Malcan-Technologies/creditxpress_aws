@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import Link from "next/link";
 import {
@@ -32,7 +32,7 @@ interface LoanData {
 	disbursedAt: string | null;
 	createdAt: string;
 	updatedAt: string;
-	application: {
+	application?: {
 		id: string;
 		amount: number;
 		purpose: string;
@@ -84,10 +84,6 @@ export default function ActiveLoansPage() {
 		fetchActiveLoans();
 	}, []);
 
-	useEffect(() => {
-		filterLoans();
-	}, [loans, searchTerm, statusFilter]);
-
 	const fetchActiveLoans = async () => {
 		try {
 			setLoading(true);
@@ -117,7 +113,7 @@ export default function ActiveLoansPage() {
 		}
 	};
 
-	const filterLoans = () => {
+	const filterLoans = useCallback(() => {
 		let filtered = [...loans];
 
 		// Apply status filter based on payment status
@@ -145,16 +141,21 @@ export default function ActiveLoansPage() {
 					loan.user.fullName.toLowerCase().includes(search) ||
 					loan.user.email.toLowerCase().includes(search) ||
 					loan.id.toLowerCase().includes(search) ||
-					loan.application.product.name
-						.toLowerCase()
-						.includes(search) ||
-					(loan.application.purpose &&
+					(loan.application?.product?.name &&
+						loan.application.product.name
+							.toLowerCase()
+							.includes(search)) ||
+					(loan.application?.purpose &&
 						loan.application.purpose.toLowerCase().includes(search))
 			);
 		}
 
 		setFilteredLoans(filtered);
-	};
+	}, [loans, searchTerm, statusFilter]);
+
+	useEffect(() => {
+		filterLoans();
+	}, [filterLoans]);
 
 	const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
 		setSearchTerm(e.target.value);
@@ -390,11 +391,9 @@ export default function ActiveLoansPage() {
 															)}
 														</div>
 														<p className="text-xs text-gray-400 mt-1">
-															{
-																loan.application
-																	.product
-																	.name
-															}
+															{loan.application
+																?.product
+																?.name || "N/A"}
 														</p>
 													</div>
 													<div className="text-right ml-4">
@@ -572,8 +571,8 @@ export default function ActiveLoansPage() {
 														.phoneNumber || "N/A"}
 												</p>
 											</div>
-											{selectedLoan.application.user
-												.employmentStatus && (
+											{selectedLoan.application?.user
+												?.employmentStatus && (
 												<div>
 													<p className="text-gray-400 text-sm">
 														Employment
@@ -603,10 +602,9 @@ export default function ActiveLoansPage() {
 													Product
 												</p>
 												<p className="text-white">
-													{
-														selectedLoan.application
-															.product.name
-													}
+													{selectedLoan.application
+														?.product?.name ||
+														"N/A"}
 												</p>
 											</div>
 											<div>
@@ -615,7 +613,7 @@ export default function ActiveLoansPage() {
 												</p>
 												<p className="text-white">
 													{selectedLoan.application
-														.purpose || "N/A"}
+														?.purpose || "N/A"}
 												</p>
 											</div>
 											<div>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 import Link from "next/link";
@@ -111,6 +112,9 @@ interface DashboardStats {
 }
 
 export default function AdminApplicationsPage() {
+	const searchParams = useSearchParams();
+	const filterParam = searchParams.get("filter");
+
 	const [applications, setApplications] = useState<LoanApplication[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
@@ -127,12 +131,47 @@ export default function AdminApplicationsPage() {
 	const [selectedTab, setSelectedTab] = useState<string>("details");
 	const [refreshing, setRefreshing] = useState(false);
 
-	// Replace single status filter with multiple filters
-	const [selectedFilters, setSelectedFilters] = useState<string[]>([
-		"PENDING_APPROVAL",
-		"PENDING_APP_FEE",
-		"PENDING_KYC",
-	]);
+	// Initialize filters based on URL parameter
+	const getInitialFilters = () => {
+		if (filterParam === "pending-approval") {
+			return ["PENDING_APPROVAL"];
+		} else if (filterParam === "pending-disbursement") {
+			return ["PENDING_DISBURSEMENT"];
+		} else {
+			// Default "All Applications" view - show active workflow statuses, exclude rejected/withdrawn/incomplete
+			return [
+				"PENDING_APP_FEE",
+				"PENDING_KYC",
+				"PENDING_APPROVAL",
+				"PENDING_SIGNATURE",
+				"PENDING_DISBURSEMENT",
+			];
+		}
+	};
+
+	const [selectedFilters, setSelectedFilters] = useState<string[]>(
+		getInitialFilters()
+	);
+
+	// Additional states for approval and disbursement
+	const [decisionNotes, setDecisionNotes] = useState("");
+	const [disbursementNotes, setDisbursementNotes] = useState("");
+	const [disbursementReference, setDisbursementReference] = useState("");
+	const [processingDecision, setProcessingDecision] = useState(false);
+	const [processingDisbursement, setProcessingDisbursement] = useState(false);
+
+	// Generate disbursement reference when application is selected for disbursement
+	useEffect(() => {
+		if (
+			selectedApplication &&
+			selectedApplication.status === "PENDING_DISBURSEMENT"
+		) {
+			const reference = `DISB-${selectedApplication.id
+				.slice(-8)
+				.toUpperCase()}-${Date.now().toString().slice(-6)}`;
+			setDisbursementReference(reference);
+		}
+	}, [selectedApplication]);
 
 	// Status colors for badges
 	const statusColors: Record<string, { bg: string; text: string }> = {
@@ -155,8 +194,6 @@ export default function AdminApplicationsPage() {
 				return ClipboardDocumentCheckIcon;
 			case "PENDING_APPROVAL":
 				return DocumentMagnifyingGlassIcon;
-			case "APPROVED":
-				return CheckCircleIcon;
 			case "PENDING_SIGNATURE":
 				return DocumentTextIcon;
 			case "PENDING_DISBURSEMENT":
@@ -180,8 +217,6 @@ export default function AdminApplicationsPage() {
 				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
 			case "PENDING_APPROVAL":
 				return "bg-amber-500/20 text-amber-200 border-amber-400/20";
-			case "APPROVED":
-				return "bg-green-500/20 text-green-200 border-green-400/20";
 			case "PENDING_SIGNATURE":
 				return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
 			case "PENDING_DISBURSEMENT":
@@ -205,8 +240,6 @@ export default function AdminApplicationsPage() {
 				return "Pending KYC";
 			case "PENDING_APPROVAL":
 				return "Pending Approval";
-			case "APPROVED":
-				return "Approved";
 			case "PENDING_SIGNATURE":
 				return "Pending Signature";
 			case "PENDING_DISBURSEMENT":
@@ -374,6 +407,11 @@ export default function AdminApplicationsPage() {
 		fetchApplications();
 	}, []);
 
+	// Update filters when URL parameter changes
+	useEffect(() => {
+		setSelectedFilters(getInitialFilters());
+	}, [filterParam]);
+
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString("en-MY", {
 			day: "numeric",
@@ -390,16 +428,8 @@ export default function AdminApplicationsPage() {
 		}).format(amount);
 	};
 
-	// Filter applications to exclude approved and disbursed ones
+	// Filter applications based on search and status filters
 	const filteredApplications = applications.filter((app) => {
-		// Exclude applications with dedicated workflow pages
-		if (
-			app.status === "PENDING_APPROVAL" ||
-			app.status === "PENDING_DISBURSEMENT"
-		) {
-			return false;
-		}
-
 		// Filter by search term
 		const searchTerm = search.toLowerCase();
 		const matchesSearch =
@@ -428,13 +458,25 @@ export default function AdminApplicationsPage() {
 	// Handle view application details
 	const handleViewClick = (application: LoanApplication) => {
 		setSelectedApplication(application);
-		setSelectedTab("details"); // Reset to details tab when selecting new application
-		setViewDialogOpen(true);
+
+		// Auto-switch to appropriate tab based on status
+		if (application.status === "PENDING_APPROVAL") {
+			setSelectedTab("approval");
+		} else if (application.status === "PENDING_DISBURSEMENT") {
+			setSelectedTab("disbursement");
+		} else {
+			setSelectedTab("details");
+		}
+
+		fetchApplicationHistory(application.id);
 	};
 
 	const handleViewClose = () => {
 		setViewDialogOpen(false);
 		setSelectedApplication(null);
+		setDecisionNotes("");
+		setDisbursementNotes("");
+		setDisbursementReference("");
 	};
 
 	// Function to fetch updated history for an application
@@ -629,6 +671,145 @@ export default function AdminApplicationsPage() {
 		)} to ${getStatusLabel(newStatus)}`;
 	};
 
+	// Approval decision handler
+	const handleApprovalDecision = async (decision: "approve" | "reject") => {
+		if (!selectedApplication) return;
+
+		// Show confirmation dialog
+		const actionText = decision === "approve" ? "approve" : "reject";
+		const confirmMessage = `Are you sure you want to ${actionText} this loan application for ${selectedApplication.user?.fullName}?`;
+
+		if (!window.confirm(confirmMessage)) {
+			return;
+		}
+
+		setProcessingDecision(true);
+		try {
+			const newStatus = decision === "approve" ? "APPROVED" : "REJECTED";
+
+			const response = await fetch(
+				`/api/admin/applications/${selectedApplication.id}/status`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem(
+							"adminToken"
+						)}`,
+					},
+					body: JSON.stringify({
+						status: newStatus,
+						notes:
+							decisionNotes ||
+							`Application ${decision}d by admin`,
+					}),
+				}
+			);
+
+			if (response.ok) {
+				const data = await response.json();
+				// Refresh the application data
+				await fetchApplications();
+				await fetchApplicationHistory(selectedApplication.id);
+				setDecisionNotes("");
+
+				// Update selected application with the final status from backend
+				setSelectedApplication((prev) =>
+					prev ? { ...prev, status: data.status || newStatus } : null
+				);
+			} else {
+				const errorData = await response.json();
+				console.error("Approval decision error:", errorData);
+				setError(
+					errorData.error ||
+						errorData.message ||
+						`Failed to ${decision} application`
+				);
+			}
+		} catch (error) {
+			console.error(`Error ${decision}ing application:`, error);
+			setError(`Failed to ${decision} application`);
+		} finally {
+			setProcessingDecision(false);
+		}
+	};
+
+	// Disbursement handler
+	const handleDisbursement = async () => {
+		if (!selectedApplication || !disbursementReference) return;
+
+		// Show confirmation dialog
+		const disbursementAmount =
+			selectedApplication.netDisbursement || selectedApplication.amount;
+		const confirmMessage = `Are you sure you want to disburse ${formatCurrency(
+			disbursementAmount
+		)} to ${
+			selectedApplication.user?.fullName
+		}?\n\nReference: ${disbursementReference}\nBank: ${
+			selectedApplication.user?.bankName
+		}\nAccount: ${selectedApplication.user?.accountNumber}`;
+
+		if (!window.confirm(confirmMessage)) {
+			return;
+		}
+
+		setProcessingDisbursement(true);
+		try {
+			console.log("Disbursement request:", {
+				applicationId: selectedApplication.id,
+				referenceNumber: disbursementReference,
+				notes: disbursementNotes || "Loan disbursed by admin",
+			});
+
+			const response = await fetch(
+				`/api/admin/applications/${selectedApplication.id}/disburse`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem(
+							"adminToken"
+						)}`,
+					},
+					body: JSON.stringify({
+						referenceNumber: disbursementReference,
+						notes: disbursementNotes || "Loan disbursed by admin",
+					}),
+				}
+			);
+
+			console.log("Disbursement response status:", response.status);
+
+			if (response.ok) {
+				const data = await response.json();
+				console.log("Disbursement success:", data);
+				// Refresh the application data
+				await fetchApplications();
+				await fetchApplicationHistory(selectedApplication.id);
+				setDisbursementNotes("");
+				setDisbursementReference("");
+
+				// Update selected application
+				setSelectedApplication((prev) =>
+					prev ? { ...prev, status: "ACTIVE" } : null
+				);
+			} else {
+				const errorData = await response.json();
+				console.error("Disbursement error:", errorData);
+				setError(
+					errorData.error ||
+						errorData.message ||
+						"Failed to disburse loan"
+				);
+			}
+		} catch (error) {
+			console.error("Error disbursing loan:", error);
+			setError("Failed to disburse loan");
+		} finally {
+			setProcessingDisbursement(false);
+		}
+	};
+
 	if (loading) {
 		return (
 			<AdminLayout userName={userName}>
@@ -639,11 +820,38 @@ export default function AdminApplicationsPage() {
 		);
 	}
 
+	const getPageTitle = () => {
+		if (filterParam === "pending-approval") {
+			return "Pending Approval";
+		} else if (filterParam === "pending-disbursement") {
+			return "Pending Disbursement";
+		} else {
+			return "Loan Applications";
+		}
+	};
+
+	const getPageDescription = () => {
+		if (filterParam === "pending-approval") {
+			return "Review and make credit decisions on loan applications";
+		} else if (filterParam === "pending-disbursement") {
+			return "Process loan disbursements for approved applications";
+		} else {
+			return "Manage active loan applications in the workflow (excludes incomplete, rejected, and withdrawn)";
+		}
+	};
+
 	return (
-		<AdminLayout
-			title="Loan Applications"
-			description="Manage all loan applications in the early stages of the workflow"
-		>
+		<AdminLayout title={getPageTitle()} description={getPageDescription()}>
+			{/* Error Display */}
+			{error && (
+				<div className="mb-6 bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
+					<span>{error}</span>
+					<button onClick={() => setError(null)}>
+						<XCircleIcon className="h-5 w-5" />
+					</button>
+				</div>
+			)}
+
 			{/* Header with summary and refresh button */}
 			<div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
 				<div>
@@ -670,6 +878,42 @@ export default function AdminApplicationsPage() {
 				</button>
 			</div>
 
+			{/* Search Bar */}
+			<div className="mb-6">
+				<div className="relative max-w-md">
+					<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+						<svg
+							className="h-5 w-5 text-gray-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+							/>
+						</svg>
+					</div>
+					<input
+						type="text"
+						placeholder="Search by applicant name, email, or purpose..."
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+						className="block w-full pl-10 pr-3 py-2 border border-gray-600 rounded-lg bg-gray-800/50 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+					/>
+					{search && (
+						<button
+							onClick={() => setSearch("")}
+							className="absolute inset-y-0 right-0 pr-3 flex items-center"
+						>
+							<XCircleIcon className="h-5 w-5 text-gray-400 hover:text-gray-300" />
+						</button>
+					)}
+				</div>
+			</div>
+
 			{/* Status filter chips */}
 			<div className="mb-6">
 				<h3 className="text-white text-sm font-medium mb-3">
@@ -680,19 +924,12 @@ export default function AdminApplicationsPage() {
 						"INCOMPLETE",
 						"PENDING_APP_FEE",
 						"PENDING_KYC",
-						"APPROVED",
+						"PENDING_APPROVAL",
 						"PENDING_SIGNATURE",
+						"PENDING_DISBURSEMENT",
 						"REJECTED",
 						"WITHDRAWN",
 					].map((status) => {
-						// Skip showing Pending Approval and Pending Disbursement filters
-						if (
-							status === "PENDING_APPROVAL" ||
-							status === "PENDING_DISBURSEMENT"
-						) {
-							return null;
-						}
-
 						const isActive = selectedFilters.includes(status);
 						const StatusIcon = getStatusIcon(status);
 						return (
@@ -890,6 +1127,40 @@ export default function AdminApplicationsPage() {
 									>
 										Audit Trail
 									</div>
+									{/* Show Approval tab for PENDING_APPROVAL applications */}
+									{selectedApplication.status ===
+										"PENDING_APPROVAL" && (
+										<div
+											className={`px-4 py-2 cursor-pointer transition-colors ${
+												selectedTab === "approval"
+													? "border-b-2 border-amber-400 font-medium text-white"
+													: "text-gray-400 hover:text-gray-200"
+											}`}
+											onClick={() =>
+												setSelectedTab("approval")
+											}
+										>
+											<DocumentMagnifyingGlassIcon className="inline h-4 w-4 mr-1" />
+											Approval
+										</div>
+									)}
+									{/* Show Disbursement tab for PENDING_DISBURSEMENT applications */}
+									{selectedApplication.status ===
+										"PENDING_DISBURSEMENT" && (
+										<div
+											className={`px-4 py-2 cursor-pointer transition-colors ${
+												selectedTab === "disbursement"
+													? "border-b-2 border-green-400 font-medium text-white"
+													: "text-gray-400 hover:text-gray-200"
+											}`}
+											onClick={() =>
+												setSelectedTab("disbursement")
+											}
+										>
+											<BanknotesIcon className="inline h-4 w-4 mr-1" />
+											Disbursement
+										</div>
+									)}
 									<div
 										className={`px-4 py-2 cursor-pointer transition-colors ${
 											selectedTab === "actions"
@@ -1185,85 +1456,81 @@ export default function AdminApplicationsPage() {
 												{selectedApplication.history &&
 												selectedApplication.history
 													.length > 0 ? (
-													<div className="relative">
-														<div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-600/50"></div>
-														<ul className="space-y-4">
-															{selectedApplication.history
-																.sort(
-																	(a, b) =>
-																		new Date(
-																			b.createdAt
-																		).getTime() -
-																		new Date(
-																			a.createdAt
-																		).getTime()
-																)
-																.map(
-																	(
-																		historyItem,
-																		index
-																	) => (
-																		<li
-																			key={
-																				historyItem.id
-																			}
-																			className="relative pl-8"
-																		>
-																			<div className="absolute left-0 top-1.5 w-8 flex items-center justify-center">
-																				<div
-																					className={`w-3 h-3 rounded-full ${
-																						index ===
-																						0
-																							? "bg-blue-400"
-																							: "bg-gray-500"
-																					}`}
-																				></div>
-																			</div>
-																			<div className="border border-gray-700/30 rounded-lg p-3 bg-gray-800/20">
-																				<div className="flex justify-between items-start mb-1">
-																					<span className="text-sm font-medium text-white">
-																						{getHistoryActionDescription(
-																							historyItem.previousStatus,
-																							historyItem.newStatus
-																						)}
-																					</span>
-																					<span className="text-xs text-gray-400">
-																						{new Date(
-																							historyItem.createdAt
-																						).toLocaleDateString(
-																							"en-US",
-																							{
-																								year: "numeric",
-																								month: "short",
-																								day: "numeric",
-																								hour: "2-digit",
-																								minute: "2-digit",
-																							}
-																						)}
-																					</span>
-																				</div>
-																				<div className="text-xs text-gray-400">
-																					<span>
-																						By:{" "}
-																						{historyItem.changedBy ||
-																							"System"}
-																					</span>
-																				</div>
-																				{historyItem.notes && (
-																					<div className="mt-2 text-xs text-gray-300 bg-gray-800/50 p-2 rounded border border-gray-700/30">
-																						<span className="font-medium">
-																							Notes:
-																						</span>{" "}
+													<div className="space-y-3">
+														{selectedApplication.history
+															.sort(
+																(a, b) =>
+																	new Date(
+																		b.createdAt
+																	).getTime() -
+																	new Date(
+																		a.createdAt
+																	).getTime()
+															)
+															.map(
+																(
+																	historyItem,
+																	index
+																) => (
+																	<div
+																		key={
+																			historyItem.id
+																		}
+																		className="flex items-start space-x-3 p-4 bg-gray-800/30 rounded-lg border border-gray-700/30"
+																	>
+																		<div className="flex-shrink-0 mt-1">
+																			<div
+																				className={`w-2 h-2 rounded-full ${
+																					index ===
+																					0
+																						? "bg-blue-400"
+																						: "bg-gray-500"
+																				}`}
+																			></div>
+																		</div>
+																		<div className="flex-1 min-w-0">
+																			<div className="flex items-center justify-between">
+																				<p className="text-sm font-medium text-white">
+																					{getHistoryActionDescription(
+																						historyItem.previousStatus,
+																						historyItem.newStatus
+																					)}
+																				</p>
+																				<p className="text-xs text-gray-400">
+																					{new Date(
+																						historyItem.createdAt
+																					).toLocaleDateString(
+																						"en-US",
 																						{
-																							historyItem.notes
+																							year: "numeric",
+																							month: "short",
+																							day: "numeric",
+																							hour: "2-digit",
+																							minute: "2-digit",
 																						}
-																					</div>
-																				)}
+																					)}
+																				</p>
 																			</div>
-																		</li>
-																	)
-																)}
-														</ul>
+																			<p className="text-xs text-gray-400 mt-1">
+																				Changed
+																				by:{" "}
+																				{historyItem.changedBy ||
+																					"System"}
+																			</p>
+																			{historyItem.notes && (
+																				<div className="mt-2 p-2 bg-gray-700/50 rounded text-xs text-gray-300">
+																					<span className="font-medium">
+																						Notes:
+																					</span>{" "}
+																					{
+																						historyItem.notes
+																					}
+																				</div>
+																			)}
+																		</div>
+																	</div>
+																)
+															)}
 													</div>
 												) : (
 													<div className="text-center py-4">
@@ -1274,6 +1541,368 @@ export default function AdminApplicationsPage() {
 														</p>
 													</div>
 												)}
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Approval Tab */}
+								{selectedTab === "approval" && (
+									<div>
+										{/* Credit Decision Section */}
+										<div className="border border-amber-500/30 rounded-lg p-6 bg-amber-500/10 mb-6">
+											<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+												<DocumentMagnifyingGlassIcon className="h-6 w-6 mr-2 text-amber-400" />
+												Credit Decision Required
+											</h4>
+
+											{/* Application Summary */}
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Applicant
+													</h5>
+													<p className="text-white">
+														{
+															selectedApplication
+																.user?.fullName
+														}
+													</p>
+													<p className="text-sm text-gray-400">
+														{
+															selectedApplication
+																.user?.email
+														}
+													</p>
+												</div>
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Loan Details
+													</h5>
+													<p className="text-white">
+														{selectedApplication.amount
+															? formatCurrency(
+																	selectedApplication.amount
+															  )
+															: "Amount not set"}
+													</p>
+													<p className="text-sm text-gray-400">
+														{selectedApplication.term
+															? `${selectedApplication.term} months`
+															: "Term not set"}
+													</p>
+												</div>
+											</div>
+
+											{/* Decision Notes */}
+											<div className="mb-6">
+												<label className="block text-sm font-medium text-gray-300 mb-2">
+													Decision Notes (Optional)
+												</label>
+												<textarea
+													value={decisionNotes}
+													onChange={(e) =>
+														setDecisionNotes(
+															e.target.value
+														)
+													}
+													placeholder="Add notes about your decision..."
+													className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+													rows={3}
+												/>
+											</div>
+
+											{/* Decision Buttons */}
+											<div className="flex space-x-4">
+												<button
+													onClick={() =>
+														handleApprovalDecision(
+															"approve"
+														)
+													}
+													disabled={
+														processingDecision
+													}
+													className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
+												>
+													<CheckCircleIcon className="h-5 w-5 mr-2" />
+													{processingDecision
+														? "Processing..."
+														: "Approve Application"}
+												</button>
+												<button
+													onClick={() =>
+														handleApprovalDecision(
+															"reject"
+														)
+													}
+													disabled={
+														processingDecision
+													}
+													className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 text-white font-medium rounded-lg transition-colors"
+												>
+													<XCircleIcon className="h-5 w-5 mr-2" />
+													{processingDecision
+														? "Processing..."
+														: "Reject Application"}
+												</button>
+											</div>
+
+											{/* Workflow Information */}
+											<div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+												<h5 className="text-sm font-medium text-blue-200 mb-2">
+													Next Steps
+												</h5>
+												<ul className="text-xs text-blue-200 space-y-1">
+													<li>
+														•{" "}
+														<strong>
+															Approve:
+														</strong>{" "}
+														Application will move to
+														PENDING_SIGNATURE status
+													</li>
+													<li>
+														•{" "}
+														<strong>Reject:</strong>{" "}
+														Application will be
+														marked as REJECTED and
+														user will be notified
+													</li>
+													<li>
+														• All decisions are
+														logged in the audit
+														trail with timestamps
+													</li>
+												</ul>
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Disbursement Tab */}
+								{selectedTab === "disbursement" && (
+									<div>
+										{/* Disbursement Section */}
+										<div className="border border-green-500/30 rounded-lg p-6 bg-green-500/10 mb-6">
+											<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+												<BanknotesIcon className="h-6 w-6 mr-2 text-green-400" />
+												Loan Disbursement
+											</h4>
+
+											{/* Loan Summary */}
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Borrower
+													</h5>
+													<p className="text-white">
+														{
+															selectedApplication
+																.user?.fullName
+														}
+													</p>
+													<p className="text-sm text-gray-400">
+														{
+															selectedApplication
+																.user?.email
+														}
+													</p>
+													<p className="text-sm text-gray-400">
+														{
+															selectedApplication
+																.user
+																?.phoneNumber
+														}
+													</p>
+												</div>
+												<div>
+													<h5 className="text-sm font-medium text-gray-300 mb-2">
+														Disbursement Details
+													</h5>
+													<p className="text-white">
+														Disbursement Amount:{" "}
+														{selectedApplication.netDisbursement
+															? formatCurrency(
+																	selectedApplication.netDisbursement
+															  )
+															: selectedApplication.amount
+															? formatCurrency(
+																	selectedApplication.amount
+															  )
+															: "Not set"}
+													</p>
+													<p className="text-sm text-gray-400">
+														Loan Amount:{" "}
+														{selectedApplication.amount
+															? formatCurrency(
+																	selectedApplication.amount
+															  )
+															: "Not set"}
+													</p>
+													<p className="text-sm text-gray-400">
+														Bank:{" "}
+														{selectedApplication
+															.user?.bankName ||
+															"Not provided"}
+													</p>
+													<div className="flex items-center gap-2">
+														<p className="text-sm text-gray-400">
+															Account:{" "}
+															{selectedApplication
+																.user
+																?.accountNumber ||
+																"Not provided"}
+														</p>
+														{selectedApplication
+															.user
+															?.accountNumber && (
+															<button
+																onClick={() =>
+																	navigator.clipboard.writeText(
+																		selectedApplication
+																			.user
+																			?.accountNumber ||
+																			""
+																	)
+																}
+																className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/10 rounded border border-blue-400/20"
+																title="Copy account number"
+															>
+																Copy
+															</button>
+														)}
+													</div>
+												</div>
+											</div>
+
+											{/* Reference Number */}
+											<div className="mb-6">
+												<label className="block text-sm font-medium text-gray-300 mb-2">
+													Bank Transfer Reference
+													Number
+												</label>
+												<div className="relative">
+													<input
+														type="text"
+														value={
+															disbursementReference
+														}
+														onChange={(e) =>
+															setDisbursementReference(
+																e.target.value
+															)
+														}
+														placeholder="Enter bank transfer reference..."
+														className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+													/>
+													<div className="mt-2 p-2 bg-blue-500/10 border border-blue-400/20 rounded text-xs text-blue-200">
+														<div className="flex items-center justify-between">
+															<div>
+																<strong>
+																	Auto-generated
+																	reference:
+																</strong>{" "}
+																{
+																	disbursementReference
+																}
+																<br />
+																<span className="text-blue-300">
+																	Use this
+																	reference
+																	when making
+																	the bank
+																	transfer
+																</span>
+															</div>
+															{disbursementReference && (
+																<button
+																	onClick={() =>
+																		navigator.clipboard.writeText(
+																			disbursementReference
+																		)
+																	}
+																	className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-500/20 rounded border border-blue-400/30 ml-2"
+																	title="Copy reference number"
+																>
+																	Copy Ref
+																</button>
+															)}
+														</div>
+													</div>
+												</div>
+											</div>
+
+											{/* Disbursement Notes */}
+											<div className="mb-6">
+												<label className="block text-sm font-medium text-gray-300 mb-2">
+													Disbursement Notes
+													(Optional)
+												</label>
+												<textarea
+													value={disbursementNotes}
+													onChange={(e) =>
+														setDisbursementNotes(
+															e.target.value
+														)
+													}
+													placeholder="Add notes about the disbursement..."
+													className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+													rows={3}
+												/>
+											</div>
+
+											{/* Disbursement Button */}
+											<div className="flex space-x-4">
+												<button
+													onClick={handleDisbursement}
+													disabled={
+														processingDisbursement ||
+														!disbursementReference.trim()
+													}
+													className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
+												>
+													<BanknotesIcon className="h-5 w-5 mr-2" />
+													{processingDisbursement
+														? "Processing..."
+														: "Disburse Loan"}
+												</button>
+												{!disbursementReference.trim() && (
+													<p className="text-sm text-red-400 flex items-center">
+														Reference number is
+														required
+													</p>
+												)}
+											</div>
+
+											{/* Process Information */}
+											<div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+												<h5 className="text-sm font-medium text-blue-200 mb-2">
+													Disbursement Process
+												</h5>
+												<ul className="text-xs text-blue-200 space-y-1">
+													<li>
+														• Funds will be
+														transferred to the
+														borrower's registered
+														bank account
+													</li>
+													<li>
+														• Loan status will
+														change to ACTIVE upon
+														successful disbursement
+													</li>
+													<li>
+														• Borrower will receive
+														SMS and email
+														notifications
+													</li>
+													<li>
+														• Repayment schedule
+														will be automatically
+														generated
+													</li>
+												</ul>
 											</div>
 										</div>
 									</div>
@@ -1292,45 +1921,36 @@ export default function AdminApplicationsPage() {
 													"INCOMPLETE",
 													"PENDING_APP_FEE",
 													"PENDING_KYC",
-													"APPROVED",
+													"PENDING_APPROVAL",
 													"PENDING_SIGNATURE",
+													"PENDING_DISBURSEMENT",
 													"REJECTED",
 													"WITHDRAWN",
-												]
-													.filter(
-														(status) =>
-															status !==
-																"PENDING_APPROVAL" &&
-															status !==
-																"PENDING_DISBURSEMENT"
-													)
-													.map((status) => (
-														<button
-															key={status}
-															onClick={() =>
-																handleStatusChange(
-																	selectedApplication.id,
-																	status
-																)
-															}
-															disabled={
-																selectedApplication.status ===
+												].map((status) => (
+													<button
+														key={status}
+														onClick={() =>
+															handleStatusChange(
+																selectedApplication.id,
 																status
-															}
-															className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-																selectedApplication.status ===
-																status
-																	? "bg-gray-700/50 text-gray-400 border-gray-600/50 cursor-not-allowed"
-																	: `${getStatusColor(
-																			status
-																	  )} hover:opacity-80`
-															}`}
-														>
-															{getStatusLabel(
-																status
-															)}
-														</button>
-													))}
+															)
+														}
+														disabled={
+															selectedApplication.status ===
+															status
+														}
+														className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+															selectedApplication.status ===
+															status
+																? "bg-gray-700/50 text-gray-400 border-gray-600/50 cursor-not-allowed"
+																: `${getStatusColor(
+																		status
+																  )} hover:opacity-80`
+														}`}
+													>
+														{getStatusLabel(status)}
+													</button>
+												))}
 											</div>
 
 											<div className="mt-3 p-3 bg-blue-500/10 border border-blue-400/20 rounded-lg">
@@ -1340,23 +1960,28 @@ export default function AdminApplicationsPage() {
 													</span>{" "}
 													For applications requiring
 													credit decision or
-													disbursement, please use the
-													dedicated workflow pages.
+													disbursement, specialized
+													tabs will appear above for
+													streamlined processing.
 												</p>
-												<div className="flex flex-wrap gap-2">
-													<Link
-														href="/dashboard/applications/pending-decision"
-														className="text-xs px-3 py-1.5 bg-amber-500/20 text-amber-200 rounded border border-amber-400/20 hover:bg-amber-500/30"
-													>
-														Go to Credit Decision
-													</Link>
-													<Link
-														href="/dashboard/applications/pending-disbursement"
-														className="text-xs px-3 py-1.5 bg-green-500/20 text-green-200 rounded border border-green-400/20 hover:bg-green-500/30"
-													>
-														Go to Disbursements
-													</Link>
-												</div>
+												{selectedApplication.status ===
+													"PENDING_APPROVAL" && (
+													<p className="text-xs text-amber-200 mt-1">
+														• This application is
+														ready for credit
+														decision - check the
+														"Approval" tab
+													</p>
+												)}
+												{selectedApplication.status ===
+													"PENDING_DISBURSEMENT" && (
+													<p className="text-xs text-green-200 mt-1">
+														• This application is
+														ready for disbursement -
+														check the "Disbursement"
+														tab
+													</p>
+												)}
 											</div>
 										</div>
 
@@ -1364,7 +1989,7 @@ export default function AdminApplicationsPage() {
 										<div className="flex justify-end space-x-3">
 											{/* Skip button for automated advancement */}
 											{selectedApplication.status !==
-												"APPROVED" &&
+												"PENDING_SIGNATURE" &&
 												selectedApplication.status !==
 													"REJECTED" &&
 												selectedApplication.status !==
@@ -1391,10 +2016,6 @@ export default function AdminApplicationsPage() {
 																case "PENDING_KYC":
 																	nextStatus =
 																		"PENDING_APPROVAL";
-																	break;
-																case "PENDING_SIGNATURE":
-																	nextStatus =
-																		"PENDING_DISBURSEMENT";
 																	break;
 																default:
 																	return;

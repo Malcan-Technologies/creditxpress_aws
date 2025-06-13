@@ -9,14 +9,18 @@ export async function POST(
 ) {
 	try {
 		const { id } = params;
-		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+		const backendUrl =
+			process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 		const token = request.headers.get("authorization")?.split(" ")[1];
 
 		console.log(
 			`Admin API Disburse: Processing disbursement for application ${id}`
 		);
+		console.log(`Disburse Backend URL: ${backendUrl}`);
+		console.log(`Disburse Token available: ${!!token}`);
 
 		if (!token) {
+			console.log("Admin API Disburse: No token provided");
 			return NextResponse.json(
 				{ error: "Unauthorized" },
 				{ status: 401 }
@@ -27,6 +31,15 @@ export async function POST(
 		const body = await request.json();
 		console.log(`Admin API Disburse: Request body:`, body);
 
+		// Validate required fields
+		if (!body.referenceNumber) {
+			console.log("Admin API Disburse: Missing referenceNumber");
+			return NextResponse.json(
+				{ error: "Reference number is required" },
+				{ status: 400 }
+			);
+		}
+
 		// Prepare the payload for disbursement
 		const payload = {
 			referenceNumber: body.referenceNumber,
@@ -36,6 +49,10 @@ export async function POST(
 		console.log(
 			`Admin API Disburse: Disbursing application ${id} with reference ${body.referenceNumber}`
 		);
+		console.log(
+			`Disburse API URL: ${backendUrl}/api/admin/applications/${id}/disburse`
+		);
+		console.log("Admin API Disburse: Request payload:", payload);
 
 		// Process the disbursement via the backend API
 		const response = await fetch(
@@ -64,12 +81,20 @@ export async function POST(
 			}
 
 			console.error("Backend API disbursement error:", errorData);
+
+			// Handle specific error cases
+			let errorMessage =
+				errorData.message ||
+				errorData.error ||
+				"Failed to process disbursement";
+			if (errorMessage.includes("already been disbursed")) {
+				errorMessage =
+					"This loan has already been disbursed. Please check the application status.";
+			}
+
 			return NextResponse.json(
 				{
-					error:
-						errorData.message ||
-						errorData.error ||
-						"Failed to process disbursement",
+					error: errorMessage,
 					details: errorData,
 				},
 				{ status: response.status }

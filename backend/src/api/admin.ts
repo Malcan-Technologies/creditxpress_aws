@@ -1218,6 +1218,8 @@ router.get(
 							fullName: true,
 							phoneNumber: true,
 							email: true,
+							bankName: true,
+							accountNumber: true,
 						},
 					},
 					product: {
@@ -1468,6 +1470,7 @@ router.patch(
 				"PENDING_KYC",
 				"PENDING_APPROVAL",
 				"APPROVED",
+				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
 				"ACTIVE",
 				"REJECTED",
@@ -1480,8 +1483,17 @@ router.patch(
 					.json({ message: "Invalid status value" });
 			}
 
+			// Auto-convert APPROVED to PENDING_SIGNATURE for better workflow
+			let finalStatus = status;
+			if (status === "APPROVED") {
+				finalStatus = "PENDING_SIGNATURE";
+				console.log(
+					"Auto-converting APPROVED status to PENDING_SIGNATURE"
+				);
+			}
+
 			// Special handling for DISBURSED status
-			if (status === "DISBURSED" || status === "ACTIVE") {
+			if (finalStatus === "DISBURSED" || finalStatus === "ACTIVE") {
 				console.log("Processing loan activation with disbursement");
 
 				// Use provided reference number or generate one as fallback
@@ -1616,12 +1628,16 @@ router.patch(
 							}
 
 							// Create the loan disbursement record
+							const disbursementAmount =
+								application.netDisbursement ||
+								application.amount ||
+								0;
 							const disbursement =
 								await createLoanDisbursementRecord(
 									prismaTransaction,
 									id,
 									disbursementReference,
-									application.amount || 0,
+									disbursementAmount,
 									adminUserId,
 									application.user.bankName,
 									application.user.accountNumber,
@@ -1692,8 +1708,7 @@ router.patch(
 													userId: application.userId,
 													walletId: newWallet.id,
 													type: "LOAN_DISBURSEMENT",
-													amount:
-														application.amount || 0,
+													amount: disbursementAmount,
 													description: `Loan disbursement - Ref: ${disbursementReference}`,
 													reference:
 														disbursementReference,
@@ -1725,8 +1740,7 @@ router.patch(
 													userId: application.userId,
 													walletId: wallet.id,
 													type: "LOAN_DISBURSEMENT",
-													amount:
-														application.amount || 0,
+													amount: disbursementAmount,
 													description: `Loan disbursement - Ref: ${disbursementReference}`,
 													reference:
 														disbursementReference,
@@ -1770,7 +1784,7 @@ router.patch(
 											data: {
 												userId: application.userId,
 												title: "Loan Activated",
-												message: `Your loan of ${application.amount} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
+												message: `Your loan of ${disbursementAmount} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
 												type: "SYSTEM",
 												priority: "HIGH",
 												metadata: {
@@ -1805,7 +1819,7 @@ router.patch(
 								notes,
 								{
 									referenceNumber: disbursementReference,
-									amount: application.amount,
+									amount: disbursementAmount,
 									disbursedBy: adminUserId,
 									disbursedAt: new Date().toISOString(),
 								}
@@ -1822,7 +1836,7 @@ router.patch(
 								notification,
 								disbursementDetails: {
 									referenceNumber: disbursementReference,
-									amount: application.amount,
+									amount: disbursementAmount,
 									bankName: application.user.bankName,
 									bankAccountNumber:
 										application.user.accountNumber,
@@ -1851,11 +1865,13 @@ router.patch(
 				}
 			} else {
 				// Regular status update (non-disbursement)
-				console.log(`Processing regular status update to ${status}`);
+				console.log(
+					`Processing regular status update to ${finalStatus}`
+				);
 
 				const application = await prisma.loanApplication.update({
 					where: { id },
-					data: { status },
+					data: { status: finalStatus },
 					include: {
 						user: {
 							select: {
@@ -1904,13 +1920,20 @@ router.patch(
 					prisma,
 					id,
 					application.status,
-					status,
+					finalStatus,
 					adminUserId,
-					"Admin status update",
-					notes,
+					status === "APPROVED"
+						? "Auto-converted from APPROVED to PENDING_SIGNATURE"
+						: "Admin status update",
+					notes ||
+						(status === "APPROVED"
+							? "Automatically moved to signature stage after approval"
+							: ""),
 					{
 						updatedBy: adminUserId,
 						updatedAt: new Date().toISOString(),
+						originalStatus: status,
+						finalStatus: finalStatus,
 					}
 				);
 
@@ -1921,16 +1944,17 @@ router.patch(
 						data: {
 							userId: application.user.id,
 							title: "Application Status Updated",
-							message: `Your loan application status has been updated to ${status}`,
+							message: `Your loan application status has been updated to ${finalStatus}`,
 							type: "SYSTEM",
 							priority: "HIGH",
 							metadata: {
 								applicationId: id,
 								previousStatus: application.status,
-								newStatus: status,
+								newStatus: finalStatus,
 								notes: notes || "",
 								updatedBy: adminUserId,
 								updatedAt: new Date().toISOString(),
+								originalStatus: status,
 							},
 						},
 					});
@@ -2317,11 +2341,15 @@ router.post(
 						}
 
 						// Create the loan disbursement record
+						const disbursementAmount =
+							application.netDisbursement ||
+							application.amount ||
+							0;
 						const disbursement = await createLoanDisbursementRecord(
 							prismaTransaction,
 							id,
 							disbursementReference,
-							application.amount || 0,
+							disbursementAmount,
 							adminUserId,
 							application.user.bankName,
 							application.user.accountNumber,
@@ -2381,7 +2409,7 @@ router.post(
 												userId: application.userId,
 												walletId: newWallet.id,
 												type: "LOAN_DISBURSEMENT",
-												amount: application.amount || 0,
+												amount: disbursementAmount,
 												description: `Loan disbursement - Ref: ${disbursementReference}`,
 												reference:
 													disbursementReference,
@@ -2412,7 +2440,7 @@ router.post(
 												userId: application.userId,
 												walletId: wallet.id,
 												type: "LOAN_DISBURSEMENT",
-												amount: application.amount || 0,
+												amount: disbursementAmount,
 												description: `Loan disbursement - Ref: ${disbursementReference}`,
 												reference:
 													disbursementReference,
@@ -2454,11 +2482,13 @@ router.post(
 									data: {
 										userId: application.userId,
 										title: "Loan Activated",
-										message: `Your loan of ${application.amount} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
+										message: `Your loan of ${disbursementAmount} has been disbursed to your bank account and is now active. Reference: ${disbursementReference}`,
 										type: "SYSTEM",
 										priority: "HIGH",
 										metadata: {
 											loanAmount: application.amount,
+											disbursementAmount:
+												disbursementAmount,
 											referenceNumber:
 												disbursementReference,
 											notes: notes || "",
@@ -2480,7 +2510,7 @@ router.post(
 								notes,
 								{
 									referenceNumber: disbursementReference,
-									amount: application.amount,
+									amount: disbursementAmount,
 									disbursedBy: adminUserId,
 									disbursedAt: new Date().toISOString(),
 								}
@@ -2497,7 +2527,7 @@ router.post(
 								notification,
 								disbursementDetails: {
 									referenceNumber: disbursementReference,
-									amount: application.amount,
+									amount: disbursementAmount,
 									bankName: application.user.bankName,
 									bankAccountNumber:
 										application.user.accountNumber,
@@ -2524,7 +2554,7 @@ router.post(
 								notes,
 								{
 									referenceNumber: disbursementReference,
-									amount: application.amount,
+									amount: disbursementAmount,
 									disbursedBy: adminUserId,
 									disbursedAt: new Date().toISOString(),
 								}
@@ -2541,7 +2571,7 @@ router.post(
 								notification: null,
 								disbursementDetails: {
 									referenceNumber: disbursementReference,
-									amount: application.amount,
+									amount: disbursementAmount,
 									bankName: application.user.bankName,
 									bankAccountNumber:
 										application.user.accountNumber,
@@ -3520,6 +3550,149 @@ router.get(
 			console.error("Error fetching users:", error);
 			return res.status(500).json({
 				message: "Failed to fetch users",
+				error: error.message,
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/disbursements:
+ *   get:
+ *     summary: Get all loan disbursements (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Number of disbursements to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *         description: Number of disbursements to skip
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by disbursement status
+ *     responses:
+ *       200:
+ *         description: List of disbursements
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       applicationId:
+ *                         type: string
+ *                       referenceNumber:
+ *                         type: string
+ *                       amount:
+ *                         type: number
+ *                       bankName:
+ *                         type: string
+ *                       bankAccountNumber:
+ *                         type: string
+ *                       disbursedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       disbursedBy:
+ *                         type: string
+ *                       notes:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       application:
+ *                         type: object
+ *                 total:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/disbursements",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const limit = parseInt(req.query.limit as string) || 50;
+			const offset = parseInt(req.query.offset as string) || 0;
+			const status = req.query.status as string;
+
+			// Build where clause
+			const where: any = {};
+			if (status) {
+				where.status = status;
+			}
+
+			// Get total count
+			const total = await prisma.loanDisbursement.count({ where });
+
+			// Get disbursements with related data
+			const disbursements = await prisma.loanDisbursement.findMany({
+				where,
+				include: {
+					application: {
+						include: {
+							user: {
+								select: {
+									id: true,
+									fullName: true,
+									email: true,
+									phoneNumber: true,
+								},
+							},
+							product: {
+								select: {
+									id: true,
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+				orderBy: { disbursedAt: "desc" },
+				take: limit,
+				skip: offset,
+			});
+
+			return res.json({
+				success: true,
+				data: disbursements,
+				total,
+				limit,
+				offset,
+			});
+		} catch (error) {
+			console.error("Error fetching disbursements:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to fetch disbursements",
 				error: error.message,
 			});
 		}

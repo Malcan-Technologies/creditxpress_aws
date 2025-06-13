@@ -20,6 +20,7 @@ import {
 	ClockIcon,
 	BellIcon,
 	CubeIcon,
+	CreditCardIcon,
 } from "@heroicons/react/24/outline";
 import {
 	AdminTokenStorage,
@@ -131,6 +132,11 @@ export default function AdminLayout({
 	const navigation = [
 		{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
 		{ name: "Active Loans", href: "/dashboard/loans", icon: BanknotesIcon },
+		{
+			name: "Disbursements",
+			href: "/dashboard/disbursements",
+			icon: CreditCardIcon,
+		},
 		{ name: "Users", href: "/dashboard/users", icon: UserGroupIcon },
 		{ name: "Reports", href: "/dashboard/reports", icon: ChartBarIcon },
 	];
@@ -143,12 +149,12 @@ export default function AdminLayout({
 		},
 		{
 			name: "Pending Approval",
-			href: "/dashboard/applications/pending-decision",
+			href: "/dashboard/applications?filter=pending-approval",
 			icon: ClockIcon,
 		},
 		{
 			name: "Pending Disbursement",
-			href: "/dashboard/applications/pending-disbursement",
+			href: "/dashboard/applications?filter=pending-disbursement",
 			icon: CheckCircleIcon,
 		},
 		{

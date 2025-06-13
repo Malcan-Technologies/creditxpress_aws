@@ -23,7 +23,8 @@ export async function PATCH(
 async function handleStatusUpdate(request: Request, params: { id: string }) {
 	try {
 		const { id } = params;
-		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+		const backendUrl =
+			process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 		const token = request.headers.get("authorization")?.split(" ")[1];
 
 		console.log(

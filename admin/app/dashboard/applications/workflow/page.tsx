@@ -314,13 +314,6 @@ export default function ApplicationWorkflowPage() {
 			type: "user",
 			statuses: [
 				{
-					name: "APPROVED",
-					label: "Approved",
-					count: counts.APPROVED,
-					color: "green",
-					icon: CheckCircleIcon,
-				},
-				{
 					name: "PENDING_SIGNATURE",
 					label: "Pending Signature",
 					count: counts.PENDING_SIGNATURE,
