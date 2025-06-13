@@ -242,4 +242,66 @@ router.put(
 	}
 );
 
+// Get or create wallet for a user
+router.get(
+	"/me/wallet",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user?.userId;
+
+			if (!userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			console.log("Getting or creating wallet for user:", userId);
+
+			// First, try to find existing wallet
+			let wallet = await prisma.wallet.findUnique({
+				where: { userId },
+			});
+
+			// If wallet doesn't exist, create it
+			if (!wallet) {
+				console.log("Wallet not found, creating new wallet");
+				wallet = await prisma.wallet.create({
+					data: {
+						userId,
+						balance: 0,
+						availableForWithdrawal: 0,
+						totalDeposits: 0,
+						totalWithdrawals: 0,
+					},
+				});
+				console.log("New wallet created:", wallet.id);
+			} else {
+				console.log("Existing wallet found:", wallet.id);
+			}
+
+			// Get wallet transactions
+			const transactions = await prisma.walletTransaction.findMany({
+				where: { userId },
+				orderBy: { createdAt: "desc" },
+				take: 10,
+			});
+
+			return res.status(200).json({
+				message: "Wallet retrieved successfully",
+				data: {
+					wallet,
+					transactions,
+				},
+			});
+		} catch (error) {
+			console.error("Error getting wallet:", error);
+			return res
+				.status(500)
+				.json({
+					message: "Internal server error",
+					error: error.message,
+				});
+		}
+	}
+);
+
 export default router;

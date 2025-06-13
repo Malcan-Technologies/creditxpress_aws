@@ -57,11 +57,15 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Copy compiled JavaScript
 COPY --from=builder /app/dist ./dist
 
+# Copy scripts directory
+COPY scripts ./scripts/
+RUN chmod +x ./scripts/migrate-db.sh
+
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chmod 777 uploads
 
 # Expose the port the app runs on
 EXPOSE 4001
 
-# Start the application directly
-CMD ["node", "dist/src/index.js"] 
+# Start the application with migration
+CMD ["sh", "-c", "./scripts/migrate-db.sh && node dist/src/index.js"] 

@@ -18,6 +18,21 @@ import {
 	SelectChangeEvent,
 	Chip,
 } from "@mui/material";
+import {
+	CheckCircleIcon,
+	XCircleIcon,
+	DocumentTextIcon,
+	ClockIcon,
+	UserCircleIcon,
+	CurrencyDollarIcon,
+	ArrowPathIcon,
+	ArrowRightIcon,
+	DocumentMagnifyingGlassIcon,
+	BanknotesIcon,
+	ClipboardDocumentCheckIcon,
+	PencilSquareIcon,
+	ArrowLeftIcon,
+} from "@heroicons/react/24/outline";
 
 interface LoanApplication {
 	id: string;
@@ -55,6 +70,7 @@ interface LoanApplication {
 		repaymentTerms?: any;
 	};
 	documents?: Document[];
+	history?: LoanApplicationHistory[];
 }
 
 interface Document {
@@ -64,6 +80,17 @@ interface Document {
 	fileUrl: string;
 	createdAt: string;
 	updatedAt: string;
+}
+
+interface LoanApplicationHistory {
+	id: string;
+	loanApplicationId: string;
+	previousStatus: string | null;
+	newStatus: string;
+	changedBy: string;
+	changedById: string;
+	createdAt: string;
+	notes?: string;
 }
 
 interface DashboardStats {
@@ -97,6 +124,8 @@ export default function AdminApplicationsPage() {
 	const [selectedDocument, setSelectedDocument] = useState<Document | null>(
 		null
 	);
+	const [selectedTab, setSelectedTab] = useState<string>("details");
+	const [refreshing, setRefreshing] = useState(false);
 
 	// Replace single status filter with multiple filters
 	const [selectedFilters, setSelectedFilters] = useState<string[]>([
@@ -115,85 +144,212 @@ export default function AdminApplicationsPage() {
 		WITHDRAWN: { bg: "bg-gray-100", text: "text-gray-800" },
 	};
 
-	useEffect(() => {
-		const fetchApplications = async () => {
+	// Add missing helper functions
+	const getStatusIcon = (status: string) => {
+		switch (status) {
+			case "INCOMPLETE":
+				return PencilSquareIcon;
+			case "PENDING_APP_FEE":
+				return CurrencyDollarIcon;
+			case "PENDING_KYC":
+				return ClipboardDocumentCheckIcon;
+			case "PENDING_APPROVAL":
+				return DocumentMagnifyingGlassIcon;
+			case "APPROVED":
+				return CheckCircleIcon;
+			case "PENDING_SIGNATURE":
+				return DocumentTextIcon;
+			case "PENDING_DISBURSEMENT":
+				return BanknotesIcon;
+			case "REJECTED":
+				return XCircleIcon;
+			case "WITHDRAWN":
+				return ArrowLeftIcon;
+			default:
+				return ClockIcon;
+		}
+	};
+
+	const getStatusColor = (status: string) => {
+		switch (status) {
+			case "INCOMPLETE":
+				return "bg-yellow-500/20 text-yellow-200 border-yellow-400/20";
+			case "PENDING_APP_FEE":
+				return "bg-blue-500/20 text-blue-200 border-blue-400/20";
+			case "PENDING_KYC":
+				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
+			case "PENDING_APPROVAL":
+				return "bg-amber-500/20 text-amber-200 border-amber-400/20";
+			case "APPROVED":
+				return "bg-green-500/20 text-green-200 border-green-400/20";
+			case "PENDING_SIGNATURE":
+				return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
+			case "PENDING_DISBURSEMENT":
+				return "bg-emerald-500/20 text-emerald-200 border-emerald-400/20";
+			case "REJECTED":
+				return "bg-red-500/20 text-red-200 border-red-400/20";
+			case "WITHDRAWN":
+				return "bg-gray-500/20 text-gray-200 border-gray-400/20";
+			default:
+				return "bg-gray-500/20 text-gray-200 border-gray-400/20";
+		}
+	};
+
+	const getStatusLabel = (status: string) => {
+		switch (status) {
+			case "INCOMPLETE":
+				return "Incomplete";
+			case "PENDING_APP_FEE":
+				return "Pending Application Fee";
+			case "PENDING_KYC":
+				return "Pending KYC";
+			case "PENDING_APPROVAL":
+				return "Pending Approval";
+			case "APPROVED":
+				return "Approved";
+			case "PENDING_SIGNATURE":
+				return "Pending Signature";
+			case "PENDING_DISBURSEMENT":
+				return "Pending Disbursement";
+			case "REJECTED":
+				return "Rejected";
+			case "WITHDRAWN":
+				return "Withdrawn";
+			default:
+				return status.replace(/_/g, " ").toLowerCase();
+		}
+	};
+
+	// Add function to update refresh button
+	const handleRefresh = async () => {
+		setRefreshing(true);
+		try {
+			// Refresh all applications
+			await fetchApplications();
+
+			// If there's a selected application, refresh its history specifically
+			if (selectedApplication) {
+				const updatedHistory = await fetchApplicationHistory(
+					selectedApplication.id
+				);
+				const updatedApp = {
+					...selectedApplication,
+					history: updatedHistory,
+				};
+				setSelectedApplication(updatedApp);
+
+				// Also update it in the applications list
+				setApplications((prev) =>
+					prev.map((app) =>
+						app.id === selectedApplication.id ? updatedApp : app
+					)
+				);
+			}
+		} catch (error) {
+			console.error("Error refreshing data:", error);
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
+	// Define fetchApplications outside of useEffect so it can be reused
+	const fetchApplications = async () => {
+		try {
+			setLoading(true);
+			setError(null);
+
+			// Fetch user data
 			try {
-				setLoading(true);
-				setError(null);
-
-				// Fetch user data
-				try {
-					const userData = await fetchWithAdminTokenRefresh<any>(
-						"/api/users/me"
-					);
-					if (userData.fullName) {
-						setUserName(userData.fullName);
-					}
-				} catch (error) {
-					console.error("Error fetching user data:", error);
-				}
-
-				// Try fetching applications from applications endpoint
-				try {
-					const applicationsData = await fetchWithAdminTokenRefresh<
-						LoanApplication[]
-					>("/api/admin/applications");
-					setApplications(applicationsData);
-				} catch (appError) {
-					console.error("Error fetching applications:", appError);
-
-					// Fallback to dashboard data
-					console.log(
-						"Falling back to dashboard data for applications"
-					);
-					try {
-						const dashboardData =
-							await fetchWithAdminTokenRefresh<DashboardStats>(
-								"/api/admin/dashboard"
-							);
-
-						// Convert dashboard recent applications to full application format
-						const recentApps = dashboardData.recentApplications.map(
-							(app) => ({
-								...app,
-								productId: "",
-								updatedAt: app.createdAt,
-							})
-						);
-
-						setApplications(recentApps);
-					} catch (dashboardError) {
-						console.error(
-							"Error fetching dashboard data:",
-							dashboardError
-						);
-						setError(
-							"Failed to load applications. Please check API implementation."
-						);
-					}
-				}
-
-				// Check for application ID in URL query params
-				const params = new URLSearchParams(window.location.search);
-				const applicationId = params.get("id");
-
-				if (applicationId && applications.length > 0) {
-					const selectedApp = applications.find(
-						(app) => app.id === applicationId
-					);
-					if (selectedApp) {
-						setSelectedApplication(selectedApp);
-						setViewDialogOpen(true);
-					}
+				const userData = await fetchWithAdminTokenRefresh<any>(
+					"/api/users/me"
+				);
+				if (userData.fullName) {
+					setUserName(userData.fullName);
 				}
 			} catch (error) {
-				console.error("Error in applications page:", error);
-				setError("An unexpected error occurred.");
-			} finally {
-				setLoading(false);
+				console.error("Error fetching user data:", error);
 			}
-		};
 
+			// Try fetching applications from applications endpoint
+			try {
+				const applicationsData = await fetchWithAdminTokenRefresh<
+					LoanApplication[]
+				>("/api/admin/applications");
+
+				// For each application, fetch its history
+				const applicationsWithHistory = await Promise.all(
+					applicationsData.map(async (app) => {
+						try {
+							const history = await fetchWithAdminTokenRefresh<
+								LoanApplicationHistory[]
+							>(`/api/admin/applications/${app.id}/history`);
+							return { ...app, history };
+						} catch (historyError) {
+							console.error(
+								`Error fetching history for application ${app.id}:`,
+								historyError
+							);
+							return app;
+						}
+					})
+				);
+
+				setApplications(applicationsWithHistory);
+			} catch (appError) {
+				console.error("Error fetching applications:", appError);
+
+				// Fallback to dashboard data
+				console.log("Falling back to dashboard data for applications");
+				try {
+					const dashboardData =
+						await fetchWithAdminTokenRefresh<DashboardStats>(
+							"/api/admin/dashboard"
+						);
+
+					// Convert dashboard recent applications to full application format
+					const recentApps = dashboardData.recentApplications.map(
+						(app) => ({
+							...app,
+							productId: "",
+							updatedAt: app.createdAt,
+						})
+					);
+
+					setApplications(recentApps);
+				} catch (dashboardError) {
+					console.error(
+						"Error fetching dashboard data:",
+						dashboardError
+					);
+					setError(
+						"Failed to load applications. Please check API implementation."
+					);
+				}
+			}
+
+			// Check for application ID in URL query params
+			const params = new URLSearchParams(window.location.search);
+			const applicationId = params.get("id");
+
+			if (applicationId && applications.length > 0) {
+				const selectedApp = applications.find(
+					(app) => app.id === applicationId
+				);
+				if (selectedApp) {
+					setSelectedApplication(selectedApp);
+					setViewDialogOpen(true);
+				}
+			}
+		} catch (error) {
+			console.error("Error in applications page:", error);
+			setError("An unexpected error occurred.");
+		} finally {
+			setLoading(false);
+			setRefreshing(false); // Make sure to stop refreshing state
+		}
+	};
+
+	useEffect(() => {
 		fetchApplications();
 	}, []);
 
@@ -215,8 +371,11 @@ export default function AdminApplicationsPage() {
 
 	// Filter applications to exclude approved and disbursed ones
 	const filteredApplications = applications.filter((app) => {
-		// Exclude approved and disbursed applications
-		if (app.status === "APPROVED" || app.status === "DISBURSED") {
+		// Exclude applications with dedicated workflow pages
+		if (
+			app.status === "PENDING_APPROVAL" ||
+			app.status === "PENDING_DISBURSEMENT"
+		) {
 			return false;
 		}
 
@@ -248,12 +407,29 @@ export default function AdminApplicationsPage() {
 	// Handle view application details
 	const handleViewClick = (application: LoanApplication) => {
 		setSelectedApplication(application);
+		setSelectedTab("details"); // Reset to details tab when selecting new application
 		setViewDialogOpen(true);
 	};
 
 	const handleViewClose = () => {
 		setViewDialogOpen(false);
 		setSelectedApplication(null);
+	};
+
+	// Function to fetch updated history for an application
+	const fetchApplicationHistory = async (applicationId: string) => {
+		try {
+			const history = await fetchWithAdminTokenRefresh<
+				LoanApplicationHistory[]
+			>(`/api/admin/applications/${applicationId}/history`);
+			return history;
+		} catch (error) {
+			console.error(
+				`Error fetching history for application ${applicationId}:`,
+				error
+			);
+			return [];
+		}
 	};
 
 	// Handle status change
@@ -271,14 +447,21 @@ export default function AdminApplicationsPage() {
 					}
 				);
 
+			// Fetch the updated history after status change
+			const updatedHistory = await fetchApplicationHistory(applicationId);
+			const applicationWithHistory = {
+				...updatedApplication,
+				history: updatedHistory,
+			};
+
 			setApplications(
 				applications.map((app) =>
-					app.id === applicationId ? updatedApplication : app
+					app.id === applicationId ? applicationWithHistory : app
 				)
 			);
 
 			if (selectedApplication?.id === applicationId) {
-				setSelectedApplication(updatedApplication);
+				setSelectedApplication(applicationWithHistory);
 			}
 		} catch (error) {
 			console.error("Error updating application status:", error);
@@ -389,6 +572,22 @@ export default function AdminApplicationsPage() {
 		}
 	};
 
+	// Add this function to get a user-friendly action description
+	const getHistoryActionDescription = (
+		previousStatus: string | null,
+		newStatus: string
+	): string => {
+		if (!previousStatus) {
+			return `Application created with status: ${getStatusLabel(
+				newStatus
+			)}`;
+		}
+
+		return `Status changed from ${getStatusLabel(
+			previousStatus
+		)} to ${getStatusLabel(newStatus)}`;
+	};
+
 	if (loading) {
 		return (
 			<AdminLayout userName={userName}>
@@ -402,1090 +601,798 @@ export default function AdminApplicationsPage() {
 	return (
 		<AdminLayout
 			title="Loan Applications"
-			description="View and manage pending loan applications"
+			description="Manage all loan applications in the early stages of the workflow"
 		>
-			<div className="bg-white shadow rounded-lg overflow-hidden">
-				<div className="px-6 py-4 border-b border-gray-200">
-					<div className="flex justify-between items-center">
-						<h2 className="text-xl font-semibold text-gray-900">
-							Pending Applications
-						</h2>
-					</div>
-
-					{error && (
-						<div className="mt-4 p-4 border border-red-300 bg-red-50 text-red-800 rounded-md">
-							<p className="flex items-center">
-								<svg
-									className="h-5 w-5 mr-2"
-									fill="currentColor"
-									viewBox="0 0 20 20"
-								>
-									<path
-										fillRule="evenodd"
-										d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-										clipRule="evenodd"
-									/>
-								</svg>
-								{error}
-							</p>
-						</div>
-					)}
-
-					{/* Filters */}
-					<div className="mt-4 space-y-4">
-						<div className="max-w-full">
-							<input
-								type="text"
-								placeholder="Search applications..."
-								value={search}
-								onChange={(e) => setSearch(e.target.value)}
-								className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-							/>
-						</div>
-						<div className="flex flex-wrap gap-2">
-							<span className="text-xs font-medium text-gray-500 flex items-center mr-2">
-								Filter by:
-							</span>
-							{[
-								"INCOMPLETE",
-								"PENDING_APP_FEE",
-								"PENDING_KYC",
-								"PENDING_APPROVAL",
-								"REJECTED",
-								"WITHDRAWN",
-							].map((status) => (
-								<button
-									key={status}
-									onClick={() => toggleFilter(status)}
-									className={`px-3 py-1 text-xs rounded-full flex items-center transition-colors ${
-										selectedFilters.includes(status)
-											? `${
-													statusColors[status]?.bg ||
-													"bg-gray-100"
-											  } ${
-													statusColors[status]
-														?.text ||
-													"text-gray-800"
-											  } border-2 border-gray-400`
-											: "bg-gray-50 text-gray-500 border border-gray-200"
-									}`}
-								>
-									{status.replace(/_/g, " ")}
-									{selectedFilters.includes(status) && (
-										<svg
-											className="ml-1 h-3 w-3"
-											fill="currentColor"
-											viewBox="0 0 20 20"
-										>
-											<path
-												fillRule="evenodd"
-												d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-												clipRule="evenodd"
-											/>
-										</svg>
-									)}
-								</button>
-							))}
-							{selectedFilters.length > 0 && (
-								<button
-									onClick={() => setSelectedFilters([])}
-									className="px-3 py-1 text-xs rounded-full text-gray-500 bg-gray-50 border border-gray-200 hover:bg-gray-100"
-								>
-									Clear All
-								</button>
-							)}
-						</div>
-					</div>
+			{/* Header with summary and refresh button */}
+			<div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
+				<div>
+					<h2 className="text-xl font-semibold text-white mb-2">
+						Application Management
+					</h2>
+					<p className="text-gray-400">
+						Review and process applications at various stages
+					</p>
 				</div>
+				<button
+					onClick={handleRefresh}
+					disabled={refreshing}
+					className={`mt-4 md:mt-0 flex items-center px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors ${
+						refreshing ? "opacity-50 cursor-not-allowed" : ""
+					}`}
+				>
+					<ArrowPathIcon
+						className={`h-4 w-4 mr-2 ${
+							refreshing ? "animate-spin" : ""
+						}`}
+					/>
+					{refreshing ? "Refreshing..." : "Refresh Data"}
+				</button>
+			</div>
 
-				{/* Applications Table */}
-				<div className="overflow-x-auto">
-					<table className="min-w-full divide-y divide-gray-200">
-						<thead className="bg-gray-50">
-							<tr>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Customer
-								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Product
-								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Loan Amount
-								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Term
-								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Status
-								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Applied
-								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Actions
-								</th>
-							</tr>
-						</thead>
-						<tbody className="bg-white divide-y divide-gray-200">
-							{filteredApplications.length > 0 ? (
-								filteredApplications.map((application) => (
-									<tr key={application.id}>
-										<td className="px-6 py-4">
-											<div className="text-sm font-medium text-gray-900">
-												{application.user?.fullName ||
-													"Unknown"}
-											</div>
-											<div className="text-xs text-gray-500">
-												{application.user?.email ||
-													"N/A"}
-											</div>
-											<div className="text-xs text-gray-500">
-												{application.user
-													?.phoneNumber || "N/A"}
-											</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-900">
-												{application.product?.name ||
-													"N/A"}
-											</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-900">
-												{application.amount
-													? formatCurrency(
-															application.amount
-													  )
-													: "N/A"}
-											</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-900">
-												{application.term
-													? `${application.term} months`
-													: "N/A"}
-											</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<span
-												className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-													statusColors[
-														application.status
-													]?.bg || "bg-gray-100"
-												} ${
-													statusColors[
-														application.status
-													]?.text || "text-gray-800"
-												}`}
-											>
-												{application.status?.replace(
-													/_/g,
-													" "
-												) || "Unknown"}
-											</span>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-											{formatDate(application.createdAt)}
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap text-sm">
-											<div className="flex items-center gap-2">
-												<button
-													onClick={() =>
-														handleViewClick(
-															application
-														)
-													}
-													className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-indigo-700 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-												>
-													View Details
-												</button>
-											</div>
-										</td>
-									</tr>
-								))
-							) : (
-								<tr>
-									<td
-										colSpan={7}
-										className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center"
-									>
-										No applications found
-									</td>
-								</tr>
-							)}
-						</tbody>
-					</table>
+			{/* Status filter chips */}
+			<div className="mb-6">
+				<h3 className="text-white text-sm font-medium mb-3">
+					Filter by status:
+				</h3>
+				<div className="flex flex-wrap gap-2">
+					{[
+						"INCOMPLETE",
+						"PENDING_APP_FEE",
+						"PENDING_KYC",
+						"APPROVED",
+						"PENDING_SIGNATURE",
+						"REJECTED",
+						"WITHDRAWN",
+					].map((status) => {
+						// Skip showing Pending Approval and Pending Disbursement filters
+						if (
+							status === "PENDING_APPROVAL" ||
+							status === "PENDING_DISBURSEMENT"
+						) {
+							return null;
+						}
+
+						const isActive = selectedFilters.includes(status);
+						const StatusIcon = getStatusIcon(status);
+						return (
+							<button
+								key={status}
+								onClick={() => toggleFilter(status)}
+								className={`flex items-center px-3 py-1.5 rounded-full text-sm border transition-colors ${
+									isActive
+										? getStatusColor(status)
+										: "bg-gray-800 text-gray-400 border-gray-700"
+								}`}
+							>
+								<StatusIcon className="h-4 w-4 mr-1.5" />
+								{getStatusLabel(status)}
+							</button>
+						);
+					})}
 				</div>
 			</div>
 
-			{/* View Application Dialog */}
-			{selectedApplication && (
-				<Dialog
-					open={viewDialogOpen}
-					onClose={handleViewClose}
-					aria-labelledby="view-dialog-title"
-					maxWidth="lg"
-					fullWidth
-				>
-					<DialogTitle
-						id="view-dialog-title"
-						className="flex justify-between items-center"
-					>
-						<span>Application Details</span>
-						<Button onClick={handleViewClose} color="primary">
-							Close
-						</Button>
-					</DialogTitle>
-					<DialogContent>
-						<div className="mt-4 space-y-6">
-							{/* Application ID and Status Section */}
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-md">
-								<div className="space-y-4">
-									<div>
-										<h3 className="text-sm font-medium text-gray-500">
-											Application ID
-										</h3>
-										<p className="mt-1 text-sm text-gray-900 font-mono">
-											{selectedApplication.id}
-										</p>
-									</div>
-									<div>
-										<h3 className="text-sm font-medium text-gray-500">
-											Current Status
-										</h3>
-										<div className="mt-1">
-											<span
-												className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-													statusColors[
-														selectedApplication
-															.status
-													]?.bg || "bg-gray-100"
-												} ${
-													statusColors[
-														selectedApplication
-															.status
-													]?.text || "text-gray-800"
+			{/* Main content */}
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				{/* Left Panel - Application List */}
+				<div className="lg:col-span-1">
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+						<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
+							<h2 className="text-lg font-medium text-white">
+								Applications
+							</h2>
+							<span className="px-2 py-1 bg-blue-500/20 text-blue-200 text-xs font-medium rounded-full border border-blue-400/20">
+								{filteredApplications.length}
+							</span>
+						</div>
+						<div className="overflow-y-auto max-h-[70vh]">
+							{loading ? (
+								<div className="flex justify-center items-center p-8">
+									<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
+								</div>
+							) : filteredApplications.length > 0 ? (
+								<ul className="divide-y divide-gray-700/30">
+									{filteredApplications.map((app) => {
+										const StatusIcon = getStatusIcon(
+											app.status
+										);
+										return (
+											<li
+												key={app.id}
+												className={`p-4 hover:bg-gray-800/30 transition-colors cursor-pointer ${
+													selectedApplication?.id ===
+													app.id
+														? "bg-gray-800/50"
+														: ""
 												}`}
+												onClick={() =>
+													handleViewClick(app)
+												}
 											>
-												{selectedApplication.status?.replace(
-													/_/g,
-													" "
-												) || "Unknown"}
-											</span>
-										</div>
-									</div>
-								</div>
-
-								<div className="space-y-4">
-									{selectedApplication.product && (
-										<div>
-											<h3 className="text-sm font-medium text-gray-500">
-												Product
-											</h3>
-											<p className="mt-1 text-sm text-gray-900 font-medium">
-												{selectedApplication.product
-													?.name || "Unknown Product"}
-											</p>
-										</div>
-									)}
-
-									<div>
-										<h3 className="text-sm font-medium text-gray-500">
-											Applied On
-										</h3>
-										<p className="mt-1 text-sm text-gray-900">
-											{formatDate(
-												selectedApplication.createdAt
-											)}
-										</p>
-									</div>
-								</div>
-							</div>
-
-							{/* Customer Details Section */}
-							<div className="border border-gray-200 rounded-md p-4">
-								<h3 className="text-base font-medium text-gray-800 mb-4">
-									Customer Information
-								</h3>
-
-								{/* Personal Information Section */}
-								<div className="mb-6">
-									<h4 className="text-lg font-semibold text-gray-700 mb-3">
-										Personal Information
-									</h4>
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div className="space-y-2">
-											<div>
-												<p className="text-sm font-medium text-gray-500">
-													Full Name
-												</p>
-												<p className="text-md text-gray-900">
-													{selectedApplication.user
-														?.fullName || "N/A"}
-												</p>
-											</div>
-											<div>
-												<p className="text-sm font-medium text-gray-500">
-													Email
-												</p>
-												<p className="text-md text-gray-900">
-													{selectedApplication.user
-														?.email || "N/A"}
-												</p>
-											</div>
-											<div>
-												<p className="text-sm font-medium text-gray-500">
-													Phone Number
-												</p>
-												<p className="text-md text-gray-900">
-													{selectedApplication.user
-														?.phoneNumber || "N/A"}
-												</p>
-											</div>
-											<div>
-												<p className="text-sm font-medium text-gray-500">
-													Employment Status
-												</p>
-												<p className="text-md text-gray-900">
-													{selectedApplication.user
-														?.employmentStatus ||
-														"N/A"}
-												</p>
-											</div>
-										</div>
-										<div className="space-y-2">
-											<div>
-												<p className="text-sm font-medium text-gray-500">
-													Employer
-												</p>
-												<p className="text-md text-gray-900">
-													{selectedApplication.user
-														?.employerName || "N/A"}
-												</p>
-											</div>
-											<div>
-												<p className="text-sm font-medium text-gray-500">
-													Monthly Income
-												</p>
-												<p className="text-md text-gray-900">
-													{selectedApplication.user
-														?.monthlyIncome
-														? formatCurrency(
-																parseInt(
-																	selectedApplication
-																		.user
-																		.monthlyIncome
-																)
-														  )
-														: "N/A"}
-												</p>
-											</div>
-										</div>
-									</div>
-								</div>
-
-								{/* Address Section */}
-								{selectedApplication.user?.address1 && (
-									<div className="mb-6">
-										<h4 className="text-lg font-semibold text-gray-700 mb-3">
-											Address
-										</h4>
-										<div className="bg-gray-50 p-4 rounded-md">
-											<p className="text-md">
-												{
-													selectedApplication.user
-														.address1
-												}
-												{selectedApplication.user
-													.address2 && (
-													<>
-														<br />
-														{
-															selectedApplication
-																.user.address2
-														}
-													</>
-												)}
-											</p>
-											<p className="text-md mt-2">
-												{[
-													selectedApplication.user
-														.city,
-													selectedApplication.user
-														.state,
-													selectedApplication.user
-														.zipCode,
-												]
-													.filter(Boolean)
-													.join(", ")}
-											</p>
-										</div>
-									</div>
-								)}
-
-								{/* Banking Information */}
-								{(selectedApplication.user?.bankName ||
-									selectedApplication.user
-										?.accountNumber) && (
-									<div>
-										<h4 className="text-lg font-semibold text-gray-700 mb-3">
-											Banking Details
-										</h4>
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-											{selectedApplication.user
-												.bankName && (
-												<div className="space-y-1">
-													<p className="text-sm font-medium text-gray-500">
-														Bank Name
-													</p>
-													<p className="text-md text-gray-900">
-														{
-															selectedApplication
-																.user.bankName
-														}
-													</p>
-												</div>
-											)}
-											{selectedApplication.user
-												.accountNumber && (
-												<div className="space-y-1">
-													<p className="text-sm font-medium text-gray-500">
-														Account Number
-													</p>
-													<p className="text-md text-gray-900">
-														{
-															selectedApplication
-																.user
-																.accountNumber
-														}
-													</p>
-												</div>
-											)}
-										</div>
-									</div>
-								)}
-							</div>
-
-							{/* Loan Details Section - Enhanced */}
-							<div className="border border-gray-200 rounded-md p-4">
-								<h3 className="text-base font-medium text-gray-800 mb-4">
-									Loan Details
-								</h3>
-								<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-									<div className="space-y-1">
-										<p className="text-sm font-medium text-gray-500">
-											Product
-										</p>
-										<p className="text-md text-gray-900 font-medium">
-											{selectedApplication.product
-												?.name || "N/A"}
-										</p>
-									</div>
-									<div className="space-y-1">
-										<p className="text-sm font-medium text-gray-500">
-											Loan Amount
-										</p>
-										<p className="text-md text-gray-900 font-medium">
-											{formatCurrency(
-												selectedApplication.amount || 0
-											)}
-										</p>
-									</div>
-									<div className="space-y-1">
-										<p className="text-sm font-medium text-gray-500">
-											Loan Purpose
-										</p>
-										<p className="text-md text-gray-900">
-											{selectedApplication.purpose ||
-												"N/A"}
-										</p>
-									</div>
-									<div className="space-y-1">
-										<p className="text-sm font-medium text-gray-500">
-											Loan Term
-										</p>
-										<p className="text-md text-gray-900">
-											{selectedApplication.term
-												? `${selectedApplication.term} months`
-												: "N/A"}
-										</p>
-									</div>
-									<div className="space-y-1">
-										<p className="text-sm font-medium text-gray-500">
-											Interest Rate
-										</p>
-										<p className="text-md text-gray-900">
-											{selectedApplication.interestRate
-												? `${selectedApplication.interestRate}% monthly`
-												: "N/A"}
-										</p>
-									</div>
-									<div className="space-y-1">
-										<p className="text-sm font-medium text-gray-500">
-											Monthly Repayment
-										</p>
-										<p className="text-md text-gray-900 font-medium">
-											{formatCurrency(
-												selectedApplication.monthlyRepayment ||
-													0
-											)}
-										</p>
-									</div>
-
-									{/* Fees section */}
-									<div className="col-span-2 md:col-span-3 mt-3 pt-3 border-t border-gray-200">
-										<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-											<div className="space-y-1">
-												<p className="text-sm font-medium text-gray-500">
-													Origination Fee (2%)
-												</p>
-												<p className="text-md text-red-600">
-													{selectedApplication.amount
-														? `(${formatCurrency(
-																selectedApplication.amount *
-																	0.02
-														  )})`
-														: "N/A"}
-												</p>
-											</div>
-											<div className="space-y-1">
-												<p className="text-sm font-medium text-gray-500">
-													Legal Fee (3%)
-												</p>
-												<p className="text-md text-red-600">
-													{selectedApplication.amount
-														? `(${formatCurrency(
-																selectedApplication.amount *
-																	0.03
-														  )})`
-														: "N/A"}
-												</p>
-											</div>
-											<div className="space-y-1">
-												<p className="text-sm font-medium text-gray-500">
-													Application Fee
-												</p>
-												<p className="text-md text-red-600">
-													(RM 50.00)
-												</p>
-											</div>
-										</div>
-									</div>
-
-									{/* Net disbursement */}
-									<div className="col-span-2 md:col-span-3 mt-3 pt-3 border-t border-gray-200">
-										<div className="flex justify-between items-center">
-											<p className="text-md font-bold text-gray-700">
-												Net Loan Disbursement
-											</p>
-											<p className="text-lg font-bold text-green-600">
-												{formatCurrency(
-													selectedApplication.netDisbursement ||
-														0
-												)}
-											</p>
-										</div>
-									</div>
-								</div>
-							</div>
-
-							{/* Documents Section - Redesigned - MOVED ABOVE STATUS */}
-							{selectedApplication.documents &&
-								selectedApplication.documents.length > 0 && (
-									<div className="border border-gray-200 rounded-md p-4">
-										<h3 className="text-base font-medium text-gray-800 mb-4">
-											Documents
-										</h3>
-										<p className="text-sm text-gray-600 mb-4">
-											Documents uploaded by the customer
-											for verification purposes.
-										</p>
-
-										<div className="space-y-4">
-											{selectedApplication.documents.map(
-												(doc) => {
-													// Determine file type for icon
-													const fileExtension =
-														doc.fileUrl
-															.split(".")
-															.pop()
-															?.toLowerCase();
-													const isImage = [
-														"jpg",
-														"jpeg",
-														"png",
-														"gif",
-														"webp",
-													].includes(
-														fileExtension || ""
-													);
-													const isPdf =
-														fileExtension === "pdf";
-
-													return (
-														<div
-															key={doc.id}
-															className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
-														>
-															<div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-200">
-																<div className="flex items-center">
-																	<div className="flex-shrink-0 mr-3">
-																		{isImage ? (
-																			<svg
-																				className="h-6 w-6 text-blue-500"
-																				fill="currentColor"
-																				viewBox="0 0 20 20"
-																			>
-																				<path
-																					fillRule="evenodd"
-																					d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
-																					clipRule="evenodd"
-																				/>
-																			</svg>
-																		) : isPdf ? (
-																			<svg
-																				className="h-6 w-6 text-red-500"
-																				fill="currentColor"
-																				viewBox="0 0 20 20"
-																			>
-																				<path
-																					fillRule="evenodd"
-																					d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-																					clipRule="evenodd"
-																				/>
-																				<path d="M8 11a1 1 0 100-2 1 1 0 000 2zm0 0a1 1 0 100-2 1 1 0 000 2zm.82 3H7v-1h1.82C9.44 13 10 12.44 10 11.82c0-.62-.56-1.18-1.18-1.18h-1.64v4.72h-1V9h2.64c1.3 0 2.36 1.06 2.36 2.36 0 1.3-1.06 2.37-2.36 2.37z" />
-																			</svg>
-																		) : (
-																			<svg
-																				className="h-6 w-6 text-gray-400"
-																				fill="currentColor"
-																				viewBox="0 0 20 20"
-																			>
-																				<path
-																					fillRule="evenodd"
-																					d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-																					clipRule="evenodd"
-																				/>
-																			</svg>
-																		)}
-																	</div>
-																	<div>
-																		<h4 className="text-sm font-medium text-gray-900">
-																			{getDocumentTypeName(
-																				doc.type
-																			)}
-																		</h4>
-																		<p className="text-xs text-gray-500">
-																			Uploaded
-																			on{" "}
-																			{new Date(
-																				doc.createdAt
-																			).toLocaleDateString()}
-																		</p>
-																	</div>
-																</div>
-																<span
-																	className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-															${getDocumentStatusColor(doc.status).bg} 
-															${getDocumentStatusColor(doc.status).text}`}
-																>
-																	{doc.status}
-																</span>
-															</div>
-
-															{/* Document actions */}
-															<div className="p-4 flex flex-wrap gap-2">
-																<a
-																	href={formatDocumentUrl(
-																		doc.fileUrl
-																	)}
-																	target="_blank"
-																	rel="noopener noreferrer"
-																	className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-																	onClick={() =>
-																		setSelectedDocument(
-																			doc
-																		)
-																	}
-																>
-																	<svg
-																		className="h-4 w-4 mr-2"
-																		fill="none"
-																		viewBox="0 0 24 24"
-																		stroke="currentColor"
-																	>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={
-																				2
-																			}
-																			d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-																		/>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={
-																				2
-																			}
-																			d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-																		/>
-																	</svg>
-																	View
-																	Document
-																</a>
-																<a
-																	href={formatDocumentUrl(
-																		doc.fileUrl
-																	)}
-																	download
-																	className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-																	onClick={() =>
-																		setSelectedDocument(
-																			doc
-																		)
-																	}
-																>
-																	<svg
-																		className="h-4 w-4 mr-2"
-																		fill="none"
-																		viewBox="0 0 24 24"
-																		stroke="currentColor"
-																	>
-																		<path
-																			strokeLinecap="round"
-																			strokeLinejoin="round"
-																			strokeWidth={
-																				2
-																			}
-																			d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-																		/>
-																	</svg>
-																	Download
-																</a>
-
-																{/* Document approval actions */}
-																<div className="ml-auto flex gap-2">
-																	<button
-																		onClick={() =>
-																			handleDocumentStatusChange(
-																				doc.id,
-																				"APPROVED"
-																			)
-																		}
-																		disabled={
-																			doc.status ===
-																			"APPROVED"
-																		}
-																		className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm font-medium rounded-md ${
-																			doc.status ===
-																			"APPROVED"
-																				? "bg-gray-100 text-gray-400 cursor-not-allowed"
-																				: "border-green-300 text-green-700 bg-green-50 hover:bg-green-100"
-																		}`}
-																	>
-																		<svg
-																			className="h-4 w-4 mr-2"
-																			fill="none"
-																			viewBox="0 0 24 24"
-																			stroke="currentColor"
-																		>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={
-																					2
-																				}
-																				d="M5 13l4 4L19 7"
-																			/>
-																		</svg>
-																		Approve
-																	</button>
-
-																	<button
-																		onClick={() =>
-																			handleDocumentStatusChange(
-																				doc.id,
-																				"REJECTED"
-																			)
-																		}
-																		disabled={
-																			doc.status ===
-																			"REJECTED"
-																		}
-																		className={`inline-flex items-center px-3 py-2 border shadow-sm text-sm font-medium rounded-md ${
-																			doc.status ===
-																			"REJECTED"
-																				? "bg-gray-100 text-gray-400 cursor-not-allowed"
-																				: "border-red-300 text-red-700 bg-red-50 hover:bg-red-100"
-																		}`}
-																	>
-																		<svg
-																			className="h-4 w-4 mr-2"
-																			fill="none"
-																			viewBox="0 0 24 24"
-																			stroke="currentColor"
-																		>
-																			<path
-																				strokeLinecap="round"
-																				strokeLinejoin="round"
-																				strokeWidth={
-																					2
-																				}
-																				d="M6 18L18 6M6 6l12 12"
-																			/>
-																		</svg>
-																		Reject
-																	</button>
-																</div>
-															</div>
+												<div className="flex justify-between items-start">
+													<div>
+														<p className="text-white font-medium">
+															{app.user
+																?.fullName ||
+																"Unknown"}
+														</p>
+														<p className="text-sm text-gray-400">
+															{app.user?.email ||
+																"N/A"}
+														</p>
+														<div className="mt-2 flex items-center text-sm text-gray-300">
+															<CurrencyDollarIcon className="mr-1 h-4 w-4 text-blue-400" />
+															{app.amount
+																? formatCurrency(
+																		app.amount
+																  )
+																: "Amount not set"}
 														</div>
-													);
-												}
-											)}
-										</div>
-
-										{/* Document status summary */}
-										<div className="mt-4 bg-gray-50 rounded-md p-4">
-											<div className="flex justify-between items-center">
-												<div className="text-sm text-gray-500">
-													<span className="font-medium">
-														Total documents:
-													</span>{" "}
-													{
-														selectedApplication
-															.documents.length
-													}
+													</div>
+													<div className="text-right">
+														<div
+															className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${getStatusColor(
+																app.status
+															)}`}
+														>
+															<StatusIcon className="h-3 w-3 mr-1" />
+															{getStatusLabel(
+																app.status
+															)}
+														</div>
+														<p className="text-xs text-gray-400 mt-1">
+															Applied:{" "}
+															{formatDate(
+																app.createdAt
+															)}
+														</p>
+														<p className="text-xs text-gray-400 mt-1">
+															Product:{" "}
+															{app.product
+																?.name || "N/A"}
+														</p>
+													</div>
 												</div>
-												<div className="flex gap-2">
-													<span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800">
-														{
-															selectedApplication.documents.filter(
-																(d) =>
-																	d.status ===
-																	"PENDING"
-															).length
-														}{" "}
-														Pending
-													</span>
-													<span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
-														{
-															selectedApplication.documents.filter(
-																(d) =>
-																	d.status ===
-																	"APPROVED"
-															).length
-														}{" "}
-														Approved
-													</span>
-													<span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-red-100 text-red-800">
-														{
-															selectedApplication.documents.filter(
-																(d) =>
-																	d.status ===
-																	"REJECTED"
-															).length
-														}{" "}
-														Rejected
-													</span>
-												</div>
-											</div>
-										</div>
-									</div>
-								)}
-
-							{/* Missing documents notification */}
-							{(!selectedApplication.documents ||
-								selectedApplication.documents.length === 0) && (
-								<div className="border border-gray-200 rounded-md p-4 bg-yellow-50">
-									<div className="flex items-center">
-										<svg
-											className="h-6 w-6 text-yellow-600 mr-3"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-										>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-											/>
-										</svg>
-										<h3 className="text-base font-medium text-yellow-800">
-											No Documents Uploaded
-										</h3>
-									</div>
-									<p className="mt-2 text-sm text-yellow-700 ml-9">
-										This application does not have any
-										uploaded documents yet. Documents are
-										required for verification purposes.
+											</li>
+										);
+									})}
+								</ul>
+							) : (
+								<div className="p-8 text-center">
+									<ClockIcon className="mx-auto h-12 w-12 text-gray-400" />
+									<p className="mt-4 text-gray-300">
+										No applications found with the selected
+										filters
 									</p>
 								</div>
 							)}
+						</div>
+					</div>
+				</div>
 
-							{/* Status Update Section - Improved - WITH PENDING_APP_FEE ADDED */}
-							<div className="border border-gray-200 rounded-md p-4">
-								<h3 className="text-base font-medium text-gray-800 mb-4">
-									Application Status
-								</h3>
-								<div className="flex items-center mb-4">
-									<span className="mr-2 text-sm font-medium text-gray-500">
-										Current status:
-									</span>
-									<span
-										className={`px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${
-											statusColors[
-												selectedApplication.status
-											]?.bg || "bg-gray-100"
-										} ${
-											statusColors[
-												selectedApplication.status
-											]?.text || "text-gray-800"
-										}`}
-									>
-										{selectedApplication.status?.replace(
-											/_/g,
-											" "
-										) || "Unknown"}
-									</span>
-								</div>
-								<div className="bg-gray-50 p-4 rounded-md">
-									<p className="text-sm font-medium text-gray-600 mb-3">
-										Update application status to:
-									</p>
-									<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-										{[
-											"PENDING_APP_FEE",
-											"PENDING_KYC",
-											"PENDING_APPROVAL",
-											"REJECTED",
-										].map((status) => (
-											<button
-												key={status}
-												onClick={() =>
-													handleStatusChange(
-														selectedApplication.id,
-														status
-													)
-												}
-												disabled={
-													selectedApplication.status ===
-													status
-												}
-												className={`px-4 py-2 text-sm font-medium rounded-md transition-colors duration-150 
-													${
-														selectedApplication.status ===
-														status
-															? "bg-gray-100 text-gray-500 cursor-not-allowed border border-gray-200"
-															: `${
-																	statusColors[
-																		status
-																	]?.bg ||
-																	"bg-gray-100"
-															  } ${
-																	statusColors[
-																		status
-																	]?.text ||
-																	"text-gray-800"
-															  } hover:bg-opacity-80 border border-gray-200 hover:shadow-sm`
-													}`}
-											>
-												{status.replace(/_/g, " ")}
-											</button>
-										))}
-									</div>
-
-									{/* Add the "Approve" option with notification */}
-									<div className="mt-4 p-3 bg-green-50 border border-green-100 rounded-md">
-										<h4 className="text-sm font-medium text-green-800 mb-2 flex items-center">
+				{/* Right Panel - Application Details */}
+				<div className="lg:col-span-2">
+					{selectedApplication ? (
+						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+							<div className="p-6">
+								<div className="flex justify-between items-center mb-6">
+									<div className="flex items-center">
+										<button
+											onClick={handleViewClose}
+											className="mr-3 p-1 rounded-full bg-gray-700/50 hover:bg-gray-700/70 text-gray-300"
+										>
 											<svg
-												className="h-5 w-5 mr-2"
+												className="w-5 h-5"
 												fill="none"
-												viewBox="0 0 24 24"
 												stroke="currentColor"
+												viewBox="0 0 24 24"
+												xmlns="http://www.w3.org/2000/svg"
 											>
 												<path
 													strokeLinecap="round"
 													strokeLinejoin="round"
 													strokeWidth={2}
-													d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+													d="M15 19l-7-7 7-7"
 												/>
 											</svg>
-											Approve Application
-										</h4>
-										<p className="text-xs text-green-700 mb-3">
-											Approving this application will move
-											it to the "Active Loans" section.
-										</p>
-										<button
-											onClick={() =>
-												handleStatusChange(
-													selectedApplication.id,
-													"APPROVED"
-												)
-											}
-											disabled={
-												selectedApplication.status ===
-												"APPROVED"
-											}
-											className="w-full px-4 py-2 text-sm font-medium rounded-md bg-green-100 text-green-800 hover:bg-green-200 border border-green-200"
-										>
-											Approve & Move to Loans
 										</button>
+										<h3 className="text-xl font-semibold text-white">
+											Application Details
+										</h3>
+									</div>
+									<div
+										className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${getStatusColor(
+											selectedApplication.status
+										)}`}
+									>
+										<span className="mr-1.5">
+											{getStatusLabel(
+												selectedApplication.status
+											)}
+										</span>
 									</div>
 								</div>
-							</div>
 
-							{/* Application Timeline Section */}
-							<div className="border border-gray-200 rounded-md p-4">
-								<h3 className="text-base font-medium text-gray-800 mb-2">
-									Application Timeline
-								</h3>
-								<div className="mt-2 flex justify-between items-center text-sm">
-									<p className="text-gray-600">
-										<span className="font-medium">
-											Created:
-										</span>{" "}
-										{formatDate(
-											selectedApplication.createdAt
-										)}
-									</p>
-									<p className="text-gray-600">
-										<span className="font-medium">
-											Last Updated:
-										</span>{" "}
-										{formatDate(
-											selectedApplication.updatedAt
-										)}
-									</p>
+								{/* Tab Navigation */}
+								<div className="flex border-b border-gray-700/30 mb-6">
+									<div
+										className={`px-4 py-2 cursor-pointer transition-colors ${
+											selectedTab === "details"
+												? "border-b-2 border-blue-400 font-medium text-white"
+												: "text-gray-400 hover:text-gray-200"
+										}`}
+										onClick={() =>
+											setSelectedTab("details")
+										}
+									>
+										Details
+									</div>
+									<div
+										className={`px-4 py-2 cursor-pointer transition-colors ${
+											selectedTab === "documents"
+												? "border-b-2 border-blue-400 font-medium text-white"
+												: "text-gray-400 hover:text-gray-200"
+										}`}
+										onClick={() =>
+											setSelectedTab("documents")
+										}
+									>
+										Documents
+									</div>
+									<div
+										className={`px-4 py-2 cursor-pointer transition-colors ${
+											selectedTab === "audit"
+												? "border-b-2 border-blue-400 font-medium text-white"
+												: "text-gray-400 hover:text-gray-200"
+										}`}
+										onClick={() => setSelectedTab("audit")}
+									>
+										Audit Trail
+									</div>
+									<div
+										className={`px-4 py-2 cursor-pointer transition-colors ${
+											selectedTab === "actions"
+												? "border-b-2 border-blue-400 font-medium text-white"
+												: "text-gray-400 hover:text-gray-200"
+										}`}
+										onClick={() =>
+											setSelectedTab("actions")
+										}
+									>
+										Actions
+									</div>
 								</div>
+
+								{/* Tab Content */}
+								{selectedTab === "details" && (
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+										{/* Applicant Information */}
+										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+											<h4 className="text-lg font-medium text-white mb-3 flex items-center">
+												<UserCircleIcon className="h-5 w-5 mr-2 text-blue-400" />
+												Applicant Information
+											</h4>
+											<div className="space-y-2 text-sm">
+												<div>
+													<span className="text-gray-400">
+														Name:
+													</span>{" "}
+													<span className="text-white">
+														{selectedApplication
+															.user?.fullName ||
+															"N/A"}
+													</span>
+												</div>
+												<div>
+													<span className="text-gray-400">
+														Email:
+													</span>{" "}
+													<span className="text-white">
+														{selectedApplication
+															.user?.email ||
+															"N/A"}
+													</span>
+												</div>
+												<div>
+													<span className="text-gray-400">
+														Phone:
+													</span>{" "}
+													<span className="text-white">
+														{selectedApplication
+															.user
+															?.phoneNumber ||
+															"N/A"}
+													</span>
+												</div>
+												{selectedApplication.user
+													?.employmentStatus && (
+													<div>
+														<span className="text-gray-400">
+															Employment:
+														</span>{" "}
+														<span className="text-white">
+															{
+																selectedApplication
+																	.user
+																	.employmentStatus
+															}
+														</span>
+													</div>
+												)}
+												{selectedApplication.user
+													?.employerName && (
+													<div>
+														<span className="text-gray-400">
+															Employer:
+														</span>{" "}
+														<span className="text-white">
+															{
+																selectedApplication
+																	.user
+																	.employerName
+															}
+														</span>
+													</div>
+												)}
+												{selectedApplication.user
+													?.monthlyIncome && (
+													<div>
+														<span className="text-gray-400">
+															Monthly Income:
+														</span>{" "}
+														<span className="text-white">
+															{formatCurrency(
+																parseFloat(
+																	selectedApplication
+																		.user
+																		.monthlyIncome
+																)
+															)}
+														</span>
+													</div>
+												)}
+											</div>
+										</div>
+
+										{/* Loan Information */}
+										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+											<h4 className="text-lg font-medium text-white mb-3 flex items-center">
+												<CurrencyDollarIcon className="h-5 w-5 mr-2 text-green-400" />
+												Loan Information
+											</h4>
+											<div className="space-y-2 text-sm">
+												<div>
+													<span className="text-gray-400">
+														Product:
+													</span>{" "}
+													<span className="text-white">
+														{selectedApplication
+															.product?.name ||
+															"N/A"}
+													</span>
+												</div>
+												<div>
+													<span className="text-gray-400">
+														Amount:
+													</span>{" "}
+													<span className="text-white">
+														{selectedApplication.amount
+															? formatCurrency(
+																	selectedApplication.amount
+															  )
+															: "Not specified"}
+													</span>
+												</div>
+												<div>
+													<span className="text-gray-400">
+														Term:
+													</span>{" "}
+													<span className="text-white">
+														{selectedApplication.term
+															? `${selectedApplication.term} months`
+															: "Not specified"}
+													</span>
+												</div>
+												<div>
+													<span className="text-gray-400">
+														Purpose:
+													</span>{" "}
+													<span className="text-white">
+														{selectedApplication.purpose ||
+															"Not specified"}
+													</span>
+												</div>
+												<div>
+													<span className="text-gray-400">
+														Applied On:
+													</span>{" "}
+													<span className="text-white">
+														{formatDate(
+															selectedApplication.createdAt
+														)}
+													</span>
+												</div>
+												<div>
+													<span className="text-gray-400">
+														Last Updated:
+													</span>{" "}
+													<span className="text-white">
+														{formatDate(
+															selectedApplication.updatedAt
+														)}
+													</span>
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Documents Tab */}
+								{selectedTab === "documents" && (
+									<div>
+										{/* Application Documents */}
+										{selectedApplication.documents &&
+											selectedApplication.documents
+												.length > 0 && (
+												<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">
+													<h4 className="text-lg font-medium text-white mb-3 flex items-center">
+														<DocumentTextIcon className="h-5 w-5 mr-2 text-amber-400" />
+														Documents
+													</h4>
+													<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+														{selectedApplication.documents.map(
+															(doc) => (
+																<div
+																	key={doc.id}
+																	className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30"
+																>
+																	<div className="flex justify-between items-center mb-2">
+																		<span className="text-sm font-medium text-white">
+																			{getDocumentTypeName(
+																				doc.type
+																			)}
+																		</span>
+																		<span
+																			className={`px-2 py-1 text-xs rounded-full ${
+																				getDocumentStatusColor(
+																					doc.status
+																				)
+																					.bg
+																			} ${
+																				getDocumentStatusColor(
+																					doc.status
+																				)
+																					.text
+																			}`}
+																		>
+																			{
+																				doc.status
+																			}
+																		</span>
+																	</div>
+																	<div className="flex space-x-2 mt-2">
+																		<a
+																			href={formatDocumentUrl(
+																				doc.fileUrl
+																			)}
+																			target="_blank"
+																			rel="noopener noreferrer"
+																			className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
+																		>
+																			View
+																		</a>
+																		<button
+																			onClick={() =>
+																				handleDocumentStatusChange(
+																					doc.id,
+																					"APPROVED"
+																				)
+																			}
+																			disabled={
+																				doc.status ===
+																				"APPROVED"
+																			}
+																			className={`text-xs px-2 py-1 rounded border ${
+																				doc.status ===
+																				"APPROVED"
+																					? "bg-gray-700/50 text-gray-400 border-gray-600/50"
+																					: "bg-green-500/20 text-green-200 border-green-400/20 hover:bg-green-500/30"
+																			}`}
+																		>
+																			Approve
+																		</button>
+																		<button
+																			onClick={() =>
+																				handleDocumentStatusChange(
+																					doc.id,
+																					"REJECTED"
+																				)
+																			}
+																			disabled={
+																				doc.status ===
+																				"REJECTED"
+																			}
+																			className={`text-xs px-2 py-1 rounded border ${
+																				doc.status ===
+																				"REJECTED"
+																					? "bg-gray-700/50 text-gray-400 border-gray-600/50"
+																					: "bg-red-500/20 text-red-200 border-red-400/20 hover:bg-red-500/30"
+																			}`}
+																		>
+																			Reject
+																		</button>
+																	</div>
+																</div>
+															)
+														)}
+													</div>
+												</div>
+											)}
+									</div>
+								)}
+
+								{/* Audit Trail Tab */}
+								{selectedTab === "audit" && (
+									<div>
+										{/* Audit Trail Section */}
+										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">
+											<h4 className="text-lg font-medium text-white mb-3 flex items-center">
+												<ClipboardDocumentCheckIcon className="h-5 w-5 mr-2 text-purple-400" />
+												Audit Trail
+											</h4>
+											<div className="space-y-2">
+												{selectedApplication.history &&
+												selectedApplication.history
+													.length > 0 ? (
+													<div className="relative">
+														<div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-600/50"></div>
+														<ul className="space-y-4">
+															{selectedApplication.history
+																.sort(
+																	(a, b) =>
+																		new Date(
+																			b.createdAt
+																		).getTime() -
+																		new Date(
+																			a.createdAt
+																		).getTime()
+																)
+																.map(
+																	(
+																		historyItem,
+																		index
+																	) => (
+																		<li
+																			key={
+																				historyItem.id
+																			}
+																			className="relative pl-8"
+																		>
+																			<div className="absolute left-0 top-1.5 w-8 flex items-center justify-center">
+																				<div
+																					className={`w-3 h-3 rounded-full ${
+																						index ===
+																						0
+																							? "bg-blue-400"
+																							: "bg-gray-500"
+																					}`}
+																				></div>
+																			</div>
+																			<div className="border border-gray-700/30 rounded-lg p-3 bg-gray-800/20">
+																				<div className="flex justify-between items-start mb-1">
+																					<span className="text-sm font-medium text-white">
+																						{getHistoryActionDescription(
+																							historyItem.previousStatus,
+																							historyItem.newStatus
+																						)}
+																					</span>
+																					<span className="text-xs text-gray-400">
+																						{new Date(
+																							historyItem.createdAt
+																						).toLocaleDateString(
+																							"en-US",
+																							{
+																								year: "numeric",
+																								month: "short",
+																								day: "numeric",
+																								hour: "2-digit",
+																								minute: "2-digit",
+																							}
+																						)}
+																					</span>
+																				</div>
+																				<div className="text-xs text-gray-400">
+																					<span>
+																						By:{" "}
+																						{historyItem.changedBy ||
+																							"System"}
+																					</span>
+																				</div>
+																				{historyItem.notes && (
+																					<div className="mt-2 text-xs text-gray-300 bg-gray-800/50 p-2 rounded border border-gray-700/30">
+																						<span className="font-medium">
+																							Notes:
+																						</span>{" "}
+																						{
+																							historyItem.notes
+																						}
+																					</div>
+																				)}
+																			</div>
+																		</li>
+																	)
+																)}
+														</ul>
+													</div>
+												) : (
+													<div className="text-center py-4">
+														<ClockIcon className="mx-auto h-10 w-10 text-gray-500 mb-2" />
+														<p className="text-gray-400">
+															No history available
+															for this application
+														</p>
+													</div>
+												)}
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Actions Tab */}
+								{selectedTab === "actions" && (
+									<div>
+										{/* Update Status Section */}
+										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">
+											<h4 className="text-lg font-medium text-white mb-3">
+												Update Application Status
+											</h4>
+											<div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+												{[
+													"INCOMPLETE",
+													"PENDING_APP_FEE",
+													"PENDING_KYC",
+													"APPROVED",
+													"PENDING_SIGNATURE",
+													"REJECTED",
+													"WITHDRAWN",
+												]
+													.filter(
+														(status) =>
+															status !==
+																"PENDING_APPROVAL" &&
+															status !==
+																"PENDING_DISBURSEMENT"
+													)
+													.map((status) => (
+														<button
+															key={status}
+															onClick={() =>
+																handleStatusChange(
+																	selectedApplication.id,
+																	status
+																)
+															}
+															disabled={
+																selectedApplication.status ===
+																status
+															}
+															className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+																selectedApplication.status ===
+																status
+																	? "bg-gray-700/50 text-gray-400 border-gray-600/50 cursor-not-allowed"
+																	: `${getStatusColor(
+																			status
+																	  )} hover:opacity-80`
+															}`}
+														>
+															{getStatusLabel(
+																status
+															)}
+														</button>
+													))}
+											</div>
+
+											<div className="mt-3 p-3 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+												<p className="text-xs text-blue-200 mb-2">
+													<span className="font-medium">
+														Note:
+													</span>{" "}
+													For applications requiring
+													credit decision or
+													disbursement, please use the
+													dedicated workflow pages.
+												</p>
+												<div className="flex flex-wrap gap-2">
+													<Link
+														href="/dashboard/applications/pending-decision"
+														className="text-xs px-3 py-1.5 bg-amber-500/20 text-amber-200 rounded border border-amber-400/20 hover:bg-amber-500/30"
+													>
+														Go to Credit Decision
+													</Link>
+													<Link
+														href="/dashboard/applications/pending-disbursement"
+														className="text-xs px-3 py-1.5 bg-green-500/20 text-green-200 rounded border border-green-400/20 hover:bg-green-500/30"
+													>
+														Go to Disbursements
+													</Link>
+												</div>
+											</div>
+										</div>
+
+										{/* Advanced Actions */}
+										<div className="flex justify-end space-x-3">
+											{/* Skip button for automated advancement */}
+											{selectedApplication.status !==
+												"APPROVED" &&
+												selectedApplication.status !==
+													"REJECTED" &&
+												selectedApplication.status !==
+													"WITHDRAWN" &&
+												selectedApplication.status !==
+													"PENDING_APPROVAL" &&
+												selectedApplication.status !==
+													"PENDING_DISBURSEMENT" && (
+													<button
+														onClick={() => {
+															// Determine next status based on current status
+															let nextStatus = "";
+															switch (
+																selectedApplication.status
+															) {
+																case "INCOMPLETE":
+																	nextStatus =
+																		"PENDING_APP_FEE";
+																	break;
+																case "PENDING_APP_FEE":
+																	nextStatus =
+																		"PENDING_KYC";
+																	break;
+																case "PENDING_KYC":
+																	nextStatus =
+																		"PENDING_APPROVAL";
+																	break;
+																case "PENDING_SIGNATURE":
+																	nextStatus =
+																		"PENDING_DISBURSEMENT";
+																	break;
+																default:
+																	return;
+															}
+
+															if (nextStatus) {
+																handleStatusChange(
+																	selectedApplication.id,
+																	nextStatus
+																);
+															}
+														}}
+														className="flex items-center px-4 py-2 bg-blue-600/40 text-blue-100 rounded-lg border border-blue-500/40 hover:bg-blue-600/60 transition-colors"
+													>
+														<ArrowRightIcon className="h-4 w-4 mr-2" />
+														Advance to Next Step
+													</button>
+												)}
+										</div>
+									</div>
+								)}
 							</div>
 						</div>
-					</DialogContent>
-				</Dialog>
-			)}
+					) : (
+						<div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-10">
+							<div className="text-center">
+								<DocumentTextIcon className="h-16 w-16 text-gray-500 mx-auto mb-4" />
+								<h3 className="text-xl font-medium text-white mb-2">
+									Select an Application
+								</h3>
+								<p className="text-gray-400 max-w-md">
+									Choose an application from the list to view
+									its details and manage its status
+								</p>
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
 		</AdminLayout>
 	);
 }

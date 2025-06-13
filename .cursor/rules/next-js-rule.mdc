@@ -45,7 +45,8 @@ Key Conventions
   - Avoid for data fetching or state management.
 
 Additional notes  
-- My backend is deployed using Docker.
+- My backend is deployed using Docker. Always run commands in Docker
+- For example i use this to rebuild it docker compose -f docker-compose.dev.yml down && docker compose -f docker-compose.dev.yml up -d
 - My frontend is written in NextJS
 - Authentication is handled using refresh tokens in the backend
 

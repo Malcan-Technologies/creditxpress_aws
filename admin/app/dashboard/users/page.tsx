@@ -5,20 +5,21 @@ import { useEffect, useState } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 import {
-	Button,
-	Dialog,
-	DialogActions,
-	DialogContent,
-	DialogContentText,
-	DialogTitle,
-	TextField,
-	FormControl,
-	InputLabel,
-	Select,
-	MenuItem,
-	Grid,
-	SelectChangeEvent,
-} from "@mui/material";
+	UserIcon,
+	PlusIcon,
+	MagnifyingGlassIcon,
+	PencilIcon,
+	TrashIcon,
+	EyeIcon,
+	XMarkIcon,
+	UserGroupIcon,
+	CalendarIcon,
+	PhoneIcon,
+	EnvelopeIcon,
+	IdentificationIcon,
+	CreditCardIcon,
+	ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 
 interface User {
@@ -46,7 +47,8 @@ export default function AdminUsersPage() {
 	const [users, setUsers] = useState<User[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
-	const [userName, setUserName] = useState("Admin");
+	const [error, setError] = useState<string | null>(null);
+	const [success, setSuccess] = useState<string | null>(null);
 	const router = useRouter();
 
 	// Dialog states
@@ -77,36 +79,26 @@ export default function AdminUsersPage() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	useEffect(() => {
-		const fetchUsers = async () => {
-			try {
-				setLoading(true);
-
-				// Fetch user data with token refresh
-				try {
-					const userData = await fetchWithAdminTokenRefresh<any>(
-						"/api/users/me"
-					);
-					if (userData.fullName) {
-						setUserName(userData.fullName);
-					}
-				} catch (error) {
-					console.error("Error fetching user data:", error);
-				}
-
-				// Fetch all users with token refresh
-				const users = await fetchWithAdminTokenRefresh<User[]>(
-					"/api/admin/users"
-				);
-				setUsers(users);
-			} catch (error) {
-				console.error("Error fetching users:", error);
-			} finally {
-				setLoading(false);
-			}
-		};
-
 		fetchUsers();
 	}, []);
+
+	const fetchUsers = async () => {
+		try {
+			setLoading(true);
+			setError(null);
+
+			// Fetch all users with token refresh
+			const users = await fetchWithAdminTokenRefresh<User[]>(
+				"/api/admin/users"
+			);
+			setUsers(users);
+		} catch (error) {
+			console.error("Error fetching users:", error);
+			setError("Failed to load users. Please try again.");
+		} finally {
+			setLoading(false);
+		}
+	};
 
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString("en-MY", {
@@ -138,7 +130,9 @@ export default function AdminUsersPage() {
 		setEditDialogOpen(true);
 	};
 
-	const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleEditChange = (
+		e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+	) => {
 		const { name, value } = e.target;
 		setEditForm((prev) => ({
 			...prev,
@@ -146,25 +140,20 @@ export default function AdminUsersPage() {
 		}));
 	};
 
-	const handleEditSelectChange = (e: SelectChangeEvent) => {
-		const { name, value } = e.target;
-		setEditForm((prev) => ({
-			...prev,
-			[name]: value,
-		}));
-	};
-
-	const handleEditSubmit = async () => {
+	const handleEditSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
 		if (!selectedUser) return;
 
 		try {
 			setIsSubmitting(true);
+			setError(null);
 
 			// Update user with token refresh
 			const updatedUser = await fetchWithAdminTokenRefresh<User>(
 				`/api/admin/users/${selectedUser.id}`,
 				{
 					method: "PUT",
+					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(editForm),
 				}
 			);
@@ -178,8 +167,10 @@ export default function AdminUsersPage() {
 
 			setEditDialogOpen(false);
 			setSelectedUser(null);
+			setSuccess("User updated successfully!");
 		} catch (error) {
 			console.error("Error updating user:", error);
+			setError("Failed to update user. Please try again.");
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -202,15 +193,9 @@ export default function AdminUsersPage() {
 		setCreateDialogOpen(true);
 	};
 
-	const handleCreateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const { name, value } = e.target;
-		setCreateForm((prev) => ({
-			...prev,
-			[name]: value,
-		}));
-	};
-
-	const handleCreateSelectChange = (e: SelectChangeEvent) => {
+	const handleCreateChange = (
+		e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+	) => {
 		const { name, value } = e.target;
 		setCreateForm((prev) => ({
 			...prev,
@@ -222,12 +207,14 @@ export default function AdminUsersPage() {
 		e.preventDefault();
 		try {
 			setIsSubmitting(true);
+			setError(null);
 
 			// Create user with token refresh
 			const newUser = await fetchWithAdminTokenRefresh<User>(
 				"/api/auth/signup",
 				{
 					method: "POST",
+					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						fullName: createForm.fullName,
 						email: createForm.email,
@@ -247,8 +234,10 @@ export default function AdminUsersPage() {
 				password: "",
 				role: "USER",
 			});
+			setSuccess("User created successfully!");
 		} catch (error) {
 			console.error("Error creating user:", error);
+			setError("Failed to create user. Please try again.");
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -269,6 +258,7 @@ export default function AdminUsersPage() {
 
 		try {
 			setIsSubmitting(true);
+			setError(null);
 
 			// Delete user with token refresh
 			await fetchWithAdminTokenRefresh<void>(
@@ -282,8 +272,10 @@ export default function AdminUsersPage() {
 			setUsers(users.filter((user) => user.id !== selectedUser.id));
 			setDeleteDialogOpen(false);
 			setSelectedUser(null);
+			setSuccess("User deleted successfully!");
 		} catch (error) {
 			console.error("Error deleting user:", error);
+			setError("Failed to delete user. Please try again.");
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -294,7 +286,7 @@ export default function AdminUsersPage() {
 		setSelectedUser(null);
 	};
 
-	// New function to handle viewing user details and applications
+	// Handle viewing user details and applications
 	const handleViewClick = async (user: User) => {
 		setSelectedUser(user);
 		setViewDialogOpen(true);
@@ -340,17 +332,22 @@ export default function AdminUsersPage() {
 	// Helper function for loan status colors
 	const getStatusColor = (status: string): string => {
 		const statusMap: Record<string, string> = {
-			INCOMPLETE: "bg-gray-100 text-gray-800",
-			PENDING_APP_FEE: "bg-blue-100 text-blue-800",
-			PENDING_KYC: "bg-indigo-100 text-indigo-800",
-			PENDING_APPROVAL: "bg-yellow-100 text-yellow-800",
-			APPROVED: "bg-green-100 text-green-800",
-			DISBURSED: "bg-purple-100 text-purple-800",
-			REJECTED: "bg-red-100 text-red-800",
-			WITHDRAWN: "bg-gray-100 text-gray-800",
+			INCOMPLETE: "bg-gray-500/20 text-gray-200 border-gray-400/20",
+			PENDING_APP_FEE: "bg-blue-500/20 text-blue-200 border-blue-400/20",
+			PENDING_KYC:
+				"bg-indigo-500/20 text-indigo-200 border-indigo-400/20",
+			PENDING_APPROVAL:
+				"bg-yellow-500/20 text-yellow-200 border-yellow-400/20",
+			APPROVED: "bg-green-500/20 text-green-200 border-green-400/20",
+			DISBURSED: "bg-purple-500/20 text-purple-200 border-purple-400/20",
+			REJECTED: "bg-red-500/20 text-red-200 border-red-400/20",
+			WITHDRAWN: "bg-gray-500/20 text-gray-200 border-gray-400/20",
 		};
 
-		return statusMap[status] || "bg-gray-100 text-gray-800";
+		return (
+			statusMap[status] ||
+			"bg-gray-500/20 text-gray-200 border-gray-400/20"
+		);
 	};
 
 	// Format currency helper function
@@ -364,9 +361,12 @@ export default function AdminUsersPage() {
 
 	if (loading) {
 		return (
-			<AdminLayout userName={userName}>
+			<AdminLayout
+				title="Users"
+				description="Manage and view all users in the system"
+			>
 				<div className="flex items-center justify-center h-64">
-					<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+					<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-400"></div>
 				</div>
 			</AdminLayout>
 		);
@@ -377,145 +377,195 @@ export default function AdminUsersPage() {
 			title="Users"
 			description="Manage and view all users in the system"
 		>
-			<div className="bg-white shadow rounded-lg overflow-hidden">
-				<div className="px-6 py-4 border-b border-gray-200">
-					<div className="flex justify-between items-center">
-						<h2 className="text-xl font-semibold text-gray-900">
-							Users
-						</h2>
+			{/* Success/Error Messages */}
+			{success && (
+				<div className="mb-6 bg-green-700/30 border border-green-600/30 text-green-300 px-4 py-3 rounded-lg flex items-center justify-between">
+					<span>{success}</span>
+					<button onClick={() => setSuccess(null)}>
+						<XMarkIcon className="h-5 w-5" />
+					</button>
+				</div>
+			)}
+
+			{error && (
+				<div className="mb-6 bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
+					<span>{error}</span>
+					<button onClick={() => setError(null)}>
+						<XMarkIcon className="h-5 w-5" />
+					</button>
+				</div>
+			)}
+
+			{/* Main Content */}
+			<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+				{/* Header */}
+				<div className="px-6 py-4 border-b border-gray-700/30">
+					<div className="flex flex-col md:flex-row md:items-center md:justify-between">
+						<div className="flex items-center mb-4 md:mb-0">
+							<UserGroupIcon className="h-8 w-8 text-blue-400 mr-3" />
+							<div>
+								<h2 className="text-xl font-semibold text-white">
+									Users Management
+								</h2>
+								<p className="text-gray-400 text-sm">
+									{filteredUsers.length} user
+									{filteredUsers.length !== 1 ? "s" : ""}{" "}
+									found
+								</p>
+							</div>
+						</div>
 						<button
 							onClick={handleCreateClick}
-							className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+							className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
 						>
+							<PlusIcon className="h-5 w-5 mr-2" />
 							Create User
 						</button>
 					</div>
 
 					{/* Search Bar */}
-					<div className="mt-4 max-w-md">
+					<div className="mt-4 relative max-w-md">
+						<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+							<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+						</div>
 						<input
 							type="text"
 							placeholder="Search users..."
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
-							className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+							className="block w-full pl-10 pr-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
 						/>
 					</div>
 				</div>
 
 				{/* Users Table */}
 				<div className="overflow-x-auto">
-					<table className="min-w-full divide-y divide-gray-200">
-						<thead className="bg-gray-50">
+					<table className="min-w-full divide-y divide-gray-700/30">
+						<thead className="bg-gray-800/50">
 							<tr>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Name
+								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+									User
 								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Email
+								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+									Contact
 								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
-									Phone
-								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
+								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 									Role
 								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
+								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 									Joined
 								</th>
-								<th
-									scope="col"
-									className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-								>
+								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 									Actions
 								</th>
 							</tr>
 						</thead>
-						<tbody className="bg-white divide-y divide-gray-200">
+						<tbody className="divide-y divide-gray-700/30">
 							{filteredUsers.length > 0 ? (
 								filteredUsers.map((user) => (
-									<tr key={user.id}>
+									<tr
+										key={user.id}
+										className="hover:bg-gray-800/30 transition-colors"
+									>
 										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm font-medium text-gray-900">
-												{user.fullName}
+											<div className="flex items-center">
+												<div className="flex-shrink-0 h-10 w-10">
+													<div className="h-10 w-10 rounded-full bg-gray-700 flex items-center justify-center">
+														<UserIcon className="h-6 w-6 text-gray-400" />
+													</div>
+												</div>
+												<div className="ml-4">
+													<div className="text-sm font-medium text-white">
+														{user.fullName}
+													</div>
+													<div className="text-sm text-gray-400">
+														ID:{" "}
+														{user.id.substring(
+															0,
+															8
+														)}
+														...
+													</div>
+												</div>
 											</div>
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-500">
-												{user.email}
-											</div>
-										</td>
-										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm text-gray-500">
-												{user.phoneNumber}
+											<div className="text-sm text-gray-300">
+												<div className="flex items-center mb-1">
+													<EnvelopeIcon className="h-4 w-4 text-gray-400 mr-2" />
+													{user.email}
+												</div>
+												<div className="flex items-center">
+													<PhoneIcon className="h-4 w-4 text-gray-400 mr-2" />
+													{user.phoneNumber}
+												</div>
 											</div>
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap">
 											<span
-												className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+												className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
 													user.role === "ADMIN"
-														? "bg-purple-100 text-purple-800"
-														: "bg-green-100 text-green-800"
+														? "bg-purple-500/20 text-purple-200 border-purple-400/20"
+														: "bg-green-500/20 text-green-200 border-green-400/20"
 												}`}
 											>
 												{user.role}
 											</span>
 										</td>
-										<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-											{formatDate(user.createdAt)}
+										<td className="px-6 py-4 whitespace-nowrap">
+											<div className="flex items-center text-sm text-gray-300">
+												<CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
+												{formatDate(user.createdAt)}
+											</div>
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap text-sm">
-											<div className="flex items-center gap-2">
+											<div className="flex items-center space-x-3">
 												<button
 													onClick={() =>
 														handleViewClick(user)
 													}
-													className="text-blue-600 hover:text-blue-900"
+													className="text-blue-400 hover:text-blue-300 transition-colors"
+													title="View Details"
 												>
-													View
+													<EyeIcon className="h-5 w-5" />
 												</button>
 												<button
 													onClick={() =>
 														handleEditClick(user)
 													}
-													className="text-indigo-600 hover:text-indigo-900"
+													className="text-green-400 hover:text-green-300 transition-colors"
+													title="Edit User"
 												>
-													Edit
+													<PencilIcon className="h-5 w-5" />
 												</button>
 												<button
 													onClick={() =>
 														handleDeleteClick(user)
 													}
-													className="text-red-600 hover:text-red-900"
+													className="text-red-400 hover:text-red-300 transition-colors"
+													title="Delete User"
 												>
-													Delete
+													<TrashIcon className="h-5 w-5" />
 												</button>
 											</div>
 										</td>
 									</tr>
 								))
 							) : (
-								<tr key="no-users">
+								<tr>
 									<td
-										colSpan={6}
-										className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center"
+										colSpan={5}
+										className="px-6 py-12 text-center"
 									>
-										No users found
+										<UserGroupIcon className="mx-auto h-12 w-12 text-gray-500" />
+										<h3 className="mt-2 text-sm font-medium text-gray-300">
+											No users found
+										</h3>
+										<p className="mt-1 text-sm text-gray-500">
+											{search
+												? "Try adjusting your search criteria"
+												: "Get started by creating a new user"}
+										</p>
 									</td>
 								</tr>
 							)}
@@ -524,424 +574,508 @@ export default function AdminUsersPage() {
 				</div>
 			</div>
 
-			{/* Edit User Dialog */}
-			<Dialog
-				open={editDialogOpen}
-				onClose={handleEditCancel}
-				aria-labelledby="edit-dialog-title"
-				aria-describedby="edit-dialog-description"
-				maxWidth="sm"
-				fullWidth
-			>
-				<DialogTitle id="edit-dialog-title">Edit User</DialogTitle>
-				<DialogContent>
-					<div className="mt-4 space-y-4">
-						<TextField
-							autoFocus
-							margin="dense"
-							id="fullName"
-							name="fullName"
-							label="Full Name"
-							type="text"
-							fullWidth
-							value={editForm.fullName}
-							onChange={handleEditChange}
-						/>
-						<TextField
-							margin="dense"
-							id="email"
-							name="email"
-							label="Email"
-							type="email"
-							fullWidth
-							value={editForm.email}
-							onChange={handleEditChange}
-						/>
-						<TextField
-							margin="dense"
-							id="phoneNumber"
-							name="phoneNumber"
-							label="Phone Number"
-							type="text"
-							fullWidth
-							value={editForm.phoneNumber}
-							onChange={handleEditChange}
-						/>
-						<FormControl fullWidth margin="dense">
-							<InputLabel id="role-label">Role</InputLabel>
-							<Select
-								labelId="role-label"
-								id="role"
-								name="role"
-								value={editForm.role}
-								label="Role"
-								onChange={handleEditSelectChange}
-							>
-								<MenuItem value="USER">User</MenuItem>
-								<MenuItem value="ADMIN">Admin</MenuItem>
-							</Select>
-						</FormControl>
-					</div>
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={handleEditCancel} color="primary">
-						Cancel
-					</Button>
-					<Button
-						onClick={handleEditSubmit}
-						color="primary"
-						variant="contained"
-						disabled={isSubmitting}
-					>
-						{isSubmitting ? "Saving..." : "Save"}
-					</Button>
-				</DialogActions>
-			</Dialog>
+			{/* Edit User Modal */}
+			{editDialogOpen && (
+				<div className="fixed inset-0 z-50 overflow-y-auto">
+					<div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+						<div
+							className="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity"
+							onClick={handleEditCancel}
+						></div>
 
-			{/* Create User Dialog */}
-			<Dialog
-				open={createDialogOpen}
-				onClose={handleCreateCancel}
-				aria-labelledby="create-dialog-title"
-				aria-describedby="create-dialog-description"
-				maxWidth="sm"
-				fullWidth
-			>
-				<DialogTitle id="create-dialog-title">
-					Create New User
-				</DialogTitle>
-				<DialogContent>
-					<div className="mt-4 space-y-4">
-						<TextField
-							autoFocus
-							margin="dense"
-							id="fullName"
-							name="fullName"
-							label="Full Name"
-							type="text"
-							fullWidth
-							value={createForm.fullName}
-							onChange={handleCreateChange}
-						/>
-						<TextField
-							margin="dense"
-							id="email"
-							name="email"
-							label="Email"
-							type="email"
-							fullWidth
-							value={createForm.email}
-							onChange={handleCreateChange}
-						/>
-						<TextField
-							margin="dense"
-							id="phoneNumber"
-							name="phoneNumber"
-							label="Phone Number"
-							type="text"
-							fullWidth
-							value={createForm.phoneNumber}
-							onChange={handleCreateChange}
-						/>
-						<TextField
-							margin="dense"
-							id="password"
-							name="password"
-							label="Password"
-							type="password"
-							fullWidth
-							value={createForm.password}
-							onChange={handleCreateChange}
-						/>
-						<FormControl fullWidth margin="dense">
-							<InputLabel id="role-label">Role</InputLabel>
-							<Select
-								labelId="role-label"
-								id="role"
-								name="role"
-								value={createForm.role}
-								label="Role"
-								onChange={handleCreateSelectChange}
-							>
-								<MenuItem value="USER">User</MenuItem>
-								<MenuItem value="ADMIN">Admin</MenuItem>
-							</Select>
-						</FormControl>
-					</div>
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={handleCreateCancel} color="primary">
-						Cancel
-					</Button>
-					<Button
-						onClick={handleCreateSubmit}
-						color="primary"
-						variant="contained"
-						disabled={isSubmitting}
-					>
-						{isSubmitting ? "Creating..." : "Create"}
-					</Button>
-				</DialogActions>
-			</Dialog>
-
-			{/* Delete User Dialog */}
-			<Dialog
-				open={deleteDialogOpen}
-				onClose={handleDeleteCancel}
-				aria-labelledby="delete-dialog-title"
-				aria-describedby="delete-dialog-description"
-			>
-				<DialogTitle id="delete-dialog-title">Delete User</DialogTitle>
-				<DialogContent>
-					<DialogContentText id="delete-dialog-description">
-						Are you sure you want to delete {selectedUser?.fullName}
-						? This action cannot be undone.
-					</DialogContentText>
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={handleDeleteCancel} color="primary">
-						Cancel
-					</Button>
-					<Button
-						onClick={handleDeleteSubmit}
-						color="error"
-						variant="contained"
-						disabled={isSubmitting}
-					>
-						{isSubmitting ? "Deleting..." : "Delete"}
-					</Button>
-				</DialogActions>
-			</Dialog>
-
-			{/* Add View User Dialog */}
-			<Dialog
-				open={viewDialogOpen}
-				onClose={handleViewClose}
-				aria-labelledby="view-dialog-title"
-				maxWidth="md"
-				fullWidth
-			>
-				<DialogTitle
-					id="view-dialog-title"
-					className="flex justify-between items-center"
-				>
-					<span>User Details</span>
-					<Button onClick={handleViewClose} color="primary">
-						Close
-					</Button>
-				</DialogTitle>
-				<DialogContent>
-					{selectedUser && (
-						<div className="space-y-6 mt-2">
-							{/* User Information */}
-							<div className="border border-gray-200 rounded-md p-4">
-								<h3 className="text-lg font-semibold mb-4">
-									User Information
+						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-700/30">
+							<div className="px-6 py-4 border-b border-gray-700/30">
+								<h3 className="text-lg font-medium text-white">
+									Edit User
 								</h3>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div className="space-y-2">
-										<div>
-											<p className="text-sm font-medium text-gray-500">
-												Name
-											</p>
-											<p className="text-md text-gray-900">
-												{selectedUser.fullName}
-											</p>
-										</div>
-										<div>
-											<p className="text-sm font-medium text-gray-500">
-												Email
-											</p>
-											<p className="text-md text-gray-900">
-												{selectedUser.email}
-											</p>
-										</div>
-									</div>
-									<div className="space-y-2">
-										<div>
-											<p className="text-sm font-medium text-gray-500">
-												Phone
-											</p>
-											<p className="text-md text-gray-900">
-												{selectedUser.phoneNumber}
-											</p>
-										</div>
-										<div>
-											<p className="text-sm font-medium text-gray-500">
-												Role
-											</p>
-											<p className="text-md text-gray-900">
-												<span
-													className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-														selectedUser.role ===
-														"ADMIN"
-															? "bg-purple-100 text-purple-800"
-															: "bg-green-100 text-green-800"
-													}`}
-												>
-													{selectedUser.role}
-												</span>
-											</p>
-										</div>
-									</div>
+							</div>
+
+							<form
+								onSubmit={handleEditSubmit}
+								className="px-6 py-4 space-y-4"
+							>
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Full Name
+									</label>
+									<input
+										type="text"
+										name="fullName"
+										value={editForm.fullName}
+										onChange={handleEditChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+										required
+									/>
 								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Email
+									</label>
+									<input
+										type="email"
+										name="email"
+										value={editForm.email}
+										onChange={handleEditChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+										required
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Phone Number
+									</label>
+									<input
+										type="text"
+										name="phoneNumber"
+										value={editForm.phoneNumber}
+										onChange={handleEditChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+										required
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Role
+									</label>
+									<select
+										name="role"
+										value={editForm.role}
+										onChange={handleEditChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+									>
+										<option value="USER">User</option>
+										<option value="ADMIN">Admin</option>
+									</select>
+								</div>
+
+								<div className="flex justify-end space-x-3 pt-4">
+									<button
+										type="button"
+										onClick={handleEditCancel}
+										className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+									>
+										Cancel
+									</button>
+									<button
+										type="submit"
+										disabled={isSubmitting}
+										className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-lg transition-colors flex items-center"
+									>
+										{isSubmitting ? (
+											<ArrowPathIcon className="h-4 w-4 animate-spin mr-2" />
+										) : null}
+										{isSubmitting
+											? "Saving..."
+											: "Save Changes"}
+									</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Create User Modal */}
+			{createDialogOpen && (
+				<div className="fixed inset-0 z-50 overflow-y-auto">
+					<div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+						<div
+							className="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity"
+							onClick={handleCreateCancel}
+						></div>
+
+						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-700/30">
+							<div className="px-6 py-4 border-b border-gray-700/30">
+								<h3 className="text-lg font-medium text-white">
+									Create New User
+								</h3>
 							</div>
 
-							{/* Loans Information */}
-							<div className="border border-gray-200 rounded-md p-4">
-								<h3 className="text-lg font-semibold mb-4">
-									Loan Applications
-								</h3>
+							<form
+								onSubmit={handleCreateSubmit}
+								className="px-6 py-4 space-y-4"
+							>
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Full Name
+									</label>
+									<input
+										type="text"
+										name="fullName"
+										value={createForm.fullName}
+										onChange={handleCreateChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+										required
+									/>
+								</div>
 
-								{loadingLoans ? (
-									<div className="flex justify-center py-6">
-										<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-									</div>
-								) : userLoans.length > 0 ? (
-									<div className="overflow-x-auto">
-										<table className="min-w-full divide-y divide-gray-200">
-											<thead className="bg-gray-50">
-												<tr>
-													<th
-														scope="col"
-														className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"
-													>
-														Loan ID
-													</th>
-													<th
-														scope="col"
-														className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"
-													>
-														Product
-													</th>
-													<th
-														scope="col"
-														className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"
-													>
-														Amount
-													</th>
-													<th
-														scope="col"
-														className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"
-													>
-														Status
-													</th>
-													<th
-														scope="col"
-														className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"
-													>
-														Date
-													</th>
-													<th
-														scope="col"
-														className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"
-													>
-														Action
-													</th>
-												</tr>
-											</thead>
-											<tbody className="bg-white divide-y divide-gray-200">
-												{userLoans.map((loan) => (
-													<tr key={loan.id}>
-														<td className="px-3 py-2 whitespace-nowrap">
-															<div className="text-sm font-medium text-gray-900">
-																{loan.id.substring(
-																	0,
-																	8
-																)}
-															</div>
-														</td>
-														<td className="px-3 py-2 whitespace-nowrap">
-															<div className="text-sm text-gray-900">
-																{loan.product
-																	?.name ||
-																	"N/A"}
-															</div>
-														</td>
-														<td className="px-3 py-2 whitespace-nowrap">
-															<div className="text-sm text-gray-900">
-																{formatCurrency(
-																	loan.amount
-																)}
-															</div>
-														</td>
-														<td className="px-3 py-2 whitespace-nowrap">
-															<span
-																className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
-																	loan.status
-																)}`}
-															>
-																{loan.status.replace(
-																	/_/g,
-																	" "
-																)}
-															</span>
-														</td>
-														<td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-															{formatDate(
-																loan.createdAt
-															)}
-														</td>
-														<td className="px-3 py-2 whitespace-nowrap">
-															<button
-																onClick={() =>
-																	handleViewLoanDetails(
-																		loan.id,
-																		loan.status
-																	)
-																}
-																className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 rounded hover:bg-blue-100"
-															>
-																View Details
-															</button>
-														</td>
-													</tr>
-												))}
-											</tbody>
-										</table>
-									</div>
-								) : (
-									<div className="text-center py-6 text-gray-500">
-										No loan applications found for this
-										user.
-									</div>
-								)}
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Email
+									</label>
+									<input
+										type="email"
+										name="email"
+										value={createForm.email}
+										onChange={handleCreateChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+										required
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Phone Number
+									</label>
+									<input
+										type="text"
+										name="phoneNumber"
+										value={createForm.phoneNumber}
+										onChange={handleCreateChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+										required
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Password
+									</label>
+									<input
+										type="password"
+										name="password"
+										value={createForm.password}
+										onChange={handleCreateChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+										required
+									/>
+								</div>
+
+								<div>
+									<label className="block text-sm font-medium text-gray-300 mb-2">
+										Role
+									</label>
+									<select
+										name="role"
+										value={createForm.role}
+										onChange={handleCreateChange}
+										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+									>
+										<option value="USER">User</option>
+										<option value="ADMIN">Admin</option>
+									</select>
+								</div>
+
+								<div className="flex justify-end space-x-3 pt-4">
+									<button
+										type="button"
+										onClick={handleCreateCancel}
+										className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+									>
+										Cancel
+									</button>
+									<button
+										type="submit"
+										disabled={isSubmitting}
+										className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white rounded-lg transition-colors flex items-center"
+									>
+										{isSubmitting ? (
+											<ArrowPathIcon className="h-4 w-4 animate-spin mr-2" />
+										) : null}
+										{isSubmitting
+											? "Creating..."
+											: "Create User"}
+									</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Delete User Modal */}
+			{deleteDialogOpen && (
+				<div className="fixed inset-0 z-50 overflow-y-auto">
+					<div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+						<div
+							className="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity"
+							onClick={handleDeleteCancel}
+						></div>
+
+						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-gray-700/30">
+							<div className="px-6 py-4 border-b border-gray-700/30">
+								<h3 className="text-lg font-medium text-white">
+									Delete User
+								</h3>
 							</div>
 
-							{/* Account Activity */}
-							<div className="border border-gray-200 rounded-md p-4">
-								<h3 className="text-lg font-semibold mb-4">
-									Account Information
+							<div className="px-6 py-4">
+								<p className="text-gray-300">
+									Are you sure you want to delete{" "}
+									<span className="font-medium text-white">
+										{selectedUser?.fullName}
+									</span>
+									? This action cannot be undone.
+								</p>
+							</div>
+
+							<div className="px-6 py-4 flex justify-end space-x-3">
+								<button
+									onClick={handleDeleteCancel}
+									className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+								>
+									Cancel
+								</button>
+								<button
+									onClick={handleDeleteSubmit}
+									disabled={isSubmitting}
+									className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 text-white rounded-lg transition-colors flex items-center"
+								>
+									{isSubmitting ? (
+										<ArrowPathIcon className="h-4 w-4 animate-spin mr-2" />
+									) : null}
+									{isSubmitting
+										? "Deleting..."
+										: "Delete User"}
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* View User Modal */}
+			{viewDialogOpen && selectedUser && (
+				<div className="fixed inset-0 z-50 overflow-y-auto">
+					<div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+						<div
+							className="fixed inset-0 bg-gray-900 bg-opacity-75 backdrop-blur-sm transition-opacity"
+							onClick={handleViewClose}
+						></div>
+
+						<div className="inline-block align-bottom bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full border border-gray-700/30">
+							<div className="px-6 py-4 border-b border-gray-700/30 flex justify-between items-center">
+								<h3 className="text-lg font-medium text-white">
+									User Details
 								</h3>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div className="space-y-2">
-										<div>
-											<p className="text-sm font-medium text-gray-500">
-												Account Created
-											</p>
-											<p className="text-md text-gray-900">
-												{formatDate(
-													selectedUser.createdAt
-												)}
-											</p>
+								<button
+									onClick={handleViewClose}
+									className="text-gray-400 hover:text-white transition-colors"
+								>
+									<XMarkIcon className="h-6 w-6" />
+								</button>
+							</div>
+
+							<div className="px-6 py-4 max-h-96 overflow-y-auto">
+								<div className="space-y-6">
+									{/* User Information */}
+									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+											<IdentificationIcon className="h-6 w-6 text-blue-400 mr-2" />
+											User Information
+										</h4>
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+											<div className="space-y-3">
+												<div>
+													<p className="text-sm font-medium text-gray-400">
+														Name
+													</p>
+													<p className="text-white">
+														{selectedUser.fullName}
+													</p>
+												</div>
+												<div>
+													<p className="text-sm font-medium text-gray-400">
+														Email
+													</p>
+													<p className="text-white">
+														{selectedUser.email}
+													</p>
+												</div>
+											</div>
+											<div className="space-y-3">
+												<div>
+													<p className="text-sm font-medium text-gray-400">
+														Phone
+													</p>
+													<p className="text-white">
+														{
+															selectedUser.phoneNumber
+														}
+													</p>
+												</div>
+												<div>
+													<p className="text-sm font-medium text-gray-400">
+														Role
+													</p>
+													<span
+														className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
+															selectedUser.role ===
+															"ADMIN"
+																? "bg-purple-500/20 text-purple-200 border-purple-400/20"
+																: "bg-green-500/20 text-green-200 border-green-400/20"
+														}`}
+													>
+														{selectedUser.role}
+													</span>
+												</div>
+											</div>
 										</div>
 									</div>
-									<div className="space-y-2">
-										<div>
-											<p className="text-sm font-medium text-gray-500">
-												Total Applications
-											</p>
-											<p className="text-md text-gray-900">
-												{userLoans.length}
-											</p>
+
+									{/* Loan Applications */}
+									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+											<CreditCardIcon className="h-6 w-6 text-green-400 mr-2" />
+											Loan Applications
+										</h4>
+
+										{loadingLoans ? (
+											<div className="flex justify-center py-6">
+												<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
+											</div>
+										) : userLoans.length > 0 ? (
+											<div className="overflow-x-auto">
+												<table className="min-w-full divide-y divide-gray-700/30">
+													<thead className="bg-gray-800/50">
+														<tr>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Loan ID
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Product
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Amount
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Status
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Date
+															</th>
+															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
+																Action
+															</th>
+														</tr>
+													</thead>
+													<tbody className="divide-y divide-gray-700/30">
+														{userLoans.map(
+															(loan) => (
+																<tr
+																	key={
+																		loan.id
+																	}
+																	className="hover:bg-gray-800/30"
+																>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm font-medium text-white">
+																			{loan.id.substring(
+																				0,
+																				8
+																			)}
+																			...
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm text-gray-300">
+																			{loan
+																				.product
+																				?.name ||
+																				"N/A"}
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<div className="text-sm text-gray-300">
+																			{formatCurrency(
+																				loan.amount
+																			)}
+																		</div>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<span
+																			className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(
+																				loan.status
+																			)}`}
+																		>
+																			{loan.status.replace(
+																				/_/g,
+																				" "
+																			)}
+																		</span>
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap text-sm text-gray-300">
+																		{formatDate(
+																			loan.createdAt
+																		)}
+																	</td>
+																	<td className="px-3 py-2 whitespace-nowrap">
+																		<button
+																			onClick={() =>
+																				handleViewLoanDetails(
+																					loan.id,
+																					loan.status
+																				)
+																			}
+																			className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
+																		>
+																			View
+																			Details
+																		</button>
+																	</td>
+																</tr>
+															)
+														)}
+													</tbody>
+												</table>
+											</div>
+										) : (
+											<div className="text-center py-6 text-gray-400">
+												<CreditCardIcon className="mx-auto h-12 w-12 text-gray-500 mb-2" />
+												<p>
+													No loan applications found
+													for this user.
+												</p>
+											</div>
+										)}
+									</div>
+
+									{/* Account Information */}
+									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+											<CalendarIcon className="h-6 w-6 text-amber-400 mr-2" />
+											Account Information
+										</h4>
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+											<div>
+												<p className="text-sm font-medium text-gray-400">
+													Account Created
+												</p>
+												<p className="text-white">
+													{formatDate(
+														selectedUser.createdAt
+													)}
+												</p>
+											</div>
+											<div>
+												<p className="text-sm font-medium text-gray-400">
+													Total Applications
+												</p>
+												<p className="text-white">
+													{userLoans.length}
+												</p>
+											</div>
 										</div>
 									</div>
 								</div>
 							</div>
 						</div>
-					)}
-				</DialogContent>
-			</Dialog>
+					</div>
+				</div>
+			)}
 		</AdminLayout>
 	);
 }

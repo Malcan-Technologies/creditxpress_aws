@@ -147,16 +147,16 @@ model LoanRepayment {
 }
 
 model LoanApplication {
-  id               String         @id @default(cuid())
+  id               String                   @id @default(cuid())
   userId           String
   productId        String
   amount           Float?
   term             Int?
-  status           String         @default("INCOMPLETE")
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  acceptTerms      Boolean        @default(false)
-  appStep          Int            @default(0)
+  status           String                   @default("INCOMPLETE")
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  acceptTerms      Boolean                  @default(false)
+  appStep          Int                      @default(0)
   applicationFee   Float?
   interestRate     Float?
   lateFee          Float?
@@ -164,15 +164,35 @@ model LoanApplication {
   monthlyRepayment Float?
   netDisbursement  Float?
   originationFee   Float?
-  paidAppFee       Boolean        @default(false)
+  paidAppFee       Boolean                  @default(false)
   purpose          String?
-  urlLink          String?        @unique
-  product          Product        @relation(fields: [productId], references: [id])
-  user             User           @relation(fields: [userId], references: [id])
+  urlLink          String?                  @unique
+  product          Product                  @relation(fields: [productId], references: [id])
+  user             User                     @relation(fields: [userId], references: [id])
   loan             Loan?
   documents        UserDocument[]
+  disbursement     LoanDisbursement?
+  history          LoanApplicationHistory[]
 
   @@map("loan_applications")
+}
+
+model LoanDisbursement {
+  id                String          @id @default(cuid())
+  applicationId     String          @unique
+  referenceNumber   String
+  amount            Float
+  bankName          String?
+  bankAccountNumber String?
+  disbursedAt       DateTime        @default(now())
+  disbursedBy       String // Admin user ID who processed the disbursement
+  notes             String?
+  status            String          @default("COMPLETED")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  application       LoanApplication @relation(fields: [applicationId], references: [id])
+
+  @@map("loan_disbursements")
 }
 
 model UserDocument {
@@ -232,6 +252,22 @@ model NotificationGroup {
   updatedAt   DateTime @updatedAt
 
   @@map("notification_groups")
+}
+
+model LoanApplicationHistory {
+  id             String   @id @default(cuid())
+  applicationId  String
+  previousStatus String?
+  newStatus      String
+  changedBy      String // User ID who made the change
+  changeReason   String? // Optional reason for the change
+  notes          String? // Optional notes about the change
+  metadata       Json? // Additional data related to the change
+  createdAt      DateTime @default(now())
+
+  application LoanApplication @relation(fields: [applicationId], references: [id])
+
+  @@map("loan_application_history")
 }
 
 enum WalletTransactionStatus {

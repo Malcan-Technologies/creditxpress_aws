@@ -152,7 +152,10 @@ export const fetchWithAdminTokenRefresh = async <T>(
 		// For direct backend API calls, we prepend the backend URL
 		const isBackendEndpoint = url.includes("/api/admin/");
 
-		if (isBackendEndpoint) {
+		// Exception: history endpoint should use frontend API route
+		const isHistoryEndpoint = url.includes("/history");
+
+		if (isBackendEndpoint && !isHistoryEndpoint) {
 			// These should go to the backend
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			fullUrl = `${backendUrl}${url}`;

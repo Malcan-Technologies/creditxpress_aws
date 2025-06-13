@@ -47,9 +47,10 @@ export default function AdminProductsPage() {
 	const fetchProducts = async () => {
 		try {
 			setLoading(true);
-			// Fetch products with token refresh
+			// Fetch products directly from backend
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			const data = await fetchWithAdminTokenRefresh<Product[]>(
-				"/api/products"
+				`${backendUrl}/api/products`
 			);
 			setProducts(data);
 		} catch (err) {
@@ -111,9 +112,10 @@ export default function AdminProductsPage() {
 						.filter((num): num is number => num !== null) || [],
 			};
 
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			const url = editingProduct
-				? `/api/products/${editingProduct.id}`
-				: `/api/products`;
+				? `${backendUrl}/api/products/${editingProduct.id}`
+				: `${backendUrl}/api/products`;
 
 			const method = editingProduct ? "PATCH" : "POST";
 
@@ -137,10 +139,14 @@ export default function AdminProductsPage() {
 		}
 
 		try {
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			// Use fetchWithAdminTokenRefresh for deletion
-			await fetchWithAdminTokenRefresh(`/api/products/${id}`, {
-				method: "DELETE",
-			});
+			await fetchWithAdminTokenRefresh(
+				`${backendUrl}/api/products/${id}`,
+				{
+					method: "DELETE",
+				}
+			);
 
 			fetchProducts();
 		} catch (err) {
@@ -161,10 +167,13 @@ export default function AdminProductsPage() {
 	};
 
 	return (
-		<AdminLayout>
+		<AdminLayout
+			title="Products Management"
+			description="Manage loan products and their configurations"
+		>
 			<div className="container mx-auto px-4 py-8">
 				<div className="flex justify-between items-center mb-6">
-					<h1 className="text-2xl font-bold text-gray-800">
+					<h1 className="text-2xl font-bold text-white">
 						Products Management
 					</h1>
 					<button
@@ -176,7 +185,7 @@ export default function AdminProductsPage() {
 				</div>
 
 				{error && (
-					<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+					<div className="bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded mb-4">
 						{error}
 					</div>
 				)}
@@ -186,50 +195,53 @@ export default function AdminProductsPage() {
 						<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
 					</div>
 				) : (
-					<div className="bg-white shadow-md rounded-lg overflow-hidden">
-						<table className="min-w-full divide-y divide-gray-200">
-							<thead className="bg-gray-50">
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+						<table className="min-w-full divide-y divide-gray-700/30">
+							<thead className="bg-gray-800/50">
 								<tr>
-									<th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 										Code
 									</th>
-									<th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 										Name
 									</th>
-									<th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 										Amount Range
 									</th>
-									<th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 										Interest Rate
 									</th>
-									<th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 										Status
 									</th>
-									<th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 										Actions
 									</th>
 								</tr>
 							</thead>
-							<tbody className="bg-white divide-y divide-gray-200">
+							<tbody className="bg-gray-800/20 divide-y divide-gray-700/30">
 								{products.length === 0 ? (
 									<tr>
 										<td
 											colSpan={6}
-											className="px-6 py-4 text-center text-gray-500"
+											className="px-6 py-4 text-center text-gray-400"
 										>
 											No products found
 										</td>
 									</tr>
 								) : (
 									products.map((product) => (
-										<tr key={product.id}>
-											<td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+										<tr
+											key={product.id}
+											className="hover:bg-gray-800/30 transition-colors"
+										>
+											<td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
 												{product.code}
 											</td>
-											<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+											<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
 												{product.name}
 											</td>
-											<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+											<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
 												{formatCurrency(
 													product.minAmount
 												)}{" "}
@@ -238,7 +250,7 @@ export default function AdminProductsPage() {
 													product.maxAmount
 												)}
 											</td>
-											<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+											<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
 												{formatPercentage(
 													product.interestRate
 												)}
@@ -247,8 +259,8 @@ export default function AdminProductsPage() {
 												<span
 													className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
 														product.isActive
-															? "bg-green-100 text-green-800"
-															: "bg-red-100 text-red-800"
+															? "bg-green-500/20 text-green-300 border border-green-400/20"
+															: "bg-red-500/20 text-red-300 border border-red-400/20"
 													}`}
 												>
 													{product.isActive
@@ -261,7 +273,7 @@ export default function AdminProductsPage() {
 													onClick={() =>
 														handleEdit(product)
 													}
-													className="text-indigo-600 hover:text-indigo-900 mr-4"
+													className="text-blue-400 hover:text-blue-300 mr-4 transition-colors"
 												>
 													Edit
 												</button>
@@ -269,7 +281,7 @@ export default function AdminProductsPage() {
 													onClick={() =>
 														handleDelete(product.id)
 													}
-													className="text-red-600 hover:text-red-900"
+													className="text-red-400 hover:text-red-300 transition-colors"
 												>
 													Delete
 												</button>
@@ -284,17 +296,17 @@ export default function AdminProductsPage() {
 
 				{/* Product Form Modal */}
 				{isModalOpen && (
-					<div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
-						<div className="bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+					<div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+						<div className="bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700/30 rounded-xl shadow-xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
 							<div className="flex justify-between items-center mb-6">
-								<h2 className="text-xl font-bold text-gray-800">
+								<h2 className="text-xl font-bold text-white">
 									{editingProduct
 										? "Edit Product"
 										: "Create New Product"}
 								</h2>
 								<button
 									onClick={() => setIsModalOpen(false)}
-									className="text-gray-500 hover:text-gray-700"
+									className="text-gray-400 hover:text-white transition-colors"
 								>
 									<svg
 										className="w-6 h-6"
@@ -316,7 +328,7 @@ export default function AdminProductsPage() {
 							<form onSubmit={handleSubmit} className="space-y-6">
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Product Code
 										</label>
 										<input
@@ -328,11 +340,11 @@ export default function AdminProductsPage() {
 													code: e.target.value,
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Product Name
 										</label>
 										<input
@@ -344,11 +356,11 @@ export default function AdminProductsPage() {
 													name: e.target.value,
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div className="md:col-span-2">
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Description
 										</label>
 										<textarea
@@ -359,12 +371,12 @@ export default function AdminProductsPage() {
 													description: e.target.value,
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 											rows={3}
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Minimum Amount (MYR)
 										</label>
 										<input
@@ -378,11 +390,11 @@ export default function AdminProductsPage() {
 													),
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Maximum Amount (MYR)
 										</label>
 										<input
@@ -396,11 +408,11 @@ export default function AdminProductsPage() {
 													),
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Interest Rate (% per month)
 										</label>
 										<input
@@ -415,11 +427,11 @@ export default function AdminProductsPage() {
 													),
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Late Fee (% per month)
 										</label>
 										<input
@@ -434,11 +446,11 @@ export default function AdminProductsPage() {
 													),
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Origination Fee (%)
 										</label>
 										<input
@@ -453,11 +465,11 @@ export default function AdminProductsPage() {
 													),
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Legal Fee (%)
 										</label>
 										<input
@@ -471,11 +483,11 @@ export default function AdminProductsPage() {
 													),
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Application Fee (MYR)
 										</label>
 										<input
@@ -489,11 +501,11 @@ export default function AdminProductsPage() {
 													),
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										/>
 									</div>
 									<div>
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Status
 										</label>
 										<select
@@ -510,7 +522,7 @@ export default function AdminProductsPage() {
 														"true",
 												})
 											}
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 										>
 											<option value="true">Active</option>
 											<option value="false">
@@ -519,7 +531,7 @@ export default function AdminProductsPage() {
 										</select>
 									</div>
 									<div className="md:col-span-2">
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Repayment Terms (months, one per
 											line)
 										</label>
@@ -538,12 +550,12 @@ export default function AdminProductsPage() {
 												}));
 											}}
 											placeholder="3&#10;6&#10;12"
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 											rows={4}
 										/>
 									</div>
 									<div className="md:col-span-2">
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Eligibility Criteria (one per line)
 										</label>
 										<textarea
@@ -561,12 +573,12 @@ export default function AdminProductsPage() {
 												});
 											}}
 											placeholder="Minimum age: 21 years&#10;Minimum income: RM 2,000&#10;Employment: At least 6 months"
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 											rows={4}
 										/>
 									</div>
 									<div className="md:col-span-2">
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Required Documents (one per line)
 										</label>
 										<textarea
@@ -584,12 +596,12 @@ export default function AdminProductsPage() {
 												});
 											}}
 											placeholder="IC&#10;Latest 3 months bank statements&#10;Latest 3 months payslips"
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 											rows={4}
 										/>
 									</div>
 									<div className="md:col-span-2">
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Product Features (one per line)
 										</label>
 										<textarea
@@ -606,12 +618,12 @@ export default function AdminProductsPage() {
 												});
 											}}
 											placeholder="Fast approval within 24 hours&#10;No hidden fees&#10;Flexible repayment terms"
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 											rows={4}
 										/>
 									</div>
 									<div className="md:col-span-2">
-										<label className="block text-sm font-medium text-gray-700 mb-1">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
 											Loan Types (one per line)
 										</label>
 										<textarea
@@ -629,7 +641,7 @@ export default function AdminProductsPage() {
 												});
 											}}
 											placeholder="Personal Loan&#10;Business Loan&#10;Education Loan"
-											className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
 											rows={4}
 										/>
 									</div>
@@ -639,13 +651,13 @@ export default function AdminProductsPage() {
 									<button
 										type="button"
 										onClick={() => setIsModalOpen(false)}
-										className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+										className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
 									>
 										Cancel
 									</button>
 									<button
 										type="submit"
-										className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+										className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors"
 									>
 										{editingProduct
 											? "Update Product"
