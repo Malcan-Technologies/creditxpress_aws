@@ -149,8 +149,8 @@ jobs:
             elif [ "${{ inputs.deploy_config }}" = "false" ]; then
               echo "config_changed=false" >> $GITHUB_OUTPUT
             else
-              # Auto-detect for config
-              if git diff --name-only HEAD~1 HEAD | grep -E '^config/'; then
+              # Auto-detect for config and scripts
+              if git diff --name-only HEAD~1 HEAD | grep -E '^config/|^scripts/'; then
                 echo "config_changed=true" >> $GITHUB_OUTPUT
               else
                 echo "config_changed=false" >> $GITHUB_OUTPUT
@@ -180,7 +180,7 @@ jobs:
               echo "backend_changed=false" >> $GITHUB_OUTPUT
             fi
             
-            if git diff --name-only HEAD~1 HEAD | grep -E '^config/'; then
+            if git diff --name-only HEAD~1 HEAD | grep -E '^config/|^scripts/'; then
               echo "config_changed=true" >> $GITHUB_OUTPUT
             else
               echo "config_changed=false" >> $GITHUB_OUTPUT
@@ -427,6 +427,14 @@ jobs:
               -e "ssh -i ~/.ssh/deploy_key" \
               backend/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
             
+            # Copy scripts directory to the root of the project
+            rsync -avz --delete \
+              -e "ssh -i ~/.ssh/deploy_key" \
+              scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
+            
+            # Make scripts executable
+            ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'chmod +x /var/www/growkapital/scripts/*.sh'
+            
             # Build and start backend containers with optimizations
             ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
               cd /var/www/growkapital/backend
@@ -511,16 +519,24 @@ jobs:
           
           echo "🎉 All parallel deployments completed successfully"
 
-      - name: Deploy config files
+      - name: Deploy config files and scripts
         if: steps.changes.outputs.config_changed == 'true'
         run: |
-          echo "🚀 Deploying config files (changes detected)..."
+          echo "🚀 Deploying config files and scripts (changes detected)..."
           
           # Create destination directory and copy files
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/config'
           rsync -avz --delete \
             -e "ssh -i ~/.ssh/deploy_key" \
             config/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/config/
+          
+          # Also copy scripts directory when config changes (they often work together)
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            scripts/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/scripts/
+          
+          # Make scripts executable
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'chmod +x /var/www/growkapital/scripts/*.sh'
           
           # Apply nginx configuration
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -546,9 +562,9 @@ jobs:
             echo "✅ Nginx configuration applied successfully"
           '
 
-      - name: Skip config deployment
+      - name: Skip config and scripts deployment
         if: steps.changes.outputs.config_changed == 'false'
-        run: echo "⏭️ Skipping config deployment (no changes detected)"
+        run: echo "⏭️ Skipping config and scripts deployment (no changes detected)"
 
       - name: Verify deployment
         run: |

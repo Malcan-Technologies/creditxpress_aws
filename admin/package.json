@@ -6,7 +6,7 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "build:prod": "NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 next build --no-lint",
-    "start": "next start",
+    "start": "next start -p 3003",
     "lint": "next lint"
   },
   "dependencies": {
