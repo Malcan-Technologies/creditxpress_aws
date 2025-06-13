@@ -43,8 +43,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install OpenSSL and jq
-RUN apk add --no-cache openssl jq
+# Install OpenSSL, jq, and wget for health checks
+RUN apk add --no-cache openssl jq wget
 
 # Copy package files and install production dependencies
 COPY package*.json ./
@@ -67,5 +67,5 @@ RUN mkdir -p uploads && chmod 777 uploads
 # Expose the port the app runs on
 EXPOSE 4001
 
-# Start the application with migration
-CMD ["sh", "-c", "./scripts/migrate-db.sh && node dist/src/index.js"] 
+# Start the application (migrations will be run separately)
+CMD ["node", "dist/src/index.js"] 

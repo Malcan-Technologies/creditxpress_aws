@@ -240,13 +240,9 @@ jobs:
             # Build and start containers with production configuration
             docker compose -f docker-compose.prod.yml up -d --build
             
-            # Wait for containers to be healthy
-            echo "Waiting for containers to be healthy..."
-            sleep 30
-            
-            # Run database migrations
-            echo "Running database migrations..."
-            docker compose -f docker-compose.prod.yml exec -T backend npx prisma migrate deploy
+            # Run database migrations using the dedicated script
+            chmod +x scripts/run-migrations.sh
+            ./scripts/run-migrations.sh
           '
 
       - name: Deploy config files
