@@ -26,6 +26,7 @@ services:
         volumes:
             - ./:/app
             - /app/node_modules
+            - ./uploads:/app/uploads
         environment:
             - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/kapital?schema=public
             - JWT_SECRET=kapital_nextauth_secret_key_2024_03_secure_789!@#
