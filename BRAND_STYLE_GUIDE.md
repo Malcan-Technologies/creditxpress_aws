@@ -22,6 +22,84 @@
 
 ---
 
+## 🎯 Product-Specific Color Themes
+
+Each product/solution has its own distinctive color theme for consistency across all pages, components, and marketing materials:
+
+### Business & Personal Loans
+* **Primary Color:** Blue-600 (`#2563EB`)
+* **Background:** Blue-50 (`#EFF6FF`)
+* **Icon Background:** Blue-600/10 with border-blue-600/20
+* **Usage:** All loan-related products, SME Term Loans, Personal Loans
+
+```jsx
+// Example usage
+<div className="bg-blue-600 text-white">Primary CTA</div>
+<div className="bg-blue-50 border-blue-200">Card background</div>
+<div className="text-blue-600">Text elements</div>
+```
+
+### Earned Wage Access (PayAdvance™)
+* **Primary Color:** Emerald-600 (`#059669`)
+* **Background:** Emerald-50 (`#ECFDF5`)
+* **Icon Background:** Emerald-600/10 with border-emerald-600/20
+* **Usage:** All earned wage access features, employee benefits
+
+```jsx
+// Example usage
+<div className="bg-emerald-600 text-white">Primary CTA</div>
+<div className="bg-emerald-50 border-emerald-200">Card background</div>
+<div className="text-emerald-600">Text elements</div>
+```
+
+### Private Credit Investments
+* **Primary Color:** Gray-800 (`#1F2937`)
+* **Background:** Gray-50 (`#F9FAFB`)
+* **Icon Background:** Gray-800/10 with border-gray-800/20
+* **Usage:** All investment products, private credit, wealth management
+
+```jsx
+// Example usage
+<div className="bg-gray-800 text-white">Primary CTA</div>
+<div className="bg-gray-50 border-gray-200">Card background</div>
+<div className="text-gray-800">Text elements</div>
+```
+
+### Credit Analytics
+* **Primary Color:** Purple-Primary (`#7C3AED`)
+* **Background:** Purple-50 (`#FAF5FF`)
+* **Icon Background:** Purple-primary/10 with border-purple-primary/20
+* **Usage:** CTOS reports, credit monitoring, business verification
+
+```jsx
+// Example usage
+<div className="bg-purple-primary text-white">Primary CTA</div>
+<div className="bg-purple-50 border-purple-200">Card background</div>
+<div className="text-purple-primary">Text elements</div>
+```
+
+### Credit Builder
+* **Primary Color:** Yellow-500 (`#EAB308`)
+* **Background:** Yellow-50 (`#FEFCE8`)
+* **Icon Background:** Yellow-500/10 with border-yellow-500/20
+* **Usage:** Credit building programs, score improvement, financial education
+
+```jsx
+// Example usage
+<div className="bg-yellow-500 text-white">Primary CTA</div>
+<div className="bg-yellow-50 border-yellow-200">Card background</div>
+<div className="text-yellow-600">Text elements</div>
+```
+
+### Product Theme Implementation Guidelines
+1. **Primary CTA buttons** should use the product's primary color
+2. **Secondary buttons** should use the product's background color with primary color text
+3. **Card backgrounds** should use the product's light background color
+4. **Icons and accents** should use the product's primary color
+5. **Hover states** should darken the primary color (e.g., `hover:bg-blue-700` for blue-600)
+
+---
+
 ## 🧹 Component Design Patterns
 
 ### General Styling
@@ -94,6 +172,16 @@
 <button className="bg-blue-tertiary text-white px-6 py-3 rounded-xl hover:bg-blue-600 transition">
   Learn More
 </button>
+
+// Product-specific button (example for loans)
+<button className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition">
+  Apply for Loan
+</button>
+
+// Product-specific button (example for credit builder)
+<button className="bg-yellow-500 text-white px-6 py-3 rounded-xl hover:bg-yellow-600 transition">
+  Start Building Credit
+</button>
 ```
 
 ---
@@ -165,4 +253,4 @@
 
 ## 🧠 Prompt Summary for Cursor AI
 
-> Use a soft off-white background (`#F7F4EF`) with primary brand color in purple (`#7C3AED`) and a complementary blue accent (`#38BDF8`). Layout cards in visually interesting proportions (1/3 + 2/3, 1/4 + 3/4, etc.) with consistent spacing and rounded corners (`rounded-xl`). Use Manrope for headings and Inter for body text. Buttons should have hover states and fit the brand colors. Ensure layout is responsive and easy to read.
+> Use a soft off-white background (`#F7F4EF`) with primary brand color in purple (`#7C3AED`) and a complementary blue accent (`#38BDF8`). Each product has its own color theme: Business Loans (Blue-600), Earned Wage Access (Emerald-600), Private Credit Investments (Gray-800), Credit Analytics (Purple-Primary), and Credit Builder (Yellow-500). Layout cards in visually interesting proportions (1/3 + 2/3, 1/4 + 3/4, etc.) with consistent spacing and rounded corners (`rounded-xl`). Use Manrope for headings and Inter for body text. Buttons should have hover states and fit the brand colors. Ensure layout is responsive and easy to read.

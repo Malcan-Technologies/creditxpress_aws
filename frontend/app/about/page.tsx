@@ -26,7 +26,7 @@ export default function About() {
 			<Navbar bgStyle="bg-transparent" />
 
 			{/* Hero Section */}
-			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 w-full">
+			<section className="min-h-screen relative flex items-center bg-[#0A0612] w-full">
 				{/* Gradient background elements */}
 				<div className="absolute inset-0 overflow-hidden">
 					<div className="absolute w-[500px] h-[500px] bg-purple-primary/10 rounded-full blur-3xl -top-32 -left-32"></div>
@@ -38,14 +38,16 @@ export default function About() {
 				<div className="relative w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-32">
 					<div className="grid lg:grid-cols-2 gap-12 items-center">
 						<div className="text-center lg:text-left">
-							<h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold tracking-tight text-white mb-6 leading-tight">
-								About Kapital
+							<h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-heading font-bold tracking-tight mb-6 leading-tight">
+								<span className="text-white drop-shadow-2xl [text-shadow:_0_4px_12px_rgb(147_51_234_/_0.8)]">
+									Hello, we're
+								</span>
 								<br />
-								<span className="text-purple-300">
-									Malaysia's Financial Future
+								<span className="text-white drop-shadow-2xl [text-shadow:_0_4px_12px_rgb(147_51_234_/_0.8)]">
+									kredit.my
 								</span>
 							</h1>
-							<p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-gray-300 mb-8 lg:mb-12 font-body leading-relaxed">
+							<p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-gray-200 mb-8 lg:mb-12 font-body leading-relaxed drop-shadow-lg">
 								We're revolutionizing business financing in
 								Malaysia through technology, transparency, and
 								trust. Our mission is to empower everyone with

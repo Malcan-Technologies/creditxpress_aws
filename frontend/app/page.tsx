@@ -5,6 +5,7 @@ import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Logo from "@/components/Logo";
+import { useState } from "react";
 import {
 	MdArrowForward,
 	MdCheck,
@@ -20,20 +21,102 @@ import {
 	MdTrendingUp,
 	MdAccountBalance,
 	MdAssessment,
+	MdLock,
 } from "react-icons/md";
 
+// Password Protection Component
+function PasswordProtection({ onUnlock }: { onUnlock: () => void }) {
+	const [password, setPassword] = useState("");
+	const [error, setError] = useState("");
+
+	const handleSubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+		// Set your development password here
+		const DEV_PASSWORD = "dev123"; // Change this to your preferred password
+
+		if (password === DEV_PASSWORD) {
+			onUnlock();
+			setError("");
+		} else {
+			setError("Incorrect password");
+			setPassword("");
+		}
+	};
+
+	return (
+		<div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+			<div className="bg-white rounded-xl p-8 w-full max-w-md shadow-xl">
+				<div className="text-center mb-6">
+					<div className="w-16 h-16 bg-purple-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+						<MdLock size={32} className="text-purple-primary" />
+					</div>
+					<h2 className="text-2xl font-heading font-bold text-gray-700 mb-2">
+						Development Access
+					</h2>
+					<p className="text-gray-500">
+						This site is currently in development mode
+					</p>
+				</div>
+
+				<form onSubmit={handleSubmit} className="space-y-4">
+					<div>
+						<label
+							htmlFor="password"
+							className="block text-sm font-medium text-gray-700 mb-2"
+						>
+							Password
+						</label>
+						<input
+							type="password"
+							id="password"
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-primary focus:border-transparent"
+							placeholder="Enter development password"
+							autoFocus
+						/>
+						{error && (
+							<p className="text-red-500 text-sm mt-2">{error}</p>
+						)}
+					</div>
+
+					<button
+						type="submit"
+						className="w-full bg-purple-primary text-white hover:bg-purple-700 font-semibold py-3 px-4 rounded-lg transition-all duration-200"
+					>
+						Access Site
+					</button>
+				</form>
+
+				<div className="mt-6 pt-6 border-t border-gray-200">
+					<p className="text-xs text-gray-500 text-center">
+						Development environment - temporary access control
+					</p>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export default function Home() {
+	const [isUnlocked, setIsUnlocked] = useState(false);
+
 	const scrollToSection = (sectionId: string) => {
 		const element = document.getElementById(sectionId);
 		element?.scrollIntoView({ behavior: "smooth" });
 	};
+
+	// Show password protection if not unlocked
+	if (!isUnlocked) {
+		return <PasswordProtection onUnlock={() => setIsUnlocked(true)} />;
+	}
 
 	return (
 		<div className="min-h-screen bg-offwhite text-gray-700 font-body w-full">
 			<Navbar bgStyle="bg-transparent" />
 
 			{/* Hero Section */}
-			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 w-full">
+			<section className="min-h-screen relative flex items-center bg-[#0A0612] w-full">
 				{/* Gradient background elements */}
 				<div className="absolute inset-0 overflow-hidden">
 					<div className="absolute w-[500px] h-[500px] bg-purple-primary/10 rounded-full blur-3xl -top-32 -left-32"></div>
@@ -45,14 +128,14 @@ export default function Home() {
 				<div className="relative w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-32">
 					<div className="grid lg:grid-cols-2 gap-12 items-center">
 						<div className="text-center lg:text-left">
-							<h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-heading font-bold tracking-tight text-white mb-6 leading-tight">
-								Modern Credit for Malaysia
-								<br />
+							<h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-heading font-bold tracking-tight mb-6 leading-tight">
+								<span className="text-white drop-shadow-2xl [text-shadow:_0_4px_12px_rgb(147_51_234_/_0.8)]">
+									Modern Credit for Malaysia
+								</span>
 							</h1>
-							<p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-gray-300 mb-8 lg:mb-12 font-body leading-relaxed">
-								Fast, transparent, and responsible lending
-								solutions designed for Malaysian businesses and
-								individuals.
+							<p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-gray-200 mb-8 lg:mb-12 font-body leading-relaxed drop-shadow-lg">
+								Fast, transparent, and responsible private
+								credit solutions designed for Malaysians.
 							</p>
 							<div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
 								<Link
@@ -78,7 +161,7 @@ export default function Home() {
 						{/* Hero Image */}
 						<div className="relative h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]">
 							<Image
-								src="/speed.svg"
+								src="/load.svg"
 								alt="Modern Digital Banking"
 								fill
 								className="object-contain"
@@ -89,138 +172,858 @@ export default function Home() {
 				</div>
 			</section>
 
-			{/* Mission & Stats Section */}
-			<section className="relative py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
+			{/* Partners Section */}
+			<section className="py-12 sm:py-16 bg-white border-b border-gray-100 w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					{/* Mission Statement */}
-					<div className="text-center mb-8 lg:mb-12">
-						<div className="inline-flex items-center px-4 sm:px-6 py-2 sm:py-3 bg-purple-primary/10 rounded-full mb-6 sm:mb-8 border border-purple-primary/20">
+					<div className="text-center mb-8 sm:mb-12">
+						<h2 className="text-xl sm:text-xl md:text-2xl font-heading font-bold text-gray-600 mb-2">
+							Our Partners
+						</h2>
+					</div>
+
+					{/* Scrolling partner logos */}
+					<div className="relative overflow-hidden">
+						<div className="flex animate-scroll space-x-16">
+							{/* First set of logos */}
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/opg.png"
+									alt="OPG Capital Holdings"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/kpkt.png"
+									alt="KPKT - Ministry of Housing and Local Government"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/ctos.png"
+									alt="CTOS Data Systems"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/ssm_einfo.png"
+									alt="SSM eInfo"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/al-kathiri.png"
+									alt="Al-Kathiri Holdings"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							{/* Duplicate set for seamless loop */}
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/opg.png"
+									alt="OPG Capital Holdings"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/kpkt.png"
+									alt="KPKT - Ministry of Housing and Local Government"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/ctos.png"
+									alt="CTOS Data Systems"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/ssm_einfo.png"
+									alt="SSM eInfo"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/al-kathiri.png"
+									alt="Al-Kathiri Holdings"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							{/* Third set for extra smooth scrolling */}
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/opg.png"
+									alt="OPG Capital Holdings"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/kpkt.png"
+									alt="KPKT - Ministry of Housing and Local Government"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/ctos.png"
+									alt="CTOS Data Systems"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/ssm_einfo.png"
+									alt="SSM eInfo"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+
+							<div className="flex items-center justify-center min-w-[160px] h-16 sm:h-20 hover:scale-105 transition-all duration-300">
+								<Image
+									src="/logos/al-kathiri.png"
+									alt="Al-Kathiri Holdings"
+									width={160}
+									height={80}
+									className="object-contain h-full w-auto"
+								/>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			{/* Products Section */}
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					{/* Section Header */}
+					<div className="text-center mb-8 lg:mb-16">
+						<div className="inline-flex items-center px-4 py-2 bg-purple-primary/10 rounded-full mb-4 sm:mb-6 border border-purple-primary/20">
 							<span className="text-xs sm:text-sm font-semibold text-purple-primary">
-								Our Mission
+								Our Solutions
 							</span>
 						</div>
-						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 leading-tight px-4">
-							We're Building the
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
+							Financial Solutions
 							<br />
 							<span className="text-purple-primary">
-								Future of Finance
+								Built for Malaysia
 							</span>
-							<br />
-							in Malaysia
 						</h2>
-						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body leading-relaxed px-4 max-w-none lg:max-w-5xl">
-							At Kapital, we believe every Malaysian business
-							deserves access to fast, transparent, and
-							responsible financing. We're not just another lender
-							— we're your partners in growth, using technology to
-							make credit accessible, affordable, and fair.
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-4xl">
+							Comprehensive financial services designed to help
+							businesses and individuals thrive in Malaysia's
+							dynamic economy
 						</p>
 					</div>
 
-					{/* Stats Card */}
-					<div className="bg-white rounded-xl lg:rounded-2xl p-4 sm:p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100 relative overflow-hidden mx-2 sm:mx-4 lg:mx-0">
-						{/* Background Pattern */}
-						<div className="absolute inset-0 opacity-5">
-							<div className="absolute w-40 h-40 bg-purple-primary rounded-full blur-3xl -top-10 -right-10"></div>
-							<div className="absolute w-32 h-32 bg-blue-tertiary rounded-full blur-2xl -bottom-8 -left-8"></div>
+					{/* Product Cards - Full Width Horizontal */}
+					<div className="space-y-8 lg:space-y-12 mx-2 sm:mx-4 lg:mx-0">
+						{/* Borrowing Solutions Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="grid lg:grid-cols-2 gap-0">
+								{/* Content Side */}
+								<div className="p-8 lg:p-12 flex flex-col justify-center">
+									<div className="flex items-center mb-6">
+										<div className="w-16 h-16 lg:w-20 lg:h-20 bg-blue-600/10 rounded-xl lg:rounded-2xl flex items-center justify-center mr-4">
+											<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+												<Image
+													src="/business-loan.svg"
+													alt="Business Loans"
+													fill
+													className="object-contain"
+												/>
+											</div>
+										</div>
+										<div>
+											<h3 className="text-2xl lg:text-4xl font-heading font-bold text-gray-700 mb-2">
+												Personal & Business Loans
+											</h3>
+											<p className="text-lg lg:text-xl text-blue-600 font-semibold mb-2">
+												Fast • Transparent • Flexible
+											</p>
+											<p className="text-sm text-gray-500 font-medium">
+												Powered by OPG Capital Holdings
+												Sdn Bhd
+											</p>
+										</div>
+									</div>
+
+									<p className="text-lg lg:text-xl text-gray-600 mb-8 font-body leading-relaxed">
+										Get the financing you need with our
+										AI-powered lending platform. Whether
+										it's personal loans for life's important
+										moments or business loans for growth and
+										expansion, we provide fast, transparent
+										solutions designed for Malaysians.
+									</p>
+
+									{/* Features Grid */}
+									<div className="grid grid-cols-2 gap-4 lg:gap-6 mb-8">
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Personal: Up to RM 150,000
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Business: Up to RM 500,000
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												24-48 hour approval
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												100% digital process
+											</span>
+										</div>
+									</div>
+
+									{/* CTA */}
+									<div className="flex flex-col sm:flex-row gap-4">
+										<Link
+											href="/products"
+											className="bg-blue-600 text-white hover:bg-blue-700 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
+										>
+											Apply for Loan
+											<MdArrowForward
+												size={20}
+												className="ml-2"
+											/>
+										</Link>
+										<Link
+											href="/sme-term-loan"
+											className="bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
+										>
+											Business Loans
+										</Link>
+									</div>
+								</div>
+
+								{/* Visual Side */}
+								<div className="relative h-64 lg:h-auto bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
+									<div className="relative h-48 w-48 lg:h-64 lg:w-64">
+										<Image
+											src="/business-loan.svg"
+											alt="Business Loan"
+											fill
+											className="object-contain"
+										/>
+									</div>
+									{/* Floating elements */}
+									<div className="absolute top-8 right-8 w-16 h-16 bg-blue-600/20 rounded-full blur-xl"></div>
+									<div className="absolute bottom-8 left-8 w-12 h-12 bg-blue-400/30 rounded-full blur-lg"></div>
+								</div>
+							</div>
 						</div>
 
-						<div className="relative">
-							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-								{/* Total Amount Loaned */}
-								<div className="text-center group">
-									<div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-primary/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-purple-primary/20 transition-colors">
-										<MdTrendingUp
-											size={24}
-											className="text-purple-primary sm:w-7 sm:h-7"
+						{/* Earned Wage Access Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="grid lg:grid-cols-2 gap-0">
+								{/* Visual Side - Left for variety */}
+								<div className="relative h-64 lg:h-auto bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center order-2 lg:order-1">
+									<div className="relative h-48 w-48 lg:h-64 lg:w-64">
+										<Image
+											src="/camping.svg"
+											alt="Earned Wage Access"
+											fill
+											className="object-contain"
 										/>
 									</div>
-									<div className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary mb-1">
-										RM 250M+
+									{/* Floating elements */}
+									<div className="absolute top-8 left-8 w-16 h-16 bg-emerald-600/20 rounded-full blur-xl"></div>
+									<div className="absolute bottom-8 right-8 w-12 h-12 bg-emerald-400/30 rounded-full blur-lg"></div>
+								</div>
+
+								{/* Content Side */}
+								<div className="p-8 lg:p-12 flex flex-col justify-center order-1 lg:order-2">
+									<div className="flex items-center mb-6">
+										<div className="w-16 h-16 lg:w-20 lg:h-20 bg-emerald-600/10 rounded-xl lg:rounded-2xl flex items-center justify-center mr-4">
+											<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+												<Image
+													src="/camping.svg"
+													alt="Earned Wage Access"
+													fill
+													className="object-contain"
+												/>
+											</div>
+										</div>
+										<div>
+											<h3 className="text-2xl lg:text-4xl font-heading font-bold text-gray-700 mb-2">
+												Earned Wage Access
+											</h3>
+											<p className="text-lg lg:text-xl text-emerald-600 font-semibold mb-2">
+												Instant • Flexible • Employee
+												Benefits
+											</p>
+										</div>
 									</div>
-									<div className="text-sm sm:text-base text-gray-700 font-semibold">
-										Total Loans Disbursed
+
+									<p className="text-lg lg:text-xl text-gray-600 mb-8 font-body leading-relaxed">
+										Access your earned wages before payday
+										with our innovative employee benefit
+										solution. Help your workforce manage
+										cash flow better while reducing
+										financial stress and improving
+										productivity.
+									</p>
+
+									{/* Features Grid */}
+									<div className="grid grid-cols-2 gap-4 lg:gap-6 mb-8">
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-emerald-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Instant access to wages
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-emerald-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												No cost to employers
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-emerald-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Transparent low fees
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-emerald-600 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Easy payroll integration
+											</span>
+										</div>
+									</div>
+
+									{/* CTA */}
+									<div className="flex flex-col sm:flex-row gap-4">
+										<Link
+											href="/pay-advance"
+											className="bg-emerald-600 text-white hover:bg-emerald-700 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
+										>
+											Get Wage Access
+											<MdArrowForward
+												size={20}
+												className="ml-2"
+											/>
+										</Link>
+										<Link
+											href="/products"
+											className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
+										>
+											For Employers
+										</Link>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Investment Solutions Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="grid lg:grid-cols-2 gap-0">
+								{/* Content Side */}
+								<div className="p-8 lg:p-12 flex flex-col justify-center">
+									<div className="flex items-center mb-6">
+										<div className="w-16 h-16 lg:w-20 lg:h-20 bg-gray-800/10 rounded-xl lg:rounded-2xl flex items-center justify-center mr-4">
+											<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+												<Image
+													src="/invest.svg"
+													alt="Investments"
+													fill
+													className="object-contain"
+												/>
+											</div>
+										</div>
+										<div>
+											<h3 className="text-2xl lg:text-4xl font-heading font-bold text-gray-700 mb-2">
+												Private Credit Investments
+											</h3>
+											<p className="text-lg lg:text-xl text-gray-800 font-semibold mb-2">
+												Secured • High Returns • Monthly
+												Income
+											</p>
+											<p className="text-sm text-gray-500 font-medium">
+												Powered by Al-Kathiri Koperasi
+												Berhad
+											</p>
+										</div>
+									</div>
+
+									<p className="text-lg lg:text-xl text-gray-600 mb-8 font-body leading-relaxed">
+										Access exclusive private credit
+										opportunities with competitive returns.
+										Our investment platform connects you
+										with carefully vetted borrowers,
+										offering steady monthly income with
+										security-backed investments.
+									</p>
+
+									{/* Features Grid */}
+									<div className="grid grid-cols-2 gap-4 lg:gap-6 mb-8">
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-gray-800 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Up to 8% annual returns
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-gray-800 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Monthly distributions
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-gray-800 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Secured investments
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-gray-800 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Minimum RM 10,000
+											</span>
+										</div>
+									</div>
+
+									{/* CTA */}
+									<div className="flex flex-col sm:flex-row gap-4">
+										<Link
+											href="/products"
+											className="bg-gray-800 text-white hover:bg-gray-900 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
+										>
+											Start Investing
+											<MdArrowForward
+												size={20}
+												className="ml-2"
+											/>
+										</Link>
+										<Link
+											href="/about"
+											className="bg-gray-50 text-gray-800 hover:bg-gray-100 border border-gray-200 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
+										>
+											Learn More
+										</Link>
 									</div>
 								</div>
 
-								{/* Number of Customers */}
-								<div className="text-center group">
-									<div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-tertiary/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-tertiary/20 transition-colors">
-										<MdPeople
-											size={24}
-											className="text-blue-tertiary sm:w-7 sm:h-7"
+								{/* Visual Side */}
+								<div className="relative h-64 lg:h-auto bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+									<div className="relative h-48 w-48 lg:h-64 lg:w-64">
+										<Image
+											src="/invest.svg"
+											alt="Investment Opportunities"
+											fill
+											className="object-contain"
 										/>
 									</div>
-									<div className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-tertiary mb-1">
-										15,000+
+									{/* Floating elements */}
+									<div className="absolute top-8 right-8 w-16 h-16 bg-gray-800/20 rounded-full blur-xl"></div>
+									<div className="absolute bottom-8 left-8 w-12 h-12 bg-gray-600/30 rounded-full blur-lg"></div>
+								</div>
+							</div>
+						</div>
+
+						{/* Analytics & Reports Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="grid lg:grid-cols-2 gap-0">
+								{/* Visual Side */}
+								<div className="relative h-64 lg:h-auto bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center order-2 lg:order-1">
+									<div className="relative h-48 w-48 lg:h-64 lg:w-64">
+										<Image
+											src="/analytics.svg"
+											alt="Analytics Dashboard"
+											fill
+											className="object-contain"
+										/>
 									</div>
-									<div className="text-sm sm:text-base text-gray-700 font-semibold">
-										Trusted Customers
+									{/* Floating elements */}
+									<div className="absolute top-8 left-8 w-16 h-16 bg-purple-primary/20 rounded-full blur-xl"></div>
+									<div className="absolute bottom-8 right-8 w-12 h-12 bg-purple-400/30 rounded-full blur-lg"></div>
+								</div>
+
+								{/* Content Side */}
+								<div className="p-8 lg:p-12 flex flex-col justify-center order-1 lg:order-2">
+									<div className="flex items-center mb-6">
+										<div className="w-16 h-16 lg:w-20 lg:h-20 bg-purple-primary/10 rounded-xl lg:rounded-2xl flex items-center justify-center mr-4">
+											<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+												<Image
+													src="/analytics.svg"
+													alt="Credit Analytics"
+													fill
+													className="object-contain"
+												/>
+											</div>
+										</div>
+										<div>
+											<h3 className="text-2xl lg:text-4xl font-heading font-bold text-gray-700 mb-2">
+												Credit Analytics
+											</h3>
+											<p className="text-lg lg:text-xl text-purple-primary font-semibold mb-2">
+												Comprehensive • Instant •
+												Verified
+											</p>
+											<p className="text-sm text-gray-500 font-medium">
+												Powered by CTOS and SSM e-Info
+											</p>
+										</div>
+									</div>
+
+									<p className="text-lg lg:text-xl text-gray-600 mb-8 font-body leading-relaxed">
+										Get comprehensive credit reports and
+										business verification services powered
+										by CTOS and SSM data. Make informed
+										decisions with detailed analytics and
+										real-time credit monitoring.
+									</p>
+
+									{/* Features Grid */}
+									<div className="grid grid-cols-2 gap-4 lg:gap-6 mb-8">
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-purple-primary rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												CTOS credit reports
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-purple-primary rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												SSM business verification
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-purple-primary rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Real-time monitoring
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-purple-primary rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Instant delivery
+											</span>
+										</div>
+									</div>
+
+									{/* CTA */}
+									<div className="flex flex-col sm:flex-row gap-4">
+										<Link
+											href="/credit-score+"
+											className="bg-purple-primary text-white hover:bg-purple-700 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
+										>
+											Get Credit Report
+											<MdArrowForward
+												size={20}
+												className="ml-2"
+											/>
+										</Link>
+										<Link
+											href="/products"
+											className="bg-purple-50 text-purple-primary hover:bg-purple-100 border border-purple-200 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
+										>
+											View Samples
+										</Link>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Credit Builder Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="grid lg:grid-cols-2 gap-0">
+								{/* Content Side */}
+								<div className="p-8 lg:p-12 flex flex-col justify-center">
+									<div className="flex items-center mb-6">
+										<div className="w-16 h-16 lg:w-20 lg:h-20 bg-yellow-500/10 rounded-xl lg:rounded-2xl flex items-center justify-center mr-4">
+											<div className="relative h-8 w-8 lg:h-10 lg:w-10">
+												<Image
+													src="/credit-score.svg"
+													alt="Credit Builder"
+													fill
+													className="object-contain"
+												/>
+											</div>
+										</div>
+										<div>
+											<h3 className="text-2xl lg:text-4xl font-heading font-bold text-gray-700 mb-2">
+												Credit Builder
+											</h3>
+											<p className="text-lg lg:text-xl text-yellow-600 font-semibold mb-2">
+												Build • Improve • Monitor
+											</p>
+										</div>
+									</div>
+
+									<p className="text-lg lg:text-xl text-gray-600 mb-8 font-body leading-relaxed">
+										Build and improve your credit score with
+										our zero-interest credit building
+										program. Perfect for individuals and
+										businesses looking to establish or
+										rebuild their credit history in
+										Malaysia.
+									</p>
+
+									{/* Features Grid */}
+									<div className="grid grid-cols-2 gap-4 lg:gap-6 mb-8">
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Structured credit building
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Monthly progress tracking
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												CTOS score improvement
+											</span>
+										</div>
+										<div className="flex items-center space-x-3">
+											<div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+											<span className="text-base lg:text-lg text-gray-600">
+												Syariah compliant
+											</span>
+										</div>
+									</div>
+
+									{/* CTA */}
+									<div className="flex flex-col sm:flex-row gap-4">
+										<Link
+											href="/products"
+											className="bg-yellow-500 text-white hover:bg-yellow-600 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
+										>
+											Start Building Credit
+											<MdArrowForward
+												size={20}
+												className="ml-2"
+											/>
+										</Link>
+										<Link
+											href="/credit-score+"
+											className="bg-yellow-50 text-yellow-600 hover:bg-yellow-100 border border-yellow-200 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
+										>
+											Check Your Score
+										</Link>
 									</div>
 								</div>
 
-								{/* Investments Collected */}
-								<div className="text-center group">
-									<div className="w-12 h-12 sm:w-14 sm:h-14 bg-purple-primary/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-purple-primary/20 transition-colors">
-										<MdAccountBalance
-											size={24}
-											className="text-purple-primary sm:w-7 sm:h-7"
+								{/* Visual Side */}
+								<div className="relative h-64 lg:h-auto bg-gradient-to-br from-yellow-50 to-yellow-100 flex items-center justify-center">
+									<div className="relative h-48 w-48 lg:h-64 lg:w-64">
+										<Image
+											src="/credit-score.svg"
+											alt="Credit Building"
+											fill
+											className="object-contain"
 										/>
 									</div>
-									<div className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary mb-1">
+									{/* Floating elements */}
+									<div className="absolute top-8 right-8 w-16 h-16 bg-yellow-500/20 rounded-full blur-xl"></div>
+									<div className="absolute bottom-8 left-8 w-12 h-12 bg-yellow-400/30 rounded-full blur-lg"></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			{/* Trust & Impact Section */}
+			<section className="relative py-12 sm:py-16 lg:py-20 xl:py-24 bg-gradient-to-br from-gray-50 via-white to-gray-50/50 w-full">
+				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					{/* Trust Statement */}
+					<div className="text-center mb-12 lg:mb-20">
+						<div className="inline-flex items-center px-4 sm:px-6 py-2 sm:py-3 bg-green-500/10 rounded-full mb-6 sm:mb-8 border border-green-500/20">
+							<MdVerifiedUser
+								size={16}
+								className="text-green-600 mr-2"
+							/>
+							<span className="text-xs sm:text-sm font-semibold text-green-600">
+								Our Track Record
+							</span>
+						</div>
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 sm:mb-8 text-gray-700 leading-tight px-4">
+							<span className="text-purple-primary">
+								50 Million
+							</span>{" "}
+							Reasons
+							<br />
+							to Trust Us
+						</h2>
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 mx-auto font-body leading-relaxed px-4 max-w-none lg:max-w-4xl mb-8 lg:mb-12">
+							We've helped thousands of Malaysian businesses &
+							individuals grow with over RM 50 million in loans
+							funded. Our track record speaks for itself —
+							transparent, fast, and reliable financial solutions.
+						</p>
+					</div>
+
+					{/* Hero Stats Grid */}
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mb-12 lg:mb-16">
+						{/* Primary Stats - Left Side */}
+						<div className="space-y-6 lg:space-y-8">
+							{/* Total Funding */}
+							<div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
+								<div className="absolute inset-0 bg-black/10"></div>
+								<div className="absolute top-4 right-4 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
+								<div className="relative">
+									<div className="flex items-center justify-between mb-6">
+										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+											<MdTrendingUp
+												size={32}
+												className="text-white"
+											/>
+										</div>
+									</div>
+									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
 										RM 50M+
 									</div>
-									<div className="text-sm sm:text-base text-gray-700 font-semibold">
-										Investments Collected
+									<div className="text-lg lg:text-xl text-purple-100 font-semibold mb-4">
+										Total Loans Disbursed
 									</div>
-								</div>
-
-								{/* Success Rate */}
-								<div className="text-center group">
-									<div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-tertiary/10 rounded-xl sm:rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-tertiary/20 transition-colors">
-										<MdVerifiedUser
-											size={24}
-											className="text-blue-tertiary sm:w-7 sm:h-7"
-										/>
-									</div>
-									<div className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-tertiary mb-1">
-										98.5%
-									</div>
-									<div className="text-sm sm:text-base text-gray-700 font-semibold">
-										Success Rate
+									<div className="text-sm lg:text-base text-purple-200">
+										Helping Malaysians grow since 2020
 									</div>
 								</div>
 							</div>
 
-							{/* Additional Info Bar */}
-							<div className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-gray-100">
-								<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 text-center">
-									<div className="flex items-center justify-center gap-2 flex-col sm:flex-row">
-										<MdSecurity
-											size={18}
-											className="text-purple-primary"
-										/>
-										<span className="text-sm text-gray-600">
-											Bank-Grade Security
-										</span>
+							{/* Customer Trust */}
+							<div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
+								<div className="absolute inset-0 bg-black/10"></div>
+								<div className="absolute bottom-4 left-4 w-16 h-16 bg-white/10 rounded-full blur-lg"></div>
+								<div className="relative">
+									<div className="flex items-center justify-between mb-6">
+										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+											<MdPeople
+												size={32}
+												className="text-white"
+											/>
+										</div>
 									</div>
-									<div className="flex items-center justify-center gap-2 flex-col sm:flex-row">
-										<MdSpeed
-											size={18}
-											className="text-blue-tertiary"
-										/>
-										<span className="text-sm text-gray-600">
-											24-48 Hour Approval
-										</span>
+									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
+										1,000+
 									</div>
-									<div className="flex items-center justify-center gap-2 flex-col sm:flex-row">
-										<MdLocationOn
-											size={18}
-											className="text-purple-primary"
-										/>
-										<span className="text-sm text-gray-600">
-											Licensed in Malaysia
-										</span>
+									<div className="text-lg lg:text-xl text-blue-100 font-semibold mb-4">
+										Trusted Customers
+									</div>
+									<div className="text-sm lg:text-base text-blue-200">
+										From startups to established SMEs across
+										Malaysia
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Secondary Stats - Right Side */}
+						<div className="space-y-6 lg:space-y-8">
+							{/* Success Rate */}
+							<div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
+								<div className="absolute inset-0 bg-black/10"></div>
+								<div className="absolute top-4 left-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+								<div className="relative">
+									<div className="flex items-center justify-between mb-6">
+										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+											<MdVerifiedUser
+												size={32}
+												className="text-white"
+											/>
+										</div>
+									</div>
+									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
+										98.5%
+									</div>
+									<div className="text-lg lg:text-xl text-green-100 font-semibold mb-4">
+										Success Rate
+									</div>
+									<div className="text-sm lg:text-base text-green-200">
+										Industry-leading approval and
+										satisfaction rates
+									</div>
+								</div>
+							</div>
+
+							{/* Investment Pool */}
+							<div className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
+								<div className="absolute inset-0 bg-black/10"></div>
+								<div className="absolute bottom-4 right-4 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
+								<div className="relative">
+									<div className="flex items-center justify-between mb-6">
+										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+											<MdAccountBalance
+												size={32}
+												className="text-white"
+											/>
+										</div>
+									</div>
+									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
+										RM 10M+
+									</div>
+									<div className="text-lg lg:text-xl text-gray-200 font-semibold mb-4">
+										Investments Facilitated
+									</div>
+									<div className="text-sm lg:text-base text-gray-300">
+										Connecting investors with verified
+										private credit opportunities
 									</div>
 								</div>
 							</div>
@@ -310,26 +1113,6 @@ export default function Home() {
 									</div>
 								</div>
 							</div>
-
-							{/* <div className="flex flex-col sm:flex-row gap-4">
-								<Link
-									href="/dashboard"
-									className="bg-purple-primary text-white hover:bg-purple-700 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
-								>
-									Try Dashboard
-									<MdArrowForward
-										size={20}
-										className="ml-2"
-									/>
-								</Link>
-								<Link
-									href="/about"
-									className="bg-blue-tertiary/10 text-blue-tertiary hover:bg-blue-tertiary/20 border border-blue-tertiary/20 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
-								>
-									<MdAssessment size={20} className="mr-2" />
-									Learn More
-								</Link>
-							</div> */}
 						</div>
 
 						{/* Large Hero Image */}
@@ -350,185 +1133,6 @@ export default function Home() {
 							{/* Subtle floating elements */}
 							<div className="absolute -top-4 -right-4 w-16 h-16 bg-purple-primary/10 rounded-full blur-xl"></div>
 							<div className="absolute -bottom-4 -left-4 w-20 h-20 bg-blue-tertiary/10 rounded-full blur-xl"></div>
-						</div>
-					</div>
-				</div>
-			</section>
-
-			{/* Products Section */}
-			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
-				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					{/* Section Header */}
-					<div className="text-center mb-8 lg:mb-12">
-						<div className="inline-flex items-center px-4 py-2 bg-purple-primary/10 rounded-full mb-4 sm:mb-6 border border-purple-primary/20">
-							<span className="text-xs sm:text-sm font-semibold text-purple-primary">
-								Our Solutions
-							</span>
-						</div>
-						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
-							Our Solutions
-						</h2>
-						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-5xl">
-							Three core solutions for your financial needs
-						</p>
-					</div>
-
-					{/* Three Main Product Cards */}
-					<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
-						{/* Loans Card - Blue Theme */}
-						<div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl lg:rounded-2xl p-8 lg:p-10 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group">
-							{/* Subtle background elements */}
-							<div className="absolute inset-0 overflow-hidden">
-								<div className="absolute w-32 h-32 bg-white/10 rounded-full blur-2xl -top-8 -right-8 group-hover:scale-110 transition-transform duration-500"></div>
-								<div className="absolute w-24 h-24 bg-white/5 rounded-full blur-xl -bottom-4 -left-4 group-hover:scale-110 transition-transform duration-700"></div>
-							</div>
-
-							<div className="relative flex flex-col h-full">
-								<div className="w-14 h-14 lg:w-16 lg:h-16 mb-6 bg-white/20 rounded-xl lg:rounded-2xl flex items-center justify-center">
-									<div className="relative h-8 w-8 lg:h-10 lg:w-10">
-										<Image
-											src="/business-loan.svg"
-											alt="Loans"
-											fill
-											className="object-contain brightness-0 invert"
-										/>
-									</div>
-								</div>
-								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4 text-white">
-									Borrow
-								</h3>
-								<p className="text-lg lg:text-xl text-blue-100 mb-6 font-body leading-relaxed">
-									Fast, transparent borrowing solutions for
-									businesses and individuals
-								</p>
-								<div className="flex flex-wrap gap-2 lg:gap-3 mb-8">
-									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										Up to RM 500K
-									</span>
-									<span className="bg-white/15 text-blue-100 px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										24-48 hours
-									</span>
-									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										No collateral
-									</span>
-								</div>
-								<div className="mt-auto">
-									<Link
-										href="/sme-term-loan"
-										className="inline-flex items-center px-6 py-3 bg-white text-blue-700 rounded-xl font-semibold hover:bg-blue-50 transition-all group-hover:scale-105 text-sm lg:text-base"
-									>
-										Apply for Loan
-										<MdArrowForward
-											size={16}
-											className="ml-2"
-										/>
-									</Link>
-								</div>
-							</div>
-						</div>
-
-						{/* Investments Card - Black Theme */}
-						<div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl lg:rounded-2xl p-8 lg:p-10 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group">
-							{/* Subtle background elements */}
-							<div className="absolute inset-0 overflow-hidden">
-								<div className="absolute w-32 h-32 bg-white/10 rounded-full blur-2xl -top-8 -right-8 group-hover:scale-110 transition-transform duration-500"></div>
-								<div className="absolute w-24 h-24 bg-white/5 rounded-full blur-xl -bottom-4 -left-4 group-hover:scale-110 transition-transform duration-700"></div>
-							</div>
-
-							<div className="relative flex flex-col h-full">
-								<div className="w-14 h-14 lg:w-16 lg:h-16 mb-6 bg-white/20 rounded-xl lg:rounded-2xl flex items-center justify-center">
-									<div className="relative h-8 w-8 lg:h-10 lg:w-10">
-										<Image
-											src="/investing.svg"
-											alt="Investments"
-											fill
-											className="object-contain brightness-0 invert"
-										/>
-									</div>
-								</div>
-								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4 text-white">
-									Invest
-								</h3>
-								<p className="text-lg lg:text-xl text-gray-200 mb-6 font-body leading-relaxed">
-									Private credit opportunities with
-									competitive returns for investors
-								</p>
-								<div className="flex flex-wrap gap-2 lg:gap-3 mb-8">
-									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										8-12% Returns
-									</span>
-									<span className="bg-white/15 text-gray-200 px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										Secured
-									</span>
-									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										Monthly Income
-									</span>
-								</div>
-								<div className="mt-auto">
-									<Link
-										href="/products"
-										className="inline-flex items-center px-6 py-3 bg-white text-gray-800 rounded-xl font-semibold hover:bg-gray-50 transition-all group-hover:scale-105 text-sm lg:text-base"
-									>
-										Start Investing
-										<MdArrowForward
-											size={16}
-											className="ml-2"
-										/>
-									</Link>
-								</div>
-							</div>
-						</div>
-
-						{/* Analytics Card - Purple Theme */}
-						<div className="bg-gradient-to-br from-purple-primary to-purple-700 rounded-xl lg:rounded-2xl p-8 lg:p-10 shadow-sm hover:shadow-lg transition-all relative overflow-hidden group">
-							{/* Subtle background elements */}
-							<div className="absolute inset-0 overflow-hidden">
-								<div className="absolute w-32 h-32 bg-white/10 rounded-full blur-2xl -top-8 -right-8 group-hover:scale-110 transition-transform duration-500"></div>
-								<div className="absolute w-24 h-24 bg-white/5 rounded-full blur-xl -bottom-4 -left-4 group-hover:scale-110 transition-transform duration-700"></div>
-							</div>
-
-							<div className="relative flex flex-col h-full">
-								<div className="w-14 h-14 lg:w-16 lg:h-16 mb-6 bg-white/20 rounded-xl lg:rounded-2xl flex items-center justify-center">
-									<div className="relative h-8 w-8 lg:h-10 lg:w-10">
-										<Image
-											src="/reports.svg"
-											alt="Analytics"
-											fill
-											className="object-contain brightness-0 invert"
-										/>
-									</div>
-								</div>
-								<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-4 text-white">
-									Analytics
-								</h3>
-								<p className="text-lg lg:text-xl text-purple-100 mb-6 font-body leading-relaxed">
-									Comprehensive credit reports and business
-									verification services
-								</p>
-								<div className="flex flex-wrap gap-2 lg:gap-3 mb-8">
-									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										Credit Reports
-									</span>
-									<span className="bg-white/15 text-purple-100 px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										SSM Reports
-									</span>
-									<span className="bg-white/20 text-white px-3 py-1.5 rounded-full text-xs lg:text-sm font-medium">
-										CTOS Data
-									</span>
-								</div>
-								<div className="mt-auto">
-									<Link
-										href="/credit-score+"
-										className="inline-flex items-center px-6 py-3 bg-white text-purple-primary rounded-xl font-semibold hover:bg-purple-50 transition-all group-hover:scale-105 text-sm lg:text-base"
-									>
-										Get Report
-										<MdArrowForward
-											size={16}
-											className="ml-2"
-										/>
-									</Link>
-								</div>
-							</div>
 						</div>
 					</div>
 				</div>
@@ -592,27 +1196,37 @@ export default function Home() {
 							</p>
 						</div>
 
-						{/* Licensed & Regulated */}
+						{/* KPKT Money Lending License */}
 						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
-								<MdSecurity
+							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
+								<MdAccountBalance
 									size={28}
-									className="text-purple-primary"
+									className="text-blue-600"
 								/>
 							</div>
 							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
-								Licensed & Regulated
+								KPKT Licensed
 							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								Fully licensed fintech provider operating under
-								Malaysian financial regulations
+							<p className="text-lg lg:text-xl text-gray-500 font-body mb-4">
+								Lending products offered by OPG Capital Holdings
+								Sdn. Bhd. under KPKT License
+								WL3337/07/01-9/020223
 							</p>
+							<div className="flex items-center text-sm text-gray-500">
+								<MdVerifiedUser
+									size={16}
+									className="text-green-600 mr-2"
+								/>
+								<span>
+									Ministry of Housing & Local Government
+								</span>
+							</div>
 						</div>
 
 						{/* AI-Powered Credit */}
 						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
 							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
-								<MdAccountBalance
+								<MdAssessment
 									size={28}
 									className="text-blue-tertiary"
 								/>
@@ -626,7 +1240,7 @@ export default function Home() {
 							</p>
 						</div>
 
-						{/* Complete Solutions */}
+						{/* SKM Koperasi License */}
 						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
 							<div className="w-14 h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mb-4">
 								<MdBusinessCenter
@@ -635,20 +1249,28 @@ export default function Home() {
 								/>
 							</div>
 							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
-								Complete Solutions
+								SKM Licensed
 							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								Loans, investments, and analytics - everything
-								you need for financial success
+							<p className="text-lg lg:text-xl text-gray-500 font-body mb-4">
+								Investment products offered by Koperasi
+								Al-Kathiri Berhad under SKM License [License
+								Number]
 							</p>
+							<div className="flex items-center text-sm text-gray-500">
+								<MdVerifiedUser
+									size={16}
+									className="text-green-600 mr-2"
+								/>
+								<span>Suruhanjaya Koperasi Malaysia</span>
+							</div>
 						</div>
 
 						{/* Local Expertise */}
 						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-tertiary/10 rounded-xl flex items-center justify-center mb-4">
+							<div className="w-14 h-14 bg-green-600/10 rounded-xl flex items-center justify-center mb-4">
 								<MdPeople
 									size={28}
-									className="text-blue-tertiary"
+									className="text-green-600"
 								/>
 							</div>
 							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">

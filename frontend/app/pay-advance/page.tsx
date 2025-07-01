@@ -78,37 +78,37 @@ export default function EmployeeMicroLoan() {
 	};
 
 	return (
-		<main className="min-h-screen bg-white dark:bg-white">
-			<Navbar bgStyle="bg-[#0A0612] dark:bg-[#0A0612]" />
+		<main className="min-h-screen bg-offwhite">
+			<Navbar bgStyle="bg-[#0A0612]/90 backdrop-blur-md" />
 
 			{/* Hero Section */}
-			<section className="relative min-h-screen bg-[#0A0612] dark:bg-[#0A0612] pt-16">
+			<section className="relative min-h-screen bg-[#0A0612] pt-16 w-full">
 				{/* Decorative Elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-					<div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-					<div className="absolute top-40 left-40 w-80 h-80 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+					<div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-600 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
+					<div className="absolute -bottom-40 -left-40 w-80 h-80 bg-emerald-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
+					<div className="absolute top-40 left-40 w-80 h-80 bg-emerald-400 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
 				</div>
 
 				{/* Content */}
-				<div className="relative min-h-screen max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-					<div className="h-full flex flex-col">
-						<div className="flex-1 flex flex-col lg:flex-row items-center gap-12">
+				<div className="relative min-h-screen w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 flex items-center">
+					<div className="w-full py-16">
+						<div className="flex flex-col lg:flex-row items-center gap-12">
 							{/* Left Column */}
 							<div className="flex-1 text-center lg:text-left">
-								<h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-white dark:text-white">
-									<span className="bg-gradient-to-r from-purple-300 to-indigo-300 bg-clip-text text-transparent">
+								<h1 className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-6">
+									<span className="text-white drop-shadow-2xl [text-shadow:_0_4px_12px_rgb(16_185_129_/_0.8)]">
 										PayAdvance™
 									</span>
 								</h1>
-								<p className="text-2xl sm:text-3xl text-purple-200 dark:text-purple-200 mb-8">
+								<p className="text-2xl sm:text-3xl text-emerald-200 mb-8">
 									Your Pay, Your Way
 								</p>
 
 								<div className="flex gap-4 justify-center lg:justify-start mb-8">
 									<Link
 										href="/apply"
-										className="bg-white text-purple-900 px-4 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold hover:bg-purple-50 transition-all"
+										className="bg-white text-emerald-900 px-4 sm:px-8 py-3 sm:py-4 rounded-full text-base sm:text-lg font-semibold hover:bg-emerald-50 transition-all"
 									>
 										Apply Now
 									</Link>
@@ -133,7 +133,7 @@ export default function EmployeeMicroLoan() {
 									</Link>
 								</div>
 
-								<p className="text-2xl text-gray-300 dark:text-gray-300 mb-8 max-w-2xl mx-auto lg:mx-0">
+								<p className="text-2xl text-gray-300 mb-8 max-w-2xl mx-auto lg:mx-0">
 									Access instant salary advances with low
 									interest. Manage unexpected expenses with
 									confidence.
@@ -142,36 +142,36 @@ export default function EmployeeMicroLoan() {
 								{/* Benefits Grid */}
 								<div className="grid grid-cols-2 gap-4 mb-8 lg:mb-0">
 									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
-										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
+										<h3 className="text-base lg:text-lg font-semibold text-white mb-2">
 											Quick Access
 										</h3>
-										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300">
 											Apply in minutes, get approved in
 											hours
 										</p>
 									</div>
 									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
-										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
+										<h3 className="text-base lg:text-lg font-semibold text-white mb-2">
 											Low Interest
 										</h3>
-										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300">
 											Only up to 1.5% monthly
 										</p>
 									</div>
 									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
-										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
+										<h3 className="text-base lg:text-lg font-semibold text-white mb-2">
 											Easy Repayment
 										</h3>
-										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300">
 											Automatically deducted from your
 											salary
 										</p>
 									</div>
 									<div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
-										<h3 className="text-base lg:text-lg font-semibold text-white dark:text-white mb-2">
+										<h3 className="text-base lg:text-lg font-semibold text-white mb-2">
 											Quick Processing
 										</h3>
-										<p className="text-sm lg:text-base text-gray-300 dark:text-gray-300">
+										<p className="text-sm lg:text-base text-gray-300">
 											Approval within minutes
 										</p>
 									</div>
@@ -194,14 +194,14 @@ export default function EmployeeMicroLoan() {
 			</section>
 
 			{/* Main Content */}
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-12 sm:py-16 lg:py-20 xl:py-24">
 				{/* How It Works Section */}
 				<div id="how-it-works" className="mb-16 scroll-mt-20">
 					<div className="text-center mb-12">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 text-gray-900">
 							How PayAdvance™ Works
 						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto font-body">
 							A simple and transparent process for both employees
 							and employers
 						</p>
@@ -212,8 +212,8 @@ export default function EmployeeMicroLoan() {
 								onClick={() => setActiveView("employer")}
 								className={`px-8 py-3 rounded-full font-semibold transition-all ${
 									activeView === "employer"
-										? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg"
-										: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50 border border-gray-200"
+										? "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg"
+										: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
 								}`}
 							>
 								For Employers
@@ -222,8 +222,8 @@ export default function EmployeeMicroLoan() {
 								onClick={() => setActiveView("employee")}
 								className={`px-8 py-3 rounded-full font-semibold transition-all ${
 									activeView === "employee"
-										? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
-										: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50 border border-gray-200"
+										? "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg"
+										: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
 								}`}
 							>
 								For Employees
@@ -236,7 +236,7 @@ export default function EmployeeMicroLoan() {
 						<div
 							className={`${
 								activeView === "employer"
-									? "bg-gradient-to-br from-purple-50 to-indigo-50"
+									? "bg-gradient-to-br from-emerald-50 to-emerald-100"
 									: "bg-gradient-to-br from-emerald-50 to-teal-50"
 							} rounded-3xl p-8 transition-all duration-300`}
 						>
@@ -244,14 +244,14 @@ export default function EmployeeMicroLoan() {
 								<div
 									className={`w-12 h-12 ${
 										activeView === "employer"
-											? "bg-purple-100"
+											? "bg-emerald-100"
 											: "bg-emerald-100"
 									} rounded-full flex items-center justify-center`}
 								>
 									<svg
 										className={`w-6 h-6 ${
 											activeView === "employer"
-												? "text-purple-600"
+												? "text-emerald-600"
 												: "text-emerald-600"
 										}`}
 										fill="none"
@@ -278,8 +278,8 @@ export default function EmployeeMicroLoan() {
 								<h3
 									className={`text-2xl font-bold ${
 										activeView === "employer"
-											? "text-purple-900 dark:text-purple-900"
-											: "text-emerald-900 dark:text-emerald-900"
+											? "text-emerald-900"
+											: "text-emerald-900"
 									}`}
 								>
 									{activeView === "employer"
@@ -293,16 +293,16 @@ export default function EmployeeMicroLoan() {
 									<>
 										{/* Employer Steps */}
 										<div className="flex items-start gap-4 group cursor-pointer hover:bg-white rounded-xl p-4 transition-all">
-											<div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-purple-600 transition-all">
-												<span className="text-purple-600 font-semibold group-hover:text-white">
+											<div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-600 transition-all">
+												<span className="text-emerald-600 font-semibold group-hover:text-white">
 													1
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Partner With Us
 												</h4>
-												<p className="text-gray-600 dark:text-gray-600">
+												<p className="text-gray-600">
 													Simple integration with the
 													Kapital platform at no cost
 													to you.
@@ -310,13 +310,13 @@ export default function EmployeeMicroLoan() {
 											</div>
 										</div>
 										<div className="flex items-start gap-4 group cursor-pointer hover:bg-white rounded-xl p-4 transition-all">
-											<div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-purple-600 transition-all">
-												<span className="text-purple-600 font-semibold group-hover:text-white">
+											<div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-600 transition-all">
+												<span className="text-emerald-600 font-semibold group-hover:text-white">
 													2
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Employee Verification
 												</h4>
 												<p className="text-gray-600">
@@ -327,13 +327,13 @@ export default function EmployeeMicroLoan() {
 											</div>
 										</div>
 										<div className="flex items-start gap-4 group cursor-pointer hover:bg-white rounded-xl p-4 transition-all">
-											<div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-purple-600 transition-all">
-												<span className="text-purple-600 font-semibold group-hover:text-white">
+											<div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-600 transition-all">
+												<span className="text-emerald-600 font-semibold group-hover:text-white">
 													3
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Automated Deductions
 												</h4>
 												<p className="text-gray-600">
@@ -344,13 +344,13 @@ export default function EmployeeMicroLoan() {
 											</div>
 										</div>
 										<div className="flex items-start gap-4 group cursor-pointer hover:bg-white rounded-xl p-4 transition-all">
-											<div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-purple-600 transition-all">
-												<span className="text-purple-600 font-semibold group-hover:text-white">
+											<div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-600 transition-all">
+												<span className="text-emerald-600 font-semibold group-hover:text-white">
 													4
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Dashboard Access
 												</h4>
 												<p className="text-gray-600">
@@ -371,10 +371,10 @@ export default function EmployeeMicroLoan() {
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Apply Through Your Employer
 												</h4>
-												<p className="text-gray-600 dark:text-gray-600">
+												<p className="text-gray-600">
 													Access the loan application
 													through the Kapital
 													platform. Apply in minutes.
@@ -388,10 +388,10 @@ export default function EmployeeMicroLoan() {
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Quick Approval
 												</h4>
-												<p className="text-gray-600 dark:text-gray-600">
+												<p className="text-gray-600">
 													Get approved within 24 hours
 													with minimal documentation
 													required.
@@ -405,10 +405,10 @@ export default function EmployeeMicroLoan() {
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Receive Funds
 												</h4>
-												<p className="text-gray-600 dark:text-gray-600">
+												<p className="text-gray-600">
 													Funds are disbursed directly
 													to your bank account within
 													1-2 business days.
@@ -422,10 +422,10 @@ export default function EmployeeMicroLoan() {
 												</span>
 											</div>
 											<div>
-												<h4 className="text-lg font-semibold mb-1 text-black dark:text-black">
+												<h4 className="text-lg font-semibold mb-1 text-black">
 													Automatic Repayment
 												</h4>
-												<p className="text-gray-600 dark:text-gray-600">
+												<p className="text-gray-600">
 													Repayments are automatically
 													deducted from your monthly
 													salary.
@@ -461,10 +461,10 @@ export default function EmployeeMicroLoan() {
 				{/* Benefits Section */}
 				<div className="mt-24 mb-24">
 					<div className="text-center mb-12">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 text-gray-900">
 							Benefits of PayAdvance™
 						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto font-body">
 							Smart financial solutions for everyone
 						</p>
 
@@ -474,8 +474,8 @@ export default function EmployeeMicroLoan() {
 								onClick={() => setActiveView("employer")}
 								className={`px-8 py-3 rounded-full font-semibold transition-all ${
 									activeView === "employer"
-										? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg"
-										: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50 border border-gray-200"
+										? "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg"
+										: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
 								}`}
 							>
 								For Employers
@@ -484,8 +484,8 @@ export default function EmployeeMicroLoan() {
 								onClick={() => setActiveView("employee")}
 								className={`px-8 py-3 rounded-full font-semibold transition-all ${
 									activeView === "employee"
-										? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
-										: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50 border border-gray-200"
+										? "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg"
+										: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
 								}`}
 							>
 								For Employees
@@ -497,9 +497,9 @@ export default function EmployeeMicroLoan() {
 						{activeView === "employer" ? (
 							<>
 								<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
-									<div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+									<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
 										<svg
-											className="w-8 h-8 text-purple-600"
+											className="w-8 h-8 text-emerald-600"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -512,19 +512,19 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										Enhanced Employee Benefits
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Attract and retain talent with zero-cost
 										financial wellness benefits.
 									</p>
 								</div>
 
 								<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
-									<div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+									<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
 										<svg
-											className="w-8 h-8 text-purple-600"
+											className="w-8 h-8 text-emerald-600"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -537,19 +537,19 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										Zero Risk & Cost
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										No financial liability or administrative
 										burden for employers.
 									</p>
 								</div>
 
 								<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
-									<div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+									<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
 										<svg
-											className="w-8 h-8 text-purple-600"
+											className="w-8 h-8 text-emerald-600"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -562,19 +562,19 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										Easy Integration
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Seamless setup with your existing
 										payroll system.
 									</p>
 								</div>
 
 								<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
-									<div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+									<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
 										<svg
-											className="w-8 h-8 text-purple-600"
+											className="w-8 h-8 text-emerald-600"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -587,10 +587,10 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										Increased Productivity
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Reduce financial stress and improve
 										workplace performance.
 									</p>
@@ -614,10 +614,10 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										Quick Access to Funds
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Get your salary advance within 24 hours
 										of approval.
 									</p>
@@ -639,10 +639,10 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										No Collateral Required
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Secure funding without any assets as
 										security.
 									</p>
@@ -664,10 +664,10 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										Flexible Repayment
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Choose between 6 or 12 months repayment
 										terms.
 									</p>
@@ -689,10 +689,10 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-3 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-3 text-black">
 										Build Credit History
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Improve your credit score with timely
 										repayments.
 									</p>
@@ -703,12 +703,12 @@ export default function EmployeeMicroLoan() {
 				</div>
 
 				{/* Terms and Calculator Section */}
-				<div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-3xl p-4 sm:p-8 md:p-12">
+				<div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-3xl p-4 sm:p-8 md:p-12">
 					<div className="text-center mb-12">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 text-gray-900">
 							Loan Terms & Calculator
 						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto font-body">
 							Transparent terms and instant calculations to help
 							you plan your loan
 						</p>
@@ -717,15 +717,15 @@ export default function EmployeeMicroLoan() {
 					<div className="grid lg:grid-cols-3 gap-12">
 						{/* Terms Section */}
 						<div className="bg-white rounded-2xl p-8 shadow-lg">
-							<h3 className="text-2xl font-bold mb-6 text-black dark:text-black">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-6 text-gray-900">
 								Terms and Details
 							</h3>
 							<div className="space-y-6">
 								<div>
-									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2">
+									<h4 className="font-semibold text-gray-700 mb-2">
 										Loan Amount
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Minimum: RM 1,000
 										<br />
 										Maximum: Up to 1 month&apos;s gross
@@ -733,15 +733,15 @@ export default function EmployeeMicroLoan() {
 									</p>
 								</div>
 								<div>
-									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2">
+									<h4 className="font-semibold text-gray-700 mb-2">
 										Interest Rate
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										1.5% per month
 									</p>
 								</div>
 								<div>
-									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2 flex items-center gap-2">
+									<h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
 										Origination Fee
 										<div className="relative group">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 cursor-help" />
@@ -754,12 +754,12 @@ export default function EmployeeMicroLoan() {
 											</div>
 										</div>
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										3% of loan amount
 									</p>
 								</div>
 								<div>
-									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2 flex items-center gap-2">
+									<h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
 										Legal Fees
 										<div className="relative group">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 cursor-help" />
@@ -771,12 +771,12 @@ export default function EmployeeMicroLoan() {
 											</div>
 										</div>
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										2% of loan amount
 									</p>
 								</div>
 								<div>
-									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2 flex items-center gap-2">
+									<h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
 										Late Payment Fee
 										<div className="relative group">
 											<InformationCircleIcon className="h-4 w-4 text-gray-500 cursor-help" />
@@ -787,23 +787,23 @@ export default function EmployeeMicroLoan() {
 											</div>
 										</div>
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										0.5% per day on amount in arrears
 									</p>
 								</div>
 								<div>
-									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2">
+									<h4 className="font-semibold text-gray-700 mb-2">
 										Repayment Terms
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										6 or 12 months
 									</p>
 								</div>
 								<div>
-									<h4 className="font-semibold text-gray-700 dark:text-gray-700 mb-2">
+									<h4 className="font-semibold text-gray-700 mb-2">
 										Eligibility
 									</h4>
-									<p className="text-gray-600 dark:text-gray-600">
+									<p className="text-gray-600">
 										Full-time employees of partner companies
 									</p>
 								</div>
@@ -814,7 +814,7 @@ export default function EmployeeMicroLoan() {
 						<div className="lg:col-span-2">
 							<div className="space-y-8">
 								<div>
-									<label className="block text-lg font-medium text-gray-700 dark:text-gray-700 mb-2">
+									<label className="block text-lg font-medium text-gray-700 mb-2">
 										Monthly Salary: RM{" "}
 										{monthlySalary.toLocaleString()}
 									</label>
@@ -833,15 +833,15 @@ export default function EmployeeMicroLoan() {
 												Math.min(loanAmount, newSalary)
 											);
 										}}
-										className="w-full h-4 rounded-lg appearance-none cursor-pointer bg-purple-200 hover:bg-purple-300"
+										className="w-full h-4 rounded-lg appearance-none cursor-pointer bg-emerald-200 hover:bg-emerald-300"
 									/>
-									<div className="flex justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
+									<div className="flex justify-between text-xs text-gray-500 mt-1">
 										<span>RM 1,700</span>
 										<span>RM 20,000</span>
 									</div>
 								</div>
 								<div>
-									<label className="block text-lg font-medium text-gray-700 dark:text-gray-700 mb-2">
+									<label className="block text-lg font-medium text-gray-700 mb-2">
 										Loan Amount: RM{" "}
 										{loanAmount.toLocaleString()}
 									</label>
@@ -856,9 +856,9 @@ export default function EmployeeMicroLoan() {
 												Number(e.target.value)
 											)
 										}
-										className="w-full h-4 rounded-lg appearance-none cursor-pointer bg-purple-200 hover:bg-purple-300"
+										className="w-full h-4 rounded-lg appearance-none cursor-pointer bg-emerald-200 hover:bg-emerald-300"
 									/>
-									<div className="flex justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
+									<div className="flex justify-between text-xs text-gray-500 mt-1">
 										<span>RM 1,000</span>
 										<span>
 											RM {monthlySalary.toLocaleString()}
@@ -866,7 +866,7 @@ export default function EmployeeMicroLoan() {
 									</div>
 								</div>
 								<div>
-									<label className="block text-lg font-medium text-gray-700 dark:text-gray-700 mb-2">
+									<label className="block text-lg font-medium text-gray-700 mb-2">
 										Loan Term
 									</label>
 									<div className="flex gap-4">
@@ -874,8 +874,8 @@ export default function EmployeeMicroLoan() {
 											onClick={() => setLoanTerm(6)}
 											className={`flex-1 py-3 rounded-lg font-medium transition-all ${
 												loanTerm === 6
-													? "bg-purple-600 text-white dark:bg-purple-600 dark:text-white"
-													: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50"
+													? "bg-emerald-600 text-white hover:bg-emerald-700"
+													: "bg-white text-gray-600 hover:bg-gray-50"
 											}`}
 										>
 											6 Months
@@ -884,8 +884,8 @@ export default function EmployeeMicroLoan() {
 											onClick={() => setLoanTerm(12)}
 											className={`flex-1 py-3 rounded-lg font-medium transition-all ${
 												loanTerm === 12
-													? "bg-purple-600 text-white dark:bg-purple-600 dark:text-white"
-													: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50"
+													? "bg-emerald-600 text-white hover:bg-emerald-700"
+													: "bg-white text-gray-600 hover:bg-gray-50"
 											}`}
 										>
 											12 Months
@@ -896,10 +896,10 @@ export default function EmployeeMicroLoan() {
 							<div className="mt-8">
 								<div className="flex justify-between items-start mb-6">
 									<div>
-										<h3 className="text-2xl font-semibold mb-3 text-black dark:text-black">
+										<h3 className="text-2xl font-semibold mb-3 text-black">
 											Monthly Payment
 										</h3>
-										<div className="text-5xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent mt-2">
+										<div className="text-5xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 bg-clip-text text-transparent mt-2">
 											RM{" "}
 											{calculateMonthlyPayment().toLocaleString(
 												undefined,
@@ -913,10 +913,10 @@ export default function EmployeeMicroLoan() {
 								</div>
 								<div className="space-y-4 mb-8">
 									<div className="flex items-center justify-between text-sm">
-										<span className="text-gray-600 dark:text-gray-600">
+										<span className="text-gray-600">
 											Origination Fee
 										</span>
-										<span className="font-medium text-gray-700 dark:text-gray-700">
+										<span className="font-medium text-gray-700">
 											RM{" "}
 											{calculateOriginationFee().toLocaleString(
 												undefined,
@@ -928,10 +928,10 @@ export default function EmployeeMicroLoan() {
 										</span>
 									</div>
 									<div className="flex items-center justify-between text-sm">
-										<span className="text-gray-600 dark:text-gray-600">
+										<span className="text-gray-600">
 											Legal Fee
 										</span>
-										<span className="font-medium text-gray-700 dark:text-gray-700">
+										<span className="font-medium text-gray-700">
 											RM{" "}
 											{calculateLegalFee().toLocaleString(
 												undefined,
@@ -944,10 +944,10 @@ export default function EmployeeMicroLoan() {
 									</div>
 
 									<div className="flex items-center justify-between text-sm">
-										<span className="text-gray-600 dark:text-gray-600">
+										<span className="text-gray-600">
 											Net Disbursement
 										</span>
-										<span className="font-medium text-gray-700 dark:text-gray-700">
+										<span className="font-medium text-gray-700">
 											RM{" "}
 											{(
 												loanAmount -
@@ -1031,7 +1031,7 @@ export default function EmployeeMicroLoan() {
 											<Line
 												type="monotone"
 												dataKey="balance"
-												stroke="#7C3AED"
+												stroke="#059669"
 												strokeWidth={2}
 												name="balance"
 												dot={false}
@@ -1049,7 +1049,7 @@ export default function EmployeeMicroLoan() {
 								</div>
 								<Link
 									href="/apply"
-									className="block w-full text-center bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white dark:text-white px-6 py-3 rounded-full font-semibold transition-all"
+									className="block w-full text-center bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white px-6 py-3 rounded-full font-semibold transition-all"
 								>
 									Apply Now
 								</Link>
@@ -1061,10 +1061,10 @@ export default function EmployeeMicroLoan() {
 				{/* Required Documents Section */}
 				<div className="mt-24 mb-24">
 					<div className="text-center mb-12">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 text-gray-900">
 							Required Documents
 						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto font-body">
 							Please prepare these documents to speed up your
 							application process
 						</p>
@@ -1075,8 +1075,8 @@ export default function EmployeeMicroLoan() {
 								onClick={() => setActiveView("employer")}
 								className={`px-8 py-3 rounded-full font-semibold transition-all ${
 									activeView === "employer"
-										? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg"
-										: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50 border border-gray-200"
+										? "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg"
+										: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
 								}`}
 							>
 								For Employers
@@ -1085,8 +1085,8 @@ export default function EmployeeMicroLoan() {
 								onClick={() => setActiveView("employee")}
 								className={`px-8 py-3 rounded-full font-semibold transition-all ${
 									activeView === "employee"
-										? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
-										: "bg-white text-gray-600 dark:text-gray-600 hover:bg-gray-50 border border-gray-200"
+										? "bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-lg"
+										: "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
 								}`}
 							>
 								For Employees
@@ -1098,9 +1098,9 @@ export default function EmployeeMicroLoan() {
 						{activeView === "employer" ? (
 							<div className="grid md:grid-cols-2 gap-8">
 								<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
-									<div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+									<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
 										<svg
-											className="w-8 h-8 text-purple-600"
+											className="w-8 h-8 text-emerald-600"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -1113,13 +1113,13 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-4 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-4 text-black">
 										Company Documents
 									</h4>
 									<ul className="space-y-3 text-gray-600">
 										<li className="flex items-center gap-2">
 											<svg
-												className="w-5 h-5 text-purple-600"
+												className="w-5 h-5 text-emerald-600"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -1137,7 +1137,7 @@ export default function EmployeeMicroLoan() {
 										</li>
 										<li className="flex items-center gap-2">
 											<svg
-												className="w-5 h-5 text-purple-600"
+												className="w-5 h-5 text-emerald-600"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -1155,7 +1155,7 @@ export default function EmployeeMicroLoan() {
 										</li>
 										<li className="flex items-center gap-2">
 											<svg
-												className="w-5 h-5 text-purple-600"
+												className="w-5 h-5 text-emerald-600"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -1175,9 +1175,9 @@ export default function EmployeeMicroLoan() {
 								</div>
 
 								<div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all">
-									<div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-6">
+									<div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
 										<svg
-											className="w-8 h-8 text-purple-600"
+											className="w-8 h-8 text-emerald-600"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"
@@ -1186,17 +1186,17 @@ export default function EmployeeMicroLoan() {
 												strokeLinecap="round"
 												strokeLinejoin="round"
 												strokeWidth={2}
-												d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+												d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-4 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-4 text-black">
 										Employee Information
 									</h4>
 									<ul className="space-y-3 text-gray-600">
 										<li className="flex items-center gap-2">
 											<svg
-												className="w-5 h-5 text-purple-600"
+												className="w-5 h-5 text-emerald-600"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -1215,7 +1215,7 @@ export default function EmployeeMicroLoan() {
 										</li>
 										<li className="flex items-center gap-2">
 											<svg
-												className="w-5 h-5 text-purple-600"
+												className="w-5 h-5 text-emerald-600"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -1250,7 +1250,7 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-4 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-4 text-black">
 										Personal Documents
 									</h4>
 									<ul className="space-y-3 text-gray-600">
@@ -1325,7 +1325,7 @@ export default function EmployeeMicroLoan() {
 											/>
 										</svg>
 									</div>
-									<h4 className="text-xl font-semibold mb-4 text-black dark:text-black">
+									<h4 className="text-xl font-semibold mb-4 text-black">
 										Employment Documents
 									</h4>
 									<ul className="space-y-3 text-gray-600">
@@ -1367,131 +1367,129 @@ export default function EmployeeMicroLoan() {
 						)}
 					</div>
 				</div>
+			</div>
 
-				{/* FAQ Section */}
-				<div className="mt-24 bg-white rounded-3xl p-4 sm:p-8 md:p-12">
-					<div className="text-center mb-12">
-						<h2 className="text-4xl md:text-5xl font-bold mb-6 text-black dark:text-black">
-							Frequently Asked Questions
-						</h2>
-						<p className="text-xl md:text-2xl text-gray-600 dark:text-gray-600 max-w-3xl mx-auto">
-							Everything you need to know about PayAdvance™
+			{/* FAQ Section */}
+			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-12 sm:py-16 lg:py-20 xl:py-24">
+				<div className="text-center mb-12">
+					<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 text-gray-900">
+						Frequently Asked Questions
+					</h2>
+					<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 max-w-3xl mx-auto font-body">
+						Everything you need to know about PayAdvance™
+					</p>
+				</div>
+
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 lg:gap-8 w-full">
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							How does PayAdvance™ work?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							PayAdvance™ is a salary advance program that allows
+							you to access a portion of your salary early. The
+							amount is automatically repaid through salary
+							deductions over 6 or 12 months.
 						</p>
 					</div>
 
-					<div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								How does PayAdvance™ work?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								PayAdvance™ is a salary advance program that
-								allows you to access a portion of your salary
-								early. The amount is automatically repaid
-								through salary deductions over 6 or 12 months.
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							How much can I borrow?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							You can borrow between RM 1,000 and up to one
+							month&apos;s gross salary, subject to eligibility
+							and approval.
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								How much can I borrow?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								You can borrow between RM 1,000 and up to one
-								month&apos;s gross salary, subject to
-								eligibility and approval.
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							What happens if I leave my job?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							The outstanding loan amount will be deducted from
+							your notice period pay. If this is insufficient,
+							you&apos;ll need to arrange an alternative repayment
+							plan with us.
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								What happens if I leave my job?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								The outstanding loan amount will be deducted
-								from your notice period pay. If this is
-								insufficient, you&apos;ll need to arrange an
-								alternative repayment plan with us.
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							Are there any hidden fees?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							No hidden fees. You only pay the processing fee
+							(7.5%) and monthly interest (1.5%).
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								Are there any hidden fees?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								No hidden fees. You only pay the processing fee
-								(7.5%) and monthly interest (1.5%).
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							Why do you charge a processing fee?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							This is to cover the cost of loan processing
+							including, but not limited to credit checks, stamp
+							duty, legal fees, and other administrative costs.
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								Why do you charge a processing fee?{" "}
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								This is to cover the cost of loan processing
-								including, but not limited to credit checks,
-								stamp duty, legal fees, and other administrative
-								costs.
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							How long does approval take?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							Most applications are approved within 24 hours, with
+							funds disbursed within 1-2 business days after
+							approval.
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								How long does approval take?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								Most applications are approved within 24 hours,
-								with funds disbursed within 1-2 business days
-								after approval.
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							Can I repay early?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							Yes, you can make early repayments without any
+							penalty to increase your credit limit.
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								Can I repay early?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								Yes, you can make early repayments without any
-								penalty to increase your credit limit.
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							Can I borrow more funds?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							Yes, you can borrow more funds as your repayment
+							balance decreases, up to 1 month gross salary in
+							total.
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								Can I borrow more funds?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								Yes, you can borrow more funds as your repayment
-								balance decreases, up to 1 month gross salary in
-								total.
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							Do I need to submit documents every time I request a
+							pay advance?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							No, the employer only needs to submit documents
+							once. After that, you will be eligible for instant
+							loan approvals and quick disbursements of funds.
+						</p>
+					</div>
 
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								Do I need to submit documents every time I
-								request a pay advance?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								No, the employer only needs to submit documents
-								once. After that, you will be eligible for
-								instant loan approvals and quick disbursements
-								of funds.
-							</p>
-						</div>
-
-						<div className="bg-purple-50 rounded-2xl p-8">
-							<h4 className="text-xl font-semibold mb-4 text-purple-900 dark:text-purple-900">
-								Are you a regulated money lender?
-							</h4>
-							<p className="text-gray-600 dark:text-gray-600">
-								Yes, the loan is powered by OPG Capital
-								Holdings, a KPKT-regulated, licensed money
-								lender (WL3337/07/01-9/020223).
-							</p>
-						</div>
+					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
+						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
+							Are you a regulated money lender?
+						</h4>
+						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
+							Yes, the loan is powered by OPG Capital Holdings, a
+							KPKT-regulated, licensed money lender
+							(WL3337/07/01-9/020223).
+						</p>
 					</div>
 				</div>
 			</div>

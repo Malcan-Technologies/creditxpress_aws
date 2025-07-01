@@ -25,11 +25,14 @@ import {
 	MdVerifiedUser,
 	MdPeople,
 	MdPlayArrow,
+	MdHome,
+	MdDirectionsCar,
+	MdSchool,
 	MdPhone,
 } from "react-icons/md";
 
-export default function SMETermLoan() {
-	const [loanAmount, setLoanAmount] = useState(100000);
+export default function PersonalLoan() {
+	const [loanAmount, setLoanAmount] = useState(50000);
 	const [loanTerm, setLoanTerm] = useState(12);
 	const [isCollateralized, setIsCollateralized] = useState(false);
 
@@ -37,7 +40,7 @@ export default function SMETermLoan() {
 	const UNCOLLATERALIZED_INTEREST_RATE = 0.015; // 1.5% per month
 	const ORIGINATION_FEE_RATE = 0.03; // 3%
 	const LEGAL_FEE_RATE = 0.02; // 2%
-	const MAX_LOAN_AMOUNT = 1000000; // Maximum loan amount cap
+	const MAX_LOAN_AMOUNT = 150000; // Maximum loan amount cap for personal loans
 
 	const getCurrentInterestRate = () => {
 		return isCollateralized
@@ -58,7 +61,7 @@ export default function SMETermLoan() {
 	};
 
 	const calculateMonthlyPayment = () => {
-		const monthlyInterest = loanAmount * getCurrentInterestRate(); // Monthly interest based on loan type
+		const monthlyInterest = loanAmount * getCurrentInterestRate();
 		const totalInterest = monthlyInterest * loanTerm;
 		const totalRepayment = loanAmount + totalInterest;
 		return totalRepayment / loanTerm;
@@ -70,15 +73,12 @@ export default function SMETermLoan() {
 		const data = [];
 		let remainingBalance = loanAmount;
 
-		// Start with Month 0 showing full amount
 		data.push({
 			month: 0,
 			balance: remainingBalance,
 		});
 
-		// Generate data for months 1 through loanTerm with equal payments
 		for (let month = 1; month <= loanTerm; month++) {
-			// Add fixed interest and subtract payment
 			remainingBalance =
 				remainingBalance + monthlyInterest - monthlyPayment;
 			remainingBalance = Math.max(0, remainingBalance);
@@ -99,9 +99,9 @@ export default function SMETermLoan() {
 			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-slate-900 via-blue-900 to-gray-900 w-full">
 				{/* Gradient background elements */}
 				<div className="absolute inset-0 overflow-hidden">
-					<div className="absolute w-[500px] h-[500px] bg-purple-primary/10 rounded-full blur-3xl -top-32 -left-32"></div>
-					<div className="absolute w-[700px] h-[700px] bg-purple-primary/5 rounded-full blur-3xl top-1/2 left-1/2"></div>
-					<div className="absolute w-[400px] h-[400px] bg-purple-primary/8 rounded-full blur-3xl -bottom-32 -right-32"></div>
+					<div className="absolute w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-3xl -top-32 -left-32"></div>
+					<div className="absolute w-[700px] h-[700px] bg-blue-600/5 rounded-full blur-3xl top-1/2 left-1/2"></div>
+					<div className="absolute w-[400px] h-[400px] bg-blue-600/8 rounded-full blur-3xl -bottom-32 -right-32"></div>
 				</div>
 
 				{/* Content */}
@@ -110,12 +110,13 @@ export default function SMETermLoan() {
 						{/* Left Column */}
 						<div className="text-center lg:text-left">
 							<h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-heading font-bold tracking-tight mb-6 leading-tight">
-								<span className="text-white drop-shadow-2xl [text-shadow:_0_4px_12px_rgb(147_51_234_/_0.8)]">
-									SME Term Loan
+								<span className="text-white drop-shadow-2xl [text-shadow:_0_4px_12px_rgb(59_130_246_/_0.8)]">
+									Personal Loan
 								</span>
 							</h1>
 							<p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-blue-400 mb-8 lg:mb-12 font-body leading-relaxed">
-								Flexible Financing for Your Business Growth
+								Fast, Flexible Financing for Life's Important
+								Moments
 							</p>
 							<div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8 lg:mb-12">
 								<Link
@@ -138,7 +139,7 @@ export default function SMETermLoan() {
 							</div>
 
 							<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-300 mb-8 lg:mb-12 font-body leading-relaxed">
-								Get up to RM 1,000,000 in business funding with
+								Get up to RM 150,000 for personal needs with
 								competitive rates and flexible terms
 							</p>
 
@@ -149,7 +150,7 @@ export default function SMETermLoan() {
 										Quick Approval
 									</h3>
 									<p className="text-sm lg:text-base text-gray-300 font-body">
-										Get approved within 3 business days
+										Get approved within 24 hours
 									</p>
 								</div>
 								<div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
@@ -162,10 +163,10 @@ export default function SMETermLoan() {
 								</div>
 								<div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
 									<h3 className="text-base lg:text-lg font-heading font-semibold text-white mb-2">
-										High Limits
+										No Collateral
 									</h3>
 									<p className="text-sm lg:text-base text-gray-300 font-body">
-										Up to RM 1,000,000 financing available
+										Unsecured personal financing
 									</p>
 								</div>
 								<div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
@@ -182,8 +183,8 @@ export default function SMETermLoan() {
 						{/* Hero Image */}
 						<div className="relative h-[300px] sm:h-[400px] lg:h-[500px] xl:h-[600px]">
 							<Image
-								src="/business-growth.svg"
-								alt="SME Term Loan"
+								src="/wishes.svg"
+								alt="Personal Loan"
 								fill
 								className="object-contain"
 								priority
@@ -201,11 +202,11 @@ export default function SMETermLoan() {
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					<div className="text-center mb-8 lg:mb-12">
 						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 leading-tight">
-							How SME Term Loan Works
+							How Personal Loan Works
 						</h2>
 						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body leading-relaxed max-w-none lg:max-w-5xl">
-							A simple and transparent process to get the funding
-							your business needs
+							A simple and transparent process to get the funds
+							you need
 						</p>
 					</div>
 
@@ -225,7 +226,7 @@ export default function SMETermLoan() {
 										</h4>
 										<p className="text-gray-500 font-body">
 											Complete our simple online
-											application with your business
+											application with your personal
 											details and required documents.
 										</p>
 									</div>
@@ -243,8 +244,7 @@ export default function SMETermLoan() {
 										</h4>
 										<p className="text-gray-500 font-body">
 											We review your application and
-											business financials within 3
-											business days.
+											personal financials within 24 hours.
 										</p>
 									</div>
 								</div>
@@ -330,7 +330,7 @@ export default function SMETermLoan() {
 								<div className="flex-1 relative overflow-hidden bg-gray-50 rounded-b-xl">
 									<Image
 										src="/apply-screenshot.png"
-										alt="SME Term Loan Application Process"
+										alt="Personal Loan Application Process"
 										fill
 										className="object-cover rounded-b-xl"
 										sizes="(max-width: 768px) 100vw, 50vw"
@@ -350,142 +350,12 @@ export default function SMETermLoan() {
 							What You Can Use It For
 						</h2>
 						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body leading-relaxed max-w-none lg:max-w-5xl">
-							Flexible financing for all your business needs
+							Flexible financing for all your personal needs
 						</p>
 					</div>
 
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
-						{/* Business Expansion */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<svg
-									className="w-7 h-7 text-blue-600"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-									/>
-								</svg>
-							</div>
-							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
-								Business Expansion
-							</h3>
-							<p className="text-lg text-gray-500 font-body">
-								Open new locations, enter new markets, or scale
-								your operations to reach more customers
-							</p>
-						</div>
-
-						{/* Working Capital */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<svg
-									className="w-7 h-7 text-blue-600"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-									/>
-								</svg>
-							</div>
-							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
-								Working Capital
-							</h3>
-							<p className="text-lg text-gray-500 font-body">
-								Manage cash flow, pay suppliers, cover payroll,
-								and maintain smooth daily operations
-							</p>
-						</div>
-
-						{/* Equipment Purchase */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<svg
-									className="w-7 h-7 text-blue-600"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-									/>
-								</svg>
-							</div>
-							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
-								Equipment Purchase
-							</h3>
-							<p className="text-lg text-gray-500 font-body">
-								Invest in new machinery, technology, or
-								equipment to improve productivity and efficiency
-							</p>
-						</div>
-
-						{/* Inventory Financing */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<svg
-									className="w-7 h-7 text-blue-600"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-									/>
-								</svg>
-							</div>
-							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
-								Inventory Financing
-							</h3>
-							<p className="text-lg text-gray-500 font-body">
-								Stock up on inventory for peak seasons, bulk
-								purchases, or new product lines
-							</p>
-						</div>
-
-						{/* Marketing & Advertising */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<svg
-									className="w-7 h-7 text-blue-600"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
-									/>
-								</svg>
-							</div>
-							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
-								Marketing & Advertising
-							</h3>
-							<p className="text-lg text-gray-500 font-body">
-								Launch marketing campaigns, digital advertising,
-								or brand development initiatives
-							</p>
-						</div>
-
-						{/* Renovation & Upgrade */}
+						{/* Home Improvement */}
 						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
 							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
 								<svg
@@ -503,19 +373,155 @@ export default function SMETermLoan() {
 								</svg>
 							</div>
 							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
-								Renovation & Upgrade
+								Home Improvement
 							</h3>
 							<p className="text-lg text-gray-500 font-body">
-								Renovate your premises, upgrade facilities, or
-								improve your business environment
+								Renovate your home, upgrade appliances, or
+								enhance your living space
+							</p>
+						</div>
+
+						{/* Education */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
+								<svg
+									className="w-7 h-7 text-blue-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M12 14l9-5-9-5-9 5 9 5z"
+									/>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
+									/>
+								</svg>
+							</div>
+							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
+								Education
+							</h3>
+							<p className="text-lg text-gray-500 font-body">
+								Fund your studies, courses, or your children's
+								educational expenses
+							</p>
+						</div>
+
+						{/* Medical Expenses */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
+								<svg
+									className="w-7 h-7 text-blue-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+									/>
+								</svg>
+							</div>
+							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
+								Medical Expenses
+							</h3>
+							<p className="text-lg text-gray-500 font-body">
+								Cover medical treatments, procedures, or
+								health-related costs
+							</p>
+						</div>
+
+						{/* Vehicle Purchase */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
+								<svg
+									className="w-7 h-7 text-blue-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M13 10V3L4 14h7v7l9-11h-7z"
+									/>
+								</svg>
+							</div>
+							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
+								Vehicle Purchase
+							</h3>
+							<p className="text-lg text-gray-500 font-body">
+								Buy a car, motorcycle, or make a down payment
+								for your vehicle
+							</p>
+						</div>
+
+						{/* Debt Consolidation */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
+								<svg
+									className="w-7 h-7 text-blue-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+									/>
+								</svg>
+							</div>
+							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
+								Debt Consolidation
+							</h3>
+							<p className="text-lg text-gray-500 font-body">
+								Combine multiple debts into one manageable
+								monthly payment
+							</p>
+						</div>
+
+						{/* Emergency Expenses */}
+						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
+							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
+								<svg
+									className="w-7 h-7 text-blue-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+									/>
+								</svg>
+							</div>
+							<h3 className="text-xl lg:text-2xl font-heading font-bold mb-3 text-gray-700">
+								Emergency Expenses
+							</h3>
+							<p className="text-lg text-gray-500 font-body">
+								Handle unexpected expenses or urgent financial
+								needs quickly
 							</p>
 						</div>
 					</div>
 				</div>
 			</section>
 
-			{/* Terms and Calculator Section */}
-			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gray-50/20 w-full">
+			{/* Loan Terms & Calculator Section */}
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					<div className="bg-blue-50 rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 xl:p-16 relative overflow-hidden shadow-lg border border-blue-100">
 						<div className="text-center mb-8 lg:mb-12">
@@ -540,7 +546,7 @@ export default function SMETermLoan() {
 											Loan Amount
 										</h4>
 										<p className="text-gray-500 font-body">
-											RM 50,000 - RM 1,000,000
+											RM 5,000 - RM 150,000
 										</p>
 									</div>
 									<div>
@@ -581,7 +587,7 @@ export default function SMETermLoan() {
 											Repayment Term
 										</h4>
 										<p className="text-gray-500 font-body">
-											6, 12, 18, or 24 months
+											6 to 24 months
 										</p>
 									</div>
 									<div>
@@ -589,8 +595,8 @@ export default function SMETermLoan() {
 											Eligibility
 										</h4>
 										<p className="text-gray-500 font-body">
-											Minimum 2 years of operation with
-											good financials
+											Minimum monthly income of RM 3,000
+											with stable employment
 										</p>
 									</div>
 								</div>
@@ -654,9 +660,9 @@ export default function SMETermLoan() {
 										<div className="relative">
 											<input
 												type="range"
-												min="50000"
+												min="5000"
 												max={MAX_LOAN_AMOUNT}
-												step="10000"
+												step="5000"
 												value={loanAmount}
 												onChange={(e) =>
 													setLoanAmount(
@@ -666,14 +672,14 @@ export default function SMETermLoan() {
 												className="w-full h-3 rounded-lg appearance-none cursor-pointer range-slider"
 												style={{
 													background: `linear-gradient(to right, #2563EB 0%, #2563EB ${
-														((loanAmount - 50000) /
+														((loanAmount - 5000) /
 															(MAX_LOAN_AMOUNT -
-																50000)) *
+																5000)) *
 														100
 													}%, #E5E7EB ${
-														((loanAmount - 50000) /
+														((loanAmount - 5000) /
 															(MAX_LOAN_AMOUNT -
-																50000)) *
+																5000)) *
 														100
 													}%, #E5E7EB 100%)`,
 												}}
@@ -721,8 +727,11 @@ export default function SMETermLoan() {
 											`}</style>
 										</div>
 										<div className="flex justify-between text-xs text-gray-500 mt-1 font-body">
-											<span>RM 50,000</span>
-											<span>RM 1,000,000</span>
+											<span>RM 5,000</span>
+											<span>
+												RM{" "}
+												{MAX_LOAN_AMOUNT.toLocaleString()}
+											</span>
 										</div>
 									</div>
 									<div>
@@ -930,33 +939,6 @@ export default function SMETermLoan() {
 										strokeLinecap="round"
 										strokeLinejoin="round"
 										strokeWidth={2}
-										d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
-									/>
-								</svg>
-							</div>
-							<h4 className="text-xl font-heading font-semibold mb-4 text-gray-700">
-								Company Registration
-							</h4>
-							<ul className="text-gray-500 space-y-2 font-body">
-								<li>• Form 9</li>
-								<li>• Form 24</li>
-								<li>• Form 49</li>
-								<li>• SSM Certificate</li>
-							</ul>
-						</div>
-
-						<div className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all border border-gray-200">
-							<div className="w-16 h-16 bg-blue-tertiary/10 rounded-full flex items-center justify-center mb-6 border border-blue-tertiary/20">
-								<svg
-									className="w-8 h-8 text-blue-tertiary"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
 										d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"
 									/>
 								</svg>
@@ -965,14 +947,14 @@ export default function SMETermLoan() {
 								Identity Documents
 							</h4>
 							<p className="text-gray-500 font-body">
-								Copy of all Director(s) NRIC/Passport
+								Copy of NRIC (front and back)
 							</p>
 						</div>
 
 						<div className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all border border-gray-200">
-							<div className="w-16 h-16 bg-blue-600/10 rounded-full flex items-center justify-center mb-6 border border-blue-600/20">
+							<div className="w-16 h-16 bg-blue-tertiary/10 rounded-full flex items-center justify-center mb-6 border border-blue-tertiary/20">
 								<svg
-									className="w-8 h-8 text-blue-600"
+									className="w-8 h-8 text-blue-tertiary"
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
@@ -989,7 +971,7 @@ export default function SMETermLoan() {
 								Bank Statements
 							</h4>
 							<p className="text-gray-500 font-body">
-								Latest 6 months bank statements
+								Latest 3 months bank statements
 							</p>
 						</div>
 
@@ -1010,11 +992,34 @@ export default function SMETermLoan() {
 								</svg>
 							</div>
 							<h4 className="text-xl font-heading font-semibold mb-4 text-gray-700">
-								Financial Statements
+								Income Documents
 							</h4>
 							<p className="text-gray-500 font-body">
-								Latest Audited Accounts & Management Accounts
-								(if available)
+								Latest 3 months payslips or EPF statement
+							</p>
+						</div>
+
+						<div className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-lg transition-all border border-gray-200">
+							<div className="w-16 h-16 bg-blue-600/10 rounded-full flex items-center justify-center mb-6 border border-blue-600/20">
+								<svg
+									className="w-8 h-8 text-blue-600"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
+									/>
+								</svg>
+							</div>
+							<h4 className="text-xl font-heading font-semibold mb-4 text-gray-700">
+								Employment Letter
+							</h4>
+							<p className="text-gray-500 font-body">
+								Employment confirmation letter from employer
 							</p>
 						</div>
 					</div>
@@ -1029,30 +1034,28 @@ export default function SMETermLoan() {
 							Frequently Asked Questions
 						</h2>
 						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body leading-relaxed max-w-none lg:max-w-5xl">
-							Everything you need to know about SME Term Loan
+							Everything you need to know about Personal Loans
 						</p>
 					</div>
 
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 lg:gap-8 w-full">
 						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
 							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								What can I use the loan for?
+								What is the maximum loan amount?
 							</h4>
 							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								The loan can be used for business expansion,
-								working capital, equipment purchase, or other
-								business purposes.
+								You can borrow up to RM 150,000 depending on
+								your income and credit profile.
 							</p>
 						</div>
 
 						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
 							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								How much can I borrow?
+								How long does approval take?
 							</h4>
 							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								You can borrow between RM 50,000 to RM
-								1,000,000, subject to business qualification and
-								financial assessment.
+								Most applications are approved within 24 hours
+								of submission with complete documentation.
 							</p>
 						</div>
 
@@ -1061,63 +1064,19 @@ export default function SMETermLoan() {
 								What documents do I need?
 							</h4>
 							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Required documents include business
-								registration, financial statements, bank
-								statements, and tax returns.
+								You'll need your IC, latest 3 months' payslips,
+								bank statements, and EPF statement.
 							</p>
 						</div>
 
 						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
 							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								How long is the approval process?
+								Can I repay early?
 							</h4>
 							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Most applications are approved within 3 business
-								days, with funding disbursed within 24 hours
-								after approval.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								Is collateral required?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								No collateral is required for businesses with
-								strong financials and at least 2 years of
-								operation.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								Can I pay off the loan early?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Yes, you can make early repayments without any
-								penalty. This can help reduce your total
-								interest costs.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								What businesses are eligible?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Registered businesses with minimum 2 years of
-								operation and good financial track record.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								How are repayments made?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Monthly repayments are made through automated
-								bank transfers from your designated business
-								account.
+								Yes, you can make early repayments without
+								penalty charges to reduce your total interest
+								cost.
 							</p>
 						</div>
 					</div>
@@ -1125,113 +1084,96 @@ export default function SMETermLoan() {
 			</section>
 
 			{/* Benefits Section */}
-			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gray-50/20 w-full">
-				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 w-full">
+				<div className="px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					<div className="text-center mb-8 lg:mb-12">
-						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 leading-tight">
-							Benefits for Your Business
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-gray-900 mb-4">
+							Why Choose{" "}
+							<span className="bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
+								Our Personal Loans
+							</span>
 						</h2>
-						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body leading-relaxed max-w-none lg:max-w-5xl">
-							Smart financing solutions to fuel your business
-							growth
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 font-body">
+							Designed to meet your personal financial needs
 						</p>
 					</div>
 
-					{/* Benefits Grid */}
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mx-2 sm:mx-4 lg:mx-0">
-						{/* Working Capital */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<MdAccountBalance
-									size={28}
-									className="text-blue-600"
-								/>
+					<div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+						<div className="bg-white rounded-2xl p-6 lg:p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+							<div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+								<MdSpeed size={24} color="#2563EB" />
 							</div>
-							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
-								Working Capital
-							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								Access funds for inventory, operations, and
-								business expansion with flexible repayment terms
-							</p>
-						</div>
-
-						{/* Fast Processing */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<MdSpeed size={28} className="text-blue-600" />
-							</div>
-							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold text-gray-900 mb-4">
 								Fast Processing
 							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								Quick approval and disbursement process to meet
-								urgent business funding needs
+							<p className="text-lg lg:text-xl text-gray-600 font-body">
+								Quick approval process with minimal
+								documentation required for your convenience
 							</p>
 						</div>
 
-						{/* Minimal Security */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<MdSecurity
-									size={28}
-									className="text-blue-600"
-								/>
+						<div className="bg-white rounded-2xl p-6 lg:p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+							<div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+								<MdSecurity size={24} color="#2563EB" />
 							</div>
-							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
-								Minimal Security
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold text-gray-900 mb-4">
+								Secure & Reliable
 							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								No collateral required for established
-								businesses with strong financial track records
+							<p className="text-lg lg:text-xl text-gray-600 font-body">
+								Bank-level security with full regulatory
+								compliance for your peace of mind
 							</p>
 						</div>
 
-						{/* Flexible Terms */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<MdTrendingUp
-									size={28}
-									className="text-blue-600"
-								/>
+						<div className="bg-white rounded-2xl p-6 lg:p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+							<div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+								<MdTrendingUp size={24} color="#2563EB" />
 							</div>
-							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold text-gray-900 mb-4">
 								Flexible Terms
 							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								Choose repayment terms from 6 to 24 months that
-								suit your business cash flow
+							<p className="text-lg lg:text-xl text-gray-600 font-body">
+								Choose repayment terms that fit your budget and
+								financial situation
 							</p>
 						</div>
 
-						{/* High Limits */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<MdVerifiedUser
-									size={28}
-									className="text-blue-600"
-								/>
+						<div className="bg-white rounded-2xl p-6 lg:p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+							<div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+								<MdAccountBalance size={24} color="#2563EB" />
 							</div>
-							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
-								High Limits
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold text-gray-900 mb-4">
+								No Hidden Fees
 							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								Up to RM 1,000,000 financing available for
-								qualified businesses and growth projects
+							<p className="text-lg lg:text-xl text-gray-600 font-body">
+								Transparent pricing with all fees clearly
+								disclosed upfront
 							</p>
 						</div>
 
-						{/* Competitive Rates */}
-						<div className="bg-white rounded-xl lg:rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-lg transition-all border border-gray-100">
-							<div className="w-14 h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mb-4">
-								<MdPeople size={28} className="text-blue-600" />
+						<div className="bg-white rounded-2xl p-6 lg:p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+							<div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+								<MdVerifiedUser size={24} color="#2563EB" />
 							</div>
-							<h3 className="text-2xl lg:text-3xl font-heading font-bold mb-3 text-gray-700">
-								Competitive Rates
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold text-gray-900 mb-4">
+								Licensed Lender
 							</h3>
-							<p className="text-lg lg:text-xl text-gray-500 font-body">
-								Starting from 1.0% monthly interest with
-								transparent pricing and no hidden fees
+							<p className="text-lg lg:text-xl text-gray-600 font-body">
+								Fully licensed by KPKT with proper regulatory
+								oversight and consumer protection
+							</p>
+						</div>
+
+						<div className="bg-white rounded-2xl p-6 lg:p-8 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+							<div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
+								<MdPeople size={24} color="#2563EB" />
+							</div>
+							<h3 className="text-2xl lg:text-3xl font-heading font-bold text-gray-900 mb-4">
+								Personal Support
+							</h3>
+							<p className="text-lg lg:text-xl text-gray-600 font-body">
+								Dedicated customer support team to help you
+								throughout the loan process
 							</p>
 						</div>
 					</div>
@@ -1246,8 +1188,8 @@ export default function SMETermLoan() {
 							Ready to Get Started?
 						</h2>
 						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-blue-100 mb-8 lg:mb-12 font-body">
-							Apply for your SME term loan today and fuel your
-							business growth
+							Apply for your personal loan today and get the funds
+							you need
 						</p>
 						<div className="flex flex-col sm:flex-row gap-4 justify-center">
 							<Link
@@ -1258,7 +1200,7 @@ export default function SMETermLoan() {
 								<MdArrowForward size={20} className="ml-2" />
 							</Link>
 							<a
-								href="https://wa.me/60164614919?text=I'm%20interested%20in%20an%20SME%20term%20loan"
+								href="https://wa.me/60164614919?text=I'm%20interested%20in%20a%20personal%20loan"
 								target="_blank"
 								rel="noopener noreferrer"
 								className="bg-blue-700 text-white hover:bg-blue-800 border border-blue-500 font-semibold text-lg px-8 py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"

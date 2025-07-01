@@ -9,10 +9,8 @@ import {
 	MdClose,
 	MdKeyboardArrowDown,
 	MdGroups,
-	MdDirectionsCar,
 	MdBusinessCenter,
 	MdAccountBalance,
-	MdApartment,
 	MdShowChart,
 	MdInfo,
 	MdWork,
@@ -21,13 +19,15 @@ import {
 	MdPhone,
 	MdDashboard,
 	MdCreditCard,
+	MdTrendingUp,
+	MdAssessment,
 } from "react-icons/md";
 
 type NavbarProps = {
 	bgStyle?: string;
 };
 
-type ActiveMenu = "none" | "borrow" | "resources";
+type ActiveMenu = "none" | "solutions" | "resources";
 
 export default function Navbar({
 	bgStyle = "bg-gradient-to-r from-gray-900 via-slate-800 to-gray-900",
@@ -88,16 +88,26 @@ export default function Navbar({
 				return prev.filter((s) => s !== section);
 			}
 			// If it's a subsection, make sure its parent is also active
-			if (section === "business" || section === "personal") {
-				return [...new Set([...prev, "borrow", section])];
+			if (
+				section === "borrow" ||
+				section === "invest" ||
+				section === "credit"
+			) {
+				return [...new Set([...prev, "solutions", section])];
 			}
 			if (section === "company" || section === "resources-sub") {
 				return [...new Set([...prev, "resources", section])];
 			}
 			// If it's a first-level menu, expand all its submenus by default
-			if (section === "borrow") {
+			if (section === "solutions") {
 				return [
-					...new Set([...prev, "borrow", "business", "personal"]),
+					...new Set([
+						...prev,
+						"solutions",
+						"borrow",
+						"invest",
+						"credit",
+					]),
 				];
 			}
 			if (section === "resources") {
@@ -142,17 +152,17 @@ export default function Navbar({
 						<div className="hidden md:flex items-center justify-center flex-1 space-x-8 px-16">
 							<div className="relative">
 								<button
-									onClick={() => handleMenuClick("borrow")}
+									onClick={() => handleMenuClick("solutions")}
 									className={`${
 										isScrolled
 											? "text-gray-700 hover:text-purple-primary"
-											: "text-gray-200 hover:text-purple-primary"
+											: "text-gray-200 hover:text-white"
 									} transition-colors flex items-center gap-1 font-body`}
 								>
-									Borrow
+									Solutions
 									<div
 										className={`transition-transform duration-200 ${
-											activeMenu === "borrow"
+											activeMenu === "solutions"
 												? "rotate-180"
 												: ""
 										}`}
@@ -167,7 +177,7 @@ export default function Navbar({
 									className={`${
 										isScrolled
 											? "text-gray-700 hover:text-purple-primary"
-											: "text-gray-200 hover:text-purple-primary"
+											: "text-gray-200 hover:text-white"
 									} transition-colors flex items-center gap-1 font-body`}
 								>
 									Resources
@@ -192,7 +202,7 @@ export default function Navbar({
 									className={`inline-flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
 										isScrolled
 											? "border-gray-400 hover:border-purple-primary text-gray-700 hover:text-purple-primary"
-											: "border-gray-400 hover:border-purple-primary text-gray-200 hover:text-purple-primary"
+											: "border-gray-400 hover:border-white text-gray-200 hover:text-white"
 									}`}
 								>
 									<MdPhone size={20} />
@@ -224,7 +234,7 @@ export default function Navbar({
 										className={`${
 											isScrolled
 												? "text-gray-700 hover:text-purple-primary"
-												: "text-gray-200 hover:text-purple-primary"
+												: "text-gray-200 hover:text-white"
 										} px-4 py-2 rounded-full transition-colors font-body`}
 									>
 										Sign in
@@ -246,7 +256,7 @@ export default function Navbar({
 								className={`${
 									isScrolled
 										? "text-gray-700 hover:text-purple-primary"
-										: "text-white hover:text-gray-200"
+										: "text-white hover:text-gray-100"
 								} transition-colors`}
 							>
 								<span className="sr-only">Open menu</span>
@@ -279,83 +289,28 @@ export default function Navbar({
 									isScrolled ? "mx-0" : "mx-2 sm:mx-4 lg:mx-0"
 								}`}
 							>
-								{activeMenu === "borrow" && (
+								{activeMenu === "solutions" && (
 									<div className="grid grid-cols-3 gap-8">
-										{/* Business Solutions Column */}
+										{/* Borrow Solutions Column */}
 										<div>
 											<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
-												Business Solutions
+												Borrow
 											</h3>
 											<div className="space-y-4">
 												<Link
-													href="/pay-advance"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
-												>
-													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
-														<MdGroups
-															size={24}
-															color="#7C3AED"
-														/>
-													</div>
-													<div>
-														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
-																PayAdvance™
-															</h4>
-															<span className="text-xs px-2 py-0.5 bg-blue-tertiary/20 text-blue-tertiary rounded-full border border-blue-tertiary/30">
-																New
-															</span>
-														</div>
-														<p className="text-sm text-gray-500 font-body">
-															Instant salary
-															advances for your
-															employees
-														</p>
-													</div>
-												</Link>
-												<Link
-													href="/equipment-financing"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
-												>
-													<div className="w-12 h-12 rounded-xl bg-blue-tertiary/10 flex items-center justify-center flex-shrink-0 border border-blue-tertiary/20">
-														<MdBusinessCenter
-															size={24}
-															color="#38BDF8"
-														/>
-													</div>
-													<div>
-														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-tertiary transition-colors font-heading">
-																Equipment
-																Financing
-															</h4>
-															<span className="text-xs px-2 py-0.5 bg-blue-tertiary/20 text-blue-tertiary rounded-full border border-blue-tertiary/30">
-																New
-															</span>
-														</div>
-														<p className="text-sm text-gray-500 font-body">
-															Finance your
-															business equipment
-															with flexible terms
-														</p>
-													</div>
-												</Link>
-												<Link
 													href="/sme-term-loan"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-blue-50"
 												>
-													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
+													<div className="w-12 h-12 rounded-xl bg-blue-600/10 flex items-center justify-center flex-shrink-0 border border-blue-600/20">
 														<MdBusinessCenter
 															size={24}
-															color="#7C3AED"
+															color="#2563EB"
 														/>
 													</div>
 													<div>
-														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
-																SME Term Loan
-															</h4>
-														</div>
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-600 transition-colors font-heading">
+															SME Term Loan
+														</h4>
 														<p className="text-sm text-gray-500 font-body">
 															Term loans for
 															business expansion
@@ -363,126 +318,132 @@ export default function Navbar({
 													</div>
 												</Link>
 												<Link
-													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
+													href="/personal-loan"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-blue-50"
 												>
-													<div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-200">
-														<MdDirectionsCar
+													<div className="w-12 h-12 rounded-xl bg-blue-600/10 flex items-center justify-center flex-shrink-0 border border-blue-600/20">
+														<MdAccountBalance
 															size={24}
-															color="#6B7280"
+															color="#2563EB"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-700 group-hover:text-gray-600 transition-colors font-heading">
-															Auto Dealer
-															Financing
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-600 transition-colors font-heading">
+															Personal Loan
 														</h4>
 														<p className="text-sm text-gray-500 font-body">
-															Specialized
-															financing for
-															dealerships
+															Fast financing for
+															personal needs
+														</p>
+													</div>
+												</Link>
+												<Link
+													href="/pay-advance"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-emerald-50"
+												>
+													<div className="w-12 h-12 rounded-xl bg-emerald-600/10 flex items-center justify-center flex-shrink-0 border border-emerald-600/20">
+														<MdGroups
+															size={24}
+															color="#059669"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center gap-2">
+															<h4 className="text-base font-semibold text-gray-700 group-hover:text-emerald-600 transition-colors font-heading">
+																PayAdvance
+															</h4>
+															<span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-full border border-emerald-600/30">
+																New
+															</span>
+														</div>
+														<p className="text-sm text-gray-500 font-body">
+															Earned wage access &
+															salary advances
 														</p>
 													</div>
 												</Link>
 											</div>
 										</div>
 
-										{/* Personal Solutions Column */}
+										{/* Invest Solutions Column */}
 										<div>
 											<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
-												Personal Solutions
+												Invest
 											</h3>
 											<div className="space-y-4">
 												<Link
 													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-gray-50"
 												>
-													<div className="w-12 h-12 rounded-xl bg-blue-tertiary/10 flex items-center justify-center flex-shrink-0 border border-blue-tertiary/20">
-														<MdAccountBalance
+													<div className="w-12 h-12 rounded-xl bg-gray-800/10 flex items-center justify-center flex-shrink-0 border border-gray-800/20">
+														<MdTrendingUp
 															size={24}
-															color="#38BDF8"
+															color="#1F2937"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-700 group-hover:text-blue-tertiary transition-colors font-heading">
-															Lifestyle Term Loan
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-gray-800 transition-colors font-heading">
+															Private Credit
+															Investments
 														</h4>
 														<p className="text-sm text-gray-500 font-body">
-															Quick and flexible
-															personal loans
+															Up to 8% annual
+															returns with monthly
+															distributions
 														</p>
 													</div>
 												</Link>
+											</div>
+										</div>
+
+										{/* Credit Solutions Column */}
+										<div>
+											<h3 className="text-lg font-semibold text-gray-700 mb-4 font-heading">
+												Credit
+											</h3>
+											<div className="space-y-4">
 												<Link
-													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
+													href="/credit-score+"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-purple-50"
 												>
 													<div className="w-12 h-12 rounded-xl bg-purple-primary/10 flex items-center justify-center flex-shrink-0 border border-purple-primary/20">
-														<MdApartment
+														<MdAssessment
 															size={24}
 															color="#7C3AED"
 														/>
 													</div>
 													<div>
 														<h4 className="text-base font-semibold text-gray-700 group-hover:text-purple-primary transition-colors font-heading">
-															Property-Backed
-															Financing
+															Credit Analytics
 														</h4>
 														<p className="text-sm text-gray-500 font-body">
-															Better rates with
-															property collateral
+															CTOS reports and
+															business
+															verification
 														</p>
 													</div>
 												</Link>
 												<Link
 													href="/products"
-													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-white"
+													className="group flex items-start gap-4 p-3 rounded-xl transition-colors hover:bg-yellow-50"
 												>
-													<div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-200">
-														<MdShowChart
+													<div className="w-12 h-12 rounded-xl bg-yellow-500/10 flex items-center justify-center flex-shrink-0 border border-yellow-500/20">
+														<MdCreditCard
 															size={24}
-															color="#6B7280"
+															color="#EAB308"
 														/>
 													</div>
 													<div>
-														<h4 className="text-base font-semibold text-gray-700 group-hover:text-gray-600 transition-colors font-heading">
-															Lease-to-Own
-															Financing
+														<h4 className="text-base font-semibold text-gray-700 group-hover:text-yellow-600 transition-colors font-heading">
+															Credit Score+
 														</h4>
 														<p className="text-sm text-gray-500 font-body">
-															Vehicle-backed
-															financing solutions
+															Build and improve
+															your credit score
 														</p>
 													</div>
 												</Link>
 											</div>
-										</div>
-
-										{/* CTA Column - Borrow Menu */}
-										<div className="bg-white rounded-xl p-6 border border-gray-100">
-											<div className="relative h-32 mb-4">
-												<Image
-													src="/decide.svg"
-													alt="Happy customer"
-													fill
-													className="object-contain object-left"
-												/>
-											</div>
-											<div className="mb-4">
-												<h3 className="text-lg font-semibold text-gray-700 mb-2 font-heading">
-													Ready to get started?
-												</h3>
-												<p className="text-sm text-gray-500 font-body">
-													Apply now and get approved
-													within 24 hours
-												</p>
-											</div>
-											<Link
-												href="/products"
-												className="inline-block text-blue-tertiary hover:text-purple-primary font-medium transition-colors font-body"
-											>
-												See all products →
-											</Link>
 										</div>
 									</div>
 								)}
@@ -689,20 +650,20 @@ export default function Navbar({
 
 							{/* Mobile Menu Links */}
 							<div className="space-y-8">
-								{/* Borrow Section */}
+								{/* Solutions Section */}
 								<div onClick={(e) => e.stopPropagation()}>
 									<button
 										onClick={() =>
-											toggleMobileSection("borrow")
+											toggleMobileSection("solutions")
 										}
 										className="flex items-center justify-between w-full text-left text-xl font-semibold text-gray-900 py-4 border-b border-gray-100"
 									>
-										<span>Borrow</span>
+										<span>Solutions</span>
 										<MdKeyboardArrowDown
 											size={24}
 											className={`transform transition-transform ${
 												activeMobileSections.includes(
-													"borrow"
+													"solutions"
 												)
 													? "rotate-180"
 													: ""
@@ -712,30 +673,30 @@ export default function Navbar({
 									<div
 										className={`space-y-6 transition-all duration-200 overflow-hidden ${
 											activeMobileSections.includes(
-												"borrow"
+												"solutions"
 											)
 												? "max-h-[2000px] opacity-100 mt-6"
 												: "max-h-0 opacity-0"
 										}`}
 									>
-										{/* Business Solutions */}
+										{/* Borrow Solutions */}
 										<div
 											onClick={(e) => e.stopPropagation()}
 										>
 											<button
 												onClick={() =>
 													toggleMobileSection(
-														"business"
+														"borrow"
 													)
 												}
 												className="flex items-center justify-between w-full text-left text-lg font-semibold text-purple-900 mb-4 py-2 px-3 rounded-lg bg-purple-50"
 											>
-												<span>Business Solutions</span>
+												<span>Borrow</span>
 												<MdKeyboardArrowDown
 													size={20}
 													className={`transform transition-transform ${
 														activeMobileSections.includes(
-															"business"
+															"borrow"
 														)
 															? "rotate-180"
 															: ""
@@ -745,71 +706,12 @@ export default function Navbar({
 											<div
 												className={`space-y-4 transition-all duration-200 overflow-hidden ${
 													activeMobileSections.includes(
-														"business"
+														"borrow"
 													)
 														? "max-h-[1000px] opacity-100"
 														: "max-h-0 opacity-0"
 												}`}
 											>
-												{/* Business Solutions Links */}
-												<Link
-													href="/pay-advance"
-													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
-													onClick={() =>
-														setMobileMenuOpen(false)
-													}
-												>
-													<div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
-														<MdGroups
-															size={20}
-															color="#9333EA"
-														/>
-													</div>
-													<div>
-														<div className="flex items-center gap-2">
-															<span className="font-semibold">
-																PayAdvance™
-															</span>
-															<span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-600 rounded-full">
-																New
-															</span>
-														</div>
-														<p className="text-sm text-gray-500">
-															Instant salary
-															advances
-														</p>
-													</div>
-												</Link>
-												<Link
-													href="/equipment-financing"
-													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
-													onClick={() =>
-														setMobileMenuOpen(false)
-													}
-												>
-													<div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-														<MdBusinessCenter
-															size={20}
-															color="#059669"
-														/>
-													</div>
-													<div>
-														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors">
-																Equipment
-																Financing
-															</h4>
-															<span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-full">
-																New
-															</span>
-														</div>
-														<p className="text-sm text-gray-500">
-															Finance your
-															business equipment
-															with flexible terms
-														</p>
-													</div>
-												</Link>
 												<Link
 													href="/sme-term-loan"
 													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
@@ -824,11 +726,9 @@ export default function Navbar({
 														/>
 													</div>
 													<div>
-														<div className="flex items-center gap-2">
-															<h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-																SME Term Loan
-															</h4>
-														</div>
+														<span className="font-semibold">
+															SME Term Loan
+														</span>
 														<p className="text-sm text-gray-500">
 															Term loans for
 															business expansion
@@ -836,51 +736,77 @@ export default function Navbar({
 													</div>
 												</Link>
 												<Link
-													href="/products"
+													href="/personal-loan"
 													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
 													onClick={() =>
 														setMobileMenuOpen(false)
 													}
 												>
 													<div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-														<MdDirectionsCar
+														<MdAccountBalance
 															size={20}
 															color="#2563EB"
 														/>
 													</div>
 													<div>
 														<span className="font-semibold">
-															Auto Dealer
-															Financing
+															Personal Loan
 														</span>
 														<p className="text-sm text-gray-500">
-															Specialized
-															financing for
-															dealerships
+															Fast financing for
+															personal needs
+														</p>
+													</div>
+												</Link>
+												<Link
+													href="/pay-advance"
+													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
+													onClick={() =>
+														setMobileMenuOpen(false)
+													}
+												>
+													<div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+														<MdGroups
+															size={20}
+															color="#059669"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center gap-2">
+															<span className="font-semibold">
+																PayAdvance
+															</span>
+															<span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-600 rounded-full">
+																New
+															</span>
+														</div>
+														<p className="text-sm text-gray-500">
+															Earned wage access &
+															salary advances
 														</p>
 													</div>
 												</Link>
 											</div>
 										</div>
 
-										{/* Personal Solutions */}
+										{/* Invest Solutions */}
 										<div
 											onClick={(e) => e.stopPropagation()}
 										>
 											<button
 												onClick={() =>
 													toggleMobileSection(
-														"personal"
+														"invest"
 													)
 												}
 												className="flex items-center justify-between w-full text-left text-lg font-semibold text-purple-900 mb-4 py-2 px-3 rounded-lg bg-purple-50"
 											>
-												<span>Personal Solutions</span>
+												<span>Invest</span>
 												<MdKeyboardArrowDown
 													size={20}
 													className={`transform transition-transform ${
 														activeMobileSections.includes(
-															"personal"
+															"invest"
 														)
 															? "rotate-180"
 															: ""
@@ -890,13 +816,12 @@ export default function Navbar({
 											<div
 												className={`space-y-4 transition-all duration-200 overflow-hidden ${
 													activeMobileSections.includes(
-														"personal"
+														"invest"
 													)
 														? "max-h-[1000px] opacity-100"
 														: "max-h-0 opacity-0"
 												}`}
 											>
-												{/* Personal Solutions Links */}
 												<Link
 													href="/products"
 													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
@@ -904,67 +829,101 @@ export default function Navbar({
 														setMobileMenuOpen(false)
 													}
 												>
-													<div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-														<MdAccountBalance
+													<div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+														<MdTrendingUp
 															size={20}
-															color="#059669"
+															color="#374151"
 														/>
 													</div>
 													<div>
 														<span className="font-semibold">
-															Lifestyle Term Loan
+															Private Credit
+															Investments
 														</span>
 														<p className="text-sm text-gray-500">
-															Quick and flexible
-															personal loans
+															8-12% annual returns
+														</p>
+													</div>
+												</Link>
+											</div>
+										</div>
+
+										{/* Credit Solutions */}
+										<div
+											onClick={(e) => e.stopPropagation()}
+										>
+											<button
+												onClick={() =>
+													toggleMobileSection(
+														"credit"
+													)
+												}
+												className="flex items-center justify-between w-full text-left text-lg font-semibold text-purple-900 mb-4 py-2 px-3 rounded-lg bg-purple-50"
+											>
+												<span>Credit</span>
+												<MdKeyboardArrowDown
+													size={20}
+													className={`transform transition-transform ${
+														activeMobileSections.includes(
+															"credit"
+														)
+															? "rotate-180"
+															: ""
+													}`}
+												/>
+											</button>
+											<div
+												className={`space-y-4 transition-all duration-200 overflow-hidden ${
+													activeMobileSections.includes(
+														"credit"
+													)
+														? "max-h-[1000px] opacity-100"
+														: "max-h-0 opacity-0"
+												}`}
+											>
+												<Link
+													href="/credit-score+"
+													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
+													onClick={() =>
+														setMobileMenuOpen(false)
+													}
+												>
+													<div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+														<MdAssessment
+															size={20}
+															color="#7C3AED"
+														/>
+													</div>
+													<div>
+														<span className="font-semibold">
+															Credit Analytics
+														</span>
+														<p className="text-sm text-gray-500">
+															CTOS reports and
+															verification
 														</p>
 													</div>
 												</Link>
 												<Link
 													href="/products"
-													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
+													className="flex items-center gap-4 text-gray-600 hover:text-yellow-600 p-2"
 													onClick={() =>
 														setMobileMenuOpen(false)
 													}
 												>
-													<div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-														<MdApartment
+													<div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center flex-shrink-0">
+														<MdCreditCard
 															size={20}
-															color="#059669"
+															color="#EAB308"
 														/>
 													</div>
 													<div>
 														<span className="font-semibold">
-															Property-Backed
-															Financing
+															Credit Score+
 														</span>
 														<p className="text-sm text-gray-500">
-															Better rates with
-															property collateral
-														</p>
-													</div>
-												</Link>
-												<Link
-													href="/products"
-													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
-													onClick={() =>
-														setMobileMenuOpen(false)
-													}
-												>
-													<div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-														<MdShowChart
-															size={20}
-															color="#059669"
-														/>
-													</div>
-													<div>
-														<span className="font-semibold">
-															Lease-to-Own
-															Financing
-														</span>
-														<p className="text-sm text-gray-500">
-															Vehicle-backed
-															financing solutions
+															Build and improve
+															credit score
 														</p>
 													</div>
 												</Link>
@@ -1035,7 +994,6 @@ export default function Navbar({
 														: "max-h-0 opacity-0"
 												}`}
 											>
-												{/* Company Links */}
 												<Link
 													href="/about"
 													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
@@ -1118,7 +1076,6 @@ export default function Navbar({
 														: "max-h-0 opacity-0"
 												}`}
 											>
-												{/* Resources Links */}
 												<Link
 													href="/blog"
 													className="flex items-center gap-4 text-gray-600 hover:text-purple-600 p-2"
