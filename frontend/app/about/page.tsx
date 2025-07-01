@@ -120,10 +120,10 @@ export default function About() {
 							in Malaysia
 						</h2>
 						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body leading-relaxed px-4 max-w-none lg:max-w-5xl">
-							At Kapital, we believe that access to capital should
-							be fast, fair, and transparent. We're committed to
-							empowering people and businesses with the financial
-							tools they need to grow and succeed.
+							At Kredit.my, we believe that access to capital
+							should be fast, fair, and transparent. We're
+							committed to empowering people and businesses with
+							the financial tools they need to grow and succeed.
 						</p>
 					</div>
 
@@ -222,7 +222,7 @@ export default function About() {
 							</h2>
 							<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mb-8 lg:mb-12 font-body leading-relaxed">
 								The principles that guide everything we do at
-								Kapital, ensuring we deliver the best possible
+								Kredit.my, ensuring we deliver the best possible
 								experience for our customers.
 							</p>
 
@@ -331,7 +331,7 @@ export default function About() {
 							</span>
 						</div>
 						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
-							The Kapital Advantage
+							The Kredit.my Advantage
 						</h2>
 						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-5xl">
 							What sets us apart in Malaysia's financial services

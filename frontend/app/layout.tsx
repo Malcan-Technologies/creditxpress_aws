@@ -26,13 +26,13 @@ export const metadata: Metadata = {
 		description:
 			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
 		url: "https://kredit.my",
-		siteName: "Kapital",
+		siteName: "Kredit.my",
 		images: [
 			{
 				url: "/og-image.jpg",
 				width: 1200,
 				height: 630,
-				alt: "Kapital - Smart Financing Solutions",
+				alt: "Kredit.my - Smart Financing Solutions",
 			},
 		],
 		locale: "en_MY",
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
 	manifest: "/site.webmanifest",
 	twitter: {
 		card: "summary_large_image",
-		title: "Kapital - Smart Financing Solutions for Every Need",
+		title: "Kredit.my - Smart Financing Solutions for Every Need",
 		description:
 			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
 		images: ["/og-image.jpg"],
