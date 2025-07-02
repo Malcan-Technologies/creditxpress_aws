@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import CTASection from "@/components/CTASection";
 import {
 	MdArrowForward,
 	MdCheck,
@@ -1193,37 +1194,14 @@ export default function PersonalLoan() {
 			</section>
 
 			{/* Final CTA Section */}
-			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gradient-to-r from-blue-600 to-blue-800 w-full">
-				<div className="px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					<div className="text-center">
-						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold text-white mb-4">
-							Ready to Get Started?
-						</h2>
-						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-blue-100 mb-8 lg:mb-12 font-body">
-							Apply for your personal loan today and get the funds
-							you need
-						</p>
-						<div className="flex flex-col sm:flex-row gap-4 justify-center">
-							<Link
-								href="/apply"
-								className="bg-white text-blue-600 hover:bg-gray-100 font-semibold text-lg px-8 py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
-							>
-								Apply Now
-								<MdArrowForward size={20} className="ml-2" />
-							</Link>
-							<a
-								href="https://wa.me/60164614919?text=I'm%20interested%20in%20a%20personal%20loan"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="bg-blue-700 text-white hover:bg-blue-800 border border-blue-500 font-semibold text-lg px-8 py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
-							>
-								<MdPhone size={20} className="mr-2" />
-								Contact Us
-							</a>
-						</div>
-					</div>
-				</div>
-			</section>
+			<CTASection
+				title="Ready to Get Started?"
+				description="Apply for your personal loan today and get the funds you need"
+				primaryButtonText="Apply Now"
+				primaryButtonHref="/apply"
+				secondaryButtonText="Contact Us"
+				secondaryButtonHref="https://wa.me/60164614919?text=I'm%20interested%20in%20a%20personal%20loan"
+			/>
 
 			<Footer />
 		</div>

@@ -34,14 +34,14 @@ export default function Footer() {
 				<div className="grid grid-cols-2 md:grid-cols-4 gap-8">
 					{/* Products */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading">
+						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
 							Products
 						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/pay-advance"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									PayAdvance™
 								</Link>
@@ -49,7 +49,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/equipment-financing"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Equipment Financing
 								</Link>
@@ -57,7 +57,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/sme-term-loan"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									SME Term Loan
 								</Link>
@@ -65,7 +65,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/products"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Borrow
 								</Link>
@@ -75,14 +75,14 @@ export default function Footer() {
 
 					{/* Company */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading">
+						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
 							Company
 						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/about"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									About Us
 								</Link>
@@ -91,7 +91,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/careers"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Careers
 								</Link>
@@ -99,7 +99,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/press"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Press
 								</Link>
@@ -109,14 +109,14 @@ export default function Footer() {
 
 					{/* Resources */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading">
+						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
 							Resources
 						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/blog"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Blog
 								</Link>
@@ -124,7 +124,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/help"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Help Center
 								</Link>
@@ -132,7 +132,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/guides"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Guides
 								</Link>
@@ -140,7 +140,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/calculator"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Loan Calculator
 								</Link>
@@ -150,14 +150,14 @@ export default function Footer() {
 
 					{/* Legal */}
 					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading">
+						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
 							Legal
 						</h3>
 						<ul className="space-y-3">
 							<li>
 								<Link
 									href="/privacy"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Privacy Policy
 								</Link>
@@ -165,7 +165,7 @@ export default function Footer() {
 							<li>
 								<Link
 									href="/terms"
-									className="text-gray-300 hover:text-purple-primary transition-colors font-body"
+									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
 								>
 									Terms of Service
 								</Link>
@@ -179,14 +179,14 @@ export default function Footer() {
 					<div className="flex flex-col space-y-6">
 						{/* Logo and SSL Badge */}
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-							<Logo size="lg" variant="white" linkTo="/" />
+							<Logo size="lg" variant="black" linkTo="/" />
 
-							<div className="inline-flex items-center gap-2 bg-purple-primary/10 backdrop-blur-lg rounded-xl p-4 border border-purple-primary/30 w-fit">
-								<span className="text-purple-primary flex-shrink-0">
+							<div className="inline-flex items-center gap-2 bg-emerald-400/10 backdrop-blur-lg rounded-xl p-4 border border-emerald-400/30 w-fit">
+								<span className="text-emerald-400 flex-shrink-0">
 									<MdShield size={20} />
 								</span>
 								<div className="text-sm">
-									<p className="text-purple-primary font-medium font-body">
+									<p className="text-emerald-400 font-medium font-body">
 										SSL Secured
 									</p>
 									<p className="text-gray-400 text-xs font-body">

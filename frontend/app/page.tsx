@@ -5,6 +5,7 @@ import Image from "next/image";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Logo from "@/components/Logo";
+import CTASection from "@/components/CTASection";
 import { useState } from "react";
 import {
 	MdArrowForward,
@@ -182,7 +183,7 @@ export default function Home() {
 			</section>
 
 			{/* Partners Section */}
-			<section className="py-12 sm:py-16 bg-white border-b border-gray-100 w-full">
+			<section className="py-12 sm:py-16 bg-gray-50 border-b border-gray-100 w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					<div className="text-center mb-8 sm:mb-12">
 						<h2 className="text-xl sm:text-xl md:text-2xl font-heading font-bold text-gray-600 mb-2">
@@ -908,28 +909,42 @@ export default function Home() {
 			</section>
 
 			{/* Trust & Impact Section */}
-			<section className="relative py-12 sm:py-16 lg:py-20 xl:py-24 bg-gradient-to-br from-gray-50 via-white to-gray-50/50 w-full">
-				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+			<section className="relative py-12 sm:py-16 lg:py-20 xl:py-24 bg-gradient-to-br from-[#0A0612] via-[#1A0B2E] to-[#0A0612] w-full">
+				{/* Gradient background elements */}
+				<div className="absolute inset-0 overflow-hidden">
+					{/* Primary purple orbs */}
+					<div className="absolute w-[500px] h-[500px] bg-[#7C3AED]/15 rounded-full blur-3xl -top-32 -left-32 animate-pulse"></div>
+					<div className="absolute w-[700px] h-[700px] bg-[#7C3AED]/8 rounded-full blur-3xl top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"></div>
+					<div className="absolute w-[400px] h-[400px] bg-[#7C3AED]/12 rounded-full blur-3xl -bottom-32 -right-32"></div>
+
+					{/* Additional subtle purple accents */}
+					<div className="absolute w-[300px] h-[300px] bg-[#7C3AED]/6 rounded-full blur-2xl top-20 right-1/4"></div>
+					<div className="absolute w-[200px] h-[200px] bg-[#7C3AED]/10 rounded-full blur-xl bottom-1/4 left-1/4"></div>
+
+					{/* Gradient overlay for depth */}
+					<div className="absolute inset-0 bg-gradient-to-t from-[#7C3AED]/5 via-transparent to-transparent"></div>
+					<div className="absolute inset-0 bg-gradient-to-r from-[#7C3AED]/3 via-transparent to-[#7C3AED]/3"></div>
+				</div>
+
+				<div className="relative w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					{/* Trust Statement */}
 					<div className="text-center mb-12 lg:mb-20">
-						<div className="inline-flex items-center px-4 sm:px-6 py-2 sm:py-3 bg-green-500/10 rounded-full mb-6 sm:mb-8 border border-green-500/20">
+						<div className="inline-flex items-center px-4 sm:px-6 py-2 sm:py-3 bg-green-500/20 rounded-full mb-6 sm:mb-8 border border-green-400/30">
 							<MdVerifiedUser
 								size={16}
-								className="text-green-600 mr-2"
+								className="text-green-400 mr-2"
 							/>
-							<span className="text-xs sm:text-sm font-semibold text-green-600">
+							<span className="text-xs sm:text-sm font-semibold text-green-400">
 								Our Track Record
 							</span>
 						</div>
-						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 sm:mb-8 text-gray-700 leading-tight px-4">
-							<span className="text-purple-primary">
-								50 Million
-							</span>{" "}
-							Reasons
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 sm:mb-8 text-white leading-tight px-4">
+							{/* <span className="text-purple-400">50 Million</span>{" "} */}
+							50 Million Reasons
 							<br />
 							to Trust Us
 						</h2>
-						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 mx-auto font-body leading-relaxed px-4 max-w-none lg:max-w-4xl mb-8 lg:mb-12">
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-300 mx-auto font-body leading-relaxed px-4 max-w-none lg:max-w-4xl mb-8 lg:mb-12">
 							We've helped thousands of Malaysian businesses &
 							individuals grow with over RM 50 million in loans
 							funded. Our track record speaks for itself —
@@ -937,114 +952,59 @@ export default function Home() {
 						</p>
 					</div>
 
-					{/* Hero Stats Grid */}
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mb-12 lg:mb-16">
-						{/* Primary Stats - Left Side */}
-						<div className="space-y-6 lg:space-y-8">
-							{/* Total Funding */}
-							<div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
-								<div className="absolute inset-0 bg-black/10"></div>
-								<div className="absolute top-4 right-4 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
-								<div className="relative">
-									<div className="flex items-center justify-between mb-6">
-										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
-											<MdTrendingUp
-												size={32}
-												className="text-white"
-											/>
-										</div>
-									</div>
-									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
-										RM 50M+
-									</div>
-									<div className="text-lg lg:text-xl text-purple-100 font-semibold mb-4">
-										Total Loans Disbursed
-									</div>
-									<div className="text-sm lg:text-base text-purple-200">
-										Helping Malaysians grow since 2020
-									</div>
-								</div>
+					{/* Stats Row */}
+					<div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12 text-center">
+						{/* Total Funding */}
+						<div>
+							<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold text-purple-400 mb-2">
+								RM 50M+
 							</div>
-
-							{/* Customer Trust */}
-							<div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
-								<div className="absolute inset-0 bg-black/10"></div>
-								<div className="absolute bottom-4 left-4 w-16 h-16 bg-white/10 rounded-full blur-lg"></div>
-								<div className="relative">
-									<div className="flex items-center justify-between mb-6">
-										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
-											<MdPeople
-												size={32}
-												className="text-white"
-											/>
-										</div>
-									</div>
-									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
-										1,000+
-									</div>
-									<div className="text-lg lg:text-xl text-blue-100 font-semibold mb-4">
-										Trusted Customers
-									</div>
-									<div className="text-sm lg:text-base text-blue-200">
-										From startups to established SMEs across
-										Malaysia
-									</div>
-								</div>
+							<div className="text-lg lg:text-xl text-white font-semibold mb-1">
+								Total Loans Disbursed
+							</div>
+							<div className="text-sm lg:text-base text-gray-400">
+								Helping Malaysians grow since 2020
 							</div>
 						</div>
 
-						{/* Secondary Stats - Right Side */}
-						<div className="space-y-6 lg:space-y-8">
-							{/* Success Rate */}
-							<div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
-								<div className="absolute inset-0 bg-black/10"></div>
-								<div className="absolute top-4 left-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
-								<div className="relative">
-									<div className="flex items-center justify-between mb-6">
-										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
-											<MdVerifiedUser
-												size={32}
-												className="text-white"
-											/>
-										</div>
-									</div>
-									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
-										98.5%
-									</div>
-									<div className="text-lg lg:text-xl text-green-100 font-semibold mb-4">
-										Success Rate
-									</div>
-									<div className="text-sm lg:text-base text-green-200">
-										Industry-leading approval and
-										satisfaction rates
-									</div>
-								</div>
+						{/* Customer Trust */}
+						<div>
+							<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold text-purple-400 mb-2">
+								1,000+
 							</div>
+							<div className="text-lg lg:text-xl text-white font-semibold mb-1">
+								Trusted Customers
+							</div>
+							<div className="text-sm lg:text-base text-gray-400">
+								From startups to established SMEs across
+								Malaysia
+							</div>
+						</div>
 
-							{/* Investment Pool */}
-							<div className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl lg:rounded-2xl p-8 lg:p-10 text-white relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
-								<div className="absolute inset-0 bg-black/10"></div>
-								<div className="absolute bottom-4 right-4 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
-								<div className="relative">
-									<div className="flex items-center justify-between mb-6">
-										<div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
-											<MdAccountBalance
-												size={32}
-												className="text-white"
-											/>
-										</div>
-									</div>
-									<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold mb-3">
-										RM 10M+
-									</div>
-									<div className="text-lg lg:text-xl text-gray-200 font-semibold mb-4">
-										Investments Facilitated
-									</div>
-									<div className="text-sm lg:text-base text-gray-300">
-										Connecting investors with verified
-										private credit opportunities
-									</div>
-								</div>
+						{/* Success Rate */}
+						<div>
+							<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold text-purple-400 mb-2">
+								98.5%
+							</div>
+							<div className="text-lg lg:text-xl text-white font-semibold mb-1">
+								Success Rate
+							</div>
+							<div className="text-sm lg:text-base text-gray-400">
+								Industry-leading approval and satisfaction rates
+							</div>
+						</div>
+
+						{/* Investment Pool */}
+						<div>
+							<div className="text-4xl sm:text-5xl lg:text-6xl font-heading font-bold text-purple-400 mb-2">
+								RM 10M+
+							</div>
+							<div className="text-lg lg:text-xl text-white font-semibold mb-1">
+								Investments Facilitated
+							</div>
+							<div className="text-sm lg:text-base text-gray-400">
+								Connecting investors with verified private
+								credit opportunities
 							</div>
 						</div>
 					</div>
@@ -1052,7 +1012,7 @@ export default function Home() {
 			</section>
 
 			{/* Technology Section */}
-			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-gray-50/50 w-full">
+			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
 					<div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
 						{/* Content */}
@@ -1305,40 +1265,14 @@ export default function Home() {
 			</section>
 
 			{/* Call to Action Section */}
-			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
-				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					<div className="bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 rounded-xl lg:rounded-2xl p-8 sm:p-10 lg:p-12 text-center relative overflow-hidden shadow-sm hover:shadow-lg transition-all mx-2 sm:mx-4 lg:mx-0">
-						<div className="absolute inset-0 bg-black/10"></div>
-						<div className="relative">
-							<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-white px-4">
-								Ready to get started?
-							</h2>
-							<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/90 mb-8 sm:mb-10 lg:mb-12 mx-auto font-body px-4 max-w-none lg:max-w-5xl">
-								Join thousands of Malaysians who trust kredit.my
-								for their financial needs
-							</p>
-							<div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
-								<Link
-									href="/signup"
-									className="bg-white text-purple-primary hover:bg-gray-100 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl inline-flex items-center justify-center"
-								>
-									Apply Now
-									<MdArrowForward
-										size={18}
-										className="ml-2 lg:w-5 lg:h-5"
-									/>
-								</Link>
-								<Link
-									href="/contact"
-									className="bg-white/10 backdrop-blur-md text-white hover:bg-white/20 border border-white/20 font-semibold text-base lg:text-lg px-6 lg:px-8 py-3 lg:py-4 rounded-xl transition-all duration-200 inline-flex items-center justify-center"
-								>
-									Contact Us
-								</Link>
-							</div>
-						</div>
-					</div>
-				</div>
-			</section>
+			<CTASection
+				title="Ready to get started?"
+				description="Join thousands of Malaysians who trust kredit.my for their financial needs"
+				primaryButtonText="Apply Now"
+				primaryButtonHref="/signup"
+				secondaryButtonText="Contact Us"
+				secondaryButtonHref="/contact"
+			/>
 
 			{/* Footer */}
 			<Footer />
