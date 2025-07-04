@@ -9,10 +9,10 @@ interface LogoProps {
 }
 
 const sizeClasses = {
-	sm: "w-24 h-8", // Small - for mobile nav, compact spaces
-	md: "w-32 h-10", // Medium - for login/signup pages
-	lg: "w-40 h-12", // Large - for main navbar, dashboard nav
-	xl: "w-48 h-16", // Extra large - for hero sections
+	sm: "w-24 h-8 sm:w-28 sm:h-9", // Small - for mobile nav, compact spaces
+	md: "w-32 h-10 sm:w-36 sm:h-11", // Medium - for login/signup pages
+	lg: "w-36 h-11 sm:w-40 sm:h-12 md:w-44 md:h-14", // Large - for main navbar, dashboard nav
+	xl: "w-44 h-14 sm:w-48 sm:h-16 md:w-52 md:h-20", // Extra large - for hero sections
 };
 
 export default function Logo({
@@ -30,10 +30,10 @@ export default function Logo({
 				src={logoSrc}
 				alt="Kapital"
 				fill
-				className="object-contain antialiased"
+				className="object-contain"
 				priority
 				quality={100}
-				sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+				sizes="(max-width: 640px) 120px, (max-width: 768px) 160px, (max-width: 1024px) 180px, 200px"
 			/>
 		</div>
 	);
