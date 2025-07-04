@@ -1014,29 +1014,31 @@ export default function Home() {
 			{/* Technology Section */}
 			<section className="py-12 sm:py-16 lg:py-20 xl:py-24 bg-offwhite w-full">
 				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
+					{/* Section Header */}
+					<div className="text-center mb-8 lg:mb-16">
+						<div className="inline-flex items-center px-4 py-2 bg-blue-tertiary/10 rounded-full mb-4 sm:mb-6 border border-blue-tertiary/20">
+							<span className="text-xs sm:text-sm font-semibold text-blue-tertiary">
+								A.I. Powered Credit
+							</span>
+						</div>
+						<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-4 sm:mb-6 text-gray-700 px-4">
+							Digital First
+							<br />
+							<span className="text-purple-primary">
+								Experience
+							</span>
+						</h2>
+						<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mx-auto font-body px-4 max-w-none lg:max-w-4xl mb-4 lg:mb-6">
+							Experience the future of finance with our AI-powered
+							platform. From instant credit decisions to real-time
+							dashboard insights, everything is designed for speed
+							and transparency.
+						</p>
+					</div>
+
 					<div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
 						{/* Content */}
-						<div className="order-2 lg:order-1">
-							<div className="inline-flex items-center px-4 py-2 bg-blue-tertiary/10 rounded-full mb-4 sm:mb-6 border border-blue-tertiary/20">
-								<span className="text-xs sm:text-sm font-semibold text-blue-tertiary">
-									A.I. Powered Credit
-								</span>
-							</div>
-							<h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-heading font-bold mb-6 text-gray-700 leading-tight">
-								Digital First
-								<br />
-								<span className="text-purple-primary">
-									Experience
-								</span>
-							</h2>
-							<p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-500 mb-8 lg:mb-12 font-body leading-relaxed">
-								Experience the future of finance with our
-								AI-powered platform. From instant credit
-								decisions to real-time dashboard insights,
-								everything is designed for speed and
-								transparency.
-							</p>
-
+						<div className="order-2 lg:order-1 p-8 lg:p-12">
 							{/* Feature List */}
 							<div className="space-y-4 lg:space-y-6 mb-8 lg:mb-12">
 								<div className="flex items-start space-x-4">
