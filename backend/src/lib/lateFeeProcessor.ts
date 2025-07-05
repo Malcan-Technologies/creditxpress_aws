@@ -177,25 +177,9 @@ export class LateFeeProcessor {
 		const today = new Date();
 		today.setUTCHours(0, 0, 0, 0);
 
-		// Check if fee already calculated today (skip if force mode)
-		if (!force) {
-			const existingTodayQuery = `
-				SELECT COUNT(*) as count
-				FROM late_fees
-				WHERE "loanRepaymentId" = $1
-				  AND "calculationDate" >= $2
-			`;
-
-			const existingTodayResult = (await prisma.$queryRawUnsafe(
-				existingTodayQuery,
-				repayment.id,
-				today
-			)) as any[];
-
-			if (Number(existingTodayResult[0]?.count) > 0) {
-				return null; // Already calculated today
-			}
-		}
+		// In force mode, we always recalculate
+		// In normal mode, we still calculate to ensure proper upsert behavior
+		// The upsert logic in saveLateFees will handle duplicates
 
 		// Calculate days overdue
 		const dueDate = new Date(repayment.dueDate);
@@ -224,16 +208,19 @@ export class LateFeeProcessor {
 		const frequencyDays = Number(repayment.lateFeeFrequencyDays) || 7;
 
 		// Calculate interest fees for missed days
+		// Exclude current day's entries to avoid double-counting
 		const existingDaysQuery = `
 			SELECT COUNT(*) as days_charged
 			FROM late_fees
 			WHERE "loanRepaymentId" = $1
 			  AND status = 'ACTIVE'
+			  AND "calculationDate" < $2
 		`;
 
 		const existingDaysResult = (await prisma.$queryRawUnsafe(
 			existingDaysQuery,
-			repayment.id
+			repayment.id,
+			today
 		)) as any[];
 		const daysAlreadyCharged = Number(
 			existingDaysResult[0]?.days_charged || 0
@@ -253,17 +240,20 @@ export class LateFeeProcessor {
 
 		// Calculate fixed fees for completed periods
 		const completedPeriods = Math.floor(daysOverdue / frequencyDays);
+		// Exclude current day's entries to avoid double-counting
 		const existingFixedFeesQuery = `
 			SELECT COALESCE(SUM("fixedFeeAmount"), 0) as total_fixed_charged
 			FROM late_fees
 			WHERE "loanRepaymentId" = $1
 			  AND status = 'ACTIVE'
 			  AND "fixedFeeAmount" > 0
+			  AND "calculationDate" < $2
 		`;
 
 		const existingFixedResult = (await prisma.$queryRawUnsafe(
 			existingFixedFeesQuery,
-			repayment.id
+			repayment.id,
+			today
 		)) as any[];
 		const totalFixedAlreadyCharged = Number(
 			existingFixedResult[0]?.total_fixed_charged || 0
@@ -317,7 +307,8 @@ export class LateFeeProcessor {
 	}
 
 	/**
-	 * Save late fee calculations to database using raw queries
+	 * Save late fee calculations to database using upsert logic
+	 * Updates existing entries instead of creating duplicates
 	 */
 	private static async saveLateFees(calculations: LateFeeCalculation[]) {
 		const today = new Date();
@@ -325,30 +316,74 @@ export class LateFeeProcessor {
 
 		await prisma.$transaction(async (tx) => {
 			for (const calc of calculations) {
-				const insertQuery = `
-					INSERT INTO late_fees (
-						id, "loanRepaymentId", "calculationDate", "daysOverdue",
-						"outstandingPrincipal", "dailyRate", "feeAmount", "cumulativeFees",
-						"feeType", "fixedFeeAmount", "frequencyDays",
-						status, "createdAt", "updatedAt"
-					) VALUES (
-						gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ACTIVE', NOW(), NOW()
-					)
-				`;
-
-				await tx.$executeRawUnsafe(
-					insertQuery,
+				// Check if an entry already exists for this repayment today
+				const existingEntry = (await tx.$queryRawUnsafe(
+					`
+					SELECT id FROM late_fees 
+					WHERE "loanRepaymentId" = $1 
+					  AND "calculationDate" = $2 
+					  AND "feeType" = $3
+					  AND status = 'ACTIVE'
+					LIMIT 1
+				`,
 					calc.loanRepaymentId,
 					today,
-					calc.daysOverdue,
-					calc.outstandingPrincipal,
-					calc.dailyRate,
-					calc.feeAmount,
-					calc.cumulativeFees,
-					calc.feeType,
-					calc.fixedFeeAmount || null,
-					calc.frequencyDays || null
-				);
+					calc.feeType
+				)) as any[];
+
+				if (existingEntry.length > 0) {
+					// Update existing entry
+					const updateQuery = `
+						UPDATE late_fees 
+						SET "daysOverdue" = $1,
+							"outstandingPrincipal" = $2,
+							"dailyRate" = $3,
+							"feeAmount" = $4,
+							"cumulativeFees" = $5,
+							"fixedFeeAmount" = $6,
+							"frequencyDays" = $7,
+							"updatedAt" = NOW()
+						WHERE id = $8
+					`;
+
+					await tx.$executeRawUnsafe(
+						updateQuery,
+						calc.daysOverdue,
+						calc.outstandingPrincipal,
+						calc.dailyRate,
+						calc.feeAmount,
+						calc.cumulativeFees,
+						calc.fixedFeeAmount || null,
+						calc.frequencyDays || null,
+						existingEntry[0].id
+					);
+				} else {
+					// Insert new entry
+					const insertQuery = `
+						INSERT INTO late_fees (
+							id, "loanRepaymentId", "calculationDate", "daysOverdue",
+							"outstandingPrincipal", "dailyRate", "feeAmount", "cumulativeFees",
+							"feeType", "fixedFeeAmount", "frequencyDays",
+							status, "createdAt", "updatedAt"
+						) VALUES (
+							gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ACTIVE', NOW(), NOW()
+						)
+					`;
+
+					await tx.$executeRawUnsafe(
+						insertQuery,
+						calc.loanRepaymentId,
+						today,
+						calc.daysOverdue,
+						calc.outstandingPrincipal,
+						calc.dailyRate,
+						calc.feeAmount,
+						calc.cumulativeFees,
+						calc.feeType,
+						calc.fixedFeeAmount || null,
+						calc.frequencyDays || null
+					);
+				}
 			}
 		});
 	}
