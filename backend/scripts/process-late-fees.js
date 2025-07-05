@@ -4,14 +4,16 @@
  * Late Fee Processing Cron Job
  *
  * This script runs daily to calculate and apply late fees for overdue loan repayments.
- * It should be executed via cron at 1:00 AM daily.
+ * It should be executed via cron at 1:00 AM UTC+8 (Malaysia time) daily.
  *
  * Usage: node scripts/process-late-fees.js
+ *
+ * Note: This script is now mainly for manual execution.
+ * Automatic scheduling is handled by node-cron within the main application.
  */
 
-// Use ts-node to import TypeScript source directly
-require("ts-node/register");
-const { LateFeeProcessor } = require("../src/lib/lateFeeProcessor.ts");
+// Import from compiled JavaScript (no ts-node needed)
+const { LateFeeProcessor } = require("../dist/src/lib/lateFeeProcessor.js");
 
 async function main() {
 	console.log(

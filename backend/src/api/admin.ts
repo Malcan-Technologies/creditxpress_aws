@@ -11,6 +11,7 @@ import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import lateFeeRoutes from "./admin/late-fees";
 import { LateFeeProcessor } from "../lib/lateFeeProcessor";
+import { CronScheduler } from "../lib/cronScheduler";
 /**
  * @swagger
  * tags:
@@ -6817,6 +6818,57 @@ router.post(
 		} catch (error) {
 			console.error("Error completing attestation:", error);
 			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+// Add these new endpoints for cron management
+router.get(
+	"/cron/status",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			const scheduler = CronScheduler.getInstance();
+			const status = scheduler.getStatus();
+
+			res.json({
+				success: true,
+				jobs: status,
+				timestamp: new Date().toISOString(),
+			});
+		} catch (error) {
+			console.error("Error getting cron status:", error);
+			res.status(500).json({
+				success: false,
+				error: "Failed to get cron status",
+			});
+		}
+	}
+);
+
+router.post(
+	"/cron/trigger-late-fees",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			const scheduler = CronScheduler.getInstance();
+			await scheduler.triggerLateFeeProcessing();
+
+			res.json({
+				success: true,
+				message: "Late fee processing triggered successfully",
+				timestamp: new Date().toISOString(),
+			});
+		} catch (error) {
+			console.error("Error triggering late fee processing:", error);
+			res.status(500).json({
+				success: false,
+				error: "Failed to trigger late fee processing",
+				details:
+					error instanceof Error ? error.message : "Unknown error",
+			});
 		}
 	}
 );

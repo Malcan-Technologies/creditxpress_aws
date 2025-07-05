@@ -1,7 +1,7 @@
 FROM node:20-alpine AS base
 
-# Install system dependencies once including cron
-RUN apk add --no-cache openssl python3 make g++ jq wget dcron
+# Install system dependencies (removed cron as we use node-cron)
+RUN apk add --no-cache openssl python3 make g++ jq wget
 
 WORKDIR /app
 
@@ -69,5 +69,5 @@ RUN node scripts/verify-prisma-client.js
 # Expose the port the app runs on
 EXPOSE 4001
 
-# Start the application with proper migration handling and cron setup
-CMD ["sh", "-c", "npx prisma generate && (./scripts/setup-cron.sh || echo 'Cron setup failed, continuing...') && node dist/src/index.js"] 
+# Start the application with proper migration handling (cron is now built-in)
+CMD ["sh", "-c", "npx prisma generate && node dist/src/index.js"] 

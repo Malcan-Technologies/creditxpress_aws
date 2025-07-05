@@ -480,45 +480,8 @@ jobs:
               chmod +x scripts/run-migrations.sh
               ./scripts/run-migrations.sh
               
-              # Setup cron jobs after container is running
-              echo "🕐 Setting up cron jobs..."
-              if [ -f "scripts/setup-production-cron.sh" ]; then
-                chmod +x scripts/setup-production-cron.sh
-                ./scripts/setup-production-cron.sh || echo "⚠️ Cron setup failed, but continuing..."
-              else
-                echo "⚠️ setup-production-cron.sh not found, setting up cron manually..."
-                # Simplified manual cron setup using the same pattern as setup-cron.sh
-                docker compose -f docker-compose.prod.yml exec backend sh -c '
-                  mkdir -p /app/logs/cron
-                  chmod 755 /app/logs/cron
-                  
-                  # Check if the late fee processing script exists
-                  if [ ! -f "/app/scripts/process-late-fees.js" ]; then
-                    echo "❌ process-late-fees.js not found, skipping cron setup"
-                    exit 0
-                  fi
-                  
-                  # Get the DATABASE_URL for production (same as setup-cron.sh)
-                  DB_URL="${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/kapital?schema=public}"
-                  
-                  # Create cron job with simplified quoting (matches setup-cron.sh pattern)
-                  echo "0 1 * * * cd /app && DATABASE_URL='\''${DB_URL}'\'' NODE_ENV=production /usr/local/bin/node scripts/process-late-fees.js >> /app/logs/cron/late-fees.log 2>&1" | crontab -
-                  
-                  # Start cron daemon (same logic as setup-cron.sh)
-                  if command -v crond >/dev/null 2>&1; then
-                    crond -b -l 2
-                  elif command -v service >/dev/null 2>&1; then
-                    service cron start
-                  else
-                    echo "❌ No cron service found"
-                    exit 1
-                  fi
-                  
-                  echo "✅ Cron job installed:"
-                  crontab -l
-                  echo "✅ Manual cron setup completed"
-                ' || echo "⚠️ Manual cron setup failed"
-              fi
+              # Cron jobs are now handled by node-cron within the application
+              echo "✅ Cron jobs are now built into the application using node-cron"
             '
             echo "✅ Backend deployment completed"
           else

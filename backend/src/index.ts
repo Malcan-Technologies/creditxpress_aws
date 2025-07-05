@@ -1,4 +1,5 @@
 import { app, port } from "./app";
+import { CronScheduler } from "./lib/cronScheduler";
 
 // Get base URL from environment or use default, ensuring no trailing slash
 const baseUrl = (process.env.BASE_URL || `http://localhost:${port}`).replace(
@@ -6,8 +7,27 @@ const baseUrl = (process.env.BASE_URL || `http://localhost:${port}`).replace(
 	""
 );
 
+// Initialize cron scheduler
+const cronScheduler = CronScheduler.getInstance();
+
 // Start server
 app.listen(port, () => {
 	console.log(`Server is running on port ${port}`);
 	console.log(`API Documentation available at ${baseUrl}/api-docs`);
+
+	// Start cron scheduler after server is ready
+	cronScheduler.start();
+});
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+	console.log("SIGTERM received, shutting down gracefully...");
+	cronScheduler.stop();
+	process.exit(0);
+});
+
+process.on("SIGINT", () => {
+	console.log("SIGINT received, shutting down gracefully...");
+	cronScheduler.stop();
+	process.exit(0);
 });
