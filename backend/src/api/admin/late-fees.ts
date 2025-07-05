@@ -28,10 +28,10 @@ const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
 				.json({ message: "Access denied. Admin only." });
 		}
 
-		next();
+		return next();
 	} catch (error) {
 		console.error("Error checking admin status:", error);
-		res.status(500).json({ message: "Internal server error" });
+		return res.status(500).json({ message: "Internal server error" });
 	}
 };
 
