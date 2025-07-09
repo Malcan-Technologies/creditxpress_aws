@@ -4025,7 +4025,15 @@ function LoansPageContent() {
 										Select a Loan to Repay
 									</h3>
 									<div className="space-y-4">
-										{loans.map((loan) => (
+										{loans
+											.filter((loan) => {
+												const status = loan.status.toUpperCase();
+												return (
+													["ACTIVE", "PENDING_DISCHARGE"].includes(status) &&
+													loan.outstandingBalance > 0
+												);
+											})
+											.map((loan) => (
 											<button
 												key={loan.id}
 												onClick={() =>
@@ -4083,7 +4091,14 @@ function LoansPageContent() {
 											</button>
 										))}
 									</div>
-									{loans.length === 0 && (
+									{loans
+										.filter((loan) => {
+											const status = loan.status.toUpperCase();
+											return (
+												["ACTIVE", "PENDING_DISCHARGE"].includes(status) &&
+												loan.outstandingBalance > 0
+											);
+										}).length === 0 && (
 										<div className="text-center py-12">
 											<CreditCardIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
 											<p className="text-gray-500 font-body">
