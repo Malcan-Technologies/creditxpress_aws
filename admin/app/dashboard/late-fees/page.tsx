@@ -803,11 +803,11 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 															{(() => {
 																const originalAmount = (fee.loanRepayment.principalAmount || 0) + 
 																	(fee.loanRepayment.interestAmount || 0);
-																const actualAmountPaid = fee.loanRepayment.actualAmount || 0;
+																const principalPaid = fee.loanRepayment.principalPaid || 0;
 																const lateFeeAmount = fee.loanRepayment.lateFeeAmount || 0;
 																const lateFeesPaid = fee.loanRepayment.lateFeesPaid || 0;
 																const outstandingLateFees = Math.max(0, lateFeeAmount - lateFeesPaid);
-																const remainingScheduledAmount = Math.max(0, originalAmount - actualAmountPaid);
+																const remainingScheduledAmount = Math.max(0, originalAmount - principalPaid);
 																const totalDue = remainingScheduledAmount + outstandingLateFees;
 																
 																if (totalDue === 0) {
@@ -964,11 +964,13 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 										const actualAmountPaid = selectedLateFee.loanRepayment.actualAmount || 0;
 										const lateFeeAmount = selectedLateFee.loanRepayment.lateFeeAmount || 0;
 										const lateFeesPaid = selectedLateFee.loanRepayment.lateFeesPaid || 0;
+										const principalPaid = selectedLateFee.loanRepayment.principalPaid || 0;
 										const outstandingLateFees = Math.max(0, lateFeeAmount - lateFeesPaid);
 										
-										// Calculate breakdown
-										const scheduledPaymentPaid = Math.min(actualAmountPaid, originalAmount);
-										const remainingScheduledAmount = Math.max(0, originalAmount - actualAmountPaid);
+										// Calculate breakdown using correct payment allocation
+										// The backend allocates payments: late fees first, then principal
+										const scheduledPaymentPaid = principalPaid; // Use actual principalPaid from backend
+										const remainingScheduledAmount = Math.max(0, originalAmount - principalPaid);
 										const totalDue = remainingScheduledAmount + outstandingLateFees;
 										
 										return (

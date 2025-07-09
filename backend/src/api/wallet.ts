@@ -210,6 +210,9 @@ async function updatePaymentScheduleAfterPayment(
 
 // Helper function to calculate outstanding balance based on actual transactions
 export async function calculateOutstandingBalance(loanId: string, tx: any) {
+	// Import SafeMath utilities for precise calculations
+	const { SafeMath } = require("../lib/precisionUtils");
+	
 	// Get the loan to get the total amount and current status
 	const loan = await tx.loan.findUnique({
 		where: { id: loanId },
@@ -218,15 +221,6 @@ export async function calculateOutstandingBalance(loanId: string, tx: any) {
 	if (!loan) {
 		throw new Error(`Loan ${loanId} not found`);
 	}
-
-	// Get all APPROVED wallet transactions for this loan (actual payments made)
-	const actualPayments = await tx.walletTransaction.findMany({
-		where: {
-			loanId: loanId,
-			type: "LOAN_REPAYMENT",
-			status: "APPROVED",
-		},
-	});
 
 	// Get total unpaid late fees for this loan using new schema
 	const unpaidLateFees = await tx.$queryRawUnsafe(
@@ -237,31 +231,31 @@ export async function calculateOutstandingBalance(loanId: string, tx: any) {
 	`,
 		loanId
 	);
-	const totalUnpaidLateFees = Math.round((Number(
+	const totalUnpaidLateFees = SafeMath.round(SafeMath.toNumber(
 		unpaidLateFees[0]?.total_unpaid_late_fees || 0
-	)) * 100) / 100;
+	));
 
 	console.log(`Calculating outstanding balance for loan ${loanId}:`);
 	console.log(`Original loan amount: ${loan.totalAmount}`);
 	console.log(`Unpaid late fees: ${totalUnpaidLateFees}`);
 
-	// Calculate total actual payments made (sum of all approved payment transactions)
-	const totalPaymentsMade = actualPayments.reduce(
-		(total: number, payment: any) => {
-			// Payment amounts are stored as negative, so we take absolute value
-			const paymentAmount = Math.abs(payment.amount);
-			console.log(`Payment transaction ${payment.id}: ${paymentAmount}`);
-			return total + paymentAmount;
-		},
-		0
+	// Calculate total principal paid (excluding late fees) from loan repayments for accurate outstanding balance
+	const principalPaidResult = await tx.$queryRawUnsafe(
+		`
+		SELECT COALESCE(SUM(lr."principalPaid"), 0) as total_principal_paid
+		FROM loan_repayments lr
+		WHERE lr."loanId" = $1
+		`,
+		loanId
 	);
+	const totalPrincipalPaid = SafeMath.toNumber(principalPaidResult[0]?.total_principal_paid || 0);
 
-	console.log(`Total payments made: ${totalPaymentsMade}`);
+	console.log(`Total principal paid: ${totalPrincipalPaid}`);
 
-	// Outstanding balance = Original loan amount + Unpaid late fees - Total actual payments made
-	const totalAmountOwed = Math.round((loan.totalAmount + totalUnpaidLateFees) * 100) / 100;
-	const outstandingBalance =
-		Math.round((totalAmountOwed - totalPaymentsMade) * 100) / 100;
+	// Outstanding balance = Original loan amount + Unpaid late fees - Principal paid
+	// This is more accurate than using wallet transactions since it separates principal from late fee payments
+	const totalAmountOwed = SafeMath.add(SafeMath.toNumber(loan.totalAmount), totalUnpaidLateFees);
+	const outstandingBalance = SafeMath.subtract(totalAmountOwed, totalPrincipalPaid);
 	const finalOutstandingBalance = Math.max(0, outstandingBalance);
 
 	console.log(`Outstanding balance: ${finalOutstandingBalance}`);
@@ -391,18 +385,18 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			},
 		});
 
-		// Calculate total repaid from actual wallet transactions (consistent with outstandingBalance calculation)
-		const totalRepaidFromTransactions =
-			await prisma.walletTransaction.aggregate({
-				where: {
-					userId,
-					type: "LOAN_REPAYMENT",
-					status: "APPROVED",
-				},
-				_sum: {
-					amount: true,
-				},
-			});
+		// Calculate total principal repaid (excluding late fees) from loan repayments
+		const totalPrincipalRepaid = await prisma.$queryRawUnsafe(
+			`
+			SELECT COALESCE(SUM(lr."principalPaid"), 0) as total_principal_paid
+			FROM loan_repayments lr
+			JOIN loans l ON lr."loanId" = l.id
+			WHERE l."userId" = $1
+			`,
+			userId
+		);
+
+		const totalRepaidAmount = parseFloat((totalPrincipalRepaid as any)[0]?.total_principal_paid || 0);
 
 		// Calculate next payment due and amount considering prepayments
 		let nextPaymentDue = null;
@@ -466,16 +460,33 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			}
 		}
 
+		// Calculate total outstanding as loan amounts + late fees minus all payments made
+		// This ensures consistency with individual loan outstanding calculations
+		const totalBorrowed = loans.reduce(
+			(sum, loan) => sum + (loan.totalAmount || loan.principalAmount),
+			0
+		);
+		
+		// Get total unpaid late fees across all user's loans
+		const totalUnpaidLateFees = await prisma.$queryRawUnsafe(
+			`
+			SELECT COALESCE(SUM(lr."lateFeeAmount" - COALESCE(lr."lateFeesPaid", 0)), 0) as total_unpaid_late_fees
+			FROM loan_repayments lr
+			JOIN loans l ON lr."loanId" = l.id
+			WHERE l."userId" = $1 AND lr."lateFeeAmount" > 0
+			`,
+			userId
+		);
+		
+		const unpaidLateFees = parseFloat((totalUnpaidLateFees as any)[0]?.total_unpaid_late_fees || 0);
+		
+		// Total outstanding = borrowed amount + unpaid late fees - principal paid
+		const totalOutstanding = Math.max(0, totalBorrowed + unpaidLateFees - totalRepaidAmount);
+
 		const loanSummary = {
-			totalOutstanding: loans.reduce(
-				(sum, loan) => sum + loan.outstandingBalance,
-				0
-			),
-			totalBorrowed: loans.reduce(
-				(sum, loan) => sum + (loan.totalAmount || loan.principalAmount),
-				0
-			),
-			totalRepaid: Math.abs(totalRepaidFromTransactions._sum.amount || 0),
+			totalOutstanding,
+			totalBorrowed,
+			totalRepaid: totalRepaidAmount,
 			nextPaymentDue,
 			nextPaymentAmount,
 		};
@@ -718,8 +729,11 @@ router.post(
 				return res.status(404).json({ error: "Active loan not found" });
 			}
 
-			// Round amount to 2 decimal places to avoid floating-point precision issues
-			const paymentAmount = Math.round(parseFloat(amount) * 100) / 100;
+					// Import SafeMath utilities for precise calculations
+		const { SafeMath } = await import("../lib/precisionUtils");
+		
+		// Convert to number but preserve exact decimal precision (don't round user input)
+		const paymentAmount = SafeMath.toNumber(amount);
 
 			// Validate repayment amount doesn't exceed outstanding balance
 			if (paymentAmount > loan.outstandingBalance) {
@@ -764,12 +778,12 @@ router.post(
 						description ||
 						`Loan repayment for loan ${loanId} via ${paymentMethod}`,
 					reference: `REP-${Date.now()}`,
-					metadata: {
-						paymentMethod,
-						loanId,
-						outstandingBalance: loan.outstandingBalance,
-						originalAmount: paymentAmount, // Store positive amount for reference
-					},
+									metadata: {
+					paymentMethod,
+					loanId,
+					outstandingBalance: loan.outstandingBalance,
+					originalAmount: paymentAmount, // Store exact amount as entered by user
+				},
 				},
 			});
 

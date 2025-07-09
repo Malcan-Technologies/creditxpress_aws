@@ -655,11 +655,11 @@ function ActiveLoansContent() {
 	const calculateProgress = (loan: LoanData) => {
 		const totalLoanAmount = loan.totalAmount || loan.principalAmount;
 		if (totalLoanAmount === 0) return 0;
-		// Calculate progress based on total amount paid
-		return (
-			((totalLoanAmount - loan.outstandingBalance) / totalLoanAmount) *
-			100
-		);
+		// Calculate progress based on principal paid (excluding late fees)
+		const principalPaid = loan.repayments?.reduce((total, repayment) => {
+			return total + (repayment.principalPaid || 0);
+		}, 0) || 0;
+		return (principalPaid / totalLoanAmount) * 100;
 	};
 
 	const getRepaymentStatusColor = (status: string) => {
@@ -1066,7 +1066,7 @@ function ActiveLoansContent() {
 								{selectedTab === "details" && (
 									<>
 										{/* Summary Cards */}
-										<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+										<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
 												<p className="text-gray-400 text-sm mb-1">
 													Outstanding Balance
@@ -1233,6 +1233,46 @@ function ActiveLoansContent() {
 													);
 												})()}
 											</div>
+											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 flex flex-col items-center">
+												{(() => {
+													const repayments = selectedLoan.repayments || [];
+													const totalLateFeesPaid = repayments.reduce((total, repayment) => {
+														return total + (repayment.lateFeesPaid || 0);
+													}, 0);
+													
+													const totalLateFeesAssessed = repayments.reduce((total, repayment) => {
+														return total + (repayment.lateFeeAmount || 0);
+													}, 0);
+
+													return (
+														<>
+															<p className="text-gray-400 text-sm mb-1">
+																Late Fees Paid
+															</p>
+															<p className="text-2xl font-bold text-white">
+																{totalLateFeesPaid > 0 
+																	? formatCurrency(totalLateFeesPaid)
+																	: formatCurrency(0)
+																}
+															</p>
+															<p className="text-xs text-gray-400 mt-1">
+																{totalLateFeesAssessed > 0 ? (
+																	<>
+																		of {formatCurrency(totalLateFeesAssessed)} assessed
+																		{totalLateFeesAssessed > totalLateFeesPaid && (
+																			<div className="text-xs text-red-400 mt-1">
+																				{formatCurrency(totalLateFeesAssessed - totalLateFeesPaid)} outstanding
+																			</div>
+																		)}
+																	</>
+																) : (
+																	"No late fees assessed"
+																)}
+															</p>
+														</>
+													);
+												})()}
+											</div>
 										</div>
 
 										{/* Payment Status Alert */}
@@ -1336,17 +1376,20 @@ function ActiveLoansContent() {
 
 												<div className="flex justify-between text-sm text-gray-400">
 													<div>
-														<p>Paid Amount</p>
+														<p>Principal Paid</p>
 														<p className="text-white font-medium">
 															{formatCurrency(
-																(selectedLoan.totalAmount ||
-																	selectedLoan.principalAmount) -
-																	selectedLoan.outstandingBalance
+																(() => {
+																	// Calculate total principal paid from repayments (excluding late fees)
+																	return selectedLoan.repayments?.reduce((total, repayment) => {
+																		return total + (repayment.principalPaid || 0);
+																	}, 0) || 0;
+																})()
 															)}
 														</p>
 													</div>
 													<div className="text-right">
-														<p>Remaining</p>
+														<p>Outstanding Balance</p>
 														<p className="text-white font-medium">
 															{formatCurrency(
 																selectedLoan.outstandingBalance
@@ -1594,11 +1637,15 @@ function ActiveLoansContent() {
 																Loan Progress
 															</span>
 															<span className="text-white">
-																{Math.round(
-																	calculateProgress(
-																		selectedLoan
-																	)
-																)}
+																{(() => {
+																	// Calculate progress based on principal paid (excluding late fees)
+																	const totalLoanAmount = selectedLoan.totalAmount || selectedLoan.principalAmount;
+																	const principalPaid = selectedLoan.repayments?.reduce((total, repayment) => {
+																		return total + (repayment.principalPaid || 0);
+																	}, 0) || 0;
+																	const progressPercent = totalLoanAmount > 0 ? Math.round((principalPaid / totalLoanAmount) * 100) : 0;
+																	return progressPercent;
+																})()}
 																% Complete
 															</span>
 														</div>
@@ -1607,9 +1654,14 @@ function ActiveLoansContent() {
 															<div
 																className="bg-gradient-to-r from-blue-500 to-green-500 h-4 rounded-full transition-all duration-300"
 																style={{
-																	width: `${calculateProgress(
-																		selectedLoan
-																	)}%`,
+																	width: `${(() => {
+																		// Calculate progress based on principal paid (excluding late fees)
+																		const totalLoanAmount = selectedLoan.totalAmount || selectedLoan.principalAmount;
+																		const principalPaid = selectedLoan.repayments?.reduce((total, repayment) => {
+																			return total + (repayment.principalPaid || 0);
+																		}, 0) || 0;
+																		return totalLoanAmount > 0 ? Math.round((principalPaid / totalLoanAmount) * 100) : 0;
+																	})()}%`,
 																}}
 															></div>
 
@@ -1724,19 +1776,22 @@ function ActiveLoansContent() {
 													<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 														<div className="text-center">
 															<p className="text-gray-400 text-sm">
-																Amount Paid
+																Principal Paid
 															</p>
 															<p className="text-white font-medium text-lg">
 																{formatCurrency(
-																	(selectedLoan.totalAmount ||
-																		selectedLoan.principalAmount) -
-																		selectedLoan.outstandingBalance
+																	(() => {
+																		// Calculate total principal paid from repayments (excluding late fees)
+																		return selectedLoan.repayments?.reduce((total, repayment) => {
+																			return total + (repayment.principalPaid || 0);
+																		}, 0) || 0;
+																	})()
 																)}
 															</p>
 														</div>
 														<div className="text-center">
 															<p className="text-gray-400 text-sm">
-																Remaining
+																Outstanding
 																Balance
 															</p>
 															<p className="text-white font-medium text-lg">

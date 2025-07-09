@@ -113,6 +113,7 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 						installmentNumber: true,
 						lateFeeAmount: true,
 						lateFeesPaid: true,
+						principalPaid: true,
 					},
 				},
 			},
@@ -121,10 +122,10 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			},
 		});
 
-		// Ensure outstanding balances are accurate by recalculating them
+		// Ensure outstanding balances are accurate by recalculating them for all active loans
 		// This ensures single source of truth even if there were any inconsistencies
 		for (const loan of loans.filter(
-			(l) => l.status === "ACTIVE" || l.status === "OVERDUE"
+			(l) => l.status === "ACTIVE" || l.status === "OVERDUE" || l.status === "PENDING_DISCHARGE"
 		)) {
 			await prisma.$transaction(async (tx) => {
 				// Import the calculation function from wallet API
@@ -174,7 +175,8 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 					const overdueRepaymentsQuery = `
 						SELECT 
 							lr.*,
-							COALESCE(lr."lateFeeAmount" - lr."lateFeesPaid", 0) as total_late_fees
+							COALESCE(lr."lateFeeAmount" - lr."lateFeesPaid", 0) as total_late_fees,
+							COALESCE(lr."principalPaid", 0) as principal_paid
 						FROM loan_repayments lr
 						WHERE lr."loanId" = $1
 						  AND lr.status IN ('PENDING', 'PARTIAL')
@@ -210,13 +212,13 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 
 						// Calculate total overdue amount and late fees
 						for (const repayment of overdueRepayments) {
-							const outstandingAmount = repayment.actualAmount
-								? Math.max(
-										0,
-										repayment.amount -
-											repayment.actualAmount
-								  )
-								: repayment.amount;
+							// Use principalPaid instead of actualAmount for correct calculation
+							// actualAmount includes late fees paid, so it's not suitable for calculating remaining scheduled amount
+							const principalPaid = repayment.principal_paid || 0;
+							const outstandingAmount = Math.max(
+								0,
+								repayment.amount - principalPaid
+							);
 
 							const totalLateFees =
 								Number(repayment.total_late_fees) || 0;
@@ -279,14 +281,12 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 							});
 
 						if (nextRepayment) {
-							// Calculate remaining balance for next payment
-							const remainingBalance = nextRepayment.actualAmount
-								? Math.max(
-										0,
-										nextRepayment.amount -
-											nextRepayment.actualAmount
-								  )
-								: nextRepayment.amount;
+							// Calculate remaining balance for next payment using principalPaid
+							const principalPaid = nextRepayment.principalPaid || 0;
+							const remainingBalance = Math.max(
+								0,
+								nextRepayment.amount - principalPaid
+							);
 
 							// Check for late fees on this specific repayment
 							const lateFeeAmount = Math.max(0, 

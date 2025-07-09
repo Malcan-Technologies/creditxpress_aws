@@ -11,7 +11,7 @@ import {
 	ClockIcon,
 	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
-import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
+import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
 interface Transaction {
 	id: string;
@@ -33,8 +33,26 @@ export default function TransactionsPage() {
 	useEffect(() => {
 		const checkAuthAndLoadData = async () => {
 			try {
+				// First check if we have any tokens at all
+				const accessToken = TokenStorage.getAccessToken();
+				const refreshToken = TokenStorage.getRefreshToken();
+
+				// If no tokens available, immediately redirect to login
+				if (!accessToken && !refreshToken) {
+					console.log(
+						"Transactions - No tokens available, redirecting to login"
+					);
+					router.push("/login");
+					return;
+				}
+
 				const isAuthenticated = await checkAuth();
 				if (!isAuthenticated) {
+					console.log(
+						"Transactions - Auth check failed, redirecting to login"
+					);
+					// Clear any invalid tokens
+					TokenStorage.clearTokens();
 					router.push("/login");
 					return;
 				}
@@ -60,7 +78,9 @@ export default function TransactionsPage() {
 				// Load transactions
 				fetchTransactions();
 			} catch (error) {
-				console.error("Auth check error:", error);
+				console.error("Transactions - Auth check error:", error);
+				// Clear any invalid tokens and redirect to login
+				TokenStorage.clearTokens();
 				router.push("/login");
 			} finally {
 				setLoading(false);

@@ -4608,12 +4608,14 @@ router.post(
 
 			// Process the repayment in a transaction
 			const result = await prisma.$transaction(async (tx) => {
-				// Get the actual payment amount (stored as positive in metadata) and round to 2 decimal places
-				const paymentAmount =
-					Math.round(
-						((transaction.metadata as any)?.originalAmount ||
-							Math.abs(transaction.amount)) * 100
-					) / 100;
+				// Import SafeMath utilities for precise calculations
+				const { SafeMath } = await import("../lib/precisionUtils");
+				
+				// Get the actual payment amount (stored as positive in metadata) - preserve exact user input
+				const paymentAmount = SafeMath.toNumber(
+					(transaction.metadata as any)?.originalAmount ||
+					Math.abs(transaction.amount)
+				);
 
 				// Update transaction status
 				const updatedTransaction = await tx.walletTransaction.update({
@@ -4665,8 +4667,8 @@ router.post(
 						data: {
 							userId: transaction.userId,
 							title: "Payment Approved",
-							message: `Your loan repayment of KES ${paymentAmount.toFixed(
-								0
+							message: `Your loan repayment of MYR ${paymentAmount.toFixed(
+								2
 							)} has been approved and processed successfully.`,
 							type: "SYSTEM",
 							priority: "MEDIUM",
@@ -4787,14 +4789,16 @@ router.post(
 				});
 			}
 
-			// Reject the transaction
-			const result = await prisma.$transaction(async (tx) => {
-				// Get the actual payment amount (stored as positive in metadata) and round to 2 decimal places
-				const paymentAmount =
-					Math.round(
-						((transaction.metadata as any)?.originalAmount ||
-							Math.abs(transaction.amount)) * 100
-					) / 100;
+					// Reject the transaction
+		const result = await prisma.$transaction(async (tx) => {
+			// Import SafeMath utilities for precise calculations
+			const { SafeMath } = await import("../lib/precisionUtils");
+			
+			// Get the actual payment amount (stored as positive in metadata) - preserve exact user input
+			const paymentAmount = SafeMath.toNumber(
+				(transaction.metadata as any)?.originalAmount ||
+				Math.abs(transaction.amount)
+			);
 
 				// Update transaction status
 				const updatedTransaction = await tx.walletTransaction.update({
@@ -4870,37 +4874,43 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 
 	const repayments = [];
 
-	// Flat rate calculation: (Principal + Total Interest) / Term
-	const monthlyInterestRate = loan.interestRate / 100;
-	const totalInterest =
-		Math.round(
-			loan.principalAmount * monthlyInterestRate * loan.term * 100
-		) / 100;
-	const monthlyPayment =
-		Math.round(((loan.principalAmount + totalInterest) / loan.term) * 100) /
-		100;
+	// Import SafeMath for precise calculations
+	const { SafeMath } = require("../lib/precisionUtils");
 
-	// Calculate interest and principal portions for flat rate
-	const monthlyInterestAmount =
-		Math.round((totalInterest / loan.term) * 100) / 100;
-	const monthlyPrincipalAmount =
-		Math.round((loan.principalAmount / loan.term) * 100) / 100;
+	// Flat rate calculation: (Principal + Total Interest) / Term
+	const monthlyInterestRate = SafeMath.toNumber(loan.interestRate) / 100;
+	const principal = SafeMath.toNumber(loan.principalAmount);
+	const term = loan.term;
+	
+	// Calculate total interest with precision
+	const totalInterest = SafeMath.multiply(
+		SafeMath.multiply(principal, monthlyInterestRate), 
+		term
+	);
+	
+	// Total amount to be paid (principal + interest)
+	const totalAmountToPay = SafeMath.add(principal, totalInterest);
+	
+	// Calculate base monthly payment (will be adjusted for final payment)
+	const baseMonthlyPayment = SafeMath.divide(totalAmountToPay, term);
+	
+	// Calculate base monthly portions
+	const baseMonthlyInterest = SafeMath.divide(totalInterest, term);
+	const baseMonthlyPrincipal = SafeMath.divide(principal, term);
 
 	console.log(`Generating payment schedule for loan ${loanId}:`);
-	console.log(
-		`Principal: ${loan.principalAmount}, Interest Rate: ${loan.interestRate}%, Term: ${loan.term} months`
-	);
-	console.log(
-		`Total Interest: ${totalInterest}, Monthly Payment: ${monthlyPayment}`
-	);
+	console.log(`Principal: ${principal}, Interest Rate: ${loan.interestRate}%, Term: ${term} months`);
+	console.log(`Total Interest: ${totalInterest}, Total Amount: ${totalAmountToPay}`);
+	console.log(`Base Monthly Payment: ${baseMonthlyPayment}`);
 
-	for (let month = 1; month <= loan.term; month++) {
+	// Generate all installments first (except the last one)
+	let totalScheduled = 0;
+	let totalInterestScheduled = 0;
+	let totalPrincipalScheduled = 0;
+
+	for (let month = 1; month <= term; month++) {
 		// Set due date to end of day exactly 1 month from disbursement
-		// Use UTC date manipulation to avoid timezone issues
 		const disbursementDate = new Date(loan.disbursedAt);
-
-		// Create due date by adding months using UTC methods
-		// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
 		const dueDate = new Date(
 			Date.UTC(
 				disbursementDate.getUTCFullYear(),
@@ -4913,16 +4923,46 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 			)
 		);
 
+		let installmentAmount, interestAmount, principalAmount;
+
+		if (month === term) {
+			// Final installment: adjust to ensure total matches exactly
+			installmentAmount = SafeMath.subtract(totalAmountToPay, totalScheduled);
+			interestAmount = SafeMath.subtract(totalInterest, totalInterestScheduled);
+			principalAmount = SafeMath.subtract(principal, totalPrincipalScheduled);
+			
+			console.log(`Final installment adjustment:`);
+			console.log(`  Target total: ${totalAmountToPay}, Scheduled so far: ${totalScheduled}`);
+			console.log(`  Final payment: ${installmentAmount} (diff: ${SafeMath.subtract(installmentAmount, baseMonthlyPayment)})`);
+		} else {
+			// Regular installment: use base amounts
+			installmentAmount = baseMonthlyPayment;
+			interestAmount = baseMonthlyInterest;
+			principalAmount = baseMonthlyPrincipal;
+			
+			// Track running totals
+			totalScheduled = SafeMath.add(totalScheduled, installmentAmount);
+			totalInterestScheduled = SafeMath.add(totalInterestScheduled, interestAmount);
+			totalPrincipalScheduled = SafeMath.add(totalPrincipalScheduled, principalAmount);
+		}
+
 		repayments.push({
 			loanId: loan.id,
-			amount: monthlyPayment,
-			principalAmount: monthlyPrincipalAmount,
-			interestAmount: monthlyInterestAmount,
+			amount: installmentAmount,
+			principalAmount: principalAmount,
+			interestAmount: interestAmount,
 			status: "PENDING",
 			dueDate: dueDate,
 			installmentNumber: month,
-			scheduledAmount: monthlyPayment,
+			scheduledAmount: installmentAmount,
 		});
+	}
+
+	// Verify total matches exactly
+	const calculatedTotal = repayments.reduce((sum, r) => SafeMath.add(sum, r.amount), 0);
+	console.log(`Verification: Calculated total ${calculatedTotal} vs Expected ${totalAmountToPay}`);
+	if (Math.abs(calculatedTotal - totalAmountToPay) > 0.001) {
+		throw new Error(`Payment schedule total mismatch: ${calculatedTotal} vs ${totalAmountToPay}`);
 	}
 
 	// Create all repayment records
@@ -4935,7 +4975,7 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 		await tx.loan.update({
 			where: { id: loanId },
 			data: {
-				monthlyPayment: monthlyPayment,
+				monthlyPayment: baseMonthlyPayment,
 				nextPaymentDue: repayments[0].dueDate,
 			},
 		});
@@ -4961,38 +5001,43 @@ async function generatePaymentSchedule(loanId: string) {
 
 	const repayments = [];
 
-	// Flat rate calculation: (Principal + Total Interest) / Term
-	// Total Interest = Principal * Monthly Interest Rate * Term
-	const monthlyInterestRate = loan.interestRate / 100; // Monthly interest rate (e.g., 1.5% = 0.015)
-	const totalInterest =
-		Math.round(
-			loan.principalAmount * monthlyInterestRate * loan.term * 100
-		) / 100;
-	const monthlyPayment =
-		Math.round(((loan.principalAmount + totalInterest) / loan.term) * 100) /
-		100;
+	// Import SafeMath for precise calculations
+	const { SafeMath } = require("../lib/precisionUtils");
 
-	// Calculate interest and principal portions for flat rate
-	const monthlyInterestAmount =
-		Math.round((totalInterest / loan.term) * 100) / 100;
-	const monthlyPrincipalAmount =
-		Math.round((loan.principalAmount / loan.term) * 100) / 100;
+	// Flat rate calculation: (Principal + Total Interest) / Term
+	const monthlyInterestRate = SafeMath.toNumber(loan.interestRate) / 100;
+	const principal = SafeMath.toNumber(loan.principalAmount);
+	const term = loan.term;
+	
+	// Calculate total interest with precision
+	const totalInterest = SafeMath.multiply(
+		SafeMath.multiply(principal, monthlyInterestRate), 
+		term
+	);
+	
+	// Total amount to be paid (principal + interest)
+	const totalAmountToPay = SafeMath.add(principal, totalInterest);
+	
+	// Calculate base monthly payment (will be adjusted for final payment)
+	const baseMonthlyPayment = SafeMath.divide(totalAmountToPay, term);
+	
+	// Calculate base monthly portions
+	const baseMonthlyInterest = SafeMath.divide(totalInterest, term);
+	const baseMonthlyPrincipal = SafeMath.divide(principal, term);
 
 	console.log(`Generating payment schedule for loan ${loanId}:`);
-	console.log(
-		`Principal: ${loan.principalAmount}, Interest Rate: ${loan.interestRate}%, Term: ${loan.term} months`
-	);
-	console.log(
-		`Total Interest: ${totalInterest}, Monthly Payment: ${monthlyPayment}`
-	);
+	console.log(`Principal: ${principal}, Interest Rate: ${loan.interestRate}%, Term: ${term} months`);
+	console.log(`Total Interest: ${totalInterest}, Total Amount: ${totalAmountToPay}`);
+	console.log(`Base Monthly Payment: ${baseMonthlyPayment}`);
 
-	for (let month = 1; month <= loan.term; month++) {
+	// Generate all installments first (except the last one)
+	let totalScheduled = 0;
+	let totalInterestScheduled = 0;
+	let totalPrincipalScheduled = 0;
+
+	for (let month = 1; month <= term; month++) {
 		// Set due date to end of day exactly 1 month from disbursement
-		// Use UTC date manipulation to avoid timezone issues
 		const disbursementDate = new Date(loan.disbursedAt);
-
-		// Create due date by adding months using UTC methods
-		// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
 		const dueDate = new Date(
 			Date.UTC(
 				disbursementDate.getUTCFullYear(),
@@ -5005,16 +5050,46 @@ async function generatePaymentSchedule(loanId: string) {
 			)
 		);
 
+		let installmentAmount, interestAmount, principalAmount;
+
+		if (month === term) {
+			// Final installment: adjust to ensure total matches exactly
+			installmentAmount = SafeMath.subtract(totalAmountToPay, totalScheduled);
+			interestAmount = SafeMath.subtract(totalInterest, totalInterestScheduled);
+			principalAmount = SafeMath.subtract(principal, totalPrincipalScheduled);
+			
+			console.log(`Final installment adjustment:`);
+			console.log(`  Target total: ${totalAmountToPay}, Scheduled so far: ${totalScheduled}`);
+			console.log(`  Final payment: ${installmentAmount} (diff: ${SafeMath.subtract(installmentAmount, baseMonthlyPayment)})`);
+		} else {
+			// Regular installment: use base amounts
+			installmentAmount = baseMonthlyPayment;
+			interestAmount = baseMonthlyInterest;
+			principalAmount = baseMonthlyPrincipal;
+			
+			// Track running totals
+			totalScheduled = SafeMath.add(totalScheduled, installmentAmount);
+			totalInterestScheduled = SafeMath.add(totalInterestScheduled, interestAmount);
+			totalPrincipalScheduled = SafeMath.add(totalPrincipalScheduled, principalAmount);
+		}
+
 		repayments.push({
 			loanId: loan.id,
-			amount: monthlyPayment,
-			principalAmount: monthlyPrincipalAmount,
-			interestAmount: monthlyInterestAmount,
+			amount: installmentAmount,
+			principalAmount: principalAmount,
+			interestAmount: interestAmount,
 			status: "PENDING",
 			dueDate: dueDate,
 			installmentNumber: month,
-			scheduledAmount: monthlyPayment,
+			scheduledAmount: installmentAmount,
 		});
+	}
+
+	// Verify total matches exactly
+	const calculatedTotal = repayments.reduce((sum, r) => SafeMath.add(sum, r.amount), 0);
+	console.log(`Verification: Calculated total ${calculatedTotal} vs Expected ${totalAmountToPay}`);
+	if (Math.abs(calculatedTotal - totalAmountToPay) > 0.001) {
+		throw new Error(`Payment schedule total mismatch: ${calculatedTotal} vs ${totalAmountToPay}`);
 	}
 
 	// Create all repayment records
@@ -5027,7 +5102,7 @@ async function generatePaymentSchedule(loanId: string) {
 		await prisma.loan.update({
 			where: { id: loanId },
 			data: {
-				monthlyPayment: monthlyPayment, // Update with correct flat rate calculation
+				monthlyPayment: baseMonthlyPayment,
 				nextPaymentDue: repayments[0].dueDate,
 			},
 		});
@@ -5295,6 +5370,9 @@ async function calculateNextPaymentDue(loanId: string, tx: any) {
 }
 
 async function calculateOutstandingBalance(loanId: string, tx: any) {
+	// Import SafeMath utilities for precise calculations
+	const { SafeMath } = require("../lib/precisionUtils");
+	
 	// Get the loan to get the total amount and current status
 	const loan = await tx.loan.findUnique({
 		where: { id: loanId },
@@ -5322,9 +5400,9 @@ async function calculateOutstandingBalance(loanId: string, tx: any) {
 	`,
 		loanId
 	);
-	const totalUnpaidLateFees = Math.round((Number(
+	const totalUnpaidLateFees = SafeMath.round(SafeMath.toNumber(
 		unpaidLateFees[0]?.total_unpaid_late_fees || 0
-	)) * 100) / 100;
+	));
 
 	console.log(`Calculating outstanding balance for loan ${loanId}:`);
 	console.log(`Original loan amount: ${loan.totalAmount}`);
@@ -5333,10 +5411,10 @@ async function calculateOutstandingBalance(loanId: string, tx: any) {
 	// Calculate total actual payments made (sum of all approved payment transactions)
 	const totalPaymentsMade = actualPayments.reduce(
 		(total: number, payment: any) => {
-			// Payment amounts are stored as negative, so we take absolute value
-			const paymentAmount = Math.abs(payment.amount);
+			// Payment amounts are stored as negative, so we take absolute value and use SafeMath
+			const paymentAmount = SafeMath.toNumber(Math.abs(payment.amount));
 			console.log(`Payment transaction ${payment.id}: ${paymentAmount}`);
-			return total + paymentAmount;
+			return SafeMath.add(total, paymentAmount);
 		},
 		0
 	);
@@ -5344,9 +5422,8 @@ async function calculateOutstandingBalance(loanId: string, tx: any) {
 	console.log(`Total payments made: ${totalPaymentsMade}`);
 
 	// Outstanding balance = Original loan amount + Unpaid late fees - Total actual payments made
-	const totalAmountOwed = Math.round((loan.totalAmount + totalUnpaidLateFees) * 100) / 100;
-	const outstandingBalance =
-		Math.round((totalAmountOwed - totalPaymentsMade) * 100) / 100;
+	const totalAmountOwed = SafeMath.add(SafeMath.toNumber(loan.totalAmount), totalUnpaidLateFees);
+	const outstandingBalance = SafeMath.subtract(totalAmountOwed, totalPaymentsMade);
 	const finalOutstandingBalance = Math.max(0, outstandingBalance);
 
 	console.log(`Outstanding balance: ${finalOutstandingBalance}`);

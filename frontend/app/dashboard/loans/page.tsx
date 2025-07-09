@@ -22,7 +22,7 @@ import {
 	XMarkIcon,
 	VideoCameraIcon,
 } from "@heroicons/react/24/outline";
-import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
+import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 import PaymentMethodModal from "@/components/modals/PaymentMethodModal";
 import BankTransferModal from "@/components/modals/BankTransferModal";
 import AttestationMethodModal from "@/components/modals/AttestationMethodModal";
@@ -95,6 +95,7 @@ interface Loan {
 		installmentNumber?: number | null;
 		lateFeeAmount?: number | null;
 		lateFeesPaid?: number | null;
+		principalPaid?: number | null;
 	}>;
 }
 
@@ -282,8 +283,26 @@ function LoansPageContent() {
 	useEffect(() => {
 		const checkAuthAndLoadData = async () => {
 			try {
+				// First check if we have any tokens at all
+				const accessToken = TokenStorage.getAccessToken();
+				const refreshToken = TokenStorage.getRefreshToken();
+
+				// If no tokens available, immediately redirect to login
+				if (!accessToken && !refreshToken) {
+					console.log(
+						"Loans - No tokens available, redirecting to login"
+					);
+					router.push("/login");
+					return;
+				}
+
 				const isAuthenticated = await checkAuth();
 				if (!isAuthenticated) {
+					console.log(
+						"Loans - Auth check failed, redirecting to login"
+					);
+					// Clear any invalid tokens
+					TokenStorage.clearTokens();
 					router.push("/login");
 					return;
 				}
@@ -312,7 +331,9 @@ function LoansPageContent() {
 					loadApplications(),
 				]);
 			} catch (error) {
-				console.error("Auth check error:", error);
+				console.error("Loans - Auth check error:", error);
+				// Clear any invalid tokens and redirect to login
+				TokenStorage.clearTokens();
 				router.push("/login");
 			} finally {
 				setLoading(false);
@@ -659,9 +680,8 @@ function LoansPageContent() {
 			};
 
 			if (nextPayment.amount > 0) {
-				const amountToFill = (
-					Math.round(nextPayment.amount * 100) / 100
-				).toFixed(2);
+				// Preserve exact decimal precision - don't round user input
+				const amountToFill = nextPayment.amount.toFixed(2);
 				setRepaymentAmount(amountToFill);
 				validateRepaymentAmount(amountToFill, selectedLoan);
 			}
@@ -1131,7 +1151,7 @@ function LoansPageContent() {
 				year: "numeric",
 			}),
 			totalScheduled: monthData.totalScheduled,
-			totalPaid: monthData.totalPaid,
+			totalPaid: monthData.totalPrincipalPaid, // Map totalPrincipalPaid to totalPaid for the selected bar data
 			totalOutstanding: monthData.totalOutstanding,
 			lateFees: monthData.lateFees || 0,
 			paidLateFees: monthData.paidLateFees || 0,
@@ -1262,7 +1282,7 @@ function LoansPageContent() {
 																month: monthKey,
 																date: dueDate,
 																totalScheduled: 0,
-																totalPaid: 0,
+																		totalPrincipalPaid: 0, // Track principal paid (excluding late fees)
 																totalOutstanding: 0,
 																lateFees: 0, // Track total late fees for this month
 																paidLateFees: 0, // Track late fees that were paid
@@ -1287,21 +1307,21 @@ function LoansPageContent() {
 
 													// Add to total scheduled for this month (ONLY the original scheduled amount)
 													monthData.totalScheduled +=
-														repayment.amount;
+														(repayment.amount || 0);
 													monthData.lateFees +=
-														repaymentLateFees;
+														(repaymentLateFees || 0);
 
-													// Determine payment status based on repayment status and actualAmount
+																												// Determine payment status based on repayment status and principalPaid
 													if (
 														repayment.status ===
 														"COMPLETED"
 													) {
-														// Use actualAmount which includes late fees paid
-														const actualPaid =
-															repayment.actualAmount ||
-															repayment.amount;
-														monthData.totalPaid +=
-															actualPaid;
+																														// Use principalPaid which excludes late fees
+														// Handle null/undefined principalPaid by falling back to amount for completed payments
+														const principalPaid = Number(repayment.principalPaid ?? 
+															(repayment.status === "COMPLETED" ? (repayment.amount || 0) : 0)) || 0;
+														monthData.totalPrincipalPaid +=
+															principalPaid;
 
 														// For completed repayments, use the actual database values for late fees
 														if (repaymentLateFees > 0) {
@@ -1315,26 +1335,22 @@ function LoansPageContent() {
 															}
 														}
 
-														// Any remaining amount is outstanding (shouldn't happen for completed, but safety check)
-														if (
-															actualPaid <
-															repaymentTotalAmount
-														) {
-															monthData.totalOutstanding +=
-																repaymentTotalAmount -
-																actualPaid;
-														}
+														// For completed payments, calculate outstanding as: total amount (including late fees) - principal paid
+														// This naturally includes any unpaid late fees in the outstanding balance
+														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
+														const outstanding = Math.max(0, totalAmountDue - principalPaid);
+														monthData.totalOutstanding += outstanding;
 													} else if (
 														repayment.status === "PARTIAL" ||
 														(repayment.status === "PENDING" &&
 														repayment.paymentType === "PARTIAL" &&
 														(repayment.actualAmount ?? 0) > 0)
 													) {
-														// Partially paid - use actualAmount for paid portion
+														// Partially paid - use principalPaid for principal portion
 														// Handle both new PARTIAL status and legacy PENDING+PARTIAL paymentType
-														const actualPaid =
-															repayment.actualAmount ??
-															0;
+														// Fall back to actualAmount if principalPaid is null (legacy data)
+														const principalPaid = Number(repayment.principalPaid ?? 
+															(repayment.actualAmount || 0)) || 0;
 
 														console.log(
 															`PARTIAL payment debug:`,
@@ -1347,8 +1363,8 @@ function LoansPageContent() {
 																amount: repayment.amount,
 																actualAmount:
 																	repayment.actualAmount,
-																actualPaid:
-																	actualPaid,
+																principalPaid:
+																	principalPaid,
 																repaymentTotalAmount:
 																	repaymentTotalAmount,
 																repaymentLateFees:
@@ -1360,11 +1376,12 @@ function LoansPageContent() {
 															}
 														);
 
-														monthData.totalPaid +=
-															actualPaid;
-														monthData.totalOutstanding +=
-															repaymentTotalAmount -
-															actualPaid;
+														monthData.totalPrincipalPaid +=
+															principalPaid;
+														// For partial payments, calculate outstanding as: total amount (including late fees) - principal paid
+														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
+														const outstanding = Math.max(0, totalAmountDue - principalPaid);
+														monthData.totalOutstanding += outstanding;
 
 														// Use actual database values for late fees (this is the key fix!)
 														if (repaymentLateFees > 0) {
@@ -1379,8 +1396,9 @@ function LoansPageContent() {
 														}
 													} else {
 														// PENDING - nothing paid yet (excluding partial payments which are handled above)
-														monthData.totalOutstanding +=
-															repaymentTotalAmount;
+														// Total amount due includes original amount + late fees
+														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
+														monthData.totalOutstanding += totalAmountDue;
 
 														// Use actual database values for late fees
 														if (repaymentLateFees > 0) {
@@ -1487,41 +1505,37 @@ function LoansPageContent() {
 													>
 														{sortedMonths.map(
 															(monthData) => {
-																// Calculate max amount considering both scheduled and actual paid amounts
-																// This ensures bars scale properly when late fees cause payments to exceed scheduled amounts
-																const maxAmount =
-																	Math.max(
+																// Calculate max amount considering both scheduled and actual principal paid amounts
+																// This ensures bars scale properly for principal payment progress
+																const maxAmount = Math.max(
+																	1, // Minimum value to prevent division by zero
 																		...sortedMonths.map(
-																			(
-																				m
-																			) =>
+																		(m) =>
 																				Math.max(
-																					m.totalScheduled,
-																					m.totalPaid +
-																						m.totalOutstanding
-																				)
-																		)
-																	);
+																				Number(m.totalScheduled) || 0,
+																				(Number(m.totalPrincipalPaid) || 0) +
+																					(Number(m.totalOutstanding) || 0)
+																			)
+																	)
+																);
 
-																// Calculate the actual total for this month (what was actually paid + what's still owed)
+																// Calculate the actual total for this month (principal paid + what's still owed)
 																const actualTotal =
-																	monthData.totalPaid +
-																	monthData.totalOutstanding;
+																	(Number(monthData.totalPrincipalPaid) || 0) +
+																	(Number(monthData.totalOutstanding) || 0);
 																const totalBarHeight =
 																	(actualTotal /
 																		maxAmount) *
 																	100;
 																const paidHeight =
-																	maxAmount >
-																	0
-																		? (monthData.totalPaid /
+																	maxAmount > 0
+																		? ((Number(monthData.totalPrincipalPaid) || 0) /
 																				maxAmount) *
 																		  100
 																		: 0;
 																const outstandingHeight =
-																	maxAmount >
-																	0
-																		? (monthData.totalOutstanding /
+																	maxAmount > 0
+																		? ((Number(monthData.totalOutstanding) || 0) /
 																				maxAmount) *
 																		  100
 																		: 0;
@@ -1652,7 +1666,7 @@ function LoansPageContent() {
 																				<div className="font-medium">
 																					Scheduled:{" "}
 																					{formatCurrency(
-																						monthData.totalScheduled
+																						Number(monthData.totalScheduled) || 0
 																					)}
 																				</div>
 																				{(monthData.paidLateFees ||
@@ -1663,8 +1677,7 @@ function LoansPageContent() {
 																						Fees
 																						Paid:{" "}
 																						{formatCurrency(
-																							monthData.paidLateFees ||
-																								0
+																							Number(monthData.paidLateFees) || 0
 																						)}
 																					</div>
 																				)}
@@ -1676,21 +1689,20 @@ function LoansPageContent() {
 																						Fees
 																						Owed:{" "}
 																						{formatCurrency(
-																							monthData.unpaidLateFees ||
-																								0
+																							Number(monthData.unpaidLateFees) || 0
 																						)}
 																					</div>
 																				)}
 																				<div className="text-green-600 font-medium">
-																					Paid:{" "}
+																					Principal Paid:{" "}
 																					{formatCurrency(
-																						monthData.totalPaid
+																						Number(monthData.totalPrincipalPaid) || 0
 																					)}
 																				</div>
 																				<div className="text-blue-tertiary font-medium">
 																					Outstanding:{" "}
 																					{formatCurrency(
-																						monthData.totalOutstanding
+																						Number(monthData.totalOutstanding) || 0
 																					)}
 																				</div>
 																				{actualTotal !==
@@ -1787,7 +1799,7 @@ function LoansPageContent() {
 														<div className="text-left">
 															<div className="text-base md:text-lg font-semibold text-gray-700 mb-1 font-heading">
 																{formatCurrency(
-																	selectedBarData.totalScheduled
+																	Number(selectedBarData.totalScheduled) || 0
 																)}
 															</div>
 															<div className="text-xs text-gray-500 font-body">
@@ -1798,19 +1810,19 @@ function LoansPageContent() {
 														<div className="text-left">
 															<div className="text-base md:text-lg font-semibold text-green-600 mb-1 font-heading">
 																{formatCurrency(
-																	selectedBarData.totalPaid
+																	Number(selectedBarData.totalPaid) || 0
 																)}
 															</div>
 															<div className="text-xs text-green-600 font-body">
-																Total Paid
+																Principal Paid
 															</div>
 														</div>
-														{selectedBarData.paidLateFees >
+														{(Number(selectedBarData.paidLateFees) || 0) >
 															0 && (
 															<div className="text-left">
 																<div className="text-base md:text-lg font-semibold text-green-600 mb-1 font-heading">
 																	{formatCurrency(
-																		selectedBarData.paidLateFees
+																		Number(selectedBarData.paidLateFees) || 0
 																	)}
 																</div>
 																<div className="text-xs text-green-600 font-body">
@@ -1819,12 +1831,12 @@ function LoansPageContent() {
 																</div>
 															</div>
 														)}
-														{selectedBarData.unpaidLateFees >
+														{(Number(selectedBarData.unpaidLateFees) || 0) >
 															0 && (
 															<div className="text-left">
 																<div className="text-base md:text-lg font-semibold text-red-600 mb-1 font-heading">
 																	{formatCurrency(
-																		selectedBarData.unpaidLateFees
+																		Number(selectedBarData.unpaidLateFees) || 0
 																	)}
 																</div>
 																<div className="text-xs text-red-600 font-body">
@@ -1833,12 +1845,12 @@ function LoansPageContent() {
 																</div>
 															</div>
 														)}
-														{selectedBarData.upcoming >
+														{(Number(selectedBarData.upcoming) || 0) >
 															0 && (
 															<div className="text-left">
 																<div className="text-base md:text-lg font-semibold text-blue-tertiary mb-1 font-heading">
 																	{formatCurrency(
-																		selectedBarData.upcoming
+																		Number(selectedBarData.upcoming) || 0
 																	)}
 																</div>
 																<div className="text-xs text-blue-tertiary font-body">
@@ -1846,12 +1858,12 @@ function LoansPageContent() {
 																</div>
 															</div>
 														)}
-														{selectedBarData.overdue >
+														{(Number(selectedBarData.overdue) || 0) >
 															0 && (
 															<div className="text-left">
 																<div className="text-base md:text-lg font-semibold text-red-600 mb-1 font-heading">
 																	{formatCurrency(
-																		selectedBarData.overdue
+																		Number(selectedBarData.overdue) || 0
 																	)}
 																</div>
 																<div className="text-xs text-red-600 font-body">
@@ -1870,20 +1882,29 @@ function LoansPageContent() {
 														{formatCurrency(
 															sortedMonths.reduce(
 																(sum, month) =>
-																	sum + month.totalPaid,
+																	sum + (Number(month.totalPrincipalPaid) || 0),
 																0
 															)
 														)}
 													</div>
 													<div className="text-xs text-green-600 font-body">
-														Total Paid
+														Principal Paid
 													</div>
 												</div>
 												<div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col justify-center items-center">
 													<div className="text-base md:text-lg font-semibold text-blue-tertiary font-heading">
 														{formatCurrency(
-															loanSummary.totalOutstanding ||
-																0
+														(() => {
+															// Use database outstandingBalance for single source of truth
+															// This is already updated by backend when late fees are processed
+															return loans
+																.filter((loan) =>
+																	["ACTIVE", "PENDING_DISCHARGE"].includes(
+																		loan.status.toUpperCase()
+																	)
+																)
+																.reduce((sum, loan) => sum + (loan.outstandingBalance || 0), 0);
+														})()
 														)}
 													</div>
 													<div className="text-xs text-blue-tertiary font-body">
@@ -1906,9 +1927,17 @@ function LoansPageContent() {
 																			month.date.getFullYear() ===
 																				now.getFullYear()
 																	);
-																return currentMonth
-																	? currentMonth.totalOutstanding
-																	: 0;
+																if (!currentMonth) return 0;
+																
+																// Calculate amount still due this month (accounting for partial payments AND late fees paid)
+																// Total due = scheduled + late fees - principal already paid - late fees already paid
+																const scheduledAmount = Number(currentMonth.totalScheduled) || 0;
+																const lateFees = Number(currentMonth.lateFees) || 0;
+																const principalPaid = Number(currentMonth.totalPrincipalPaid) || 0;
+																const lateFeesPaid = Number(currentMonth.paidLateFees) || 0;
+																const totalDueThisMonth = Math.max(0, (scheduledAmount + lateFees) - principalPaid - lateFeesPaid);
+																
+																return totalDueThisMonth;
 															})()
 														)}
 													</div>
@@ -1922,7 +1951,7 @@ function LoansPageContent() {
 															sortedMonths.reduce(
 																(sum, month) =>
 																	sum +
-																	month.totalScheduled,
+																	(Number(month.totalScheduled) || 0),
 																0
 															) > 0
 																? (sortedMonths.reduce(
@@ -1931,7 +1960,7 @@ function LoansPageContent() {
 																			month
 																		) =>
 																			sum +
-																			month.totalPaid,
+																			(Number(month.totalPrincipalPaid) || 0),
 																		0
 																  ) /
 																		sortedMonths.reduce(
@@ -1940,7 +1969,7 @@ function LoansPageContent() {
 																				month
 																			) =>
 																				sum +
-																				month.totalScheduled,
+																				(Number(month.totalScheduled) || 0),
 																			0
 																		)) *
 																		100
@@ -2242,9 +2271,9 @@ function LoansPageContent() {
 																				{/* Use backend-calculated days overdue from overdueRepayments */}
 																				{loan.overdueInfo.overdueRepayments && 
 																				 loan.overdueInfo.overdueRepayments.length > 0 && (
-																					<span className="text-xs text-red-600 block mt-1 font-medium">
+																							<span className="text-xs text-red-600 block mt-1 font-medium">
 																						⏰ {Math.max(...loan.overdueInfo.overdueRepayments.map(rep => rep.daysOverdue))} day{Math.max(...loan.overdueInfo.overdueRepayments.map(rep => rep.daysOverdue)) !== 1 ? "s" : ""} overdue
-																					</span>
+																							</span>
 																				)}
 																			</div>
 																		</div>
@@ -2252,16 +2281,39 @@ function LoansPageContent() {
 																)}
 
 																{/* Loan Summary Stats */}
-																<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-4">
+																{(() => {
+																	// Calculate total late fees paid and total principal paid for display
+																	let totalLateFeesPaid = 0;
+																	let totalPrincipalPaid = 0;
+																	if (loan.repayments) {
+																		loan.repayments.forEach(repayment => {
+																			totalLateFeesPaid += repayment.lateFeesPaid || 0;
+																			// Handle null/undefined principalPaid by falling back to appropriate amounts
+																			const principalPaid = repayment.principalPaid ?? 
+																				(repayment.status === "COMPLETED" ? repayment.amount : 
+																				 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0);
+																			totalPrincipalPaid += principalPaid;
+																		});
+																	}
+																	
+																	return (
+																		<div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 ${totalLateFeesPaid > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3 md:gap-4 mb-4`}>
 																	<div>
 																		<p className="text-sm text-gray-500 mb-1 font-body">
 																			Outstanding
 																			Balance
 																		</p>
 																		<p className="text-base md:text-lg font-semibold text-purple-primary font-heading">
-																			{formatCurrency(
-																				loan.outstandingBalance
-																			)}
+																{formatCurrency(loan.outstandingBalance || 0)}
+															</p>
+																			</div>
+																			
+																			<div>
+																				<p className="text-sm text-gray-500 mb-1 font-body">
+																					Principal Paid
+																				</p>
+																				<p className="text-base md:text-lg font-semibold text-green-600 font-heading">
+																					{formatCurrency(totalPrincipalPaid)}
 																		</p>
 																	</div>
 																	<div>
@@ -2391,7 +2443,24 @@ function LoansPageContent() {
 																			</p>
 																		)}
 																	</div>
+																	
+																	{/* Conditionally show Late Fees Paid if there are any */}
+																	{totalLateFeesPaid > 0 && (
+																		<div>
+																			<p className="text-sm text-gray-500 mb-1 font-body">
+																				Late Fees Paid
+																			</p>
+																			<p className="text-base md:text-lg font-semibold text-green-600 font-heading">
+																				{formatCurrency(totalLateFeesPaid)}
+																			</p>
+																			<p className="text-xs text-green-600 font-body">
+																				Total paid
+																			</p>
 																</div>
+																	)}
+																		</div>
+																	);
+																})()}
 
 																{/* Progress Bar */}
 																<div className="mb-4">
@@ -2414,49 +2483,33 @@ function LoansPageContent() {
 																				currentOutstanding
 																			);
 
-																		// If we have late fees info, use the more accurate calculation
-																		let actualTotalOwed =
-																			totalAmountOwed;
-																		if (
-																			loan
-																				.overdueInfo
-																				?.hasOverduePayments &&
-																			loan
-																				.overdueInfo
-																				.totalLateFees >
-																				0
-																		) {
-																			// Total originally owed + late fees that have been added
-																			actualTotalOwed =
-																				totalOriginalAmount +
-																				loan
-																					.overdueInfo
-																					.totalLateFees;
-																		}
+																		// For progress calculation, we should compare against the original loan amount
+																		// Late fees are additional charges, not part of loan progress
+																		const originalLoanAmount = totalOriginalAmount;
 
-																		// Calculate total amount actually paid (including late fees)
-																		// Use the same logic as the chart
-																		let totalPaidAmount = 0;
+																		// Calculate principal amount actually paid (excluding late fees)
+																		// This gives accurate progress towards loan principal
+																		let totalPrincipalPaid = 0;
 																		let totalLateFeesPaidAmount = 0;
 																		
 																		if (loan.repayments) {
 																			loan.repayments.forEach(repayment => {
-																				if (repayment.status === "COMPLETED") {
-																					totalPaidAmount += repayment.actualAmount || repayment.amount;
-																				} else if (repayment.status === "PARTIAL" || 
-																					(repayment.status === "PENDING" && repayment.paymentType === "PARTIAL")) {
-																					totalPaidAmount += repayment.actualAmount || 0;
-																				}
+																				// Use principalPaid field which excludes late fees
+																				// Handle null/undefined principalPaid by falling back to amount for completed payments
+																				const principalPaid = repayment.principalPaid ?? 
+																					(repayment.status === "COMPLETED" ? repayment.amount : 
+																					 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0);
+																				totalPrincipalPaid += principalPaid;
 																				
-																				// Add late fees paid
+																				// Track late fees paid separately
 																				totalLateFeesPaidAmount += repayment.lateFeesPaid || 0;
 																			});
 																		}
 																		
-																		const paidAmount = totalPaidAmount;
+																		const paidAmount = totalPrincipalPaid;
 
 																		const progressPercent =
-																			actualTotalOwed >
+																			originalLoanAmount >
 																			0
 																				? Math.min(
 																						100,
@@ -2464,7 +2517,7 @@ function LoansPageContent() {
 																							0,
 																							Math.round(
 																								(paidAmount /
-																									actualTotalOwed) *
+																									originalLoanAmount) *
 																									100
 																							)
 																						)
@@ -2496,16 +2549,14 @@ function LoansPageContent() {
 																				</div>
 																				<div className="flex justify-between text-xs text-gray-500 mt-1 font-body">
 																					<span>
-																						Paid:{" "}
+																						Principal Paid:{" "}
 																						{formatCurrency(
 																							paidAmount
 																						)}
 																					</span>
 																					<span>
 																						Outstanding:{" "}
-																						{formatCurrency(
-																							currentOutstanding
-																						)}
+														{formatCurrency(loan.outstandingBalance || 0)}
 																					</span>
 																				</div>
 																			</>

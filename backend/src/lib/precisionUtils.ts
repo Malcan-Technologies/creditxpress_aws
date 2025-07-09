@@ -18,6 +18,41 @@ export function roundTo2Decimals(value: number): number {
 }
 
 /**
+ * Round a number to specified decimal places for high precision calculations
+ * Used for late fee percentage calculations that need higher precision
+ */
+export function roundToDecimals(value: number, decimals: number): number {
+    if (typeof value !== 'number' || isNaN(value)) {
+        return 0;
+    }
+    const factor = Math.pow(10, decimals);
+    return Math.round(value * factor) / factor;
+}
+
+/**
+ * Calculate late fee with high precision during calculation, round final result to 2 decimals
+ * This preserves precision for small percentage calculations like 0.022% per day
+ */
+export function calculateLateFeeHighPrecision(
+    principal: number, 
+    dailyRate: number, 
+    days: number
+): number {
+    if (typeof principal !== 'number' || typeof dailyRate !== 'number' || typeof days !== 'number') {
+        return 0;
+    }
+    if (isNaN(principal) || isNaN(dailyRate) || isNaN(days)) {
+        return 0;
+    }
+    
+    // Use high precision during calculation (8 decimal places)
+    const highPrecisionResult = principal * dailyRate * days;
+    
+    // Only round the final result to 2 decimal places
+    return roundTo2Decimals(highPrecisionResult);
+}
+
+/**
  * Add two numbers with precise 2 decimal rounding
  */
 export function addPrecise(a: number, b: number): number {
@@ -216,7 +251,9 @@ export const SafeMath = {
     toNumber: toSafeNumber,
     percentage: calculatePercentage,
     max: (...values: number[]) => roundTo2Decimals(Math.max(...values.map(toSafeNumber))),
-    min: (...values: number[]) => roundTo2Decimals(Math.min(...values.map(toSafeNumber)))
+    min: (...values: number[]) => roundTo2Decimals(Math.min(...values.map(toSafeNumber))),
+    lateFeeCalculation: calculateLateFeeHighPrecision,
+    roundToDecimals: roundToDecimals
 };
 
 /**

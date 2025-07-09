@@ -17,7 +17,7 @@ import {
 	ChevronUpIcon,
 	ChevronDownIcon,
 } from "@heroicons/react/24/outline";
-import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
+import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
 interface WalletData {
 	balance: number;
@@ -63,8 +63,26 @@ export default function WalletPage() {
 	useEffect(() => {
 		const checkAuthAndLoadData = async () => {
 			try {
+				// First check if we have any tokens at all
+				const accessToken = TokenStorage.getAccessToken();
+				const refreshToken = TokenStorage.getRefreshToken();
+
+				// If no tokens available, immediately redirect to login
+				if (!accessToken && !refreshToken) {
+					console.log(
+						"Wallet - No tokens available, redirecting to login"
+					);
+					router.push("/login");
+					return;
+				}
+
 				const isAuthenticated = await checkAuth();
 				if (!isAuthenticated) {
+					console.log(
+						"Wallet - Auth check failed, redirecting to login"
+					);
+					// Clear any invalid tokens
+					TokenStorage.clearTokens();
 					router.push("/login");
 					return;
 				}
@@ -90,7 +108,9 @@ export default function WalletPage() {
 				// Load wallet data
 				loadWalletData();
 			} catch (error) {
-				console.error("Auth check error:", error);
+				console.error("Wallet - Auth check error:", error);
+				// Clear any invalid tokens and redirect to login
+				TokenStorage.clearTokens();
 				router.push("/login");
 			} finally {
 				setLoading(false);

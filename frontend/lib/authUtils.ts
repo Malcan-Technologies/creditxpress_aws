@@ -193,24 +193,46 @@ export const checkAuth = async (): Promise<boolean> => {
 	try {
 		// Try to use current token
 		const accessToken = TokenStorage.getAccessToken();
+		const refreshToken = TokenStorage.getRefreshToken();
 
+		// If no access token available, try to refresh using refresh token
 		if (!accessToken) {
-			// No access token available, try to refresh
+			console.log("checkAuth - No access token found, attempting refresh");
+			
+			if (!refreshToken) {
+				console.log("checkAuth - No refresh token available, authentication failed");
+				return false;
+			}
+
 			const newToken = await refreshAccessToken();
-			return !!newToken;
+			if (!newToken) {
+				console.log("checkAuth - Token refresh failed, authentication failed");
+				return false;
+			}
+			
+			console.log("checkAuth - Token refreshed successfully");
+			return true;
 		}
 
 		// Verify token validity by making a request to /api/users/me
 		try {
 			await fetchWithTokenRefresh("/api/users/me");
+			console.log("checkAuth - Token validation successful");
 			return true;
 		} catch (error) {
+			console.log("checkAuth - Token validation failed, attempting refresh");
 			// Token is invalid, try to refresh
 			const newToken = await refreshAccessToken();
-			return !!newToken;
+			if (!newToken) {
+				console.log("checkAuth - Token refresh after validation failure failed");
+				return false;
+			}
+			
+			console.log("checkAuth - Token refreshed successfully after validation failure");
+			return true;
 		}
 	} catch (error) {
-		console.error("Auth check failed:", error);
+		console.error("checkAuth - Unexpected error during auth check:", error);
 		return false;
 	}
 };

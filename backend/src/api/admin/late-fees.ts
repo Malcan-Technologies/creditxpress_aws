@@ -115,13 +115,15 @@ router.get(
 
 				// Get actual product configuration
 				const product = repayment.loan.application.product;
-				const dailyRate = Number(product.lateFeeRate) / 100; // Convert percentage to decimal
+				const dailyRate = Number(product.lateFeeRate) / 100; // Convert percentage to decimal, preserve precision
 				const fixedFeeAmount = Number(product.lateFeeFixedAmount) || 0;
 				const frequencyDays = Number(product.lateFeeFrequencyDays) || 7;
 
 				// Calculate component breakdown from database values (for display purposes only)
+				// Import SafeMath for high precision late fee calculations
+				const { SafeMath } = require("../../lib/precisionUtils");
 				const interestFeesTotal = daysOverdue > 0 && outstandingPrincipal > 0 ? 
-					Math.round(outstandingPrincipal * dailyRate * daysOverdue * 100) / 100 : 0;
+					SafeMath.lateFeeCalculation(outstandingPrincipal, dailyRate, daysOverdue) : 0;
 				
 				const completedPeriods = Math.floor(daysOverdue / frequencyDays);
 				const fixedFeesTotal = Math.round(completedPeriods * fixedFeeAmount * 100) / 100;

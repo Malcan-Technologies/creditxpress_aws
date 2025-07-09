@@ -214,8 +214,25 @@ export class LateFeeProcessor {
 			// Save all calculations in a transaction
 			if (repaymentUpdates.length > 0) {
 				await LateFeeProcessor.saveLateFees(repaymentUpdates, Array.from(loanCalculations.values()));
+				
+				// Update outstanding balances for all affected loans to reflect new late fees
+				logger.info(`Recalculating outstanding balances for ${loanCalculations.size} loans...`);
+				for (const loanCalc of loanCalculations.values()) {
+					try {
+						// Use a separate transaction for each outstanding balance calculation
+						await prisma.$transaction(async (tx) => {
+							const { calculateOutstandingBalance } = await import("../api/wallet");
+							await calculateOutstandingBalance(loanCalc.loanId, tx);
+						});
+						logger.info(`Updated outstanding balance for loan ${loanCalc.loanId}`);
+					} catch (error) {
+						logger.error(`Failed to update outstanding balance for loan ${loanCalc.loanId}:`, error);
+						// Continue processing other loans - don't fail the entire operation
+					}
+				}
+				
 				logger.info(
-					`Successfully updated ${repaymentUpdates.length} repayments and ${loanCalculations.size} loans`
+					`Successfully updated ${repaymentUpdates.length} repayments and ${loanCalculations.size} loans with recalculated outstanding balances`
 				);
 			}
 
@@ -350,9 +367,9 @@ export class LateFeeProcessor {
 			return null; // Nothing outstanding to charge late fees on
 		}
 
-		// Get product configuration - use regular division for rates, safe conversion for amounts
-		const lateFeeRate = SafeMath.toNumber(repayment.lateFeeRate);
-		const dailyRate = lateFeeRate / 100; // Don't round rates - preserve precision
+		// Get product configuration - preserve precision for rates, safe conversion for amounts
+		const lateFeeRate = Number(repayment.lateFeeRate); // Don't round rates - preserve full precision
+		const dailyRate = lateFeeRate / 100; // Convert percentage to decimal, preserving precision
 		const fixedFeeAmount = SafeMath.toNumber(repayment.lateFeeFixedAmount || 0);
 		const frequencyDays = Math.max(1, Math.floor(SafeMath.toNumber(repayment.lateFeeFrequencyDays || 7)));
 
@@ -360,9 +377,9 @@ export class LateFeeProcessor {
 
 		// Calculate total interest fees for all overdue days
 		// Use the REMAINING UNPAID BALANCE, not the full principal
-		// Preserve precision in rate calculation, only round final amount
+		// Use high precision calculation for small percentage rates like 0.022% per day
 		const totalInterestFeeAmount = daysOverdue > 0
-			? SafeMath.round(outstandingPrincipal * dailyRate * daysOverdue)
+			? SafeMath.lateFeeCalculation(outstandingPrincipal, dailyRate, daysOverdue)
 				: 0;
 
 		// Calculate total fixed fees for completed periods
@@ -514,10 +531,10 @@ export class LateFeeProcessor {
 
 		try {
 			logger.info(
-				`Handling payment allocation for loan ${loanId}: $${SafeMath.round(paymentAmount).toFixed(2)}`
+				`Handling payment allocation for loan ${loanId}: $${SafeMath.toNumber(paymentAmount).toFixed(2)}`
 			);
 
-			// Convert payment amount to safe number
+			// Convert payment amount to safe number but preserve exact precision
 			const safePaymentAmount = SafeMath.toNumber(paymentAmount);
 
 			// Get all repayments for this loan, ordered by due date (oldest first)
@@ -714,16 +731,16 @@ export class LateFeeProcessor {
 			});
 
 			logger.info(
-				`✅ Payment allocation completed: $${SafeMath.round(totalLateFeesPaid).toFixed(2)} to late fees, $${SafeMath.round(totalPrincipalPaid).toFixed(2)} to principal. Remaining: $${SafeMath.round(remainingPayment).toFixed(2)}`
+				`✅ Payment allocation completed: $${totalLateFeesPaid.toFixed(2)} to late fees, $${totalPrincipalPaid.toFixed(2)} to principal. Remaining: $${remainingPayment.toFixed(2)}`
 			);
 
 			return {
 				success: true,
-				lateFeesPaid: SafeMath.round(totalLateFeesPaid),
-				principalPaid: SafeMath.round(totalPrincipalPaid),
+				lateFeesPaid: totalLateFeesPaid,
+				principalPaid: totalPrincipalPaid,
 				totalLateFees: SafeMath.toNumber(totalLateFees._sum.lateFeeAmount || 0),
 				paymentAllocation,
-				remainingPayment: SafeMath.round(remainingPayment),
+				remainingPayment: remainingPayment,
 			};
 		} catch (error) {
 			const errorMessage =
@@ -772,7 +789,7 @@ export class LateFeeProcessor {
 						}
 				}
 			}
-		});
+			});
 
 			if (!repayment) {
 				throw new Error(`Repayment ${loanRepaymentId} not found`);
@@ -787,7 +804,7 @@ export class LateFeeProcessor {
 			const daysOverdue = TimeUtils.daysOverdue(dueDate);
 			
 			const product = repayment.loan.application.product;
-			const dailyRate = SafeMath.divide(SafeMath.toNumber(product.lateFeeRate), 100);
+			const dailyRate = Number(product.lateFeeRate) / 100; // Preserve full precision for rate
 			const fixedFeeAmount = SafeMath.toNumber(product.lateFeeFixedAmount || 0);
 			const frequencyDays = Math.max(1, Math.floor(SafeMath.toNumber(product.lateFeeFrequencyDays || 7)));
 
@@ -803,10 +820,7 @@ export class LateFeeProcessor {
 			);
 			
 			const interestFeesTotal = daysOverdue > 0 ? 
-				SafeMath.multiply(
-					SafeMath.multiply(outstandingPrincipal, dailyRate),
-					daysOverdue
-				) : 0;
+				SafeMath.lateFeeCalculation(outstandingPrincipal, dailyRate, daysOverdue) : 0;
 			
 			const completedPeriods = Math.floor(daysOverdue / frequencyDays);
 			const fixedFeesTotal = SafeMath.multiply(completedPeriods, fixedFeeAmount);
@@ -838,7 +852,7 @@ export class LateFeeProcessor {
 	}) {
 		try {
 			await prisma.lateFeeProcessingLog.create({
-				data: {
+		data: {
 					feesCalculated: data.feesCalculated,
 					totalFeeAmount: SafeMath.round(data.totalFeeAmount),
 					overdue_repayments: data.overdueRepayments,

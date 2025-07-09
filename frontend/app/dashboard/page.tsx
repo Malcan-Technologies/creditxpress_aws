@@ -67,6 +67,19 @@ export default function DashboardPage() {
 	useEffect(() => {
 		const checkAuthAndLoadData = async () => {
 			try {
+				// First check if we have any tokens at all
+				const accessToken = TokenStorage.getAccessToken();
+				const refreshToken = TokenStorage.getRefreshToken();
+
+				// If no tokens available, immediately redirect to login
+				if (!accessToken && !refreshToken) {
+					console.log(
+						"Dashboard - No tokens available, redirecting to login"
+					);
+					router.push("/login");
+					return;
+				}
+
 				// Use the checkAuth utility to verify authentication
 				const isAuthenticated = await checkAuth();
 
@@ -74,6 +87,8 @@ export default function DashboardPage() {
 					console.log(
 						"Dashboard - Auth check failed, redirecting to login"
 					);
+					// Clear any invalid tokens
+					TokenStorage.clearTokens();
 					router.push("/login");
 					return;
 				}
@@ -126,6 +141,8 @@ export default function DashboardPage() {
 				fetchTransactions();
 			} catch (error) {
 				console.error("Dashboard - Auth check error:", error);
+				// Clear any invalid tokens and redirect to login
+				TokenStorage.clearTokens();
 				router.push("/login");
 			} finally {
 				setLoading(false);

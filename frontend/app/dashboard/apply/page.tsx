@@ -9,7 +9,7 @@ import ApplicationDetailsForm from "@/components/application/ApplicationDetailsF
 import PersonalInfoVerificationForm from "@/components/application/PersonalInfoVerificationForm";
 import DocumentUploadForm from "@/components/application/DocumentUploadForm";
 import ReviewAndSubmitForm from "@/components/application/ReviewAndSubmitForm";
-import AttestationForm from "@/components/application/AttestationForm";
+
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import CheckCircle from "@mui/icons-material/CheckCircle";
 import Info from "@mui/icons-material/Info";
@@ -22,7 +22,6 @@ const steps = [
 	"Personal Information",
 	"Supporting Documents",
 	"Review & Submit",
-	"Terms Attestation",
 ];
 
 interface PersonalInfo {
@@ -115,7 +114,7 @@ function ApplyPageContent() {
 		const step = searchParams.get("step");
 		if (step) {
 			const stepNumber = parseInt(step);
-			if (!isNaN(stepNumber) && stepNumber >= 1 && stepNumber <= 6) {
+			if (!isNaN(stepNumber) && stepNumber >= 1 && stepNumber <= 5) {
 				setActiveStep(stepNumber - 1); // Convert 1-based to 0-based for internal state
 			}
 		}
@@ -635,84 +634,15 @@ function ApplyPageContent() {
 	const handleSubmit = async (data: { termsAccepted: boolean }) => {
 		if (!data.termsAccepted) return;
 
-		const applicationId = searchParams.get("applicationId");
-		if (!applicationId) return;
-
-		try {
-			const token = localStorage.getItem("token") || Cookies.get("token");
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${applicationId}/submit`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
-					body: JSON.stringify({
-						termsAccepted: data.termsAccepted,
-						appStep: 6, // This is correct as it's 1-based
-					}),
-				}
-			);
-
-			if (response.ok) {
-				// Update URL with new step
-				const url = new URL(window.location.href);
-				url.searchParams.set("step", "6");
-				window.history.pushState({}, "", url.toString());
-
-				// Move to attestation step
-				setActiveStep(5);
-				return; // Add explicit return statement for success case
-			} else {
-				throw new Error("Failed to submit application");
-			}
-		} catch (error) {
-			console.error("Error submitting application:", error);
-			return; // Add explicit return statement for error case
-		}
+		// The submission is already handled in ReviewAndSubmitForm.tsx
+		// No need for an additional submit API call since it properly updates the application
+		// with acceptTerms: true and status: "PENDING_APP_FEE"
+		
+		// Just navigate to dashboard since the submission was successful
+		router.push("/dashboard");
 	};
 
-	const handleAttestation = async () => {
-		const applicationId = searchParams.get("applicationId");
-		if (!applicationId) return;
 
-		try {
-			const token = localStorage.getItem("token") || Cookies.get("token");
-
-			// Complete attestation
-			const response = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/loan-applications/${applicationId}/complete-attestation`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${token}`,
-					},
-					body: JSON.stringify({
-						attestationType: "IMMEDIATE",
-						attestationVideoWatched: true,
-						attestationTermsAccepted: true,
-					}),
-				}
-			);
-
-			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(
-					errorData.message || "Failed to complete attestation"
-				);
-			}
-
-			// Redirect to dashboard after completion
-			router.push(
-				"/dashboard/applications?success=attestation_completed"
-			);
-		} catch (error) {
-			console.error("Error completing attestation:", error);
-			throw error; // Re-throw to be handled by the form
-		}
-	};
 
 	const selectedProductDetails = selectedProduct
 		? products.find((p) => p.id === selectedProduct.id)
@@ -762,59 +692,6 @@ function ApplyPageContent() {
 						userData={userData}
 					/>
 				);
-			case 5:
-				return applicationData && selectedProduct ? (
-					<AttestationForm
-						onSubmit={handleAttestation}
-						onBack={handleBack}
-						application={{
-							id: searchParams.get("applicationId") || "",
-							status: "PENDING_ATTESTATION",
-							amount: parseFloat(applicationData.loanAmount) || 0,
-							term: parseInt(applicationData.loanTerm) || 0,
-							purpose: applicationData.loanPurpose || "",
-							createdAt: new Date().toISOString(),
-							updatedAt: new Date().toISOString(),
-							monthlyRepayment:
-								parseFloat(applicationData.monthlyRepayment) ||
-								0,
-							interestRate:
-								parseFloat(applicationData.interestRate) || 0,
-							legalFee: parseFloat(applicationData.legalFee) || 0,
-							netDisbursement:
-								parseFloat(applicationData.netDisbursement) ||
-								0,
-							product: {
-								name: selectedProduct.name,
-								code: selectedProduct.code,
-								originationFee:
-									selectedProduct.originationFee || 0,
-								legalFee: selectedProduct.legalFee || 0,
-								applicationFee:
-									selectedProduct.applicationFee || 0,
-								interestRate: selectedProduct.interestRate || 0,
-							},
-						}}
-						calculateFees={(app) => ({
-							interestRate: app.interestRate,
-							legalFee: parseFloat(applicationData.legalFee) || 0,
-							netDisbursement:
-								parseFloat(applicationData.netDisbursement) ||
-								0,
-							originationFee:
-								parseFloat(applicationData.originationFee) || 0,
-							applicationFee: selectedProduct.applicationFee || 0,
-							totalFees:
-								(parseFloat(applicationData.legalFee) || 0) +
-								(parseFloat(applicationData.originationFee) ||
-									0) +
-								(selectedProduct.applicationFee || 0),
-						})}
-						formatCurrency={(amount) =>
-							`RM ${amount.toLocaleString()}`
-						}
-					/>
-				) : null;
 			default:
 				return null;
 		}

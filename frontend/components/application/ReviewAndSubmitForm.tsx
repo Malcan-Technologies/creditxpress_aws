@@ -524,7 +524,6 @@ function ReviewAndSubmitFormContent({
 	};
 
 	if (isLoading) {
-		console.log("Component is in loading state");
 		return (
 			<div className="flex justify-center items-center min-h-[200px]">
 				<div className="flex flex-col items-center space-y-4">
@@ -537,40 +536,21 @@ function ReviewAndSubmitFormContent({
 		);
 	}
 
-	console.log("Rendering with applicationData:", applicationData);
-	console.log("Rendering with productDetails:", productDetails);
-
 	if (!productDetails || !applicationData) {
-		console.log(
-			"Missing data - productDetails:",
-			!!productDetails,
-			"applicationData:",
-			!!applicationData
-		);
-
 		// If we have applicationData but no productDetails, try to fetch product details again
 		if (applicationData && !productDetails) {
-			console.log(
-				"We have application data but no product details, attempting to fetch product details again"
-			);
-
 			// Use a timeout to avoid infinite loops
 			setTimeout(() => {
 				const fetchProductDetails = async () => {
 					try {
 						const productCode = applicationData.product?.code;
 						if (productCode) {
-							console.log(
-								"Fetching product details for code:",
-								productCode
-							);
 							const response = await fetch(
 								`${process.env.NEXT_PUBLIC_API_URL}/api/products?code=${productCode}`
 							);
 
 							if (response.ok) {
 								const data = await response.json();
-								console.log("Product data fetched:", data);
 								setProductDetails(data);
 							}
 						}
