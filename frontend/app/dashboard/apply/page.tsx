@@ -210,11 +210,11 @@ function ApplyPageContent() {
 					...data,
 				});
 
-				// Check if onboarding is complete
-				if (!data?.isOnboardingComplete) {
-					router.push("/onboarding");
-					return;
-				}
+				// Skip onboarding check - all users go directly to dashboard
+				// if (!data?.isOnboardingComplete) {
+				// 	router.push("/onboarding");
+				// 	return;
+				// }
 			} catch (error) {
 				console.error("Apply - Auth check error:", error);
 				router.push("/login");

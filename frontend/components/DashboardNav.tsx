@@ -129,9 +129,17 @@ export default function DashboardNav() {
 				<div className="p-4 border-t border-purple-primary/20 space-y-1">
 					<Link
 						href="/dashboard/profile"
-						className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 rounded-xl hover:bg-purple-primary/5 hover:text-purple-primary transition-all duration-200 border border-transparent hover:border-purple-primary/20 font-body group"
+						className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 border font-body group ${
+							pathname === "/dashboard/profile"
+								? "bg-purple-primary/20 text-purple-primary border-purple-primary/30"
+								: "text-gray-700 hover:bg-purple-primary/5 hover:text-purple-primary border-transparent hover:border-purple-primary/20"
+						}`}
 					>
-						<UserIcon className="w-5 h-5 mr-3 text-gray-500 group-hover:text-purple-primary transition-colors duration-200" />
+						<UserIcon className={`w-5 h-5 mr-3 transition-colors duration-200 ${
+							pathname === "/dashboard/profile"
+								? "text-purple-primary"
+								: "text-gray-500 group-hover:text-purple-primary"
+						}`} />
 						Profile
 					</Link>
 					<button
@@ -240,9 +248,17 @@ export default function DashboardNav() {
 							<Link
 								href="/dashboard/profile"
 								onClick={() => setMobileMenuOpen(false)}
-								className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 rounded-xl hover:bg-purple-primary/5 hover:text-purple-primary transition-all duration-200 border border-transparent hover:border-purple-primary/20 font-body group"
+								className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 border font-body group ${
+									pathname === "/dashboard/profile"
+										? "bg-purple-primary/20 text-purple-primary border-purple-primary/30 shadow-lg shadow-purple-primary/10"
+										: "text-gray-700 hover:bg-purple-primary/5 hover:text-purple-primary border-transparent hover:border-purple-primary/20"
+								}`}
 							>
-								<UserIcon className="w-5 h-5 mr-3 text-gray-500 group-hover:text-purple-primary transition-colors duration-200" />
+								<UserIcon className={`w-5 h-5 mr-3 transition-colors duration-200 ${
+									pathname === "/dashboard/profile"
+										? "text-purple-primary"
+										: "text-gray-500 group-hover:text-purple-primary"
+								}`} />
 								Profile
 							</Link>
 							<button

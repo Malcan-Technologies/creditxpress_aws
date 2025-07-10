@@ -9,6 +9,7 @@ import Cookies from "js-cookie";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import { TokenStorage } from "@/lib/authUtils";
+import { validatePhoneNumber } from "@/lib/phoneUtils";
 
 interface CountryData {
 	countryCode: string;
@@ -27,6 +28,7 @@ export default function SignupPage() {
 	const [phoneNumber, setPhoneNumber] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+	const [phoneError, setPhoneError] = useState<string | null>(null);
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
@@ -38,12 +40,33 @@ export default function SignupPage() {
 
 	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
 
+	const handlePhoneChange = (value: string, data: CountryData) => {
+		setPhoneNumber(value);
+		setPlaceholder(placeholders[data.countryCode] || "1234 5678");
+		
+		// Clear phone error when user starts typing
+		if (phoneError) {
+			setPhoneError(null);
+		}
+	};
+
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		setError(null);
 
 		if (!acceptedTerms) {
 			setError("Please accept the terms and conditions to continue");
+			return;
+		}
+
+		// Validate phone number before submission
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: true, // Require mobile numbers for signup
+			allowLandline: false
+		});
+
+		if (!phoneValidation.isValid) {
+			setPhoneError(phoneValidation.error || "Please enter a valid phone number");
 			return;
 		}
 
@@ -77,8 +100,8 @@ export default function SignupPage() {
 			TokenStorage.setAccessToken(data.accessToken);
 			TokenStorage.setRefreshToken(data.refreshToken);
 
-			// Always redirect to onboarding for new users
-			router.push("/onboarding");
+			// Redirect directly to dashboard instead of onboarding
+			router.push("/dashboard");
 		} catch (error) {
 			setError(
 				error instanceof Error ? error.message : "An error occurred"
@@ -211,12 +234,7 @@ export default function SignupPage() {
 												value,
 												data: CountryData
 											) => {
-												setPhoneNumber(value);
-												setPlaceholder(
-													placeholders[
-														data.countryCode
-													] || "1234 5678"
-												);
+												handlePhoneChange(value, data);
 											}}
 											inputProps={{
 												id: "phoneNumber",
@@ -233,6 +251,11 @@ export default function SignupPage() {
 											disableSearchIcon
 											searchPlaceholder="Search country..."
 										/>
+										{phoneError && (
+											<p className="mt-1 text-sm text-red-600 font-body">
+												{phoneError}
+											</p>
+										)}
 									</div>
 								</div>
 

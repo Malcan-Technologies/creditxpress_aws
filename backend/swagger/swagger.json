@@ -3022,7 +3022,7 @@
             }
           },
           "400": {
-            "description": "User already exists"
+            "description": "User already exists or invalid phone number"
           },
           "500": {
             "description": "Server error"
@@ -4688,6 +4688,69 @@
           },
           "401": {
             "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/users/me/password": {
+      "put": {
+        "summary": "Change user password",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ],
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "description": "Current password for verification"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "description": "New password to set"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or password requirements not met"
+          },
+          "401": {
+            "description": "Unauthorized or current password incorrect"
           },
           "500": {
             "description": "Server error"

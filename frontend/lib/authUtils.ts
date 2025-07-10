@@ -179,7 +179,17 @@ export const fetchWithTokenRefresh = async <T>(
 	}
 
 	if (!response.ok) {
-		throw new Error(`API request failed with status: ${response.status}`);
+		// Try to extract error message from response
+		let errorMessage = `API request failed with status: ${response.status}`;
+		
+		try {
+			const errorData = await response.json();
+			errorMessage = errorData.error || errorData.message || errorMessage;
+		} catch (parseError) {
+			// If we can't parse the error response, use the generic message
+			// Keep the default errorMessage
+		}
+		throw new Error(errorMessage);
 	}
 
 	return response.json();

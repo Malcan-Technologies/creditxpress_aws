@@ -96,13 +96,14 @@ export default function DashboardPage() {
 				const data = await fetchWithTokenRefresh<any>("/api/users/me");
 				console.log("Dashboard - Auth check data:", data);
 
-				if (!data?.isOnboardingComplete) {
-					console.log(
-						"Dashboard - User has not completed onboarding, redirecting to onboarding"
-					);
-					router.push("/onboarding");
-					return;
-				}
+				// Skip onboarding check - all users go directly to dashboard
+				// if (!data?.isOnboardingComplete) {
+				// 	console.log(
+				// 		"Dashboard - User has not completed onboarding, redirecting to onboarding"
+				// 	);
+				// 	router.push("/onboarding");
+				// 	return;
+				// }
 
 				// Load wallet data
 				fetchWalletData();

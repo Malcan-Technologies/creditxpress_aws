@@ -243,6 +243,12 @@ export default function AdminUsersPage() {
 			setIsSubmitting(true);
 			setError(null);
 
+			// Validate password length
+			if (createForm.password.length < 8) {
+				setError("Password must be at least 8 characters long");
+				return;
+			}
+
 			// Create user with token refresh
 			const newUser = await fetchWithAdminTokenRefresh<User>(
 				"/api/auth/signup",
@@ -837,6 +843,9 @@ export default function AdminUsersPage() {
 										className="w-full bg-gray-700/50 border border-gray-600 rounded-lg text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
 										required
 									/>
+									<p className="mt-1 text-sm text-gray-400">
+										Password must be at least 8 characters long
+									</p>
 								</div>
 
 								<div>

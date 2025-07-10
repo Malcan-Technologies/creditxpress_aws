@@ -31,7 +31,7 @@ interface UserProfile {
 	address2: string | null;
 	city: string | null;
 	state: string | null;
-	postalCode: string | null;
+	zipCode: string | null;
 	employmentStatus: string | null;
 	employerName: string | null;
 	monthlyIncome: string | null;
@@ -61,7 +61,7 @@ const incomeRanges = [
 	"Above RM10,000",
 ] as const;
 
-type EditingSections = "personal" | "address" | "employment" | "banking" | null;
+type EditingSections = "personal" | "address" | "employment" | "banking" | "password" | null;
 
 export default function ProfilePage() {
 	const router = useRouter();
@@ -70,6 +70,12 @@ export default function ProfilePage() {
 	const [saving, setSaving] = useState(false);
 	const [editingSection, setEditingSection] = useState<EditingSections>(null);
 	const [formData, setFormData] = useState<Partial<UserProfile>>({});
+	const [passwordData, setPasswordData] = useState({
+		currentPassword: "",
+		newPassword: "",
+		confirmPassword: "",
+	});
+	const [passwordError, setPasswordError] = useState("");
 
 	useEffect(() => {
 		const fetchProfile = async () => {
@@ -112,6 +118,13 @@ export default function ProfilePage() {
 	const handleCancel = () => {
 		setEditingSection(null);
 		setFormData(profile || {});
+		// Reset password form when canceling
+		setPasswordData({
+			currentPassword: "",
+			newPassword: "",
+			confirmPassword: "",
+		});
+		setPasswordError("");
 	};
 
 	const handleInputChange = (
@@ -122,6 +135,63 @@ export default function ProfilePage() {
 			...prev,
 			[name]: value,
 		}));
+	};
+
+	const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const { name, value } = e.target;
+		setPasswordData((prev) => ({
+			...prev,
+			[name]: value,
+		}));
+		// Clear error when user starts typing
+		if (passwordError) {
+			setPasswordError("");
+		}
+	};
+
+	const handlePasswordSave = async () => {
+		if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+			setPasswordError("All password fields are required");
+			return;
+		}
+
+		if (passwordData.newPassword !== passwordData.confirmPassword) {
+			setPasswordError("New passwords do not match");
+			return;
+		}
+
+		if (passwordData.newPassword.length < 8) {
+			setPasswordError("New password must be at least 8 characters long");
+			return;
+		}
+
+		setSaving(true);
+		try {
+			await fetchWithTokenRefresh("/api/users/me/password", {
+				method: "PUT",
+				body: JSON.stringify({
+					currentPassword: passwordData.currentPassword,
+					newPassword: passwordData.newPassword,
+				}),
+			});
+
+			// Reset form and close editing
+			setPasswordData({
+				currentPassword: "",
+				newPassword: "",
+				confirmPassword: "",
+			});
+			setEditingSection(null);
+			setPasswordError("");
+			
+			// Show success message (you can implement a toast notification here)
+			alert("Password changed successfully!");
+		} catch (error: any) {
+			console.error("Error changing password:", error);
+			setPasswordError(error.message || "Failed to change password");
+		} finally {
+			setSaving(false);
+		}
 	};
 
 	const handleSave = async () => {
@@ -186,32 +256,27 @@ export default function ProfilePage() {
 
 	const formatDate = (dateString: string) => {
 		const date = new Date(dateString);
-		// Convert to GMT+8
-		const gmt8Date = new Date(date.getTime() + 8 * 60 * 60 * 1000);
-
-		return gmt8Date.toLocaleDateString("en-US", {
+		// Format in Malaysia timezone (GMT+8)
+		return date.toLocaleDateString("en-US", {
 			year: "numeric",
 			month: "long",
 			day: "numeric",
+			timeZone: "Asia/Kuala_Lumpur",
 		});
 	};
 
 	const formatDateTime = (dateString: string) => {
 		const date = new Date(dateString);
-		// Convert to GMT+8
-		const gmt8Date = new Date(date.getTime() + 8 * 60 * 60 * 1000);
-
-		return (
-			gmt8Date.toLocaleString("en-US", {
-				year: "numeric",
-				month: "long",
-				day: "numeric",
-				hour: "numeric",
-				minute: "2-digit",
-				hour12: true,
-				timeZone: "UTC",
-			}) + " GMT+8"
-		);
+		// Format in Malaysia timezone (GMT+8)
+		return date.toLocaleString("en-US", {
+			year: "numeric",
+			month: "long",
+			day: "numeric",
+			hour: "numeric",
+			minute: "2-digit",
+			hour12: true,
+			timeZone: "Asia/Kuala_Lumpur",
+		}) + " (GMT+8)";
 	};
 
 	const renderBadge = (status: boolean, label: string) => (
@@ -296,295 +361,572 @@ export default function ProfilePage() {
 		</div>
 	);
 
-	const renderInfoCard = (
-		title: string,
-		icon: React.ReactNode,
-		section: EditingSections,
-		content: React.ReactNode,
-		iconColor: string
-	) => (
-		<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-			<div className="p-6">
-				<div className="flex justify-between items-center mb-6">
-					<div className="flex items-center space-x-3">
-						<div
-							className={`p-2 ${iconColor} rounded-lg border ${iconColor
-								.replace("bg-", "border-")
-								.replace("/10", "/20")}`}
-						>
-							{icon}
-						</div>
-						<h2 className="text-xl font-bold font-heading text-purple-primary">
-							{title}
-						</h2>
-					</div>
-					{editingSection !== section && renderEditButton(section)}
-				</div>
-				{content}
-			</div>
-		</div>
-	);
 
-	const renderField = (
-		label: string,
-		value: string | null,
-		icon?: React.ReactNode
-	) => (
-		<div className="flex items-center space-x-3 bg-gray-50 p-4 rounded-lg border border-gray-200">
-			{icon && (
-				<div className="flex-shrink-0 text-purple-primary">{icon}</div>
-			)}
-			<div>
-				<label className="block text-sm font-medium text-gray-500 font-body">
-					{label}
-				</label>
-				<p className="mt-2 text-base text-gray-700 font-body">
-					{value || "Not provided"}
-				</p>
-			</div>
-		</div>
-	);
 
 	return (
 		<DashboardLayout
 			userName={profile.fullName?.split(" ")[0] || "User"}
 			title="Profile"
 		>
-			<div className="max-w-7xl mx-auto space-y-6">
-				{/* Personal Information */}
-				{renderInfoCard(
-					"Personal Information",
-					<UserCircleIcon className="h-6 w-6 text-purple-primary" />,
-					"personal",
-					editingSection === "personal" ? (
-						<div className="space-y-6">
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-								{renderInput("fullName", "Full Name")}
-								{renderInput("email", "Email", "email")}
-								{renderInput(
-									"phoneNumber",
-									"Phone Number",
-									"tel"
-								)}
-								{renderInput(
-									"dateOfBirth",
-									"Date of Birth",
-									"date"
-								)}
-							</div>
-							{renderSaveButtons()}
-						</div>
-					) : (
-						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-							{renderField(
-								"Full Name",
-								profile.fullName,
-								<IdentificationIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Email",
-								profile.email,
-								<EnvelopeIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Phone Number",
-								profile.phoneNumber,
-								<PhoneIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Date of Birth",
-								profile.dateOfBirth
-									? formatDate(profile.dateOfBirth)
-									: null,
-								<CalendarIcon className="h-5 w-5" />
-							)}
-						</div>
-					),
-					"bg-purple-primary/10"
-				)}
-
-				{/* Address */}
-				{renderInfoCard(
-					"Address",
-					<HomeIcon className="h-6 w-6 text-purple-primary" />,
-					"address",
-					editingSection === "address" ? (
-						<div className="space-y-6">
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-								<div className="md:col-span-2">
-									{renderInput("address1", "Address Line 1")}
+			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+				<div className="space-y-6">
+					{/* Profile Header Card */}
+					<div className="bg-purple-50 rounded-xl lg:rounded-2xl shadow-sm  transition-all border border-purple-primary/20 overflow-hidden">
+						<div className="p-6 lg:p-8">
+							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+								<div className="flex items-center">
+									<div className="w-16 h-16 lg:w-20 lg:h-20 bg-purple-primary/10 rounded-xl lg:rounded-2xl flex items-center justify-center mr-4 border border-purple-primary/20">
+										<UserCircleIcon className="h-10 w-10 lg:h-12 lg:w-12 text-purple-primary" />
+									</div>
+									<div>
+										<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700 mb-1">
+											{profile.fullName || "User Profile"}
+										</h1>
+										<p className="text-sm lg:text-base text-purple-primary font-semibold">
+											{profile.phoneNumber}
+										</p>
+									</div>
 								</div>
-								<div className="md:col-span-2">
-									{renderInput("address2", "Address Line 2")}
+								<div className="flex items-center space-x-4">
+									{renderBadge(profile.kycStatus, profile.kycStatus ? "KYC Verified" : "KYC Pending")}
+									{renderBadge(profile.isOnboardingComplete, profile.isOnboardingComplete ? "Profile Complete" : "Profile Incomplete")}
 								</div>
-								{renderInput("city", "City")}
-								{renderInput("state", "State")}
-								{renderInput("postalCode", "Postal Code")}
-							</div>
-							{renderSaveButtons()}
-						</div>
-					) : (
-						<div className="space-y-4">
-							{renderField(
-								"Address Line 1",
-								profile.address1,
-								<MapPinIcon className="h-5 w-5" />
-							)}
-							{renderField("Address Line 2", profile.address2)}
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								{renderField("City", profile.city)}
-								{renderField("State", profile.state)}
-								{renderField("Postal Code", profile.postalCode)}
 							</div>
 						</div>
-					),
-					"bg-purple-primary/10"
-				)}
+					</div>
 
-				{/* Employment */}
-				{renderInfoCard(
-					"Employment Information",
-					<BriefcaseIcon className="h-6 w-6 text-purple-primary" />,
-					"employment",
-					editingSection === "employment" ? (
-						<div className="space-y-6">
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-								{renderInput(
-									"employmentStatus",
-									"Employment Status",
-									"text",
-									employmentStatuses
+					{/* Main Profile Grid */}
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+						{/* Personal Information Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-6 lg:p-8">
+								<div className="flex items-center justify-between mb-6">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+											<UserCircleIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+										</div>
+										<div>
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+												Personal Information
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
+												Basic details
+											</p>
+										</div>
+									</div>
+									{editingSection !== "personal" && renderEditButton("personal")}
+								</div>
+
+								{editingSection === "personal" ? (
+									<div className="space-y-6">
+										<div className="grid grid-cols-1 gap-4">
+											{renderInput("fullName", "Full Name")}
+											{renderInput("email", "Email", "email")}
+											{renderInput("phoneNumber", "Phone Number", "tel")}
+											{renderInput("dateOfBirth", "Date of Birth", "date")}
+										</div>
+										{renderSaveButtons()}
+									</div>
+								) : (
+									<div className="space-y-4">
+										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Full Name
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.fullName || "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Email
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.email || "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<PhoneIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Phone Number
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.phoneNumber}
+														</p>
+													</div>
+												</div>
+											</div>
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<CalendarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Date of Birth
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.dateOfBirth ? formatDate(profile.dateOfBirth) : "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
 								)}
-								{formData.employmentStatus &&
-									formData.employmentStatus !== "Student" &&
-									formData.employmentStatus !==
-										"Unemployed" && (
-										<>
-											{renderInput(
-												"employerName",
-												"Employer Name"
+							</div>
+						</div>
+
+						{/* Address Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-6 lg:p-8">
+								<div className="flex items-center justify-between mb-6">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+											<HomeIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+										</div>
+										<div>
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+												Address
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
+												Residential address
+											</p>
+										</div>
+									</div>
+									{editingSection !== "address" && renderEditButton("address")}
+								</div>
+
+								{editingSection === "address" ? (
+									<div className="space-y-6">
+										<div className="grid grid-cols-1 gap-4">
+											{renderInput("address1", "Address Line 1")}
+											{renderInput("address2", "Address Line 2")}
+											<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+												{renderInput("city", "City")}
+												{renderInput("state", "State")}
+												{renderInput("zipCode", "Postal Code")}
+											</div>
+										</div>
+										{renderSaveButtons()}
+									</div>
+								) : (
+									<div className="space-y-4">
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-start space-x-3">
+												<MapPinIcon className="h-5 w-5 text-purple-primary flex-shrink-0 mt-0.5" />
+												<div className="min-w-0 flex-1">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Complete Address
+													</label>
+													<div className="mt-1 space-y-1">
+														{profile.address1 && (
+															<p className="text-base text-gray-700 font-body">
+																{profile.address1}
+															</p>
+														)}
+														{profile.address2 && (
+															<p className="text-base text-gray-700 font-body">
+																{profile.address2}
+															</p>
+														)}
+														{(profile.city || profile.state || profile.zipCode) && (
+															<p className="text-base text-gray-700 font-body">
+																{[profile.city, profile.state, profile.zipCode].filter(Boolean).join(", ")}
+															</p>
+														)}
+														{!profile.address1 && !profile.address2 && !profile.city && (
+															<p className="text-base text-gray-500 font-body italic">
+																Address not provided
+															</p>
+														)}
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
+
+					{/* Second Row */}
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+						{/* Employment Information Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-6 lg:p-8">
+								<div className="flex items-center justify-between mb-6">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+											<BriefcaseIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+										</div>
+										<div>
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+												Employment Information
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
+												Work & income details
+											</p>
+										</div>
+									</div>
+									{editingSection !== "employment" && renderEditButton("employment")}
+								</div>
+
+								{editingSection === "employment" ? (
+									<div className="space-y-6">
+										<div className="grid grid-cols-1 gap-4">
+											{renderInput("employmentStatus", "Employment Status", "text", employmentStatuses)}
+											{formData.employmentStatus && 
+												formData.employmentStatus !== "Student" && 
+												formData.employmentStatus !== "Unemployed" && (
+												renderInput("employerName", "Employer Name")
 											)}
-										</>
-									)}
-								{renderInput(
-									"monthlyIncome",
-									"Monthly Income",
-									"text",
-									incomeRanges
+											{renderInput("monthlyIncome", "Monthly Income", "text", incomeRanges)}
+										</div>
+										{renderSaveButtons()}
+									</div>
+								) : (
+									<div className="space-y-4">
+										<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Employment Status
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.employmentStatus || "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<BuildingOfficeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Employer Name
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.employerName || "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<CurrencyDollarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Monthly Income
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.monthlyIncome || "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
 								)}
 							</div>
-							{renderSaveButtons()}
 						</div>
-					) : (
-						<div className="space-y-4">
-							{renderField(
-								"Employment Status",
-								profile.employmentStatus,
-								<BriefcaseIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Employer Name",
-								profile.employerName,
-								<BuildingOfficeIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Monthly Income",
-								profile.monthlyIncome,
-								<CurrencyDollarIcon className="h-5 w-5" />
-							)}
-						</div>
-					),
-					"bg-purple-primary/10"
-				)}
 
-				{/* Banking Information */}
-				{renderInfoCard(
-					"Banking Information",
-					<BanknotesIcon className="h-6 w-6 text-purple-primary" />,
-					"banking",
-					editingSection === "banking" ? (
-						<div className="space-y-6">
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-								{renderInput("bankName", "Bank Name")}
-								{renderInput("accountNumber", "Account Number")}
+						{/* Banking Information Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-6 lg:p-8">
+								<div className="flex items-center justify-between mb-6">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+											<BanknotesIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+										</div>
+										<div>
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+												Banking Information
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
+												Bank account details
+											</p>
+										</div>
+									</div>
+									{editingSection !== "banking" && renderEditButton("banking")}
+								</div>
+
+								{editingSection === "banking" ? (
+									<div className="space-y-6">
+										<div className="grid grid-cols-1 gap-4">
+											{renderInput("bankName", "Bank Name")}
+											{renderInput("accountNumber", "Account Number")}
+										</div>
+										{renderSaveButtons()}
+									</div>
+								) : (
+									<div className="space-y-4">
+										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<BanknotesIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Bank Name
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.bankName || "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<ShieldCheckIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Account Number
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile.accountNumber ? "••••" + profile.accountNumber.slice(-4) : "Not provided"}
+														</p>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
 							</div>
-							{renderSaveButtons()}
 						</div>
-					) : (
-						<div className="space-y-4">
-							{renderField(
-								"Bank Name",
-								profile.bankName,
-								<BanknotesIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Account Number",
-								profile.accountNumber
-									? "••••" + profile.accountNumber.slice(-4)
-									: null,
-								<ShieldCheckIcon className="h-5 w-5" />
-							)}
-						</div>
-					),
-					"bg-purple-primary/10"
-				)}
+					</div>
 
-				{/* Account Information */}
-				{renderInfoCard(
-					"Account Information",
-					<ClockIcon className="h-6 w-6 text-purple-primary" />,
-					null,
-					<div className="space-y-4">
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							{renderField(
-								"Member Since",
-								formatDate(profile.createdAt),
-								<CalendarIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Last Updated",
-								formatDate(profile.updatedAt),
-								<ClockIcon className="h-5 w-5" />
-							)}
-							{renderField(
-								"Last Login",
-								profile.lastLoginAt
-									? formatDateTime(profile.lastLoginAt)
-									: "Not available",
-								<ClockIcon className="h-5 w-5" />
-							)}
+					{/* Full Width Cards */}
+					<div className="grid grid-cols-1 gap-6">
+
+						{/* Password & Security Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-6 lg:p-8">
+								<div className="flex items-center justify-between mb-6">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+											<ShieldCheckIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+										</div>
+										<div>
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+												Password & Security
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
+												Account security settings
+											</p>
+										</div>
+									</div>
+									{editingSection !== "password" && renderEditButton("password")}
+								</div>
+
+								{editingSection === "password" ? (
+									<div className="space-y-6">
+										{passwordError && (
+											<div className="bg-red-50 border border-red-200 rounded-lg p-4">
+												<p className="text-sm text-red-700 font-body">{passwordError}</p>
+											</div>
+										)}
+										<div className="space-y-4">
+											<div>
+												<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+													Current Password
+												</label>
+												<input
+													type="password"
+													name="currentPassword"
+													value={passwordData.currentPassword}
+													onChange={handlePasswordChange}
+													className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
+													placeholder="Enter your current password"
+												/>
+											</div>
+											<div>
+												<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+													New Password
+												</label>
+												<input
+													type="password"
+													name="newPassword"
+													value={passwordData.newPassword}
+													onChange={handlePasswordChange}
+													className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
+													placeholder="Enter your new password"
+												/>
+												<p className="mt-1 text-sm text-gray-500 font-body">
+													Password must be at least 8 characters long
+												</p>
+											</div>
+											<div>
+												<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+													Confirm New Password
+												</label>
+												<input
+													type="password"
+													name="confirmPassword"
+													value={passwordData.confirmPassword}
+													onChange={handlePasswordChange}
+													className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
+													placeholder="Confirm your new password"
+												/>
+											</div>
+										</div>
+										<div className="flex justify-end space-x-3">
+											<button
+												onClick={handleCancel}
+												className="px-6 py-3 text-sm font-medium text-gray-700 hover:text-gray-900 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors font-body"
+												disabled={saving}
+											>
+												Cancel
+											</button>
+											<button
+												onClick={handlePasswordSave}
+												className="px-6 py-3 text-sm font-medium text-white bg-purple-primary hover:bg-purple-600 rounded-lg transition-colors shadow-sm font-body"
+												disabled={saving}
+											>
+												{saving ? "Changing Password..." : "Change Password"}
+											</button>
+										</div>
+									</div>
+								) : (
+									<div className="space-y-4">
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<ShieldCheckIcon className="h-5 w-5 text-purple-primary" />
+												<div>
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Password
+													</label>
+													<p className="mt-2 text-base text-gray-700 font-body">
+														••••••••••••
+													</p>
+												</div>
+											</div>
+										</div>
+										<div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+											<div className="flex items-start space-x-3">
+												<ShieldCheckIcon className="h-5 w-5 text-blue-600 mt-0.5" />
+												<div>
+													<p className="text-sm font-medium text-blue-800 font-body">
+														Security Tip
+													</p>
+													<p className="mt-1 text-sm text-blue-700 font-body">
+														Use a strong password with at least 8 characters. Consider using a mix of letters, numbers, and symbols.
+													</p>
+												</div>
+											</div>
+										</div>
+									</div>
+								)}
+							</div>
 						</div>
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-								<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
-									Onboarding Status
-								</label>
-								<div className="mt-2">
-									{renderBadge(
-										profile.isOnboardingComplete,
-										profile.isOnboardingComplete
-											? "Complete"
-											: `In Progress (Step ${profile.onboardingStep}/4)`
-									)}
+
+						{/* Account Information Card */}
+						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+							<div className="p-6 lg:p-8">
+								<div className="flex items-center justify-between mb-6">
+									<div className="flex items-center">
+										<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+											<ClockIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+										</div>
+										<div>
+											<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+												Account Information
+											</h3>
+											<p className="text-sm lg:text-base text-purple-primary font-semibold">
+												Account timeline & status
+											</p>
+										</div>
+									</div>
+								</div>
+
+								<div className="space-y-6">
+									<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<CalendarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Member Since
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{formatDate(profile.createdAt)}
+													</p>
+												</div>
+											</div>
+										</div>
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Last Updated
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{formatDateTime(profile.updatedAt)}
+													</p>
+												</div>
+											</div>
+										</div>
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Last Login
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile.lastLoginAt ? formatDateTime(profile.lastLoginAt) : "Not available"}
+													</p>
+												</div>
+											</div>
+										</div>
+									</div>
+									<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
+												Onboarding Status
+											</label>
+											<div className="mt-2">
+												{renderBadge(
+													profile.isOnboardingComplete,
+													profile.isOnboardingComplete
+														? "Complete"
+														: `In Progress (Step ${profile.onboardingStep}/4)`
+												)}
+											</div>
+										</div>
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
+												KYC Status
+											</label>
+											<div className="mt-2">
+												{renderBadge(
+													profile.kycStatus,
+													profile.kycStatus
+														? "Verified"
+														: "Not Verified"
+												)}
+											</div>
+										</div>
+									</div>
 								</div>
 							</div>
-							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-								<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
-									KYC Status
-								</label>
-								<div className="mt-2">
-									{renderBadge(
-										profile.kycStatus,
-										profile.kycStatus
-											? "Verified"
-											: "Not Verified"
-									)}
-								</div>
-							</div>
 						</div>
-					</div>,
-					"bg-purple-primary/10"
-				)}
+					</div>
+				</div>
 			</div>
 		</DashboardLayout>
 	);

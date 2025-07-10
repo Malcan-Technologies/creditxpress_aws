@@ -189,13 +189,32 @@ router.post("/login", async (req: Request, res: Response) => {
 		console.log("Admin login attempt:", req.body);
 		const { phoneNumber, password } = req.body;
 
-		// Find user by phone number
+		// Validate and normalize phone number
+		const { validatePhoneNumber, normalizePhoneNumber } = require("../lib/phoneUtils");
+		
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: false, // Allow both mobile and landline for admin login
+			allowLandline: true
+		});
+
+		if (!phoneValidation.isValid) {
+			console.log("Invalid phone number format:", phoneNumber);
+			return res.status(400).json({ 
+				error: phoneValidation.error || "Invalid phone number format" 
+			});
+		}
+
+		// Normalize phone number for database lookup
+		const normalizedPhone = normalizePhoneNumber(phoneNumber);
+		console.log("Normalized phone number:", normalizedPhone);
+
+		// Find user by normalized phone number
 		const user = await prisma.user.findUnique({
-			where: { phoneNumber },
+			where: { phoneNumber: normalizedPhone },
 		});
 
 		if (!user) {
-			console.log("User not found:", phoneNumber);
+			console.log("User not found:", normalizedPhone);
 			return res.status(401).json({ error: "Invalid credentials" });
 		}
 

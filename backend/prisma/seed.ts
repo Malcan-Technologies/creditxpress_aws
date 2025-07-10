@@ -12,7 +12,7 @@ async function main() {
 		const hashedPassword = await bcrypt.hash("admin123", 10);
 		await prisma.user.create({
 			data: {
-				phoneNumber: "60123456789", // Example admin phone
+				phoneNumber: "+60182440976", // Example admin phone
 				password: hashedPassword,
 				fullName: "System Administrator",
 				email: "admin@kredit.my",

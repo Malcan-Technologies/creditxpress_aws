@@ -242,6 +242,116 @@ router.put(
 	}
 );
 
+/**
+ * @swagger
+ * /api/users/me/password:
+ *   put:
+ *     summary: Change user password
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 description: Current password for verification
+ *               newPassword:
+ *                 type: string
+ *                 description: New password to set
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid input or password requirements not met
+ *       401:
+ *         description: Unauthorized or current password incorrect
+ *       500:
+ *         description: Server error
+ */
+router.put(
+	"/me/password",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user?.userId;
+			if (!userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			const { currentPassword, newPassword } = req.body;
+
+			// Validate required fields
+			if (!currentPassword || !newPassword) {
+				return res.status(400).json({ 
+					message: "Current password and new password are required" 
+				});
+			}
+
+			// Validate new password strength (minimum 8 characters)
+			if (newPassword.length < 8) {
+				return res.status(400).json({ 
+					message: "New password must be at least 8 characters long" 
+				});
+			}
+
+			// Get current user with password
+			const user = await prisma.user.findUnique({
+				where: { id: userId },
+				select: {
+					id: true,
+					password: true,
+				},
+			});
+
+			if (!user) {
+				return res.status(404).json({ message: "User not found" });
+			}
+
+			// Import bcrypt for password operations
+			const bcrypt = require("bcryptjs");
+
+			// Verify current password
+			const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+			if (!isCurrentPasswordValid) {
+				return res.status(401).json({ message: "Current password is incorrect" });
+			}
+
+			// Hash new password using the same method as in User.create()
+			const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+			// Update password in database
+			await prisma.user.update({
+				where: { id: userId },
+				data: {
+					password: hashedNewPassword,
+				},
+			});
+
+			return res.json({
+				message: "Password changed successfully",
+			});
+		} catch (error) {
+			console.error("Error changing password:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
 // Get or create wallet for a user
 router.get(
 	"/me/wallet",

@@ -325,10 +325,11 @@ function LoansPageContent() {
 				const userData = await fetchWithTokenRefresh<any>(
 					"/api/users/me"
 				);
-				if (!userData?.isOnboardingComplete) {
-					router.push("/onboarding");
-					return;
-				}
+				// Skip onboarding check - all users go directly to dashboard
+				// if (!userData?.isOnboardingComplete) {
+				// 	router.push("/onboarding");
+				// 	return;
+				// }
 
 				// Set user name
 				if (userData.firstName) {

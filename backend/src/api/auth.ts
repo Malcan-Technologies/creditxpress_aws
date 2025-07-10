@@ -8,6 +8,7 @@ import {
 } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import * as bcrypt from "bcryptjs";
+import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
 
 const router = Router();
 
@@ -69,21 +70,31 @@ router.post("/login", async (req, res) => {
 	try {
 		const { phoneNumber, password } = req.body;
 
-		console.log("Login attempt:", { phoneNumber });
+		// Validate phone number format
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: false, // Allow both mobile and landline for login
+			allowLandline: true
+		});
 
-		// Find user
-		const user = await User.findByPhoneNumber(phoneNumber);
+		if (!phoneValidation.isValid) {
+			return res.status(400).json({ 
+				message: phoneValidation.error || "Invalid phone number format" 
+			});
+		}
+
+		// Normalize phone number for database lookup
+		const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+		// Find user by normalized phone number
+		const user = await User.findByPhoneNumber(normalizedPhone);
 		if (!user) {
-			console.log("User not found:", { phoneNumber });
 			return res.status(401).json({ message: "Invalid credentials" });
 		}
 
 		// Check password
 		const isValidPassword = await user.comparePassword(password);
-		console.log("Password check:", { isValid: isValidPassword });
 
 		if (!isValidPassword) {
-			console.log("Invalid password for user:", { phoneNumber });
 			return res.status(401).json({ message: "Invalid credentials" });
 		}
 
@@ -100,11 +111,6 @@ router.post("/login", async (req, res) => {
 
 		// Save refresh token
 		await user.updateRefreshToken(refreshToken);
-
-		console.log("Login successful:", {
-			userId: user.id,
-			phoneNumber: user.phoneNumber,
-		});
 
 		return res.json({
 			userId: user.id,
@@ -238,7 +244,7 @@ router.post("/refresh", async (req, res) => {
  *                 onboardingStep:
  *                   type: number
  *       400:
- *         description: User already exists
+ *         description: User already exists or invalid phone number
  *       500:
  *         description: Server error
  */
@@ -247,14 +253,32 @@ router.post("/signup", async (req, res) => {
 	try {
 		const { phoneNumber, password } = req.body;
 
+		// Validate phone number format
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: true, // Require mobile numbers for signup
+			allowLandline: false
+		});
+
+		if (!phoneValidation.isValid) {
+			return res.status(400).json({ 
+				message: phoneValidation.error || "Invalid phone number format" 
+			});
+		}
+
+		// Normalize phone number for database storage
+		const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
 		// Check if user already exists
-		const existingUser = await User.findByPhoneNumber(phoneNumber);
+		const existingUser = await User.findByPhoneNumber(normalizedPhone);
 		if (existingUser) {
 			return res.status(400).json({ message: "User already exists" });
 		}
 
-		// Create new user
-		const user = await User.create({ phoneNumber, password });
+		// Create new user with normalized phone number
+		const user = await User.create({ 
+			phoneNumber: normalizedPhone, 
+			password 
+		});
 
 		// Generate tokens
 		const { accessToken, refreshToken } = generateTokens(user);
@@ -270,6 +294,7 @@ router.post("/signup", async (req, res) => {
 			onboardingStep: user.onboardingStep,
 		});
 	} catch (error) {
+		console.error("Signup error:", error);
 		return res.status(500).json({ message: "Error creating user" });
 	}
 });

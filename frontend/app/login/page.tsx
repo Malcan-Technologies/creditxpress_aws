@@ -9,6 +9,7 @@ import Cookies from "js-cookie";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
 import { TokenStorage } from "@/lib/authUtils";
+import { validatePhoneNumber } from "@/lib/phoneUtils";
 
 interface CountryData {
 	countryCode: string;
@@ -28,6 +29,7 @@ function LoginPageContent() {
 	const [loading, setLoading] = useState(false);
 	const [phoneNumber, setPhoneNumber] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
+	const [phoneError, setPhoneError] = useState<string | null>(null);
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
@@ -46,10 +48,32 @@ function LoginPageContent() {
 		}
 	}, [searchParams]);
 
+	const handlePhoneChange = (value: string, data: CountryData) => {
+		setPhoneNumber(value);
+		setPlaceholder(placeholders[data.countryCode] || "1234 5678");
+		
+		// Clear phone error when user starts typing
+		if (phoneError) {
+			setPhoneError(null);
+		}
+	};
+
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		setError(null);
 		setMessage(null);
+
+		// Validate phone number before submission
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: false, // Allow both mobile and landline for login
+			allowLandline: true
+		});
+
+		if (!phoneValidation.isValid) {
+			setPhoneError(phoneValidation.error || "Please enter a valid phone number");
+			return;
+		}
+
 		setLoading(true);
 
 		const formData = new FormData(e.currentTarget);
@@ -114,12 +138,8 @@ function LoginPageContent() {
 				// Use window.location for more reliable redirect with auth state
 				window.location.href = decodedRedirect;
 			} else {
-				// Redirect based on onboarding status
-				if (data.isOnboardingComplete) {
-					window.location.href = "/dashboard";
-				} else {
-					window.location.href = "/onboarding";
-				}
+				// Always redirect to dashboard
+				window.location.href = "/dashboard";
 			}
 		} catch (error) {
 			console.error("Login - Error:", error);
@@ -293,12 +313,7 @@ function LoginPageContent() {
 												value,
 												data: CountryData
 											) => {
-												setPhoneNumber(value);
-												setPlaceholder(
-													placeholders[
-														data.countryCode
-													] || "1234 5678"
-												);
+												handlePhoneChange(value, data);
 											}}
 											inputProps={{
 												id: "phoneNumber",
@@ -315,6 +330,11 @@ function LoginPageContent() {
 											disableSearchIcon
 											searchPlaceholder="Search country..."
 										/>
+										{phoneError && (
+											<p className="mt-1 text-sm text-red-600 font-body">
+												{phoneError}
+											</p>
+										)}
 									</div>
 								</div>
 
