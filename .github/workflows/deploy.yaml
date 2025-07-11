@@ -396,9 +396,18 @@ jobs:
                 pm2 delete growkapital-admin
               fi
               
-              echo "▶️ Starting admin service with standalone server..."
-              # Use standalone server for admin (required for Next.js output: "standalone")
-              PORT=3003 pm2 start .next/standalone/server.js --name "growkapital-admin"
+              echo "▶️ Starting admin service..."
+              # Try multiple startup methods in order of preference
+              if [ -f "ecosystem.config.js" ]; then
+                echo "Using ecosystem config..."
+                pm2 start ecosystem.config.js
+              elif [ -f ".next/standalone/server.js" ]; then
+                echo "Using standalone server..."
+                PORT=3003 pm2 start .next/standalone/server.js --name "growkapital-admin"
+              else
+                echo "Using npm start..."
+                pm2 start npm --name "growkapital-admin" -- start
+              fi
               pm2 save
             '
             echo "✅ Admin deployment completed"
@@ -592,11 +601,14 @@ jobs:
             # Check admin (if deployed)
             if [ "${{ steps.changes.outputs.admin_changed }}" = "true" ]; then
               echo "🔍 Verifying admin..."
-              if timeout 10 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login | grep -q "200"; then
+              # Give admin more time to start up
+              sleep 5
+              if timeout 15 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3003/login | grep -q "200"; then
                 echo "✅ Admin is accessible"
               else
-                echo "⚠️ Admin verification failed"
-                pm2 logs growkapital-admin --lines 5 --nostream
+                echo "⚠️ Admin verification failed, checking PM2 status..."
+                pm2 show growkapital-admin || echo "Admin process not found in PM2"
+                pm2 logs growkapital-admin --lines 10 --nostream || echo "No logs available"
               fi
             fi
             

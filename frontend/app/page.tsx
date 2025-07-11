@@ -6,7 +6,6 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Logo from "@/components/Logo";
 import CTASection from "@/components/CTASection";
-import { useState } from "react";
 import {
 	MdArrowForward,
 	MdCheck,
@@ -22,95 +21,13 @@ import {
 	MdTrendingUp,
 	MdAccountBalance,
 	MdAssessment,
-	MdLock,
 } from "react-icons/md";
 
-// Password Protection Component
-function PasswordProtection({ onUnlock }: { onUnlock: () => void }) {
-	const [password, setPassword] = useState("");
-	const [error, setError] = useState("");
-
-	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
-		// Set your development password here
-		const DEV_PASSWORD = "dev123"; // Change this to your preferred password
-
-		if (password === DEV_PASSWORD) {
-			onUnlock();
-			setError("");
-		} else {
-			setError("Incorrect password");
-			setPassword("");
-		}
-	};
-
-	return (
-		<div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-			<div className="bg-white rounded-xl p-8 w-full max-w-md shadow-xl">
-				<div className="text-center mb-6">
-					<div className="w-16 h-16 bg-purple-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-						<MdLock size={32} className="text-purple-primary" />
-					</div>
-					<h2 className="text-2xl font-heading font-bold text-gray-700 mb-2">
-						Development Access
-					</h2>
-					<p className="text-gray-500">
-						This site is currently in development mode
-					</p>
-				</div>
-
-				<form onSubmit={handleSubmit} className="space-y-4">
-					<div>
-						<label
-							htmlFor="password"
-							className="block text-sm font-medium text-gray-700 mb-2"
-						>
-							Password
-						</label>
-						<input
-							type="password"
-							id="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-primary focus:border-transparent"
-							placeholder="Enter development password"
-							autoFocus
-						/>
-						{error && (
-							<p className="text-red-500 text-sm mt-2">{error}</p>
-						)}
-					</div>
-
-					<button
-						type="submit"
-						className="w-full bg-purple-primary text-white hover:bg-purple-700 font-semibold py-3 px-4 rounded-lg transition-all duration-200"
-					>
-						Access Site
-					</button>
-				</form>
-
-				<div className="mt-6 pt-6 border-t border-gray-200">
-					<p className="text-xs text-gray-500 text-center">
-						Development environment - temporary access control
-					</p>
-				</div>
-			</div>
-		</div>
-	);
-}
-
 export default function Home() {
-	const [isUnlocked, setIsUnlocked] = useState(false);
-
 	const scrollToSection = (sectionId: string) => {
 		const element = document.getElementById(sectionId);
 		element?.scrollIntoView({ behavior: "smooth" });
 	};
-
-	// Show password protection if not unlocked
-	if (!isUnlocked) {
-		return <PasswordProtection onUnlock={() => setIsUnlocked(true)} />;
-	}
 
 	return (
 		<div className="min-h-screen bg-offwhite text-gray-700 font-body w-full">
