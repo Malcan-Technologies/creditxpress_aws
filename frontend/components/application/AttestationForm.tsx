@@ -4,6 +4,10 @@ import { useState } from "react";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import InfoIcon from "@mui/icons-material/Info";
+import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
+import DescriptionIcon from "@mui/icons-material/Description";
+import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
+import VideoCameraIcon from "@mui/icons-material/VideoCall";
 
 interface LoanApplication {
 	id: string;
@@ -43,6 +47,7 @@ interface LoanApplication {
 interface AttestationFormProps {
 	onSubmit: () => Promise<void>;
 	onBack: () => void;
+	onLiveCallSelect: () => void; // Add this new prop
 	application: LoanApplication;
 	calculateFees: (application: LoanApplication) => {
 		interestRate: number;
@@ -58,12 +63,14 @@ interface AttestationFormProps {
 export default function AttestationForm({
 	onSubmit,
 	onBack,
+	onLiveCallSelect, // Add this parameter
 	application,
 	calculateFees,
 	formatCurrency,
 }: AttestationFormProps) {
 	const [videoWatched, setVideoWatched] = useState(false);
 	const [termsAccepted, setTermsAccepted] = useState(false);
+	const [termsRejected, setTermsRejected] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [videoStarted, setVideoStarted] = useState(false);
@@ -76,6 +83,52 @@ export default function AttestationForm({
 
 	const handleVideoComplete = () => {
 		setVideoWatched(true);
+	};
+
+	const handleTermsChange = (accepted: boolean) => {
+		if (accepted) {
+			setTermsAccepted(true);
+			setTermsRejected(false);
+		} else {
+			setTermsAccepted(false);
+			setTermsRejected(true);
+		}
+	};
+
+	const handleRejectAndScheduleCall = async () => {
+		try {
+			setLoading(true);
+			setError(null);
+
+			// Make the same API call as in the loans page for requesting live call
+			const response = await fetch(`/api/loan-applications/${application.id}/request-live-call`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					attestationType: "MEETING",
+					reason: "terms_rejected",
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to request live call");
+			}
+
+			// Success - notify user and trigger callback
+			alert(
+				"Live video call request submitted! Our legal team will contact you within 1-2 business days to schedule your appointment."
+			);
+			
+			// Trigger the callback to handle navigation/modal closure
+			onLiveCallSelect();
+		} catch (error) {
+			console.error("Error requesting live call:", error);
+			setError("Failed to submit live call request. Please try again.");
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	const handleSubmit = async () => {
@@ -102,366 +155,508 @@ export default function AttestationForm({
 		}
 	};
 
+	const currentStep = !videoWatched ? 1 : !termsAccepted ? 2 : 3;
+
 	return (
 		<div className="space-y-6">
-			<div className="text-center mb-6">
-				<h2 className="text-2xl font-heading font-bold text-gray-700 mb-2">
+			{/* Page Header */}
+			<div className="text-center mb-8">
+				<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700 mb-2">
 					Loan Terms Attestation
-				</h2>
-				<p className="text-gray-600 font-body">
+				</h1>
+				<p className="text-base lg:text-lg text-gray-600 font-body">
 					Please review your loan terms and confirm your understanding
 				</p>
 			</div>
 
-			{/* Comprehensive Loan Details */}
-			<div className="p-6 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl">
-				<h3 className="text-lg font-heading font-semibold text-gray-700 mb-6">
-					Complete Loan Terms & Details
-				</h3>
+			{/* Progress Steps */}
+			<div className="mb-6">
+				<div className="flex items-center justify-center mb-6">
+					<div className="flex items-center space-x-4 md:space-x-8">
+						{/* Step 1 */}
+						<div className="flex items-center">
+							<div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm ${
+								currentStep >= 1 
+									? 'bg-purple-primary text-white' 
+									: 'bg-gray-200 text-gray-500'
+							}`}>
+								{videoWatched ? <CheckCircleIcon className="w-5 h-5" /> : '1'}
+							</div>
+							<span className="ml-2 text-sm font-medium text-gray-700 hidden sm:block">
+								Watch Video
+							</span>
+						</div>
+						
+						{/* Connector */}
+						<div className={`h-1 w-8 md:w-16 rounded ${
+							currentStep >= 2 ? 'bg-purple-primary' : 'bg-gray-200'
+						}`}></div>
 
-				{/* Basic Loan Information */}
-				<div className="space-y-6">
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div>
-							<p className="text-sm text-gray-600 font-body">
-								Product
-							</p>
-							<p className="text-lg font-semibold text-purple-primary">
+						{/* Step 2 */}
+						<div className="flex items-center">
+							<div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm ${
+								currentStep >= 2 
+									? 'bg-purple-primary text-white' 
+									: 'bg-gray-200 text-gray-500'
+							}`}>
+								{termsAccepted ? <CheckCircleIcon className="w-5 h-5" /> : '2'}
+							</div>
+							<span className="ml-2 text-sm font-medium text-gray-700 hidden sm:block">
+								Accept Terms
+							</span>
+						</div>
+
+						{/* Connector */}
+						<div className={`h-1 w-8 md:w-16 rounded ${
+							currentStep >= 3 ? 'bg-purple-primary' : 'bg-gray-200'
+						}`}></div>
+
+						{/* Step 3 */}
+						<div className="flex items-center">
+							<div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm ${
+								currentStep >= 3 
+									? 'bg-purple-primary text-white' 
+									: 'bg-gray-200 text-gray-500'
+							}`}>
+								3
+							</div>
+							<span className="ml-2 text-sm font-medium text-gray-700 hidden sm:block">
+								Complete
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			{/* Loan Details Card */}
+			<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+				<div className="p-4 sm:p-6 lg:p-8">
+					{/* Header */}
+					<div className="flex items-center mb-6">
+						<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+							<DescriptionIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+						</div>
+						<div className="min-w-0">
+							<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+								Loan Agreement Details
+							</h3>
+							<p className="text-sm lg:text-base text-purple-primary font-semibold">
 								{application.product.name}
 							</p>
 						</div>
-						<div>
-							<p className="text-sm text-gray-600 font-body">
-								Loan Purpose
-							</p>
-							<p className="text-lg font-semibold text-purple-primary">
-								{application.purpose}
-							</p>
+					</div>
+
+					{/* Key Loan Information */}
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+						<div className="space-y-4">
+							<div className="bg-purple-primary/5 rounded-xl p-4 border border-purple-primary/20">
+								<p className="text-sm text-gray-600 font-body mb-1">Loan Amount</p>
+								<p className="text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
+									{formatCurrency(application.amount)}
+								</p>
+							</div>
+							<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+								<p className="text-sm text-gray-600 font-body mb-1">Monthly Repayment</p>
+								<p className="text-2xl lg:text-3xl font-heading font-bold text-blue-tertiary">
+									{formatCurrency(application.monthlyRepayment)}
+								</p>
+							</div>
 						</div>
-						<div>
-							<p className="text-sm text-gray-600 font-body">
-								Loan Amount
-							</p>
-							<p className="text-lg font-semibold text-purple-primary">
-								{formatCurrency(application.amount)}
-							</p>
-						</div>
-						<div>
-							<p className="text-sm text-gray-600 font-body">
-								Loan Term
-							</p>
-							<p className="text-lg font-semibold text-purple-primary">
-								{application.term} months
-							</p>
+						
+						<div className="space-y-4">
+							<div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+								<p className="text-sm text-gray-600 font-body mb-1">Loan Term</p>
+								<p className="text-2xl lg:text-3xl font-heading font-bold text-gray-700">
+									{application.term} months
+								</p>
+							</div>
+							<div className="bg-green-50 rounded-xl p-4 border border-green-200">
+								<p className="text-sm text-gray-600 font-body mb-1">Net Disbursement</p>
+								<p className="text-2xl lg:text-3xl font-heading font-bold text-green-600">
+									{formatCurrency(fees.netDisbursement)}
+								</p>
+							</div>
 						</div>
 					</div>
 
-					{/* Fees Breakdown */}
-					<div className="pt-4 border-t border-gray-200">
-						<h4 className="text-md font-heading font-semibold text-gray-700 mb-4">
+					{/* Separator */}
+					<div className="border-t border-gray-100 my-6"></div>
+
+					{/* Fee Breakdown */}
+					<div className="space-y-4">
+						<h4 className="text-lg font-heading font-semibold text-gray-700">
 							Fee Breakdown
 						</h4>
-						<div className="space-y-3">
-							<div className="flex justify-between">
-								<span className="text-sm text-gray-600 font-body">
-									Interest Rate (Monthly)
-								</span>
-								<span className="text-sm font-medium text-gray-700">
-									{application.product.interestRate}%
-								</span>
-							</div>
-							<div className="flex justify-between">
-								<span className="text-sm text-gray-600 font-body">
-									Origination Fee (
-									{application.product.originationFee}%)
-								</span>
-								<span className="text-sm font-medium text-red-600">
-									({formatCurrency(fees.originationFee)})
-								</span>
-							</div>
-							<div className="flex justify-between">
-								<span className="text-sm text-gray-600 font-body">
-									Legal Fee ({application.product.legalFee}%)
-								</span>
-								<span className="text-sm font-medium text-red-600">
-									({formatCurrency(fees.legalFee)})
-								</span>
-							</div>
-							<div className="flex justify-between">
-								<span className="text-sm text-gray-600 font-body">
-									Application Fee (paid upfront)
-								</span>
-								<span className="text-sm font-medium text-red-600">
-									({formatCurrency(fees.applicationFee)})
-								</span>
-							</div>
-						</div>
-					</div>
-
-					{/* Key Financial Information */}
-					<div className="pt-4 border-t border-gray-200">
-						<div className="space-y-4">
-							{/* Net Loan Disbursement */}
-							<div className="bg-blue-tertiary/5 rounded-xl p-4 border border-blue-tertiary/20">
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="space-y-3">
 								<div className="flex justify-between items-center">
-									<span className="text-blue-tertiary font-normal text-base font-body">
-										Net Loan Disbursement
+									<span className="text-sm text-gray-600 font-body">
+										Interest Rate (Monthly)
 									</span>
-									<span className="text-blue-tertiary font-normal text-lg font-heading">
-										{formatCurrency(fees.netDisbursement)}
+									<span className="text-sm font-semibold text-gray-700">
+										{application.product.interestRate}%
+									</span>
+								</div>
+								<div className="flex justify-between items-center">
+									<span className="text-sm text-gray-600 font-body">
+										Origination Fee ({application.product.originationFee}%)
+									</span>
+									<span className="text-sm font-semibold text-red-500">
+										{formatCurrency(fees.originationFee)}
 									</span>
 								</div>
 							</div>
-
-							{/* Monthly Repayment */}
-							<div className="bg-purple-primary/5 rounded-xl p-4 border border-purple-primary/20">
+							<div className="space-y-3">
 								<div className="flex justify-between items-center">
-									<span className="text-purple-primary font-normal text-base font-body">
-										Monthly Repayment
+									<span className="text-sm text-gray-600 font-body">
+										Legal Fee ({application.product.legalFee}%)
 									</span>
-									<span className="text-purple-primary font-normal text-lg font-heading">
-										{formatCurrency(
-											application.monthlyRepayment
-										)}
+									<span className="text-sm font-semibold text-red-500">
+										{formatCurrency(fees.legalFee)}
+									</span>
+								</div>
+								<div className="flex justify-between items-center">
+									<span className="text-sm text-gray-600 font-body">
+										Application Fee
+									</span>
+									<span className="text-sm font-semibold text-red-500">
+										{formatCurrency(fees.applicationFee)}
 									</span>
 								</div>
 							</div>
 						</div>
 					</div>
 
-					{/* Personal Information */}
+					{/* Borrower Information */}
 					{application.user && (
-						<div className="pt-4 border-t border-gray-200">
-							<h4 className="text-md font-heading font-semibold text-gray-700 mb-4">
-								Borrower Information
-							</h4>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-								<div className="flex justify-between">
-									<span className="text-sm text-gray-600 font-body">
-										Full Name
-									</span>
-									<span className="text-sm font-medium text-gray-700">
-										{application.user.fullName}
-									</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-sm text-gray-600 font-body">
-										Email
-									</span>
-									<span className="text-sm font-medium text-gray-700">
-										{application.user.email}
-									</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-sm text-gray-600 font-body">
-										Phone
-									</span>
-									<span className="text-sm font-medium text-gray-700">
-										{application.user.phoneNumber}
-									</span>
-								</div>
-								<div className="flex justify-between">
-									<span className="text-sm text-gray-600 font-body">
-										Employment
-									</span>
-									<span className="text-sm font-medium text-gray-700">
-										{application.user.employmentStatus}
-									</span>
-								</div>
-								{application.user.monthlyIncome &&
-									!isNaN(
-										Number(application.user.monthlyIncome)
-									) &&
-									Number(application.user.monthlyIncome) >
-										0 && (
-										<div className="flex justify-between">
-											<span className="text-sm text-gray-600 font-body">
-												Monthly Income
-											</span>
-											<span className="text-sm font-medium text-gray-700">
-												{formatCurrency(
-													Number(
-														application.user
-															.monthlyIncome
-													)
-												)}
+						<>
+							<div className="border-t border-gray-100 my-6"></div>
+							<div className="space-y-4">
+								<h4 className="text-lg font-heading font-semibold text-gray-700">
+									Borrower Information
+								</h4>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div className="space-y-3">
+										<div className="flex justify-between items-center">
+											<span className="text-sm text-gray-600 font-body">Full Name</span>
+											<span className="text-sm font-semibold text-gray-700">
+												{application.user.fullName}
 											</span>
 										</div>
-									)}
+										<div className="flex justify-between items-center">
+											<span className="text-sm text-gray-600 font-body">Email</span>
+											<span className="text-sm font-semibold text-gray-700">
+												{application.user.email}
+											</span>
+										</div>
+									</div>
+									<div className="space-y-3">
+										<div className="flex justify-between items-center">
+											<span className="text-sm text-gray-600 font-body">Phone</span>
+											<span className="text-sm font-semibold text-gray-700">
+												{application.user.phoneNumber}
+											</span>
+										</div>
+										<div className="flex justify-between items-center">
+											<span className="text-sm text-gray-600 font-body">Employment</span>
+											<span className="text-sm font-semibold text-gray-700">
+												{application.user.employmentStatus}
+											</span>
+										</div>
+									</div>
+								</div>
 							</div>
-						</div>
+						</>
 					)}
 				</div>
 			</div>
 
 			{/* Video Section */}
-			<div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
-				<div className="flex items-center mb-4">
-					<PlayArrowIcon className="text-purple-primary mr-2" />
-					<h3 className="text-lg font-heading font-semibold text-gray-700">
-						Loan Terms Video
-					</h3>
-					{videoWatched && (
-						<CheckCircleIcon className="text-green-600 ml-2" />
-					)}
-				</div>
-
-				<div className="bg-gray-100 rounded-lg overflow-hidden mb-4">
-					{!videoStarted ? (
-						<div className="aspect-video flex items-center justify-center p-8">
-							<div className="text-center">
-								<PlayArrowIcon
-									className="text-purple-primary mx-auto mb-2"
-									style={{ fontSize: 48 }}
-								/>
-								<p className="text-gray-600 font-body mb-4">
-									Click to watch the loan terms explanation
-									video
+			<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+				<div className="p-4 sm:p-6 lg:p-8">
+					{/* Header */}
+					<div className="flex items-center justify-between mb-6">
+						<div className="flex items-center">
+							<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+								<VideoLibraryIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+							</div>
+							<div className="min-w-0">
+								<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+									Loan Terms Video
+								</h3>
+								<p className="text-sm lg:text-base text-purple-primary font-semibold">
+									Step 1: Watch the explanation video
 								</p>
-								<button
-									onClick={handleVideoStart}
-									className="bg-purple-primary text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition-colors font-body inline-flex items-center gap-2"
-								>
-									<PlayArrowIcon className="w-5 h-5" />
-									Start Video
-								</button>
 							</div>
 						</div>
-					) : (
-						<div className="relative">
-							{!videoWatched ? (
-								<div className="space-y-4">
-									<div className="relative aspect-video">
-										<video
-											className="w-full h-full object-cover"
-											controls
-											autoPlay
-											onEnded={handleVideoComplete}
-											controlsList="nodownload"
-										>
-											<source
-												src="/videos/attestation.mp4"
-												type="video/mp4"
-											/>
-											Your browser does not support the
-											video tag.
-										</video>
-										<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-4">
-											<p className="text-white font-body text-sm">
-												Please watch the complete video
-												to continue
-											</p>
+						{videoWatched && (
+							<div className="flex items-center bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+								<CheckCircleIcon className="text-green-600 mr-2 w-5 h-5" />
+								<span className="text-sm font-semibold text-green-700">Completed</span>
+							</div>
+						)}
+					</div>
+
+					{/* Video Player */}
+					<div className="bg-gray-50 rounded-xl overflow-hidden mb-6">
+						{!videoStarted ? (
+							<div className="aspect-video flex items-center justify-center p-8">
+								<div className="text-center">
+									<div className="w-20 h-20 bg-purple-primary rounded-full flex items-center justify-center mx-auto mb-4">
+										<PlayArrowIcon className="text-white" style={{ fontSize: 32 }} />
+									</div>
+									<h4 className="text-lg font-heading font-semibold text-gray-700 mb-2">
+										Ready to Watch?
+									</h4>
+									<p className="text-gray-600 font-body mb-6 max-w-md">
+										This video explains your loan terms, repayment schedule, and your rights as a borrower.
+									</p>
+									<button
+										onClick={handleVideoStart}
+										className="bg-purple-primary text-white px-8 py-4 rounded-xl hover:bg-purple-700 transition-colors font-body inline-flex items-center gap-3 text-lg font-semibold"
+									>
+										<PlayArrowIcon className="w-6 h-6" />
+										Start Video
+									</button>
+								</div>
+							</div>
+						) : (
+							<div className="relative">
+								{!videoWatched ? (
+									<div className="space-y-4">
+										<div className="relative aspect-video">
+											<video
+												className="w-full h-full object-cover"
+												controls
+												autoPlay
+												onEnded={handleVideoComplete}
+												controlsList="nodownload"
+											>
+												<source
+													src="/videos/attestation.mp4"
+													type="video/mp4"
+												/>
+												Your browser does not support the video tag.
+											</video>
+											<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-4">
+												<p className="text-white font-body text-sm">
+													Please watch the complete video to continue
+												</p>
+											</div>
+										</div>
+										<div className="text-center py-4">
+											<button
+												onClick={handleVideoComplete}
+												className="bg-white text-purple-primary border-2 border-purple-primary px-6 py-3 rounded-xl hover:bg-purple-50 transition-colors font-body font-semibold"
+											>
+												I have finished watching the video
+											</button>
 										</div>
 									</div>
-									<div className="text-center pt-4 pb-6">
-										<button
-											onClick={handleVideoComplete}
-											className="bg-white text-purple-primary border border-purple-primary px-6 py-3 rounded-xl hover:bg-purple-50 transition-colors font-body text-sm"
-										>
-											I have finished watching the video
-										</button>
+								) : (
+									<div className="aspect-video flex items-center justify-center p-8">
+										<div className="text-center">
+											<div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+												<CheckCircleIcon className="text-white" style={{ fontSize: 32 }} />
+											</div>
+											<h4 className="text-lg font-heading font-semibold text-green-600 mb-2">
+												Video Completed!
+											</h4>
+											<p className="text-gray-600 font-body mb-4">
+												You can now proceed to accept the terms below
+											</p>
+											<button
+												onClick={() => {
+													setVideoWatched(false);
+													setVideoStarted(false);
+												}}
+												className="text-gray-500 hover:text-gray-700 text-sm font-body underline transition-colors"
+											>
+												Watch video again
+											</button>
+										</div>
 									</div>
-								</div>
-							) : (
-								<div className="aspect-video flex items-center justify-center p-8">
-									<div className="text-center">
-										<CheckCircleIcon
-											className="text-green-600 mx-auto mb-2"
-											style={{ fontSize: 48 }}
-										/>
-										<p className="text-green-600 font-body font-semibold">
-											Video completed successfully!
-										</p>
-										<p className="text-gray-600 font-body text-sm mt-2 mb-4">
-											You can now accept the terms and
-											conditions below
-										</p>
-										<button
-											onClick={() => {
-												setVideoWatched(false);
-												setVideoStarted(false);
-											}}
-											className="text-gray-500 hover:text-gray-700 text-sm font-body underline transition-colors"
-										>
-											Watch video again
-										</button>
-									</div>
-								</div>
-							)}
-						</div>
-					)}
-				</div>
+								)}
+							</div>
+						)}
+					</div>
 
-				<div className="bg-blue-50 p-4 rounded-lg">
-					<div className="flex items-start">
-						<InfoIcon className="text-blue-600 mr-2 mt-0.5" />
-						<div>
-							<p className="text-sm text-blue-800 font-body">
-								<strong>Important:</strong> This video explains
-								your loan terms, repayment schedule, and your
-								rights and obligations as a borrower. Please
-								watch it completely before proceeding.
-							</p>
+					{/* Video Info */}
+					<div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+						<div className="flex items-start">
+							<InfoIcon className="text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+							<div>
+								<p className="text-sm text-blue-800 font-body">
+									<strong>Important:</strong> This video explains your loan terms, repayment schedule, and your rights and obligations as a borrower. Please watch it completely before proceeding.
+								</p>
+							</div>
 						</div>
 					</div>
 				</div>
 			</div>
 
 			{/* Terms Acceptance */}
-			<div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
-				<h3 className="text-lg font-heading font-semibold text-gray-700 mb-4">
-					Terms and Conditions
-				</h3>
+			<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+				<div className="p-4 sm:p-6 lg:p-8">
+					{/* Header */}
+					<div className="flex items-center justify-between mb-6">
+						<div className="flex items-center">
+							<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+								<VerifiedUserIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+							</div>
+							<div className="min-w-0">
+								<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+									Terms and Conditions
+								</h3>
+								<p className="text-sm lg:text-base text-purple-primary font-semibold">
+									Step 2: Accept or reject the loan agreement
+								</p>
+							</div>
+						</div>
+						{termsAccepted && (
+							<div className="flex items-center bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+								<CheckCircleIcon className="text-green-600 mr-2 w-5 h-5" />
+								<span className="text-sm font-semibold text-green-700">Accepted</span>
+							</div>
+						)}
+						{termsRejected && (
+							<div className="flex items-center bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+								<svg className="text-red-600 mr-2 w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+									<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+								</svg>
+								<span className="text-sm font-semibold text-red-700">Rejected</span>
+							</div>
+						)}
+					</div>
 
-				<label className="inline-flex items-start cursor-pointer">
-					<input
-						type="checkbox"
-						checked={termsAccepted}
-						onChange={(e) => setTermsAccepted(e.target.checked)}
-						disabled={!videoWatched}
-						className="mt-1 mr-3 h-4 w-4 text-purple-primary border-gray-300 rounded focus:ring-purple-primary focus:ring-2"
-					/>
-					<span className="font-body text-gray-700">
-						I confirm that I have watched the loan terms video and
-						understand my rights and obligations under this loan
-						agreement. I accept the terms and conditions as
-						explained.
-					</span>
-				</label>
+					{/* Terms Options */}
+					<div className="bg-gray-50 rounded-xl p-6 border border-gray-200 space-y-6">
+						{/* Accept Terms */}
+						<label className="inline-flex items-start cursor-pointer group">
+							<div className="relative flex items-center justify-center mt-1 mr-4">
+								<input
+									type="radio"
+									name="terms"
+									checked={termsAccepted}
+									onChange={() => handleTermsChange(true)}
+									disabled={!videoWatched}
+									className="sr-only"
+								/>
+								<div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+									!videoWatched 
+										? 'border-gray-300 bg-gray-100 cursor-not-allowed' 
+										: termsAccepted 
+											? 'border-purple-primary bg-purple-primary' 
+											: 'border-gray-300 bg-white group-hover:border-purple-primary'
+								}`}>
+									{termsAccepted && (
+										<div className="w-2 h-2 rounded-full bg-white"></div>
+									)}
+								</div>
+							</div>
+							<span className="font-body text-gray-700 leading-relaxed">
+								<strong>I accept the terms and conditions.</strong> I confirm that I have watched the loan terms video and understand my rights and obligations under this loan agreement.
+							</span>
+						</label>
 
-				{!videoWatched && (
-					<p className="text-sm text-gray-500 font-body mt-2">
-						Please watch the video first to enable this checkbox
-					</p>
-				)}
+						{/* Reject Terms */}
+						<label className="inline-flex items-start cursor-pointer group">
+							<div className="relative flex items-center justify-center mt-1 mr-4">
+								<input
+									type="radio"
+									name="terms"
+									checked={termsRejected}
+									onChange={() => handleTermsChange(false)}
+									disabled={!videoWatched}
+									className="sr-only"
+								/>
+								<div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+									!videoWatched 
+										? 'border-gray-300 bg-gray-100 cursor-not-allowed' 
+										: termsRejected 
+											? 'border-purple-primary bg-purple-primary' 
+											: 'border-gray-300 bg-white group-hover:border-purple-primary'
+								}`}>
+									{termsRejected && (
+										<div className="w-2 h-2 rounded-full bg-white"></div>
+									)}
+								</div>
+							</div>
+							<span className="font-body text-gray-700 leading-relaxed">
+								<strong>I need more clarification.</strong> I would like to speak with a legal advisor about these terms before proceeding.
+							</span>
+						</label>
+
+						{!videoWatched && (
+							<p className="text-sm text-gray-500 font-body">
+								Please watch the video first to enable these options
+							</p>
+						)}
+
+						{/* Rejection Notice */}
+						{termsRejected && (
+							<div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200">
+								<div className="flex items-start">
+									<InfoIcon className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+									<div className="w-full">
+										<p className="text-sm text-amber-800 font-body mb-4">
+											<strong>No problem!</strong> We understand you may need additional clarification. We'll connect you with a legal advisor for a personal consultation.
+										</p>
+										<div className="flex flex-col sm:flex-row gap-3">
+											<button
+												onClick={handleRejectAndScheduleCall}
+												className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-xl transition-all font-body font-semibold inline-flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+											>
+												<VideoCameraIcon className="w-5 h-5" />
+												Schedule Live Call
+											</button>
+											<button
+												onClick={() => handleTermsChange(true)}
+												className="bg-white hover:bg-gray-50 text-amber-700 border-2 border-amber-300 hover:border-amber-400 px-6 py-3 rounded-xl transition-all font-body font-medium inline-flex items-center justify-center gap-2"
+											>
+												<CheckCircleIcon className="w-5 h-5" />
+												Accept Terms
+											</button>
+										</div>
+									</div>
+								</div>
+							</div>
+						)}
+					</div>
+				</div>
 			</div>
 
 			{/* Error Display */}
 			{error && (
-				<div className="bg-red-50 border border-red-200 rounded-lg p-4">
-					<p className="text-red-600 font-body">{error}</p>
+				<div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+					<div className="flex items-center">
+						<div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
+							<InfoIcon className="text-red-600 w-5 h-5" />
+						</div>
+						<p className="text-red-700 font-body font-medium">{error}</p>
+					</div>
 				</div>
 			)}
 
 			{/* Navigation Buttons */}
-			<div className="flex justify-between pt-6">
+			<div className="flex flex-col sm:flex-row justify-between gap-4 pt-6">
 				<button
 					onClick={onBack}
 					disabled={loading}
-					className="bg-white text-gray-700 border border-gray-300 px-6 py-3 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-colors font-body disabled:opacity-50 disabled:cursor-not-allowed"
+					className="bg-white text-gray-700 border-2 border-gray-300 px-8 py-4 rounded-xl hover:border-gray-400 hover:bg-gray-50 transition-colors font-body font-semibold disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
 				>
-					Back
+					Back to Previous Step
 				</button>
 
 				<button
 					onClick={handleSubmit}
 					disabled={!videoWatched || !termsAccepted || loading}
-					className="bg-purple-primary text-white px-6 py-3 rounded-xl hover:bg-purple-700 transition-colors font-body disabled:bg-gray-300 disabled:cursor-not-allowed inline-flex items-center gap-2"
+					className="bg-purple-primary text-white px-8 py-4 rounded-xl hover:bg-purple-700 transition-colors font-body font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed inline-flex items-center justify-center gap-3 order-1 sm:order-2"
 				>
 					{loading ? (
 						<>
 							<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-							Processing...
+							Processing Attestation...
 						</>
 					) : (
 						<>

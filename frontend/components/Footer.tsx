@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MdArrowForward, MdShield } from "react-icons/md";
+import { FaInstagram, FaFacebook, FaTiktok, FaLinkedin } from "react-icons/fa";
 import Logo from "./Logo";
 
 export default function Footer() {
@@ -184,9 +185,51 @@ export default function Footer() {
 				{/* Copyright */}
 				<div className="mt-12 pt-8 border-t border-purple-primary/20">
 					<div className="flex flex-col space-y-6">
-						{/* Logo and SSL Badge */}
-						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-							<Logo size="lg" variant="black" linkTo="/" />
+						{/* Logo, Social Media, and SSL Badge */}
+						<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+							<div className="flex flex-col sm:flex-row sm:items-center gap-6">
+								<Logo size="lg" variant="black" linkTo="/" />
+								
+								{/* Social Media Icons */}
+								<div className="flex items-center gap-4">
+									<Link
+										href="https://instagram.com/kapital.my"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
+										aria-label="Follow us on Instagram"
+									>
+										<FaInstagram size={24} />
+									</Link>
+									<Link
+										href="https://facebook.com/kapital.my"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
+										aria-label="Follow us on Facebook"
+									>
+										<FaFacebook size={24} />
+									</Link>
+									<Link
+										href="https://tiktok.com/@kapital.my"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
+										aria-label="Follow us on TikTok"
+									>
+										<FaTiktok size={24} />
+									</Link>
+									<Link
+										href="https://linkedin.com/company/kapital-my"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
+										aria-label="Follow us on LinkedIn"
+									>
+										<FaLinkedin size={24} />
+									</Link>
+								</div>
+							</div>
 
 							<div className="inline-flex items-center gap-2 bg-emerald-400/10 backdrop-blur-lg rounded-xl p-4 border border-emerald-400/30 w-fit">
 								<span className="text-emerald-400 flex-shrink-0">

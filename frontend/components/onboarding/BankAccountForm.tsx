@@ -3,8 +3,7 @@ import * as Yup from "yup";
 import { BankInfo } from "@/types/onboarding";
 import { 
 	BanknotesIcon,
-	CreditCardIcon,
-	InformationCircleIcon
+	CreditCardIcon
 } from "@heroicons/react/24/outline";
 
 interface BankAccountFormProps {
@@ -30,18 +29,13 @@ const banks = [
 ] as const;
 
 const validationSchema = Yup.object({
-	bankName: Yup.string().oneOf([...banks, ""]),
-	accountNumber: Yup.string().when("bankName", {
-		is: (val: string) => val && val.length > 0,
-		then: (schema) =>
-			schema
-				.required("Account number is required when bank is selected")
-				.matches(
-					/^\d{10,16}$/,
-					"Account number must be between 10 and 16 digits"
-				),
-		otherwise: (schema) => schema,
-	}),
+	bankName: Yup.string().required("Please select your bank"),
+	accountNumber: Yup.string()
+		.required("Account number is required")
+		.matches(
+			/^\d{10,16}$/,
+			"Account number must be between 10 and 16 digits"
+		),
 });
 
 export default function BankAccountForm({
@@ -63,15 +57,6 @@ export default function BankAccountForm({
 		},
 	});
 
-	// Check if form is valid (if user provides bank info, both fields are required)
-	const isFormValid = 
-		// Either both fields are empty (skip case) or both fields are filled and valid
-		(!formik.values.bankName && !formik.values.accountNumber) ||
-		(formik.values.bankName && 
-		 formik.values.accountNumber && 
-		 !formik.errors.bankName && 
-		 !formik.errors.accountNumber);
-
 	return (
 		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
 			<div className="p-4 sm:p-6 lg:p-8">
@@ -90,26 +75,11 @@ export default function BankAccountForm({
 					</div>
 				</div>
 
-				{/* Info Notice */}
-				<div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 lg:mb-8">
-					<div className="flex items-start">
-						<InformationCircleIcon className="w-5 h-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
-						<div>
-							<p className="text-sm lg:text-base text-amber-800 font-medium mb-1">
-								Optional Step
-							</p>
-							<p className="text-sm text-amber-700">
-								Link your bank account for loan disbursements. This step is optional and can be completed later in your dashboard.
-							</p>
-						</div>
-					</div>
-				</div>
-
 				<form onSubmit={formik.handleSubmit} className="space-y-6">
 					{/* Bank Selection */}
 					<div>
 						<label htmlFor="bankName" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
-							Select Bank *
+							Select Bank <span className="text-red-500">*</span>
 						</label>
 						<div className="relative">
 							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -142,10 +112,10 @@ export default function BankAccountForm({
 						)}
 					</div>
 
-										{/* Account Number */}
+					{/* Account Number */}
 					<div>
 						<label htmlFor="accountNumber" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
-							Account Number *
+							Account Number <span className="text-red-500">*</span>
 						</label>
 						<div className="relative">
 							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -188,26 +158,17 @@ export default function BankAccountForm({
 									Back
 								</button>
 							)}
-							<div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-								<button
-									type="button"
-									onClick={onSkip}
-									className="w-full sm:w-auto px-6 py-3 lg:py-4 text-gray-600 font-medium hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base"
-								>
-									Skip for now
-								</button>
-								<button
-									type="submit"
-									disabled={!isFormValid}
-									className={`w-full sm:w-auto px-8 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-medium focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base ${
-										!isFormValid
-											? "bg-gray-300 text-gray-500 cursor-not-allowed"
-											: "bg-purple-primary text-white hover:bg-purple-700 shadow-lg hover:shadow-xl"
-									}`}
-								>
-									{isLastStep ? "Complete Profile" : "Continue"}
-								</button>
-							</div>
+							<button
+								type="submit"
+								disabled={!formik.isValid}
+								className={`w-full sm:flex-1 px-8 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-medium focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm lg:text-base ${
+									!formik.isValid
+										? "bg-gray-300 text-gray-500 cursor-not-allowed"
+										: "bg-purple-primary text-white hover:bg-purple-700 shadow-lg hover:shadow-xl"
+								}`}
+							>
+								{isLastStep ? "Complete Profile" : "Continue"}
+							</button>
 						</div>
 					</div>
 				</form>

@@ -1089,6 +1089,11 @@ function LoansPageContent() {
 		setShowAttestationMethodModal(true);
 	};
 
+	const handleSwitchToInstantAttestation = (app: LoanApplication) => {
+		// Direct navigation to instant attestation page without modal
+		router.push(`/dashboard/applications/${app.id}/attestation`);
+	};
+
 	const handleInstantAttestationSelect = () => {
 		if (selectedAttestationApplication) {
 			setShowAttestationMethodModal(false);
@@ -1158,10 +1163,9 @@ function LoansPageContent() {
 			monthData.date.getMonth() === now.getMonth() &&
 			monthData.date.getFullYear() === now.getFullYear();
 
-		// Use backend overdue data instead of frontend date calculations
-		const overdue = (monthData.unpaidLateFees || 0) > 0 ? monthData.totalOutstanding : 0;
-		const upcoming =
-			!isCurrentMonth && (monthData.unpaidLateFees || 0) === 0 ? monthData.totalOutstanding : 0;
+		// Use pre-categorized amounts from the data processing
+		const overdue = monthData.overdueOutstanding || 0;
+		const upcoming = monthData.regularOutstanding || 0;
 
 		const newBarData = {
 			month: monthData.date.toLocaleDateString("en-US", {
@@ -1200,7 +1204,7 @@ function LoansPageContent() {
 		<DashboardLayout userName={userName} title="Loans & Applications">
 			<div className="w-full space-y-6">
 					{/* Quick Actions Bar - Top */}
-					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+					{/* <div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
 						<div className="p-6 lg:p-8">
 							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
 								<div className="flex items-center min-w-0">
@@ -1233,247 +1237,10 @@ function LoansPageContent() {
 								</div>
 							</div>
 						</div>
-					</div>
+					</div> */}
 
 					{/* Main Stats Cards - Due This Month & Loan Progress */}
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
-						{/* Due This Month Card */}
-						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
-							<div className="p-6 lg:p-8">
-								<div className="flex items-center mb-4">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
-										<CalendarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
-									</div>
-									<div className="min-w-0">
-										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-											Due This Month
-										</h3>
-										<p className="text-sm lg:text-base text-blue-600 font-semibold">
-											Payment obligations
-										</p>
-									</div>
-								</div>
-								<div className="space-y-4 lg:space-y-6">
-									<div>
-										<p className="text-2xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-											{formatCurrency(
-												(() => {
-													// Generate monthly data for current month calculation
-													const monthlyData = new Map();
-													const now = new Date();
-
-													// Process each loan individually
-													loans
-														.filter(
-															(loan) =>
-																loan.status === "ACTIVE" ||
-																loan.status === "PENDING_DISCHARGE"
-														)
-														.forEach((loan) => {
-															if (!loan.repayments) return;
-
-															// Sort repayments by due date
-															const sortedRepayments = [...loan.repayments].sort(
-																(a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-															);
-
-															// Process each repayment
-															sortedRepayments.forEach((repayment) => {
-																const dueDate = new Date(repayment.dueDate);
-																const monthKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}`;
-
-																if (!monthlyData.has(monthKey)) {
-																	monthlyData.set(monthKey, {
-																		month: monthKey,
-																		date: dueDate,
-																		totalScheduled: 0,
-																		totalPrincipalPaid: 0,
-																		lateFees: 0,
-																		paidLateFees: 0,
-																	});
-																}
-
-																const monthData = monthlyData.get(monthKey);
-																const repaymentLateFees = repayment.lateFeeAmount || 0;
-																const repaymentLateFeesPaid = repayment.lateFeesPaid || 0;
-
-																// Add to scheduled amount
-																monthData.totalScheduled += (repayment.amount || 0);
-																monthData.lateFees += repaymentLateFees;
-
-																// Track principal paid
-																if (repayment.status === "COMPLETED") {
-																	const principalPaid = Number(repayment.principalPaid ?? (repayment.amount || 0)) || 0;
-																	monthData.totalPrincipalPaid += principalPaid;
-																	monthData.paidLateFees += repaymentLateFeesPaid;
-																} else if (repayment.status === "PARTIAL" || (repayment.status === "PENDING" && repayment.paymentType === "PARTIAL" && (repayment.actualAmount ?? 0) > 0)) {
-																	const principalPaid = Number(repayment.principalPaid ?? (repayment.actualAmount || 0)) || 0;
-																	monthData.totalPrincipalPaid += principalPaid;
-																	monthData.paidLateFees += repaymentLateFeesPaid;
-																} else {
-																	// PENDING - add any late fees paid
-																	monthData.paidLateFees += repaymentLateFeesPaid;
-																}
-															});
-														});
-
-													// Find current month data
-													const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-													const currentMonth = monthlyData.get(currentMonthKey);
-													
-													if (!currentMonth) return 0;
-													
-													// Calculate amount still due this month
-													const scheduledAmount = Number(currentMonth.totalScheduled) || 0;
-													const lateFees = Number(currentMonth.lateFees) || 0;
-													const principalPaid = Number(currentMonth.totalPrincipalPaid) || 0;
-													const lateFeesPaid = Number(currentMonth.paidLateFees) || 0;
-													const totalDueThisMonth = Math.max(0, (scheduledAmount + lateFees) - principalPaid - lateFeesPaid);
-													
-													return totalDueThisMonth;
-												})()
-											)}
-										</p>
-									</div>
-									
-									{/* Payment Details */}
-									<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
-										{(() => {
-											const now = new Date();
-											const currentMonth = now.getMonth();
-											const currentYear = now.getFullYear();
-											
-											// Find all pending payments in current month
-											interface PendingPayment {
-												amount: number;
-												dueDate: string;
-												loanProduct: string;
-											}
-											const pendingPayments: PendingPayment[] = [];
-											
-											loans
-												.filter((loan) => loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE")
-												.forEach((loan) => {
-													if (!loan.repayments) return;
-													
-													loan.repayments
-														.filter((repayment) => {
-															const dueDate = new Date(repayment.dueDate);
-															const isPending = repayment.status === "PENDING" || 
-																(repayment.status === "PARTIAL" && (repayment.actualAmount || 0) < (repayment.amount || 0));
-															const isCurrentMonth = dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear;
-															return isPending && isCurrentMonth;
-														})
-														.forEach((repayment) => {
-															const lateFees = repayment.lateFeeAmount || 0;
-															const lateFeesPaid = repayment.lateFeesPaid || 0;
-															const principalPaid = Number(repayment.principalPaid || repayment.actualAmount || 0) || 0;
-															const totalAmount = (repayment.amount || 0) + lateFees;
-															const amountDue = Math.max(0, totalAmount - principalPaid - lateFeesPaid);
-															
-															if (amountDue > 0) {
-																pendingPayments.push({
-																	amount: amountDue,
-																	dueDate: repayment.dueDate,
-																	loanProduct: loan.application.product.name
-																});
-															}
-														});
-												});
-											
-											if (pendingPayments.length === 0) {
-												return "All current payments up to date";
-											}
-											
-											return `${pendingPayments.length} payment${pendingPayments.length !== 1 ? 's' : ''} pending this month`;
-										})()}
-									</div>
-								</div>
-							</div>
-						</div>
-
-						{/* Loan Progress Overview Card */}
-						<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
-							<div className="p-6 lg:p-8">
-								<div className="flex items-center mb-4">
-									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-blue-600/10 rounded-xl flex items-center justify-center mr-3">
-										<ChartPieIcon className="h-6 w-6 lg:h-7 lg:w-7 text-blue-600" />
-									</div>
-									<div>
-										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-											Loan Progress
-										</h3>
-										<p className="text-sm lg:text-base text-blue-600 font-semibold">
-											Repayment overview
-										</p>
-									</div>
-								</div>
-
-								{(() => {
-									// Calculate overall loan progress - principal paid vs total owed (principal + interest)
-									const totalOwed = loans
-										.filter((loan) => ["ACTIVE", "PENDING_DISCHARGE"].includes(loan.status.toUpperCase()))
-										.reduce((sum, loan) => sum + (loan.totalAmount || 0), 0);
-									
-									// Calculate total principal paid from all repayments
-									const totalPrincipalPaid = loans
-										.filter((loan) => ["ACTIVE", "PENDING_DISCHARGE"].includes(loan.status.toUpperCase()))
-										.reduce((sum, loan) => {
-											if (!loan.repayments) return sum;
-											
-											const loanPrincipalPaid = loan.repayments.reduce((loanSum, repayment) => {
-												if (repayment.status === "COMPLETED") {
-													// For completed payments, use principalPaid or fall back to amount
-													return loanSum + (Number(repayment.principalPaid) || Number(repayment.amount) || 0);
-												} else if (repayment.status === "PARTIAL") {
-													// For partial payments, use principalPaid or actualAmount
-													return loanSum + (Number(repayment.principalPaid) || Number(repayment.actualAmount) || 0);
-												}
-												return loanSum;
-											}, 0);
-											
-											return sum + loanPrincipalPaid;
-										}, 0);
-									
-									const progressPercent = totalOwed > 0 ? (totalPrincipalPaid / totalOwed) * 100 : 0;
-
-									return (
-										<div className="space-y-4 lg:space-y-6">
-											{/* Main Amount */}
-											<div>
-												<p className="text-2xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-													{Math.round(progressPercent)}% Complete
-												</p>
-											</div>
-											
-											{/* Progress Description */}
-											<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
-												{totalPrincipalPaid > 0 
-													? `${formatCurrency(totalPrincipalPaid)} paid of ${formatCurrency(totalOwed)} total` 
-													: "No payments made yet"
-												}
-											</div>
-											
-											{/* Simple Progress Bar */}
-											<div className="w-full">
-												<div className="w-full bg-gray-200 rounded-full h-3">
-													<div 
-														className="bg-gradient-to-r from-blue-600 to-blue-700 h-3 rounded-full transition-all duration-1000 ease-out"
-														style={{ width: `${Math.min(progressPercent, 100)}%` }}
-													></div>
-												</div>
-												<div className="flex justify-between text-sm text-gray-500 mt-2">
-													<span>0%</span>
-													<span>100%</span>
-												</div>
-											</div>
-										</div>
-									);
-								})()}
-							</div>
-						</div>
-
-					</div>
+					
 								
 
 										{/* Recharts Version - Repayment Timeline */}
@@ -1564,6 +1331,9 @@ function LoansPageContent() {
 																totalScheduled: 0,
 													totalPrincipalPaid: 0,
 																totalOutstanding: 0,
+													overdueOutstanding: 0,
+													currentMonthOutstanding: 0,
+													regularOutstanding: 0,
 													lateFees: 0,
 													paidLateFees: 0,
 													unpaidLateFees: 0,
@@ -1579,6 +1349,32 @@ function LoansPageContent() {
 											// Add to total scheduled for this month
 											monthData.totalScheduled += (repayment.amount || 0);
 											monthData.lateFees += (repaymentLateFees || 0);
+
+											// Helper function to categorize outstanding amounts by due date
+											const categorizeOutstanding = (outstanding: number) => {
+												if (outstanding <= 0) return;
+												
+												const repaymentYear = dueDate.getFullYear();
+												const repaymentMonth = dueDate.getMonth();
+												const nowYear = now.getFullYear();
+												const nowMonth = now.getMonth();
+												const hasLateFees = repaymentLateFees > repaymentLateFeesPaid;
+												
+												if (repaymentYear < nowYear || (repaymentYear === nowYear && repaymentMonth < nowMonth)) {
+													// Past month - overdue
+													monthData.overdueOutstanding += outstanding;
+												} else if (repaymentYear === nowYear && repaymentMonth === nowMonth) {
+													// Current month - check specific due date and late fees
+													if (dueDate < now || hasLateFees) {
+														monthData.overdueOutstanding += outstanding;
+													} else {
+														monthData.currentMonthOutstanding += outstanding;
+													}
+												} else {
+													// Future month
+													monthData.regularOutstanding += outstanding;
+												}
+											};
 
 											// Determine payment status
 											if (repayment.status === "COMPLETED") {
@@ -1598,6 +1394,7 @@ function LoansPageContent() {
 														const totalPaid = principalPaid + repaymentLateFeesPaid;
 														const outstanding = Math.max(0, totalAmountDue - totalPaid);
 														monthData.totalOutstanding += outstanding;
+														categorizeOutstanding(outstanding);
 													} else if (
 														repayment.status === "PARTIAL" ||
 														(repayment.status === "PENDING" &&
@@ -1612,6 +1409,7 @@ function LoansPageContent() {
 														const totalPaid = principalPaid + repaymentLateFeesPaid;
 														const outstanding = Math.max(0, totalAmountDue - totalPaid);
 														monthData.totalOutstanding += outstanding;
+														categorizeOutstanding(outstanding);
 
 														if (repaymentLateFees > 0) {
 															monthData.paidLateFees += repaymentLateFeesPaid;
@@ -1624,6 +1422,7 @@ function LoansPageContent() {
 												// PENDING - nothing paid yet
 														const totalAmountDue = (repayment.amount || 0) + (repaymentLateFees || 0);
 														monthData.totalOutstanding += totalAmountDue;
+														categorizeOutstanding(totalAmountDue);
 
 														if (repaymentLateFees > 0) {
 															monthData.paidLateFees += repaymentLateFeesPaid;
@@ -1669,25 +1468,10 @@ function LoansPageContent() {
 
 							// Transform data for Recharts with color categorization
 							const chartData = sortedMonths.map((month) => {
-									const hasUnpaidLateFees = (month.unpaidLateFees || 0) > 0;
-									const isCurrentMonth = month.date.getMonth() === now.getMonth() && 
-														   month.date.getFullYear() === now.getFullYear();
-									
-									// Separate outstanding amounts by category
-									let regularOutstanding = 0;
-									let currentMonthOutstanding = 0;
-									let overdueOutstanding = 0;
-									
-									if (hasUnpaidLateFees) {
-										// If there are unpaid late fees, treat as overdue
-										overdueOutstanding = month.totalOutstanding;
-									} else if (isCurrentMonth) {
-										// Current month payments
-										currentMonthOutstanding = month.totalOutstanding;
-										} else {
-										// Regular future payments
-										regularOutstanding = month.totalOutstanding;
-										}
+									// Use pre-categorized amounts from the data processing
+									const regularOutstanding = month.regularOutstanding || 0;
+									const currentMonthOutstanding = month.currentMonthOutstanding || 0;
+									const overdueOutstanding = month.overdueOutstanding || 0;
 
 										return {
 										month: month.monthName,
@@ -1967,7 +1751,12 @@ function LoansPageContent() {
 								>
 									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
 										<CheckCircleIcon className="h-4 w-4" />
-										<span className="text-xs">Discharged</span>
+										<span className="hidden sm:inline">
+											Discharged
+										</span>
+										<span className="sm:hidden text-xs">
+											Discharged
+										</span>
 										{loans.filter(
 											(loan) =>
 												loan.status.toUpperCase() ===
@@ -1995,7 +1784,12 @@ function LoansPageContent() {
 								>
 									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
 										<DocumentTextIcon className="h-4 w-4" />
-										<span className="text-xs">Apps</span>
+										<span className="hidden sm:inline">
+											Applications
+										</span>
+										<span className="sm:hidden text-xs">
+											Apps
+										</span>
 										{applications.filter(
 											(app) =>
 												![
@@ -2031,7 +1825,12 @@ function LoansPageContent() {
 								>
 									<div className="flex flex-col sm:flex-row items-center sm:space-x-2 space-y-1 sm:space-y-0">
 										<ClockIcon className="h-4 w-4" />
-										<span className="text-xs">Pending</span>
+										<span className="hidden sm:inline">
+											Pending
+										</span>
+										<span className="sm:hidden text-xs">
+											Pending
+										</span>
 										{applications.filter(
 											(app) =>
 												app.status.toUpperCase() ===
@@ -2491,6 +2290,165 @@ function LoansPageContent() {
 																		);
 																	})()}
 																</div>
+
+																	{/* Repayment Schedule Table */}
+																	<div className="mb-8">
+																		<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
+																			Repayment Schedule
+																		</h5>
+																		<div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+																			{loan.repayments && loan.repayments.length > 0 ? (
+																				<div className="overflow-x-auto">
+																					<table className="w-full min-w-[600px]">
+																						<thead className="bg-gray-50">
+																							<tr>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Late Fees</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cleared Date</th>
+																							</tr>
+																						</thead>
+																						<tbody className="bg-white divide-y divide-gray-200">
+																							{loan.repayments
+																								.sort((a, b) => (a.installmentNumber || 0) - (b.installmentNumber || 0))
+																								.map((repayment, index) => {
+																									const totalDue = (repayment.amount || 0) + (repayment.lateFeeAmount || 0);
+																									const isOverdue = repayment.status === "PENDING" && new Date(repayment.dueDate) < new Date();
+																									
+																									// Calculate payment amounts
+																									const principalPaid = repayment.principalPaid ?? 
+																										(repayment.status === "COMPLETED" ? (repayment.amount || 0) : 
+																										 repayment.status === "PARTIAL" ? (repayment.actualAmount || 0) : 0);
+																									const lateFeesPaid = repayment.lateFeesPaid || 0;
+																									const totalPaid = principalPaid + lateFeesPaid;
+																									const remaining = Math.max(0, totalDue - totalPaid);
+																									
+																									// Calculate payment timing for cleared payments
+																									const getPaymentTiming = () => {
+																										if (!repayment.paidAt || (repayment.status !== "COMPLETED" && repayment.status !== "PARTIAL")) {
+																											return null;
+																										}
+																										
+																										const paidDate = new Date(repayment.paidAt);
+																										const dueDate = new Date(repayment.dueDate);
+																										const diffTime = paidDate.getTime() - dueDate.getTime();
+																										const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+																										
+																										if (diffDays < 0) {
+																											return { type: "early", days: Math.abs(diffDays), color: "text-green-600" };
+																										} else if (diffDays > 0) {
+																											return { type: "late", days: diffDays, color: "text-red-600" };
+																										} else {
+																											return { type: "onTime", days: 0, color: "text-blue-600" };
+																										}
+																									};
+																									
+																									const paymentTiming = getPaymentTiming();
+																									
+																									return (
+																										<tr key={repayment.id} className="hover:bg-gray-50">
+																											<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+																												{repayment.installmentNumber || index + 1}
+																											</td>
+																											<td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+																												{formatDate(repayment.dueDate)}
+																											</td>
+																											<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+																												<div className="flex flex-col">
+																													<span>{formatCurrency(repayment.amount || 0)}</span>
+																													{totalPaid > 0 && (
+																														<span className="text-xs text-green-600 font-medium">
+																															Paid: {formatCurrency(principalPaid)}
+																														</span>
+																													)}
+																												</div>
+																											</td>
+																											<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+																												{(repayment.lateFeeAmount || 0) > 0 ? (
+																													<div className="flex flex-col">
+																														<span className="text-red-600">{formatCurrency(repayment.lateFeeAmount || 0)}</span>
+																														{lateFeesPaid > 0 && (
+																															<span className="text-xs text-green-600 font-medium">
+																																Paid: {formatCurrency(lateFeesPaid)}
+																															</span>
+																														)}
+																													</div>
+																												) : (
+																													<span className="text-gray-400">-</span>
+																												)}
+																											</td>
+																											<td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+																												{formatCurrency(remaining)}
+																											</td>
+																											<td className="px-4 py-3 whitespace-nowrap">
+																												{(() => {
+																													if (repayment.status === "COMPLETED") {
+																														return (
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+																																<CheckCircleIcon className="h-3 w-3 mr-1" />
+																																Paid
+																															</span>
+																														);
+																													} else if (repayment.status === "PARTIAL") {
+																														return (
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
+																																<ClockIcon className="h-3 w-3 mr-1" />
+																																Partial
+																															</span>
+																														);
+																													} else if (isOverdue) {
+																														return (
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+																																<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
+																																Overdue
+																															</span>
+																														);
+																													} else {
+																														return (
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+																																<ClockIcon className="h-3 w-3 mr-1" />
+																																Pending
+																															</span>
+																														);
+																													}
+																												})()}
+																											</td>
+																											<td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+																												{repayment.paidAt ? (
+																													<div className="flex flex-col">
+																														<span>{formatDate(repayment.paidAt)}</span>
+																														{paymentTiming && (
+																															<span className={`text-xs font-medium ${paymentTiming.color}`}>
+																																{paymentTiming.type === "early" 
+																																	? `${paymentTiming.days} day${paymentTiming.days !== 1 ? "s" : ""} early`
+																																	: paymentTiming.type === "late"
+																																	? `${paymentTiming.days} day${paymentTiming.days !== 1 ? "s" : ""} late`
+																																	: "On time"
+																																}
+																															</span>
+																														)}
+																													</div>
+																												) : (
+																													<span className="text-gray-400">-</span>
+																												)}
+																											</td>
+																										</tr>
+																									);
+																								})}
+																						</tbody>
+																					</table>
+																				</div>
+																			) : (
+																				<div className="text-center py-8">
+																					<CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+																					<p className="text-gray-500 font-body">No repayment schedule available</p>
+																				</div>
+																			)}
+																		</div>
+																	</div>
 
 																	<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 																		{/* Loan Information */}
@@ -3072,7 +3030,7 @@ function LoansPageContent() {
 																								</div>
 																								<button
 																									onClick={() =>
-																										handleAttestationMethodSelect(
+																										handleSwitchToInstantAttestation(
 																											app
 																										)
 																									}
@@ -3406,7 +3364,7 @@ function LoansPageContent() {
 																											</p>
 																											<button
 																												onClick={() =>
-																													handleAttestationMethodSelect(
+																													handleSwitchToInstantAttestation(
 																														app
 																													)
 																												}

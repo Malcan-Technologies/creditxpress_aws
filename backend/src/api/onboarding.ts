@@ -21,10 +21,14 @@ interface UserResponse {
 	employmentStatus: string | null;
 	employerName: string | null;
 	monthlyIncome: string | null;
+	serviceLength: string | null;
 	bankName: string | null;
 	accountNumber: string | null;
 	icNumber: string | null;
 	icType: string | null;
+	emergencyContactName: string | null;
+	emergencyContactPhone: string | null;
+	emergencyContactRelationship: string | null;
 }
 
 router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
@@ -52,10 +56,14 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 				employmentStatus: true,
 				employerName: true,
 				monthlyIncome: true,
+				serviceLength: true,
 				bankName: true,
 				accountNumber: true,
 				icNumber: true,
 				icType: true,
+				emergencyContactName: true,
+				emergencyContactPhone: true,
+				emergencyContactRelationship: true,
 			},
 		});
 
@@ -70,6 +78,10 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			zipCode: undefined,
 			icNumber: user.icNumber,
 			icType: user.icType,
+			serviceLength: user.serviceLength,
+			emergencyContactName: user.emergencyContactName,
+			emergencyContactPhone: user.emergencyContactPhone,
+			emergencyContactRelationship: user.emergencyContactRelationship,
 		};
 
 		return res.json(response);
@@ -101,11 +113,15 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			employmentStatus,
 			employerName,
 			monthlyIncome,
+			serviceLength,
 			bankName,
 			accountNumber,
 			onboardingStep,
 			icNumber,
 			icType,
+			emergencyContactName,
+			emergencyContactPhone,
+			emergencyContactRelationship,
 		} = req.body;
 
 		// Prepare the data for update
@@ -120,12 +136,16 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			employmentStatus,
 			employerName,
 			monthlyIncome,
+			serviceLength,
 			bankName,
 			accountNumber,
 			onboardingStep,
 			isOnboardingComplete: onboardingStep >= 4,
 			icNumber,
 			icType,
+			emergencyContactName,
+			emergencyContactPhone,
+			emergencyContactRelationship,
 		};
 
 		// Convert date string to Date object if present
@@ -160,10 +180,14 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 				employmentStatus: true,
 				employerName: true,
 				monthlyIncome: true,
+				serviceLength: true,
 				bankName: true,
 				accountNumber: true,
 				icNumber: true,
 				icType: true,
+				emergencyContactName: true,
+				emergencyContactPhone: true,
+				emergencyContactRelationship: true,
 			},
 		});
 
@@ -174,6 +198,10 @@ router.post("/", authenticateToken, async (req: AuthRequest, res: Response) => {
 			zipCode: undefined,
 			icNumber: updatedUser.icNumber,
 			icType: updatedUser.icType,
+			serviceLength: updatedUser.serviceLength,
+			emergencyContactName: updatedUser.emergencyContactName,
+			emergencyContactPhone: updatedUser.emergencyContactPhone,
+			emergencyContactRelationship: updatedUser.emergencyContactRelationship,
 		};
 
 		console.log("Onboarding POST - Updated user:", response);

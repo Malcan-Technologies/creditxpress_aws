@@ -30,6 +30,46 @@ import {
 	MdPhone,
 } from "react-icons/md";
 
+// FAQ Item Component
+function FAQItem({ faq, index }: { faq: { question: string; answer: string }; index: number }) {
+	const [isOpen, setIsOpen] = useState(false);
+	
+	return (
+		<div key={index} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all">
+			<button
+				onClick={() => setIsOpen(!isOpen)}
+				className="w-full text-left p-6 flex items-center justify-between"
+			>
+				<h4 className="text-lg lg:text-xl font-heading font-semibold text-blue-600 pr-4">
+					{faq.question}
+				</h4>
+				<svg
+					className={`w-5 h-5 text-blue-600 transition-transform duration-200 flex-shrink-0 ${
+						isOpen ? 'rotate-180' : ''
+					}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M19 9l-7 7-7-7"
+					/>
+				</svg>
+			</button>
+			{isOpen && (
+				<div className="px-6 pb-6">
+					<p className="text-gray-500 font-body leading-relaxed">
+						{faq.answer}
+					</p>
+				</div>
+			)}
+		</div>
+	);
+}
+
 export default function SMETermLoan() {
 	useDocumentTitle("SME Term Loan");
 
@@ -1046,93 +1086,43 @@ export default function SMETermLoan() {
 						</p>
 					</div>
 
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 lg:gap-8 w-full">
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								What can I use the loan for?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								The loan can be used for business expansion,
-								working capital, equipment purchase, or other
-								business purposes.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								How much can I borrow?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								You can borrow between RM 50,000 to RM
-								1,000,000, subject to business qualification and
-								financial assessment.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								What documents do I need?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Required documents include business
-								registration, financial statements, bank
-								statements, and tax returns.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								How long is the approval process?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Most applications are approved within 3 business
-								days, with funding disbursed within 24 hours
-								after approval.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								Is collateral required?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								No collateral is required for businesses with
-								strong financials and at least 2 years of
-								operation.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								Can I pay off the loan early?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Yes, you can make early repayments without any
-								penalty. This can help reduce your total
-								interest costs.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								What businesses are eligible?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Registered businesses with minimum 2 years of
-								operation and good financial track record.
-							</p>
-						</div>
-
-						<div className="bg-blue-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-blue-600/10 w-full">
-							<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-blue-600 leading-tight">
-								How are repayments made?
-							</h4>
-							<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-								Monthly repayments are made through automated
-								bank transfers from your designated business
-								account.
-							</p>
-						</div>
+					<div className="max-w-4xl mx-auto space-y-4">
+						{[
+							{
+								question: "What can I use the loan for?",
+								answer: "The loan can be used for business expansion, working capital, equipment purchase, or other business purposes."
+							},
+							{
+								question: "How much can I borrow?",
+								answer: "You can borrow between RM 50,000 to RM 1,000,000, subject to business qualification and financial assessment."
+							},
+							{
+								question: "What documents do I need?",
+								answer: "Required documents include business registration, financial statements, bank statements, and tax returns."
+							},
+							{
+								question: "How long is the approval process?",
+								answer: "Most applications are approved within 3 business days, with funding disbursed within 24 hours after approval."
+							},
+							{
+								question: "Is collateral required?",
+								answer: "No collateral is required for businesses with strong financials and at least 2 years of operation."
+							},
+							{
+								question: "Can I pay off the loan early?",
+								answer: "Yes, you can make early repayments without any penalty. This can help reduce your total interest costs."
+							},
+							{
+								question: "What businesses are eligible?",
+								answer: "Registered businesses with minimum 2 years of operation and good financial track record."
+							},
+							{
+								question: "How are repayments made?",
+								answer: "Monthly repayments are made through automated bank transfers from your designated business account."
+							}
+						].map((faq, index) => (
+							<FAQItem key={index} faq={faq} index={index} />
+						))}
 					</div>
 				</div>
 			</section>

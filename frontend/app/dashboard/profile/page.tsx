@@ -20,6 +20,9 @@ import {
 	BuildingOfficeIcon,
 	CurrencyDollarIcon,
 	IdentificationIcon,
+	DocumentTextIcon,
+	EyeIcon,
+	ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 import { validatePhoneNumber } from "@/lib/phoneUtils";
@@ -30,6 +33,7 @@ import {
 	getRelationshipOptions,
 	validateEmergencyContactPhone 
 } from "@/lib/icUtils";
+import { checkProfileCompleteness } from "@/lib/profileUtils";
 
 interface UserProfile {
 	id: string;
@@ -45,6 +49,7 @@ interface UserProfile {
 	employmentStatus: string | null;
 	employerName: string | null;
 	monthlyIncome: string | null;
+	serviceLength: string | null;
 	bankName: string | null;
 	accountNumber: string | null;
 	isOnboardingComplete: boolean;
@@ -60,6 +65,23 @@ interface UserProfile {
 	emergencyContactName?: string | null;
 	emergencyContactPhone?: string | null;
 	emergencyContactRelationship?: string | null;
+}
+
+interface UserDocument {
+	id: string;
+	type: string;
+	status: string;
+	fileUrl: string;
+	applicationId: string | null;
+	createdAt: string;
+	updatedAt: string;
+	application?: {
+		id: string;
+		product: {
+			name: string;
+			code: string;
+		};
+	} | null;
 }
 
 interface CountryData {
@@ -116,6 +138,8 @@ export default function ProfilePage() {
 	const [passwordError, setPasswordError] = useState("");
 	const [icError, setIcError] = useState("");
 	const [emergencyError, setEmergencyError] = useState("");
+	const [documents, setDocuments] = useState<UserDocument[]>([]);
+	const [documentsLoading, setDocumentsLoading] = useState(true);
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
@@ -127,7 +151,38 @@ export default function ProfilePage() {
 
 	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
 
-		const fetchProfile = async () => {
+	const fetchDocuments = async () => {
+		try {
+			setDocumentsLoading(true);
+			const data = await fetchWithTokenRefresh<UserDocument[]>(
+				`/api/users/me/documents?t=${Date.now()}`
+			);
+			
+			// Deduplicate documents based on fileUrl (same document used in multiple applications)
+			const uniqueDocuments = data ? data.reduce((acc: UserDocument[], current) => {
+				const existingIndex = acc.findIndex(doc => doc.fileUrl === current.fileUrl);
+				if (existingIndex === -1) {
+					// New unique document
+					acc.push(current);
+				} else {
+					// Keep the most recent one (latest createdAt)
+					if (new Date(current.createdAt) > new Date(acc[existingIndex].createdAt)) {
+						acc[existingIndex] = current;
+					}
+				}
+				return acc;
+			}, []) : [];
+			
+			setDocuments(uniqueDocuments);
+		} catch (error) {
+			console.error("Error fetching documents:", error);
+			setDocuments([]);
+		} finally {
+			setDocumentsLoading(false);
+		}
+	};
+
+	const fetchProfile = async () => {
 			try {
 				// Check authentication using our utility
 				const isAuthenticated = await checkAuth();
@@ -159,6 +214,9 @@ export default function ProfilePage() {
 				setFormData(data);
 				// Initialize phone number state
 				setPhoneNumber(data.phoneNumber || "");
+				
+				// Load documents
+				fetchDocuments();
 			} catch (error) {
 				console.error("Error fetching profile:", error);
 				router.push("/login");
@@ -177,6 +235,7 @@ export default function ProfilePage() {
 			if (!document.hidden && profile) {
 				// Only refetch if we already have profile data (not on initial load)
 				fetchProfile();
+				fetchDocuments();
 			}
 		};
 
@@ -184,6 +243,7 @@ export default function ProfilePage() {
 			if (profile) {
 				// Only refetch if we already have profile data (not on initial load)
 				fetchProfile();
+				fetchDocuments();
 			}
 		};
 
@@ -192,6 +252,7 @@ export default function ProfilePage() {
 			if (e.key === 'profile_updated' && e.newValue) {
 				// Profile was updated in another tab/window, refetch
 				fetchProfile();
+				fetchDocuments();
 				// Clear the flag
 				localStorage.removeItem('profile_updated');
 			}
@@ -253,10 +314,29 @@ export default function ProfilePage() {
 		e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
 	) => {
 		const { name, value } = e.target;
-		setFormData((prev) => ({
-			...prev,
-			[name]: value,
-		}));
+		
+		// Handle employment status changes
+		if (name === "employmentStatus") {
+			if (value === "Student" || value === "Unemployed") {
+				// Clear employer name and service length for student/unemployed
+				setFormData((prev) => ({
+					...prev,
+					[name]: value,
+					employerName: "",
+					serviceLength: "",
+				}));
+			} else {
+				setFormData((prev) => ({
+					...prev,
+					[name]: value,
+				}));
+			}
+		} else {
+			setFormData((prev) => ({
+				...prev,
+				[name]: value,
+			}));
+		}
 		
 		// Clear errors when user starts typing
 		if (name === "icNumber" && icError) {
@@ -523,6 +603,62 @@ export default function ProfilePage() {
 		}) + " (GMT+8)";
 	};
 
+	const profileStatus = checkProfileCompleteness(profile);
+
+	const getDocumentStatusBadge = (status: string) => {
+		switch (status) {
+			case "PENDING":
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+						Pending Review
+					</span>
+				);
+			case "APPROVED":
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+						Approved
+					</span>
+				);
+			case "REJECTED":
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+						Rejected
+					</span>
+				);
+			default:
+				return (
+					<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+						{status}
+					</span>
+				);
+		}
+	};
+
+	const formatDocumentDate = (dateString: string) => {
+		const date = new Date(dateString);
+		return date.toLocaleDateString("en-US", {
+			year: "numeric",
+			month: "short",
+			day: "numeric",
+			timeZone: "Asia/Kuala_Lumpur",
+		});
+	};
+
+	const getFileExtension = (fileUrl: string) => {
+		return fileUrl.split('.').pop()?.toUpperCase() || 'FILE';
+	};
+
+	const handleDocumentView = (document: UserDocument) => {
+		if (document.applicationId) {
+			// For application documents, use the existing document viewing endpoint
+			const viewUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/loan-applications/${document.applicationId}/documents/${document.id}`;
+			window.open(viewUrl, '_blank');
+		} else {
+			// For standalone documents (if any)
+			window.open(document.fileUrl, '_blank');
+		}
+	};
+
 	const renderBadge = (status: boolean, label: string) => (
 		<span
 			className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium font-body ${
@@ -784,16 +920,28 @@ export default function ProfilePage() {
 										</div>
 									</div>
 									<div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-										<div className="flex items-center space-x-3">
-										{renderBadge(profile.kycStatus, profile.kycStatus ? "KYC Verified" : "KYC Pending")}
-										{renderBadge(profile.isOnboardingComplete, profile.isOnboardingComplete ? "Profile Complete" : "Profile Incomplete")}
+										<div className="flex flex-col space-y-3">
+											<div className="flex items-center space-x-3">
+												{renderBadge(profile.kycStatus, profile.kycStatus ? "KYC Verified" : "KYC Pending")}
+												{renderBadge(profileStatus.isComplete, profileStatus.isComplete ? "Profile Complete" : `Profile ${profileStatus.completionPercentage}% Complete`)}
+											</div>
+											{!profileStatus.isComplete && profileStatus.missing.length > 0 && (
+												<div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+													<p className="text-sm font-medium text-amber-800 font-body mb-1">
+														Missing Information:
+													</p>
+													<p className="text-sm text-amber-700 font-body">
+														{profileStatus.missing.join(", ")}
+													</p>
+												</div>
+											)}
 										</div>
 										<button
 											onClick={() => router.push('/onboarding?step=0')}
 											className="flex items-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
 										>
 											<UserCircleIcon className="w-4 h-4 mr-2" />
-											Update Profile
+											{profileStatus.isComplete ? "Update Profile" : "Complete Profile"}
 										</button>
 									</div>
 								</div>
@@ -1140,7 +1288,10 @@ export default function ProfilePage() {
 												{formData.employmentStatus && 
 													formData.employmentStatus !== "Student" && 
 													formData.employmentStatus !== "Unemployed" && (
-													renderInput("employerName", "Employer Name")
+													<>
+														{renderInput("employerName", "Employer Name")}
+														{renderInput("serviceLength", "Years at Current Company", "number")}
+													</>
 												)}
 												{renderInput("monthlyIncome", "Monthly Income (RM)", "number")}
 											</div>
@@ -1148,8 +1299,8 @@ export default function ProfilePage() {
 										</div>
 									) : (
 										<div className="space-y-4">
-											<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
 													<div className="flex items-center space-x-3">
 														<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
 														<div className="min-w-0">
@@ -1162,7 +1313,7 @@ export default function ProfilePage() {
 														</div>
 													</div>
 												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
 													<div className="flex items-center space-x-3">
 														<BuildingOfficeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
 														<div className="min-w-0">
@@ -1175,7 +1326,20 @@ export default function ProfilePage() {
 														</div>
 													</div>
 												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+													<div className="flex items-center space-x-3">
+														<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+														<div className="min-w-0">
+															<label className="block text-sm font-medium text-gray-500 font-body">
+																Service Length
+															</label>
+															<p className="mt-1 text-base text-gray-700 font-body truncate">
+																{profile.serviceLength ? `${profile.serviceLength} years` : "Not provided"}
+															</p>
+														</div>
+													</div>
+												</div>
+												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
 													<div className="flex items-center space-x-3">
 														<CurrencyDollarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
 														<div className="min-w-0">
@@ -1183,7 +1347,7 @@ export default function ProfilePage() {
 																Monthly Income
 															</label>
 															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.monthlyIncome || "Not provided"}
+																{profile.monthlyIncome ? `RM ${Number(profile.monthlyIncome).toLocaleString()}` : "Not provided"}
 															</p>
 														</div>
 													</div>
@@ -1260,6 +1424,100 @@ export default function ProfilePage() {
 
 						{/* Full Width Cards */}
 						<div className="grid grid-cols-1 gap-6">
+							{/* Uploaded Documents Card */}
+							<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+								<div className="p-6 lg:p-8">
+									<div className="flex items-center justify-between mb-6">
+										<div className="flex items-center">
+											<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3">
+												<DocumentTextIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+											</div>
+											<div>
+												<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+													Uploaded Documents
+												</h3>
+												<p className="text-sm lg:text-base text-purple-primary font-semibold">
+													Your uploaded documents
+												</p>
+											</div>
+										</div>
+										<div className="flex items-center space-x-2">
+											<span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium font-body bg-blue-100 text-blue-800 border border-blue-200">
+												{documents.length} document{documents.length !== 1 ? 's' : ''}
+											</span>
+										</div>
+									</div>
+
+									{documentsLoading ? (
+										<div className="flex items-center justify-center py-8">
+											<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-primary"></div>
+											<span className="ml-3 text-gray-600 font-body">Loading documents...</span>
+										</div>
+									) : documents.length > 0 ? (
+										<div className="space-y-4">
+											{documents.map((document) => (
+												<div
+													key={document.id}
+													className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+												>
+													<div className="flex items-center justify-between">
+														<div className="flex items-center space-x-4 min-w-0 flex-1">
+															<div className="flex-shrink-0">
+																<div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+																	<DocumentTextIcon className="h-5 w-5 text-blue-600" />
+																</div>
+															</div>
+															<div className="min-w-0 flex-1">
+																<div className="flex items-center space-x-3 mb-1">
+																	<h4 className="text-sm lg:text-base font-semibold text-gray-700 font-body truncate">
+																		{document.type}
+																	</h4>
+																	{getDocumentStatusBadge(document.status)}
+																</div>
+																<div className="flex items-center space-x-4 text-sm text-gray-500 font-body">
+																	<span>
+																		{getFileExtension(document.fileUrl)} file
+																	</span>
+																	<span>
+																		Uploaded {formatDocumentDate(document.createdAt)}
+																	</span>
+																</div>
+															</div>
+														</div>
+														<div className="flex items-center space-x-2 ml-4">
+															<button
+																onClick={() => handleDocumentView(document)}
+																className="flex items-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200 hover:border-blue-300"
+															>
+																<EyeIcon className="h-4 w-4 mr-1" />
+																View
+															</button>
+														</div>
+													</div>
+												</div>
+											))}
+										</div>
+									) : (
+										<div className="text-center py-8">
+											<div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+												<DocumentTextIcon className="h-8 w-8 text-gray-400" />
+											</div>
+											<h4 className="text-lg font-semibold text-gray-700 font-heading mb-2">
+												No Documents Yet
+											</h4>
+											<p className="text-gray-500 font-body mb-4">
+												You haven't uploaded any documents yet. Documents are uploaded during various processes like loan applications.
+											</p>
+											<button
+												onClick={() => router.push('/dashboard/apply')}
+												className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-primary hover:bg-purple-600 rounded-lg transition-colors"
+											>
+												Start Application
+											</button>
+										</div>
+									)}
+								</div>
+							</div>
 
 							{/* Password & Security Card */}
 							<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
@@ -1440,34 +1698,6 @@ export default function ProfilePage() {
 															{profile.lastLoginAt ? formatDateTime(profile.lastLoginAt) : "Not available"}
 														</p>
 													</div>
-												</div>
-											</div>
-										</div>
-										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-												<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
-													Onboarding Status
-												</label>
-												<div className="mt-2">
-													{renderBadge(
-														profile.isOnboardingComplete,
-														profile.isOnboardingComplete
-															? "Complete"
-															: `In Progress (Step ${profile.onboardingStep}/4)`
-													)}
-												</div>
-											</div>
-											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-												<label className="block text-sm font-medium text-gray-500 mb-2 font-body">
-													KYC Status
-												</label>
-												<div className="mt-2">
-													{renderBadge(
-														profile.kycStatus,
-														profile.kycStatus
-															? "Verified"
-															: "Not Verified"
-													)}
 												</div>
 											</div>
 										</div>

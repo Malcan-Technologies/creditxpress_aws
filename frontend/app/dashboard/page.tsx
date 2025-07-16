@@ -24,6 +24,7 @@ import {
 	fetchWithTokenRefresh,
 	checkAuth,
 } from "@/lib/authUtils";
+import { checkProfileCompleteness } from "@/lib/profileUtils";
 
 interface WalletData {
 	balance: number;
@@ -40,6 +41,7 @@ interface WalletData {
 export default function DashboardPage() {
 	const router = useRouter();
 	const [userName, setUserName] = useState<string>("");
+	const [userProfile, setUserProfile] = useState<any>(null);
 	const [walletData, setWalletData] = useState<WalletData>({
 		balance: 0,
 		availableForWithdrawal: 0,
@@ -95,6 +97,9 @@ export default function DashboardPage() {
 				// Fetch user data with automatic token refresh
 				const data = await fetchWithTokenRefresh<any>("/api/users/me");
 				console.log("Dashboard - Auth check data:", data);
+
+				// Set user profile for completeness check
+				setUserProfile(data);
 
 				// Skip onboarding check - all users go directly to dashboard
 				// if (!data?.isOnboardingComplete) {
@@ -541,6 +546,27 @@ export default function DashboardPage() {
 
 	// Convert applications to action notifications
 	const getActionNotifications = () => {
+		const notifications: any[] = [];
+		
+		// Check profile completeness first
+		const profileStatus = checkProfileCompleteness(userProfile);
+		if (!profileStatus.isComplete && profileStatus.missing.length > 0) {
+			notifications.push({
+				id: 'profile-incomplete',
+				type: 'PROFILE_INCOMPLETE' as const,
+				title: "Complete Your Profile",
+				description: `Your profile is ${profileStatus.completionPercentage}% complete. Missing: ${profileStatus.missing.join(", ")}`,
+				buttonText: "Complete Profile",
+				buttonHref: "/dashboard/profile",
+				priority: 'MEDIUM' as const,
+				metadata: {
+					completionPercentage: profileStatus.completionPercentage,
+					missing: profileStatus.missing,
+					date: "Complete for better loan eligibility",
+				},
+			});
+		}
+
 		const actionableApps = incompleteApplications.filter((app: any) =>
 			[
 				"INCOMPLETE",
@@ -550,7 +576,7 @@ export default function DashboardPage() {
 			].includes(app.status)
 		);
 
-		return actionableApps.map((app: any) => {
+		const appNotifications = actionableApps.map((app: any) => {
 			const getNotificationData = (status: string) => {
 				switch (status) {
 					case "INCOMPLETE":
@@ -642,6 +668,9 @@ export default function DashboardPage() {
 				},
 			};
 		});
+
+		// Combine profile and application notifications
+		return [...notifications, ...appNotifications];
 	};
 
 
@@ -685,7 +714,7 @@ export default function DashboardPage() {
 							{/* Main Content Grid - Chart and Stats */}
 							<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 								{/* Donut Chart Section */}
-								<div className="flex flex-col items-center justify-center order-2 lg:order-1">
+								<div className="flex flex-col items-center justify-center order-2 lg:order-1 space-y-4">
 									<PieChart
 										borrowed={
 											(() => {
@@ -726,6 +755,56 @@ export default function DashboardPage() {
 										size={240}
 										theme="light"
 									/>
+									
+									{/* Total Paid - Compact */}
+									<div className="text-center space-y-1">
+										<div className="flex items-center space-x-1 justify-center">
+											<svg
+												className="h-3 w-3 text-blue-600"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+												/>
+											</svg>
+											<span className="text-xs font-medium text-gray-600 font-body">
+												Total Paid
+											</span>
+										</div>
+										<p className="text-lg font-heading font-bold text-blue-600">
+											{formatCurrency(
+												(() => {
+													// Calculate total principal paid from active loans only
+													const activeLoans = loans.filter(loan => 
+														loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+													);
+													return activeLoans.reduce((sum, loan) => {
+														if (!loan.repayments) return sum;
+														
+														// Sum up principal paid from all repayments
+														const loanPrincipalPaid = loan.repayments.reduce((loanSum: number, repayment: any) => {
+															if (repayment.status === "COMPLETED") {
+																// For completed payments, use principalPaid or fall back to amount
+																return loanSum + (Number(repayment.principalPaid) || Number(repayment.amount) || 0);
+															} else if (repayment.status === "PARTIAL") {
+																// For partial payments, use principalPaid or actualAmount
+																return loanSum + (Number(repayment.principalPaid) || Number(repayment.actualAmount) || 0);
+															}
+															return loanSum;
+														}, 0);
+														
+														return sum + loanPrincipalPaid;
+													}, 0);
+												})()
+											)}
+										</p>
+										<p className="text-xs text-gray-500 font-body">Excluding late fees</p>
+									</div>
 								</div>
 
 								{/* Stats Section */}
@@ -735,7 +814,7 @@ export default function DashboardPage() {
 										<p className="text-gray-500 text-sm mb-2 font-body">
 											Total Outstanding
 										</p>
-										<p className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold text-gray-700 mb-3">
+										<p className="text-2xl sm:text-3xl lg:text-4xl font-heading font-bold text-gray-700 mb-3">
 											{formatCurrency(
 												(() => {
 													// Calculate outstanding from active loans only
@@ -768,180 +847,172 @@ export default function DashboardPage() {
 									{/* Subtle separator line */}
 									<div className="border-t border-gray-100"></div>
 
-									{/* Quick Stats Grid */}
-									<div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4 lg:gap-6 justify-items-center md:justify-items-start">
-										<div className="space-y-2 text-center md:text-left w-full">
-											<div className="flex items-center space-x-2 justify-center md:justify-start">
-												<svg
-													className="h-4 w-4 text-blue-600"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-													/>
-												</svg>
-												<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
-													Total Paid
-												</span>
-											</div>
-											<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-600">
-												{formatCurrency(
-													(() => {
-														// Calculate total principal paid from active loans only
-														const activeLoans = loans.filter(loan => 
-															loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
-														);
-														return activeLoans.reduce((sum, loan) => {
-															if (!loan.repayments) return sum;
-															
-															// Sum up principal paid from all repayments
-															const loanPrincipalPaid = loan.repayments.reduce((loanSum: number, repayment: any) => {
-																if (repayment.status === "COMPLETED") {
-																	// For completed payments, use principalPaid or fall back to amount
-																	return loanSum + (Number(repayment.principalPaid) || Number(repayment.amount) || 0);
-																} else if (repayment.status === "PARTIAL") {
-																	// For partial payments, use principalPaid or actualAmount
-																	return loanSum + (Number(repayment.principalPaid) || Number(repayment.actualAmount) || 0);
-																}
-																return loanSum;
-															}, 0);
-															
-															return sum + loanPrincipalPaid;
-														}, 0);
-													})()
-												)}
-											</p>
-											<p className="text-xs text-gray-500 font-body mt-1">Excluding late fees</p>
-										</div>
+									{/* Quick Stats Grid - Card Design */}
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+										{/* Next Payment Date Card */}
 										{(() => {
-											const nextPaymentInfo =
-												calculateNextPaymentInfo();
-											const isOverdue =
-												nextPaymentInfo.isOverdue;
-
+											const nextPaymentInfo = calculateNextPaymentInfo();
+											const isOverdue = nextPaymentInfo.isOverdue;
+											
 											return (
-												<div className="space-y-2 text-center md:text-left w-full">
-													<div className="flex items-center space-x-2 justify-center md:justify-start">
-														<svg
-															className={`h-4 w-4 ${
-																isOverdue
-																	? "text-red-500"
-																	: "text-blue-600"
-															}`}
-															fill="none"
-															stroke="currentColor"
-															viewBox="0 0 24 24"
-														>
-															<path
-																strokeLinecap="round"
-																strokeLinejoin="round"
-																strokeWidth={2}
-																d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-															/>
-														</svg>
-														<span
-															className={`text-xs sm:text-sm font-medium font-body ${
-																isOverdue
-																	? "text-red-600"
-																	: "text-gray-500"
-															}`}
-														>
-															{isOverdue
-																? "Overdue Payment"
-																: "Next Payment"}
-														</span>
-													</div>
-													<p
-														className={`text-xl sm:text-2xl lg:text-3xl font-heading font-bold ${
-															isOverdue
-																? "text-red-600"
-																: "text-blue-600"
-														}`}
-													>
-														{nextPaymentInfo.amount >
-														0
-															? formatCurrency(
-																	nextPaymentInfo.amount
-															  )
-															: "No payments"}
-													</p>
-													{nextPaymentInfo.dueDate && (
-														<p
-															className={`text-xs mt-1 font-body ${
-																isOverdue
-																	? "text-red-500"
-																	: "text-gray-500"
-															}`}
-														>
-															{isOverdue
-																? "Was due"
-																: "Due"}{" "}
-															{formatDate(
-																nextPaymentInfo.dueDate
-															)}
-														</p>
-													)}
-													{nextPaymentInfo.description !==
-														"No payments due" &&
-														nextPaymentInfo.amount >
-															0 && (
-															<p
-																className={`text-xs mt-1 font-body ${
-																	isOverdue
-																		? "text-red-500"
-																		: "text-gray-500"
+												<div className={`rounded-xl p-4 border ${
+													isOverdue 
+														? "bg-red-50 border-red-200" 
+														: "bg-blue-50 border-blue-200"
+												}`}>
+													<div className="space-y-2 text-left">
+														<div className="flex items-center space-x-2">
+															<svg
+																className={`h-4 w-4 ${
+																	isOverdue ? "text-red-600" : "text-blue-600"
 																}`}
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
 															>
-																{
-																	nextPaymentInfo.description
-																}
+																<path
+																	strokeLinecap="round"
+																	strokeLinejoin="round"
+																	strokeWidth={2}
+																	d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+																/>
+															</svg>
+															<span className={`text-sm font-medium font-body ${
+																isOverdue ? "text-red-700" : "text-blue-700"
+															}`}>
+																{isOverdue ? "Overdue Date" : "Next Due Date"}
+															</span>
+														</div>
+														<p className={`text-lg font-heading font-bold ${
+															isOverdue ? "text-red-700" : "text-blue-700"
+														}`}>
+															{nextPaymentInfo.dueDate 
+																? formatDate(nextPaymentInfo.dueDate)
+																: "No due date"
+															}
+														</p>
+														{nextPaymentInfo.dueDate && (
+															<p className={`text-xs font-body ${
+																isOverdue ? "text-red-600" : "text-blue-600"
+															}`}>
+																{(() => {
+																	const today = new Date();
+																	const dueDate = new Date(nextPaymentInfo.dueDate);
+																	const diffTime = dueDate.getTime() - today.getTime();
+																	const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+																	
+																	if (isOverdue) {
+																		const overdueDays = Math.abs(diffDays);
+																		return `${overdueDays} ${overdueDays === 1 ? 'day' : 'days'} overdue`;
+																	} else if (diffDays === 0) {
+																		return "Due today";
+																	} else if (diffDays === 1) {
+																		return "1 day away";
+																	} else {
+																		return `due in ${diffDays} days`;
+																	}
+																})()}
 															</p>
 														)}
+													</div>
 												</div>
 											);
 										})()}
-										<div className="space-y-2 text-center md:text-left w-full col-span-2 sm:col-span-1">
-											<div className="flex items-center space-x-2 justify-center md:justify-start">
-												<svg
-													className="h-4 w-4 text-blue-600"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-													/>
-												</svg>
-												<span className="text-xs sm:text-sm font-medium text-gray-500 font-body">
-													Active Loans
-												</span>
+
+										{/* Next Payment Amount Card */}
+										{(() => {
+											const nextPaymentInfo = calculateNextPaymentInfo();
+											const isOverdue = nextPaymentInfo.isOverdue;
+
+											return (
+												<div className={`rounded-xl p-4 border ${
+													isOverdue 
+														? "bg-red-50 border-red-200" 
+														: "bg-blue-50 border-blue-200"
+												}`}>
+													<div className="space-y-2 text-left">
+														<div className="flex items-center space-x-2">
+															<svg
+																className={`h-4 w-4 ${
+																	isOverdue ? "text-red-600" : "text-blue-600"
+																}`}
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	strokeLinecap="round"
+																	strokeLinejoin="round"
+																	strokeWidth={2}
+																	d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+																/>
+															</svg>
+															<span className={`text-sm font-medium font-body ${
+																isOverdue ? "text-red-700" : "text-blue-700"
+															}`}>
+																{isOverdue ? "Overdue Amount" : "Next Payment"}
+															</span>
+														</div>
+														<p className={`text-lg font-heading font-bold ${
+															isOverdue ? "text-red-700" : "text-blue-700"
+														}`}>
+															{nextPaymentInfo.amount > 0
+																? formatCurrency(nextPaymentInfo.amount)
+																: "No payments"
+															}
+														</p>
+														{nextPaymentInfo.description !== "No payments due" && nextPaymentInfo.amount > 0 && (
+															<p className={`text-xs font-body ${
+																isOverdue ? "text-red-600" : "text-blue-600"
+															}`}>
+																{nextPaymentInfo.description}
+															</p>
+														)}
+													</div>
+												</div>
+											);
+										})()}
+
+										{/* Active Loans Card */}
+										<div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+											<div className="space-y-2 text-left">
+												<div className="flex items-center space-x-2">
+													<svg
+														className="h-4 w-4 text-blue-600"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+														/>
+													</svg>
+													<span className="text-sm font-medium text-blue-700 font-body">
+														Active Loans
+													</span>
+												</div>
+												<p className="text-lg font-heading font-bold text-blue-700">
+													{(() => {
+														// Count only active loans
+														const activeLoans = loans.filter(loan => 
+															loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+														);
+														return activeLoans.length;
+													})()}
+												</p>
+												<p className="text-xs text-blue-600 font-body">
+													{(() => {
+														const activeLoansCount = loans.filter(loan => 
+															loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
+														).length;
+														return activeLoansCount === 1 ? "loan" : "loans";
+													})()}{" "}
+													active
+												</p>
 											</div>
-											<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-blue-600">
-												{(() => {
-													// Count only active loans
-													const activeLoans = loans.filter(loan => 
-														loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
-													);
-													return activeLoans.length;
-												})()}
-											</p>
-											<p className="text-xs text-gray-500 mt-1 font-body">
-												{(() => {
-													const activeLoansCount = loans.filter(loan => 
-														loan.status === "ACTIVE" || loan.status === "PENDING_DISCHARGE"
-													).length;
-													return activeLoansCount === 1 ? "loan" : "loans";
-												})()}{" "}
-												active
-											</p>
 										</div>
 									</div>
 								</div>
@@ -1024,7 +1095,7 @@ export default function DashboardPage() {
 									<p className="text-gray-500 text-sm mb-2 font-body">
 										Total Balance
 									</p>
-									<p className="text-3xl sm:text-4xl lg:text-5xl font-heading font-bold text-gray-700 mb-3">
+									<p className="text-2xl sm:text-3xl lg:text-4xl font-heading font-bold text-gray-700 mb-3">
 										{formatCurrency(walletData.balance)}
 									</p>
 									<p className="text-sm sm:text-base lg:text-lg text-gray-600 font-body leading-relaxed">
@@ -1047,7 +1118,7 @@ export default function DashboardPage() {
 												Deposits
 											</span>
 										</div>
-										<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
+										<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
 											{formatCurrency(
 												walletData.totalDeposits
 											)}
@@ -1060,7 +1131,7 @@ export default function DashboardPage() {
 												Disbursed
 											</span>
 										</div>
-										<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
+										<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
 											{formatCurrency(
 												walletData.totalDisbursed
 											)}
@@ -1217,7 +1288,7 @@ export default function DashboardPage() {
 																{scoreInfo.category}
 															</span>
 														</div>
-														<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
+														<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
 															600
 														</p>
 														<p className="text-xs text-gray-500 font-body">
@@ -1232,7 +1303,7 @@ export default function DashboardPage() {
 																Last Updated
 															</span>
 														</div>
-														<p className="text-xl sm:text-2xl lg:text-3xl font-heading font-bold text-purple-primary">
+														<p className="text-xl sm:text-2xl lg:text-2xl font-heading font-bold text-purple-primary">
 															Never
 														</p>
 													</div>

@@ -1474,6 +1474,10 @@ router.get("/:id/history", authenticateToken, async (req: AuthRequest, res) => {
  *               attestationType:
  *                 type: string
  *                 enum: [MEETING]
+ *               reason:
+ *                 type: string
+ *                 description: Optional reason for requesting live call (e.g., "terms_rejected")
+ *                 example: "terms_rejected"
  *     responses:
  *       200:
  *         description: Live call request submitted successfully
@@ -1492,18 +1496,18 @@ router.get("/:id/history", authenticateToken, async (req: AuthRequest, res) => {
  *       500:
  *         description: Server error
  */
-// Request live video call attestation (user endpoint)
+		// Request live video call attestation (user endpoint)
 router.post(
 	"/:id/request-live-call",
 	authenticateToken,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
-			const { attestationType } = req.body;
+			const { attestationType, reason } = req.body;
 			const userId = req.user?.userId;
 
 			console.log(
-				`User ${userId} requesting live call for application ${id}`
+				`User ${userId} requesting live call for application ${id}${reason ? ` (reason: ${reason})` : ''}`
 			);
 
 			// Get the application to check ownership and current status
@@ -1548,6 +1552,15 @@ router.post(
 				});
 			}
 
+			// Determine attestation notes based on reason
+			let attestationNotes = "Live video call requested by user";
+			let historyNotes = "Live video call attestation requested by user";
+			
+			if (reason === "terms_rejected") {
+				attestationNotes = "Live video call requested after terms rejection - user needs clarification";
+				historyNotes = "Live video call requested after user rejected terms - needs legal advisor consultation";
+			}
+
 			// Update the application with live call request
 			const updatedApplication = await prisma.loanApplication.update({
 				where: { id },
@@ -1555,7 +1568,7 @@ router.post(
 					attestationType: "MEETING",
 					attestationCompleted: false,
 					attestationDate: null,
-					attestationNotes: "Live video call requested by user",
+					attestationNotes: attestationNotes,
 					attestationVideoWatched: false,
 					attestationTermsAccepted: false,
 					meetingCompletedAt: null,
@@ -1586,13 +1599,14 @@ router.post(
 				"PENDING_ATTESTATION",
 				"PENDING_ATTESTATION",
 				userId,
-				"Live video call attestation requested by user",
-				"Live video call attestation requested by user",
+				historyNotes,
+				historyNotes,
 				{
 					attestationType: "MEETING",
 					requestedBy: userId,
 					requestedAt: new Date().toISOString(),
 					status: "LIVE_CALL_REQUESTED",
+					reason: reason || "user_request",
 				}
 			);
 
@@ -1603,6 +1617,134 @@ router.post(
 		} catch (error) {
 			console.error("Error requesting live call:", error);
 			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/loan-applications/{id}/link-documents:
+ *   post:
+ *     summary: Link existing documents to a loan application
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documentIds
+ *               - documentTypes
+ *             properties:
+ *               documentIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of existing document IDs to link
+ *               documentTypes:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of document types corresponding to the document IDs
+ *     responses:
+ *       200:
+ *         description: Documents linked successfully
+ *       400:
+ *         description: Invalid request data
+ *       404:
+ *         description: Loan application not found
+ *       500:
+ *         description: Server error
+ */
+// Link existing documents to a loan application
+router.post(
+	"/:id/link-documents",
+	authenticateToken,
+	async (req: AuthRequest, res) => {
+		try {
+			const { id } = req.params;
+			const { documentIds, documentTypes } = req.body;
+
+			// Ensure user is authenticated
+			if (!req.user || !req.user.userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			const userId = req.user.userId;
+
+			// Validate input
+			if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+				return res.status(400).json({
+					message: "Document IDs are required and must be a non-empty array",
+				});
+			}
+
+			if (!documentTypes || !Array.isArray(documentTypes) || documentTypes.length !== documentIds.length) {
+				return res.status(400).json({
+					message: "Document types must be provided and match the number of document IDs",
+				});
+			}
+
+			// Check if loan application exists and belongs to user
+			const loanApplication = await prisma.loanApplication.findFirst({
+				where: {
+					OR: [{ id }, { urlLink: id }],
+					userId,
+				},
+			});
+
+			if (!loanApplication) {
+				return res
+					.status(404)
+					.json({ message: "Loan application not found" });
+			}
+
+			// Verify that all documents exist and belong to the user
+			const existingDocuments = await prisma.userDocument.findMany({
+				where: {
+					id: { in: documentIds },
+					userId,
+				},
+			});
+
+			if (existingDocuments.length !== documentIds.length) {
+				return res.status(400).json({
+					message: "Some documents not found or do not belong to you",
+				});
+			}
+
+			// Create new document records linked to this application
+			const linkedDocuments = await Promise.all(
+				documentIds.map(async (documentId, index) => {
+					const originalDoc = existingDocuments.find(doc => doc.id === documentId);
+					return prisma.userDocument.create({
+						data: {
+							userId,
+							applicationId: loanApplication.id,
+							type: documentTypes[index],
+							fileUrl: originalDoc!.fileUrl,
+							status: "PENDING",
+						},
+					});
+				})
+			);
+
+			return res.json(linkedDocuments);
+		} catch (error) {
+			console.error("Error linking documents:", error);
+			return res
+				.status(500)
+				.json({ message: "Error linking documents" });
 		}
 	}
 );

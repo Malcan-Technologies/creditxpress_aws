@@ -8,6 +8,7 @@ interface PersonalInfo {
 	employmentStatus: string;
 	employerName?: string;
 	monthlyIncome: string;
+	serviceLength?: string;
 	address1: string;
 	address2?: string;
 	city: string;
@@ -34,6 +35,7 @@ function PersonalInfoVerificationFormContent({
 		employmentStatus: "",
 		employerName: "",
 		monthlyIncome: "",
+		serviceLength: "",
 		address1: "",
 		address2: "",
 		city: "",
@@ -85,6 +87,7 @@ function PersonalInfoVerificationFormContent({
 						employmentStatus: userData.employmentStatus || "",
 						employerName: userData.employerName || "",
 						monthlyIncome: userData.monthlyIncome || "",
+						serviceLength: userData.serviceLength || "",
 						address1: userData.address1 || "",
 						address2: userData.address2 || "",
 						city: userData.city || "",
@@ -128,17 +131,10 @@ function PersonalInfoVerificationFormContent({
 		}
 
 		if (
-			formValues.employmentStatus === "Employed" &&
+			(formValues.employmentStatus === "Employed" || formValues.employmentStatus === "Self-Employed") &&
 			!formValues.employerName
 		) {
 			newErrors.employerName = "Employer name is required";
-		}
-
-		if (
-			formValues.employmentStatus === "Business Owner" &&
-			!formValues.employerName
-		) {
-			newErrors.employerName = "Company name is required";
 		}
 
 		if (!formValues.monthlyIncome) {
@@ -184,8 +180,22 @@ function PersonalInfoVerificationFormContent({
 		(field: keyof PersonalInfo) =>
 		(e: React.ChangeEvent<HTMLInputElement>) => {
 			const value = e.target.value;
-			if (field === "monthlyIncome" || field === "postalCode") {
-				const numericValue = value.replace(/[^0-9]/g, "");
+			
+			// Handle employment status changes with clearing logic
+			if (field === "employmentStatus") {
+				if (value === "Student" || value === "Unemployed") {
+					// Clear employer name and service length for student/unemployed
+					setFormValues((prev) => ({
+						...prev,
+						[field]: value,
+						employerName: "",
+						serviceLength: "",
+					}));
+				} else {
+					setFormValues((prev) => ({ ...prev, [field]: value }));
+				}
+			} else if (field === "monthlyIncome" || field === "postalCode" || field === "serviceLength") {
+				const numericValue = value.replace(/[^0-9.]/g, "");
 				if (field === "postalCode" && numericValue.length > 5) {
 					return;
 				}
@@ -293,7 +303,7 @@ function PersonalInfoVerificationFormContent({
 							{[
 								"Employed",
 								"Self-Employed",
-								"Business Owner",
+								"Student",
 								"Unemployed",
 							].map((status) => (
 								<label
@@ -327,32 +337,44 @@ function PersonalInfoVerificationFormContent({
 					</div>
 
 					{(formValues.employmentStatus === "Employed" ||
-						formValues.employmentStatus === "Business Owner") && (
-						<div>
-							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-								{formValues.employmentStatus ===
-								"Business Owner"
-									? "Company Name"
-									: "Employer Name"}
-							</label>
-							<input
-								type="text"
-								value={formValues.employerName || ""}
-								onChange={handleChange("employerName")}
-								className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
-								placeholder={`Enter your ${
-									formValues.employmentStatus ===
-									"Business Owner"
-										? "company"
-										: "employer"
-								} name`}
-							/>
-							{errors.employerName && (
-								<p className="mt-1 text-sm text-red-600 font-body">
-									{errors.employerName}
+						formValues.employmentStatus === "Self-Employed") && (
+						<>
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+									Employer Name
+								</label>
+								<input
+									type="text"
+									value={formValues.employerName || ""}
+									onChange={handleChange("employerName")}
+									className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+									placeholder="Enter your employer name"
+								/>
+								{errors.employerName && (
+									<p className="mt-1 text-sm text-red-600 font-body">
+										{errors.employerName}
+									</p>
+								)}
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+									Years at Current Company (Optional)
+								</label>
+								<input
+									type="number"
+									min="0"
+									step="0.1"
+									value={formValues.serviceLength || ""}
+									onChange={handleChange("serviceLength")}
+									className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body"
+									placeholder="0.5"
+								/>
+								<p className="mt-1 text-sm text-gray-500 font-body">
+									Length of time you've been working at your current company
 								</p>
-							)}
-						</div>
+							</div>
+						</>
 					)}
 
 					<div>

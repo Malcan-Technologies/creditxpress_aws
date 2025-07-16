@@ -61,6 +61,7 @@ model User {
   employerName                 String?
   employmentStatus             String?
   monthlyIncome                String?
+  serviceLength                String?
   isOnboardingComplete         Boolean             @default(false)
   kycStatus                    Boolean             @default(false)
   onboardingStep               Int                 @default(0)

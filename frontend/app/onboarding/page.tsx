@@ -18,7 +18,7 @@ import {
 
 const steps = [
 	{
-		title: "Personal Information",
+		title: "Personal & Emergency Contact",
 		description: "Tell us about yourself",
 		icon: UserIcon,
 	},
@@ -76,6 +76,10 @@ function OnboardingPageContent() {
 					employmentStatus: string | null;
 					employerName: string | null;
 					monthlyIncome: string | null;
+					serviceLength: string | null;
+					emergencyContactName: string | null;
+					emergencyContactPhone: string | null;
+					emergencyContactRelationship: string | null;
 					bankName: string | null;
 					accountNumber: string | null;
 					onboardingStep: number;
@@ -104,6 +108,10 @@ function OnboardingPageContent() {
 					employmentStatus: userData.employmentStatus || "",
 					employerName: userData.employerName || "",
 					monthlyIncome: userData.monthlyIncome || "",
+					serviceLength: userData.serviceLength || "",
+					emergencyContactName: userData.emergencyContactName || "",
+					emergencyContactPhone: userData.emergencyContactPhone || "",
+					emergencyContactRelationship: userData.emergencyContactRelationship || "",
 					bankName: userData.bankName || "",
 					accountNumber: userData.accountNumber || "",
 					onboardingStep: userData.onboardingStep || 0,
@@ -157,6 +165,10 @@ function OnboardingPageContent() {
 				employmentStatus: string | null;
 				employerName: string | null;
 				monthlyIncome: string | null;
+				serviceLength: string | null;
+				emergencyContactName: string | null;
+				emergencyContactPhone: string | null;
+				emergencyContactRelationship: string | null;
 				bankName: string | null;
 				accountNumber: string | null;
 				onboardingStep: number;
@@ -190,48 +202,7 @@ function OnboardingPageContent() {
 		}
 	};
 
-	const handleSkip = async () => {
-		try {
-			// For bank account step (step 3), allow skipping
-			if (activeStep === 3) {
-				const updatedFormData = { ...formData };
-				updatedFormData.onboardingStep = 4; // Mark as complete
-				
-				const response = await fetchWithTokenRefresh<{
-					id: string;
-					phoneNumber: string;
-					fullName: string | null;
-					email: string | null;
-					dateOfBirth: string | null;
-					address1: string | null;
-					address2: string | null;
-					city: string | null;
-					state: string | null;
-					postalCode: string | null;
-					employmentStatus: string | null;
-					employerName: string | null;
-					monthlyIncome: string | null;
-					bankName: string | null;
-					accountNumber: string | null;
-					onboardingStep: number;
-					isOnboardingComplete: boolean;
-					icNumber: string | null;
-					icType: string | null;
-				}>("/api/onboarding", {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify(updatedFormData),
-				});
-
-				console.log("Onboarding - Skip response:", response);
-				router.push("/dashboard/profile");
-			}
-		} catch (error) {
-			console.error("Onboarding - Error skipping step:", error);
-		}
-	};
+	// Remove skip functionality since bank account is now required
 
 	const handleBack = () => {
 		if (activeStep > 0) {
@@ -277,7 +248,7 @@ function OnboardingPageContent() {
 						initialValues={formData}
 						onSubmit={handleNext}
 						onBack={handleBack}
-						onSkip={handleSkip}
+						onSkip={() => {}} // Placeholder function since skip is removed
 						showBackButton={true}
 						isLastStep={true}
 					/>
@@ -370,7 +341,7 @@ function OnboardingPageContent() {
 							<div className="hidden sm:block">
 								<div className="relative">
 									{/* Connection Lines Background */}
-																			<div className="absolute top-5 lg:top-6 left-0 right-0 flex items-center justify-between px-5 lg:px-6">
+											<div className="absolute top-5 lg:top-6 left-0 right-0 flex items-center justify-between px-5 lg:px-6">
 											{steps.slice(0, -1).map((_, index) => (
 												<div
 													key={index}

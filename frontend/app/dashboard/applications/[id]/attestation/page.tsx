@@ -118,6 +118,11 @@ export default function AttestationPage() {
 		router.push("/dashboard/loans?tab=applications");
 	};
 
+	const handleLiveCallSelect = () => {
+		// Navigate back to loans page after live call is scheduled
+		router.push("/dashboard/loans?tab=applications");
+	};
+
 	const formatCurrency = (amount: number) => {
 		return new Intl.NumberFormat("en-MY", {
 			style: "currency",
@@ -208,6 +213,7 @@ export default function AttestationPage() {
 					<AttestationForm
 						onSubmit={handleAttestationComplete}
 						onBack={handleBack}
+						onLiveCallSelect={handleLiveCallSelect}
 						application={application}
 						calculateFees={calculateFees}
 						formatCurrency={formatCurrency}

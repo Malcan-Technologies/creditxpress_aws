@@ -32,10 +32,10 @@ export default function SignupPage() {
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
-		my: "1234 5678", // Malaysia
-		sg: "8123 4567", // Singapore
-		id: "812 345 678", // Indonesia
-		th: "81 234 5678", // Thailand
+		my: "+60", // Malaysia
+		sg: "+65", // Singapore
+		id: "+62", // Indonesia
+		th: "+66", // Thailand
 	};
 
 	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
@@ -49,6 +49,10 @@ export default function SignupPage() {
 			setPhoneError(null);
 		}
 	};
+
+	// Check if user has entered actual digits beyond the country code
+	// Show helper text when field is empty or only has country code
+	const shouldShowHelper = !phoneNumber || phoneNumber.length <= 2;
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -232,7 +236,7 @@ export default function SignupPage() {
 									>
 										Phone Number
 									</label>
-									<div className="phone-input-wrapper">
+									<div className="phone-input-wrapper relative">
 										<PhoneInput
 											country="my"
 											value={phoneNumber}
@@ -257,6 +261,11 @@ export default function SignupPage() {
 											disableSearchIcon
 											searchPlaceholder="Search country..."
 										/>
+										{shouldShowHelper && (
+											<div className="absolute left-32 top-3 text-base text-gray-400 pointer-events-none font-body">
+												12 345 6789
+											</div>
+										)}
 										{phoneError && (
 											<p className="mt-1 text-sm text-red-600 font-body">
 												{phoneError}

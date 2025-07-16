@@ -3892,6 +3892,11 @@
                     "enum": [
                       "MEETING"
                     ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "Optional reason for requesting live call (e.g., \"terms_rejected\")",
+                    "example": "terms_rejected"
                   }
                 }
               }
@@ -3920,6 +3925,74 @@
           },
           "404": {
             "description": "Application not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/loan-applications/{id}/link-documents": {
+      "post": {
+        "summary": "Link existing documents to a loan application",
+        "tags": [
+          "Loan Applications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Loan application ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "documentIds",
+                  "documentTypes"
+                ],
+                "properties": {
+                  "documentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Array of existing document IDs to link"
+                  },
+                  "documentTypes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Array of document types corresponding to the document IDs"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Documents linked successfully"
+          },
+          "400": {
+            "description": "Invalid request data"
+          },
+          "404": {
+            "description": "Loan application not found"
           },
           "500": {
             "description": "Server error"
@@ -4615,6 +4688,9 @@
                     "updatedAt": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "serviceLength": {
+                      "type": "string"
                     }
                   }
                 }
@@ -4706,6 +4782,9 @@
                   },
                   "emergencyContactRelationship": {
                     "type": "string"
+                  },
+                  "serviceLength": {
+                    "type": "string"
                   }
                 }
               }
@@ -4781,6 +4860,84 @@
           },
           "401": {
             "description": "Unauthorized or current password incorrect"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/api/users/me/documents": {
+      "get": {
+        "summary": "Get all documents for the current user",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User documents retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "fileUrl": {
+                        "type": "string"
+                      },
+                      "applicationId": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "application": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "product": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - No token provided"
           },
           "500": {
             "description": "Server error"

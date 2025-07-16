@@ -57,6 +57,8 @@ const router = Router();
  *                   type: string
  *                 monthlyIncome:
  *                   type: string
+ *                 serviceLength:
+ *                   type: string
  *                 bankName:
  *                   type: string
  *                 accountNumber:
@@ -111,6 +113,7 @@ router.get(
 					employmentStatus: true,
 					employerName: true,
 					monthlyIncome: true,
+					serviceLength: true,
 					bankName: true,
 					accountNumber: true,
 					isOnboardingComplete: true,
@@ -179,6 +182,8 @@ router.get(
  *               employerName:
  *                 type: string
  *               monthlyIncome:
+ *                 type: string
+ *               serviceLength:
  *                 type: string
  *               bankName:
  *                 type: string
@@ -269,6 +274,7 @@ router.put(
 					employmentStatus: true,
 					employerName: true,
 					monthlyIncome: true,
+					serviceLength: true,
 					bankName: true,
 					accountNumber: true,
 					isOnboardingComplete: true,
@@ -408,6 +414,92 @@ router.put(
 		} catch (error) {
 			console.error("Error changing password:", error);
 			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/users/me/documents:
+ *   get:
+ *     summary: Get all documents for the current user
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User documents retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   type:
+ *                     type: string
+ *                   status:
+ *                     type: string
+ *                   fileUrl:
+ *                     type: string
+ *                   applicationId:
+ *                     type: string
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *                   updatedAt:
+ *                     type: string
+ *                     format: date-time
+ *                   application:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       product:
+ *                         type: object
+ *                         properties:
+ *                           name:
+ *                             type: string
+ *                           code:
+ *                             type: string
+ *       401:
+ *         description: Unauthorized - No token provided
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/me/documents",
+	authenticateToken,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user?.userId;
+			if (!userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			const documents = await prisma.userDocument.findMany({
+				where: { userId },
+				include: {
+					application: {
+						include: {
+							product: {
+								select: {
+									name: true,
+									code: true,
+								},
+							},
+						},
+					},
+				},
+				orderBy: { createdAt: "desc" },
+			});
+
+			return res.json(documents);
+		} catch (error) {
+			console.error("Error fetching user documents:", error);
+			return res.status(500).json({ message: "Failed to fetch documents" });
 		}
 	}
 );

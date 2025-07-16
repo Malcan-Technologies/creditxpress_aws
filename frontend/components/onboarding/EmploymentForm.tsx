@@ -4,7 +4,8 @@ import { EmploymentInfo } from "@/types/onboarding";
 import { 
 	BriefcaseIcon,
 	BuildingOfficeIcon,
-	CurrencyDollarIcon
+	CurrencyDollarIcon,
+	ClockIcon
 } from "@heroicons/react/24/outline";
 
 interface EmploymentFormProps {
@@ -32,6 +33,21 @@ const validationSchema = Yup.object({
 		then: (schema) => schema.optional(),
 		otherwise: (schema) => schema,
 	}),
+	serviceLength: Yup.mixed()
+		.optional()
+		.nullable()
+		.test("is-number", "Please enter a valid number", (value) => {
+			if (value === undefined || value === null || value === "") {
+				return true; // Allow empty values
+			}
+			return !isNaN(Number(value));
+		})
+		.test("is-positive", "Service length cannot be negative", (value) => {
+			if (value === undefined || value === null || value === "") {
+				return true; // Allow empty values
+			}
+			return Number(value) >= 0;
+		}),
 	monthlyIncome: Yup.mixed()
 		.optional()
 		.nullable()
@@ -61,6 +77,7 @@ export default function EmploymentForm({
 			employmentStatus: initialValues.employmentStatus || "",
 			employerName: initialValues.employerName || "",
 			monthlyIncome: initialValues.monthlyIncome || "",
+			serviceLength: initialValues.serviceLength || "",
 		},
 		validationSchema,
 		onSubmit: (values) => {
@@ -71,10 +88,31 @@ export default function EmploymentForm({
 				monthlyIncome: values.monthlyIncome
 					? String(values.monthlyIncome)
 					: "",
+				// Keep service length as a string, but ensure it's properly formatted
+				serviceLength: values.serviceLength
+					? String(values.serviceLength)
+					: "",
 			};
+			
+			// Clear employer name and service length for student/unemployed
+			if (values.employmentStatus === "Student" || values.employmentStatus === "Unemployed") {
+				formattedValues.employerName = "";
+				formattedValues.serviceLength = "";
+			}
+			
 			onSubmit(formattedValues);
 		},
 	});
+
+	const handleEmploymentStatusChange = (status: string) => {
+		formik.setFieldValue("employmentStatus", status);
+		
+		// Clear employer name and service length for student/unemployed
+		if (status === "Student" || status === "Unemployed") {
+			formik.setFieldValue("employerName", "");
+			formik.setFieldValue("serviceLength", "");
+		}
+	};
 
 	const showEmployerField =
 		formik.values.employmentStatus === "Employed" ||
@@ -122,7 +160,7 @@ export default function EmploymentForm({
 										name="employmentStatus"
 										value={status}
 										checked={formik.values.employmentStatus === status}
-										onChange={formik.handleChange}
+										onChange={() => handleEmploymentStatusChange(status)}
 										className="sr-only"
 									/>
 									<div className={`w-4 h-4 rounded-full border-2 mr-3 flex items-center justify-center transition-all duration-200 ${
@@ -181,6 +219,44 @@ export default function EmploymentForm({
 									{formik.errors.employerName}
 								</p>
 							)}
+						</div>
+					)}
+
+					{/* Service Length - Show only for Employed/Self-Employed */}
+					{showEmployerField && (
+						<div>
+							<label htmlFor="serviceLength" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
+								Years at Current Company <span className="text-gray-400 font-normal">(Optional)</span>
+							</label>
+							<div className="relative">
+								<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+									<ClockIcon className="h-5 w-5 text-gray-400" />
+								</div>
+								<input
+									id="serviceLength"
+									name="serviceLength"
+									type="number"
+									min="0"
+									step="0.1"
+									value={formik.values.serviceLength}
+									onChange={formik.handleChange}
+									onBlur={formik.handleBlur}
+									placeholder="0.5"
+									className={`block w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
+										formik.touched.serviceLength && formik.errors.serviceLength
+											? "border-red-300 focus:ring-red-500"
+											: "border-gray-300 hover:border-gray-400"
+									}`}
+								/>
+							</div>
+							{formik.touched.serviceLength && formik.errors.serviceLength && (
+								<p className="mt-2 text-sm text-red-600 font-medium">
+									{formik.errors.serviceLength}
+								</p>
+							)}
+							<p className="mt-2 text-sm text-gray-500">
+								Length of time you've been working at your current company
+							</p>
 						</div>
 					)}
 

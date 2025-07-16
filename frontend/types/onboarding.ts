@@ -5,6 +5,9 @@ export interface PersonalInfo {
 	phoneNumber: string; // Display only, cannot be changed
 	icNumber: string;
 	icType: 'IC' | 'PASSPORT' | null;
+	emergencyContactName: string;
+	emergencyContactPhone: string;
+	emergencyContactRelationship: string;
 }
 
 export interface AddressInfo {
@@ -19,6 +22,13 @@ export interface EmploymentInfo {
 	employmentStatus: string;
 	employerName: string;
 	monthlyIncome: string;
+	serviceLength: string;
+}
+
+export interface EmergencyContactInfo {
+	emergencyContactName: string;
+	emergencyContactPhone: string;
+	emergencyContactRelationship: string;
 }
 
 export interface BankInfo {
@@ -34,5 +44,6 @@ export interface OnboardingMetadata {
 export type OnboardingFormData = PersonalInfo &
 	AddressInfo &
 	EmploymentInfo &
+	EmergencyContactInfo &
 	BankInfo &
 	OnboardingMetadata;

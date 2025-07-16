@@ -17,6 +17,8 @@ import {
 	DialogTitle,
 	DialogContent,
 	DialogActions,
+	Checkbox,
+	FormControlLabel,
 } from "@mui/material";
 
 // Override Material-UI styles for light theme
@@ -187,6 +189,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import { useSearchParams, usePathname } from "next/navigation";
 import { ProductType } from "@/types/product";
 
@@ -224,6 +228,16 @@ interface Document {
 	fileUrl?: string;
 }
 
+interface PreviousDocument {
+	id: string;
+	type: string;
+	status: string;
+	fileUrl: string;
+	createdAt: string;
+	applicationId: string | null;
+	name?: string;
+}
+
 export default function DocumentUploadForm({
 	onSubmit,
 	onBack,
@@ -243,6 +257,12 @@ export default function DocumentUploadForm({
 	const [confirmDialogType, setConfirmDialogType] = useState<
 		"none" | "incomplete"
 	>("none");
+	const [previousDocuments, setPreviousDocuments] = useState<PreviousDocument[]>([]);
+	const [showPreviousDocsDialog, setShowPreviousDocsDialog] = useState(false);
+	const [selectedDocType, setSelectedDocType] = useState<string>("");
+	const [selectedPreviousDocs, setSelectedPreviousDocs] = useState<string[]>([]);
+	const [previewFile, setPreviewFile] = useState<PreviousDocument | null>(null);
+	const [showPreviewDialog, setShowPreviewDialog] = useState(false);
 
 	const getApplicationId = useCallback(() => {
 		// First try the prop
@@ -283,6 +303,23 @@ export default function DocumentUploadForm({
 		return null;
 	}, [searchParams, selectedProduct, productCode]);
 
+	const fetchPreviousDocuments = async () => {
+		try {
+			const response = await fetch("/api/users/me/documents", {
+				headers: {
+					Authorization: `Bearer ${localStorage.getItem("token")}`,
+				},
+			});
+
+			if (response.ok) {
+				const docs = await response.json();
+				setPreviousDocuments(docs || []);
+			}
+		} catch (error) {
+			console.error("Error fetching previous documents:", error);
+		}
+	};
+
 	useEffect(() => {
 		const fetchData = async () => {
 			try {
@@ -307,11 +344,11 @@ export default function DocumentUploadForm({
 					);
 				}
 
-				// Fetch product details and existing documents in parallel
+				// Fetch product details, existing documents, and previous documents in parallel
 				const productUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/products?code=${productCode}`;
 				console.log("Fetching product from URL:", productUrl);
 
-				const [productResponse, documentsResponse] = await Promise.all([
+				const [productResponse, documentsResponse, previousDocsResponse] = await Promise.all([
 					fetch(productUrl, {
 						headers: {
 							Authorization: `Bearer ${localStorage.getItem(
@@ -329,6 +366,11 @@ export default function DocumentUploadForm({
 							},
 						}
 					),
+					fetch("/api/users/me/documents", {
+						headers: {
+							Authorization: `Bearer ${localStorage.getItem("token")}`,
+						},
+					}),
 				]);
 
 				if (!productResponse.ok) {
@@ -358,6 +400,12 @@ export default function DocumentUploadForm({
 
 				const existingDocuments = await documentsResponse.json();
 				console.log("Documents API response:", existingDocuments);
+
+				// Handle previous documents
+				if (previousDocsResponse.ok) {
+					const previousDocs = await previousDocsResponse.json();
+					setPreviousDocuments(previousDocs || []);
+				}
 
 				// Handle both array and single object responses
 				const productData = Array.isArray(products)
@@ -709,6 +757,114 @@ export default function DocumentUploadForm({
 		}
 	};
 
+	const handleLinkPreviousDocuments = async () => {
+		if (selectedPreviousDocs.length === 0) {
+			return;
+		}
+
+		try {
+			const currentApplicationId = getApplicationId();
+			if (!currentApplicationId) {
+				throw new Error("Application ID not found");
+			}
+
+			// Set status to uploading for the current document type
+			setDocuments((prev) =>
+				prev.map((doc) =>
+					doc.name === selectedDocType
+						? { ...doc, status: "uploading" }
+						: doc
+				)
+			);
+
+			const response = await fetch(
+				`/api/loan-applications/${currentApplicationId}/link-documents`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${localStorage.getItem("token")}`,
+					},
+					body: JSON.stringify({
+						documentIds: selectedPreviousDocs,
+						documentTypes: Array(selectedPreviousDocs.length).fill(selectedDocType),
+					}),
+				}
+			);
+
+			if (!response.ok) {
+				throw new Error("Failed to link documents");
+			}
+
+			const linkedDocs = await response.json();
+
+			// Update the document state with linked files
+			setDocuments((prev) =>
+				prev.map((doc) =>
+					doc.name === selectedDocType
+						? {
+								...doc,
+								status: "success",
+								files: linkedDocs.map((linkedDoc: any) => ({
+									name: linkedDoc.fileUrl?.split("/").pop() || "Linked document",
+									url: linkedDoc.fileUrl,
+									id: linkedDoc.id,
+								})),
+						  }
+						: doc
+				)
+			);
+
+			// Close dialog and reset selections
+			setShowPreviousDocsDialog(false);
+			setSelectedPreviousDocs([]);
+			setSelectedDocType("");
+		} catch (error) {
+			console.error("Error linking documents:", error);
+			// Reset document status on error
+			setDocuments((prev) =>
+				prev.map((doc) =>
+					doc.name === selectedDocType
+						? { ...doc, status: "error", error: "Failed to link documents" }
+						: doc
+				)
+			);
+		}
+	};
+
+	const handleSelectPreviousDoc = (docId: string) => {
+		setSelectedPreviousDocs((prev) =>
+			prev.includes(docId)
+				? prev.filter((id) => id !== docId)
+				: [...prev, docId]
+		);
+	};
+
+	const handlePreviewDocument = (doc: PreviousDocument) => {
+		setPreviewFile(doc);
+		setShowPreviewDialog(true);
+	};
+
+	const getFileExtension = (url: string) => {
+		return url.split('.').pop()?.toLowerCase() || '';
+	};
+
+	const isImageFile = (url: string) => {
+		const ext = getFileExtension(url);
+		return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext);
+	};
+
+	const isPDFFile = (url: string) => {
+		const ext = getFileExtension(url);
+		return ext === 'pdf';
+	};
+
+	const openPreviousDocsDialog = (docType: string) => {
+		setSelectedDocType(docType);
+		setSelectedPreviousDocs([]);
+		setShowPreviousDocsDialog(true);
+	};
+
 	const handleBack = () => {
 		const currentStep = parseInt(searchParams.get("step") || "1", 10);
 		const newStep = Math.max(currentStep - 1, 1);
@@ -872,119 +1028,147 @@ export default function DocumentUploadForm({
 							)}
 						</Box>
 						<Box
-							sx={{ width: 120, flexShrink: 0 }}
-							className="ml-4"
+							sx={{ width: 180, flexShrink: 0 }}
+							className="ml-4 space-y-2"
 						>
-							{/* Show upload button only if no files and not uploading */}
+							{/* Show upload and link buttons only if no files and not uploading */}
 							{!doc.files?.length &&
 								doc.status !== "uploading" && (
-									<Button
-										component="label"
-										variant="outlined"
-										fullWidth
-										size="small"
-										className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
-									>
-										Upload
-										<input
-											type="file"
-											hidden
-											multiple
-											accept=".jpg,.jpeg,.png,.pdf"
-											onChange={(e) => {
-												const files = Array.from(
-													e.target.files || []
-												);
-												if (files.length > 0) {
-													const invalidFiles =
-														files.filter(
-															(file) =>
-																!file.type.match(
-																	/^(image\/(jpeg|png)|application\/pdf)$/
+									<>
+										<Button
+											component="label"
+											variant="outlined"
+											fullWidth
+											size="small"
+											className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
+										>
+											Upload New
+											<input
+												type="file"
+												hidden
+												multiple
+												accept=".jpg,.jpeg,.png,.pdf"
+												onChange={(e) => {
+													const files = Array.from(
+														e.target.files || []
+													);
+													if (files.length > 0) {
+														const invalidFiles =
+															files.filter(
+																(file) =>
+																	!file.type.match(
+																		/^(image\/(jpeg|png)|application\/pdf)$/
+																	)
+															);
+														if (
+															invalidFiles.length > 0
+														) {
+															setDocuments((prev) =>
+																prev.map((d) =>
+																	d.id === doc.id
+																		? {
+																				...d,
+																				status: "error",
+																				error: "Invalid file type. Only JPG, PNG, and PDF files are allowed.",
+																		  }
+																		: d
 																)
-														);
-													if (
-														invalidFiles.length > 0
-													) {
-														setDocuments((prev) =>
-															prev.map((d) =>
-																d.id === doc.id
-																	? {
-																			...d,
-																			status: "error",
-																			error: "Invalid file type. Only JPG, PNG, and PDF files are allowed.",
-																	  }
-																	: d
-															)
-														);
-														return;
+															);
+															return;
+														}
+														files.forEach((file) => {
+															handleFileChange(
+																doc.id,
+																file
+															);
+														});
 													}
-													files.forEach((file) => {
-														handleFileChange(
-															doc.id,
-															file
-														);
-													});
-												}
-											}}
-										/>
-									</Button>
+												}}
+											/>
+										</Button>
+										{previousDocuments.length > 0 && (
+											<Button
+												variant="outlined"
+												fullWidth
+												size="small"
+												startIcon={<AttachFileIcon />}
+												className="text-green-600 border-green-600 hover:bg-green-50"
+												onClick={() => openPreviousDocsDialog(doc.name)}
+											>
+												Use Previous
+											</Button>
+										)}
+									</>
 								)}
-							{/* Add More button when files exist */}
+							{/* Add More and Use Previous buttons when files exist */}
 							{doc.files &&
 								doc.files.length > 0 &&
 								doc.status !== "uploading" && (
-									<Button
-										component="label"
-										variant="outlined"
-										fullWidth
-										size="small"
-										className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
-									>
-										Add More
-										<input
-											type="file"
-											hidden
-											multiple
-											accept=".jpg,.jpeg,.png,.pdf"
-											onChange={(e) => {
-												const files = Array.from(
-													e.target.files || []
-												);
-												if (files.length > 0) {
-													const invalidFiles =
-														files.filter(
-															(file) =>
-																!file.type.match(
-																	/^(image\/(jpeg|png)|application\/pdf)$/
+									<>
+										<Button
+											component="label"
+											variant="outlined"
+											fullWidth
+											size="small"
+											className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
+										>
+											Add More
+											<input
+												type="file"
+												hidden
+												multiple
+												accept=".jpg,.jpeg,.png,.pdf"
+												onChange={(e) => {
+													const files = Array.from(
+														e.target.files || []
+													);
+													if (files.length > 0) {
+														const invalidFiles =
+															files.filter(
+																(file) =>
+																	!file.type.match(
+																		/^(image\/(jpeg|png)|application\/pdf)$/
+																	)
+															);
+														if (
+															invalidFiles.length > 0
+														) {
+															setDocuments((prev) =>
+																prev.map((d) =>
+																	d.id === doc.id
+																		? {
+																				...d,
+																				status: "error",
+																				error: "Invalid file type. Only JPG, PNG, and PDF files are allowed.",
+																		  }
+																		: d
 																)
-														);
-													if (
-														invalidFiles.length > 0
-													) {
-														setDocuments((prev) =>
-															prev.map((d) =>
-																d.id === doc.id
-																	? {
-																			...d,
-																			status: "error",
-																			error: "Invalid file type. Only JPG, PNG, and PDF files are allowed.",
-																	  }
-																	: d
-															)
-														);
-														return;
+															);
+															return;
+														}
+														files.forEach((file) => {
+															handleFileChange(
+																doc.id,
+																file
+															);
+														});
 													}
-													files.forEach((file) => {
-														handleFileChange(
-															doc.id,
-															file
-														);
-													});
-												}
-											}}
-										/>
-									</Button>
+												}}
+											/>
+										</Button>
+										{previousDocuments.length > 0 && (
+											<Button
+												variant="outlined"
+												fullWidth
+												size="small"
+												startIcon={<AttachFileIcon />}
+												className="text-green-600 border-green-600 hover:bg-green-50"
+												onClick={() => openPreviousDocsDialog(doc.name)}
+											>
+												Use Previous
+											</Button>
+										)}
+									</>
 								)}
 						</Box>
 					</ListItem>
@@ -1112,6 +1296,250 @@ export default function DocumentUploadForm({
 							? "Continue Without Documents"
 							: "Continue With Incomplete Documents"}
 					</Button>
+				</DialogActions>
+			</Dialog>
+
+			{/* Previous Documents Selection Dialog */}
+			<Dialog
+				open={showPreviousDocsDialog}
+				onClose={() => setShowPreviousDocsDialog(false)}
+				maxWidth="md"
+				fullWidth
+				sx={{
+					"& .MuiDialog-paper": {
+						backgroundColor: "white",
+						border: "1px solid #E5E7EB",
+						borderRadius: "12px",
+						boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+					},
+					"& .MuiBackdrop-root": {
+						backgroundColor: "rgba(0, 0, 0, 0.5)",
+					},
+					"& .MuiDialogTitle-root": {
+						color: "#374151",
+						backgroundColor: "white",
+						fontFamily: "Manrope, sans-serif",
+						fontWeight: "600",
+					},
+					"& .MuiDialogContent-root": {
+						backgroundColor: "white",
+						color: "#374151",
+						fontFamily: "Inter, sans-serif",
+					},
+					"& .MuiDialogActions-root": {
+						backgroundColor: "white",
+						padding: "24px",
+					},
+					"& .MuiTypography-root": {
+						color: "#374151",
+					},
+					"& .MuiButton-outlined": {
+						color: "#374151",
+						backgroundColor: "white",
+						borderColor: "#D1D5DB",
+						"&:hover": {
+							backgroundColor: "#F9FAFB",
+							borderColor: "#9CA3AF",
+						},
+					},
+					"& .MuiButton-contained": {
+						color: "white",
+						backgroundColor: "#7C3AED",
+						"&:hover": {
+							backgroundColor: "#6D28D9",
+							boxShadow: "none",
+						},
+					},
+				}}
+			>
+				<DialogTitle>
+					Select Previous Documents for {selectedDocType}
+				</DialogTitle>
+				<DialogContent>
+					<Typography className="mb-4">
+						Select documents from your previous uploads to use for this document type.
+					</Typography>
+					{previousDocuments.length === 0 ? (
+						<Typography>No previous documents found.</Typography>
+					) : (
+						<List>
+							{previousDocuments
+								.filter(doc => !doc.applicationId || doc.applicationId !== getApplicationId())
+								.map((doc) => (
+									<ListItem
+										key={doc.id}
+										className="bg-gray-50 rounded-lg mb-2"
+									>
+										<FormControlLabel
+											control={
+												<Checkbox
+													checked={selectedPreviousDocs.includes(doc.id)}
+													onChange={() => handleSelectPreviousDoc(doc.id)}
+													color="primary"
+												/>
+											}
+											label={
+												<Box className="flex-1">
+													<Typography variant="subtitle2">
+														{doc.type}
+													</Typography>
+													<Typography variant="body2" className="text-gray-600">
+														{doc.fileUrl?.split("/").pop() || "Document"}
+													</Typography>
+													<Typography variant="caption" className="text-gray-500">
+														Uploaded: {new Date(doc.createdAt).toLocaleDateString()}
+													</Typography>
+												</Box>
+											}
+											className="flex-1"
+										/>
+										<IconButton
+											onClick={() => handlePreviewDocument(doc)}
+											className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+											size="small"
+										>
+											<VisibilityIcon fontSize="small" />
+										</IconButton>
+									</ListItem>
+								))}
+						</List>
+					)}
+				</DialogContent>
+				<DialogActions>
+					<Button
+						onClick={() => setShowPreviousDocsDialog(false)}
+						variant="outlined"
+					>
+						Cancel
+					</Button>
+					<Button
+						onClick={handleLinkPreviousDocuments}
+						variant="contained"
+						disabled={selectedPreviousDocs.length === 0}
+					>
+						Link Selected Documents ({selectedPreviousDocs.length})
+					</Button>
+				</DialogActions>
+			</Dialog>
+
+			{/* Document Preview Dialog */}
+			<Dialog
+				open={showPreviewDialog}
+				onClose={() => setShowPreviewDialog(false)}
+				maxWidth="lg"
+				fullWidth
+				sx={{
+					"& .MuiDialog-paper": {
+						backgroundColor: "white",
+						border: "1px solid #E5E7EB",
+						borderRadius: "12px",
+						boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+						maxHeight: "90vh",
+					},
+					"& .MuiBackdrop-root": {
+						backgroundColor: "rgba(0, 0, 0, 0.8)",
+					},
+					"& .MuiDialogTitle-root": {
+						color: "#374151",
+						backgroundColor: "white",
+						fontFamily: "Manrope, sans-serif",
+						fontWeight: "600",
+						borderBottom: "1px solid #E5E7EB",
+					},
+					"& .MuiDialogContent-root": {
+						backgroundColor: "white",
+						color: "#374151",
+						fontFamily: "Inter, sans-serif",
+						padding: "0",
+					},
+					"& .MuiDialogActions-root": {
+						backgroundColor: "white",
+						padding: "16px 24px",
+						borderTop: "1px solid #E5E7EB",
+					},
+				}}
+			>
+				<DialogTitle>
+					Document Preview - {previewFile?.type}
+				</DialogTitle>
+				<DialogContent>
+					{previewFile && (
+						<Box className="min-h-96 flex items-center justify-center p-4">
+							{isImageFile(previewFile.fileUrl) ? (
+								<img
+									src={`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`}
+									alt="Document preview"
+									style={{
+										maxWidth: "100%",
+										maxHeight: "70vh",
+										objectFit: "contain",
+									}}
+									onError={(e) => {
+										console.error("Failed to load image preview");
+										e.currentTarget.style.display = "none";
+										e.currentTarget.parentElement!.innerHTML = `
+											<div class="text-center text-gray-500 p-8">
+												<p>Preview not available</p>
+												<p class="text-sm">Unable to load image preview</p>
+											</div>
+										`;
+									}}
+								/>
+							) : isPDFFile(previewFile.fileUrl) ? (
+								<iframe
+									src={`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`}
+									width="100%"
+									height="600px"
+									style={{ border: "none" }}
+									title="PDF preview"
+									onError={() => {
+										console.error("Failed to load PDF preview");
+									}}
+								/>
+							) : (
+								<Box className="text-center text-gray-500 p-8">
+									<Typography variant="h6" className="mb-2">
+										Preview not available
+									</Typography>
+									<Typography variant="body2" className="mb-4">
+										This file type cannot be previewed directly.
+									</Typography>
+									<Button
+										variant="outlined"
+										onClick={() => {
+											window.open(
+												`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`,
+												"_blank"
+											);
+										}}
+									>
+										Download File
+									</Button>
+								</Box>
+							)}
+						</Box>
+					)}
+				</DialogContent>
+				<DialogActions>
+					<Button
+						onClick={() => setShowPreviewDialog(false)}
+						variant="outlined"
+					>
+						Close Preview
+					</Button>
+					{previewFile && (
+						<Button
+							onClick={() => {
+								window.open(
+									`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`,
+									"_blank"
+								);
+							}}
+							variant="contained"
+						>
+							Open in New Tab
+						</Button>
+					)}
 				</DialogActions>
 			</Dialog>
 		</Box>

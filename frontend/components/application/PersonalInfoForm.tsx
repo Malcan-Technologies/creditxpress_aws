@@ -8,6 +8,7 @@ import {
 	BriefcaseIcon,
 	BuildingOfficeIcon,
 	CurrencyDollarIcon,
+	ClockIcon,
 	HomeIcon,
 	MapPinIcon
 } from "@heroicons/react/24/outline";
@@ -15,13 +16,14 @@ import {
 interface PersonalInfoFormProps {
 	onSubmit: (values: any) => void;
 	onBack: () => void;
-	userData: {
+			userData: {
 		fullName: string;
 		email: string;
 		phoneNumber: string;
 		employmentStatus: string;
 		employerName?: string;
 		monthlyIncome: string;
+		serviceLength?: string;
 		address1: string;
 		address2?: string;
 		city: string;
@@ -57,6 +59,7 @@ export default function PersonalInfoForm({
 					employmentStatus: data.employmentStatus || "",
 					employerName: data.employerName || "",
 					monthlyIncome: data.monthlyIncome || "",
+					serviceLength: data.serviceLength || "",
 					address1: data.address1 || "",
 					address2: data.address2 || "",
 					city: data.city || "",
@@ -206,7 +209,7 @@ export default function PersonalInfoForm({
 							</h3>
 						</div>
 
-						<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+						<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
 							<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
 								<div className="flex items-center space-x-3 mb-2">
 									<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
@@ -233,13 +236,25 @@ export default function PersonalInfoForm({
 
 							<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
 								<div className="flex items-center space-x-3 mb-2">
+									<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+									<label className="text-sm lg:text-base font-medium text-gray-700 font-body">
+										Service Length
+									</label>
+								</div>
+								<p className="text-base lg:text-lg text-gray-900 font-body ml-8">
+									{userInfo.serviceLength ? `${userInfo.serviceLength} years` : "Not provided"}
+								</p>
+							</div>
+
+							<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
+								<div className="flex items-center space-x-3 mb-2">
 									<CurrencyDollarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
 									<label className="text-sm lg:text-base font-medium text-gray-700 font-body">
 										Monthly Income
 									</label>
 								</div>
 								<p className="text-base lg:text-lg text-gray-900 font-body ml-8">
-									{userInfo.monthlyIncome ? `RM ${parseFloat(userInfo.monthlyIncome).toLocaleString()}` : "Not provided"}
+									{userInfo.monthlyIncome ? `RM ${Number(userInfo.monthlyIncome).toLocaleString()}` : "Not provided"}
 								</p>
 							</div>
 						</div>

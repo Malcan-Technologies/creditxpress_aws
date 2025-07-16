@@ -18,6 +18,46 @@ import {
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
+// FAQ Item Component
+function FAQItem({ faq, index }: { faq: { question: string; answer: string }; index: number }) {
+	const [isOpen, setIsOpen] = useState(false);
+	
+	return (
+		<div key={index} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all">
+			<button
+				onClick={() => setIsOpen(!isOpen)}
+				className="w-full text-left p-6 flex items-center justify-between"
+			>
+				<h4 className="text-lg lg:text-xl font-heading font-semibold text-emerald-600 pr-4">
+					{faq.question}
+				</h4>
+				<svg
+					className={`w-5 h-5 text-emerald-600 transition-transform duration-200 flex-shrink-0 ${
+						isOpen ? 'rotate-180' : ''
+					}`}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M19 9l-7 7-7-7"
+					/>
+				</svg>
+			</button>
+			{isOpen && (
+				<div className="px-6 pb-6">
+					<p className="text-gray-500 font-body leading-relaxed">
+						{faq.answer}
+					</p>
+				</div>
+			)}
+		</div>
+	);
+}
+
 export default function EmployeeMicroLoan() {
 	useDocumentTitle("PayAdvance™");
 
@@ -1383,117 +1423,51 @@ export default function EmployeeMicroLoan() {
 					</p>
 				</div>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 lg:gap-8 w-full">
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							How does PayAdvance™ work?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							PayAdvance™ is a salary advance program that allows
-							you to access a portion of your salary early. The
-							amount is automatically repaid through salary
-							deductions over 6 or 12 months.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							How much can I borrow?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							You can borrow between RM 1,000 and up to one
-							month&apos;s gross salary, subject to eligibility
-							and approval.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							What happens if I leave my job?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							The outstanding loan amount will be deducted from
-							your notice period pay. If this is insufficient,
-							you&apos;ll need to arrange an alternative repayment
-							plan with us.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							Are there any hidden fees?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							No hidden fees. You only pay the processing fee
-							(7.5%) and monthly interest (1.5%).
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							Why do you charge a processing fee?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							This is to cover the cost of loan processing
-							including, but not limited to credit checks, stamp
-							duty, legal fees, and other administrative costs.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							How long does approval take?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							Most applications are approved within 24 hours, with
-							funds disbursed within 1-2 business days after
-							approval.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							Can I repay early?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							Yes, you can make early repayments without any
-							penalty to increase your credit limit.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							Can I borrow more funds?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							Yes, you can borrow more funds as your repayment
-							balance decreases, up to 1 month gross salary in
-							total.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							Do I need to submit documents every time I request a
-							pay advance?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							No, the employer only needs to submit documents
-							once. After that, you will be eligible for instant
-							loan approvals and quick disbursements of funds.
-						</p>
-					</div>
-
-					<div className="bg-emerald-600/5 rounded-2xl p-4 md:p-6 lg:p-8 border border-emerald-600/10 w-full">
-						<h4 className="text-base md:text-lg lg:text-xl xl:text-2xl font-heading font-semibold mb-2 md:mb-3 lg:mb-4 text-emerald-600 leading-tight">
-							Are you a regulated money lender?
-						</h4>
-						<p className="text-sm md:text-base lg:text-lg text-gray-500 font-body leading-relaxed">
-							Yes, the loan is powered by OPG Capital Holdings, a
-							KPKT-regulated, licensed money lender
-							(WL3337/07/01-9/020223).
-						</p>
-					</div>
+				<div className="max-w-4xl mx-auto space-y-4">
+					{[
+						{
+							question: "How does PayAdvance™ work?",
+							answer: "PayAdvance™ is a salary advance program that allows you to access a portion of your salary early. The amount is automatically repaid through salary deductions over 6 or 12 months."
+						},
+						{
+							question: "How much can I borrow?",
+							answer: "You can borrow between RM 1,000 and up to one month's gross salary, subject to eligibility and approval."
+						},
+						{
+							question: "What happens if I leave my job?",
+							answer: "The outstanding loan amount will be deducted from your notice period pay. If this is insufficient, you'll need to arrange an alternative repayment plan with us."
+						},
+						{
+							question: "Are there any hidden fees?",
+							answer: "No hidden fees. You only pay the processing fee (7.5%) and monthly interest (1.5%)."
+						},
+						{
+							question: "Why do you charge a processing fee?",
+							answer: "This is to cover the cost of loan processing including, but not limited to credit checks, stamp duty, legal fees, and other administrative costs."
+						},
+						{
+							question: "How long does approval take?",
+							answer: "Most applications are approved within 24 hours, with funds disbursed within 1-2 business days after approval."
+						},
+						{
+							question: "Can I repay early?",
+							answer: "Yes, you can make early repayments without any penalty to increase your credit limit."
+						},
+						{
+							question: "Can I borrow more funds?",
+							answer: "Yes, you can borrow more funds as your repayment balance decreases, up to 1 month gross salary in total."
+						},
+						{
+							question: "Do I need to submit documents every time I request a pay advance?",
+							answer: "No, the employer only needs to submit documents once. After that, you will be eligible for instant loan approvals and quick disbursements of funds."
+						},
+						{
+							question: "Are you a regulated money lender?",
+							answer: "Yes, the loan is powered by OPG Capital Holdings, a KPKT-regulated, licensed money lender (WL3337/07/01-9/020223)."
+						}
+					].map((faq, index) => (
+						<FAQItem key={index} faq={faq} index={index} />
+					))}
 				</div>
 			</div>
 
