@@ -4897,6 +4897,92 @@ router.post(
 				return { updatedTransaction, scheduleUpdate: null };
 			});
 
+			// Send WhatsApp notification for payment approval
+			if (transaction.user.phoneNumber && result.scheduleUpdate) {
+				try {
+					console.log("Sending WhatsApp payment approval notification");
+					
+					// Get the actual payment amount from the transaction result
+					const approvedAmount = (transaction.metadata as any)?.originalAmount || Math.abs(transaction.amount);
+					
+					// Get loan details with product information
+					const loanWithProduct = await prisma.loan.findUnique({
+						where: { id: transaction.loanId || '' },
+						include: {
+							application: {
+								include: {
+									product: true
+								}
+							}
+						}
+					});
+
+					// Get completed repayments count
+					const completedRepayments = await prisma.loanRepayment.count({
+						where: {
+							loanId: transaction.loanId || '',
+							status: 'COMPLETED'
+						}
+					});
+
+					if (loanWithProduct) {
+						// Calculate payment progress
+						const totalScheduledPayments = loanWithProduct.term; // Use term field instead of repaymentTermMonths
+						const completedPayments = completedRepayments;
+						
+						// Calculate next payment amount based on outstanding balance and late fees
+						let nextPaymentAmount = loanWithProduct.monthlyPayment; // Default scheduled payment
+						
+						// If there are partial payments or late fees, calculate the actual remaining balance
+						if (result.scheduleUpdate.nextPaymentDue) {
+							// Get the next pending repayment to see what's actually due
+							const nextRepayment = await prisma.loanRepayment.findFirst({
+								where: {
+									loanId: transaction.loanId || '',
+									status: { in: ['PENDING', 'PARTIAL'] }
+								},
+								orderBy: { dueDate: 'asc' }
+							});
+							
+							if (nextRepayment) {
+								// Calculate remaining amount for this repayment
+								const scheduledAmount = nextRepayment.scheduledAmount || nextRepayment.amount;
+								const paidAmount = nextRepayment.actualAmount || 0;
+								const lateFeeAmount = nextRepayment.lateFeeAmount || 0;
+								
+								// Next payment = (scheduled amount + late fees) - amount already paid
+								const remainingAmount = (scheduledAmount + lateFeeAmount) - paidAmount;
+								nextPaymentAmount = Math.max(remainingAmount, 0);
+							}
+						}
+						
+						// Format next due date
+						const nextDueDate = result.scheduleUpdate.nextPaymentDue 
+							? formatDateForWhatsApp(new Date(result.scheduleUpdate.nextPaymentDue))
+							: 'To be determined';
+
+						const whatsappResult = await whatsappService.sendPaymentApprovedNotification({
+							to: transaction.user.phoneNumber,
+							fullName: transaction.user.fullName || 'Valued Customer',
+							paymentAmount: approvedAmount.toFixed(2),
+							loanName: loanWithProduct.application.product.name,
+							nextPaymentAmount: nextPaymentAmount.toFixed(2),
+							nextDueDate: nextDueDate,
+							completedPayments: completedPayments.toString(),
+							totalPayments: totalScheduledPayments.toString()
+						});
+						
+						if (whatsappResult.success) {
+							console.log(`WhatsApp payment approval notification sent successfully to ${transaction.user.phoneNumber}. Message ID: ${whatsappResult.messageId}`);
+						} else {
+							console.error(`Failed to send WhatsApp payment approval notification: ${whatsappResult.error}`);
+						}
+					}
+				} catch (whatsappError) {
+					console.error("Error sending WhatsApp payment approval notification:", whatsappError);
+				}
+			}
+
 			return res.json({
 				success: true,
 				message: "Repayment approved successfully",

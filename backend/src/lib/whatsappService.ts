@@ -253,6 +253,33 @@ class WhatsAppService {
 			parameters: [fullName, productName]
 		});
 	}
+
+	// Specific method for payment approved notifications
+	async sendPaymentApprovedNotification({
+		to,
+		fullName,
+		paymentAmount,
+		loanName,
+		nextPaymentAmount,
+		nextDueDate,
+		completedPayments,
+		totalPayments
+	}: {
+		to: string;
+		fullName: string;
+		paymentAmount: string;
+		loanName: string;
+		nextPaymentAmount: string;
+		nextDueDate: string;
+		completedPayments: string;
+		totalPayments: string;
+	}): Promise<WhatsAppResponse> {
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'payment_approved',
+			parameters: [fullName, paymentAmount, loanName, nextPaymentAmount, nextDueDate, completedPayments, totalPayments]
+		});
+	}
 }
 
 export default new WhatsAppService(); 
