@@ -646,7 +646,7 @@ function LoansPageContent() {
 		try {
 			const amount = parseFloat(repaymentAmount);
 
-			// Call the API to create the fresh funds payment transaction
+			// Call the API to create the bank transfer payment transaction
 			const response = await fetchWithTokenRefresh(
 				"/api/wallet/repay-loan",
 				{
@@ -658,7 +658,7 @@ function LoansPageContent() {
 						loanId: selectedLoan.id,
 						amount,
 						paymentMethod: "FRESH_FUNDS",
-						description: `Fresh funds loan repayment - ${formatCurrency(
+						description: `Loan repayment - ${formatCurrency(
 							amount
 						)}`,
 					}),
@@ -666,7 +666,7 @@ function LoansPageContent() {
 			);
 
 			if (response) {
-				// Fresh funds payment submitted successfully
+				// Bank transfer payment submitted successfully
 				setShowBankTransferModal(false);
 				setRepaymentAmount("");
 				setSelectedLoan(null);
@@ -679,7 +679,7 @@ function LoansPageContent() {
 				);
 			}
 		} catch (error) {
-			console.error("Error submitting fresh funds payment:", error);
+			console.error("Error submitting bank transfer payment:", error);
 			alert("Failed to submit payment. Please try again.");
 		}
 	};
@@ -1202,7 +1202,8 @@ function LoansPageContent() {
 
 	return (
 		<DashboardLayout userName={userName} title="Loans & Applications">
-			<div className="w-full space-y-6">
+			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+				<div className="space-y-6">
 					{/* Quick Actions Bar - Top */}
 					{/* <div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
 						<div className="p-6 lg:p-8">
@@ -2560,14 +2561,9 @@ function LoansPageContent() {
 																											)}
 																										</p>
 																										<p className="text-xs text-gray-500">
-																											{formatDate(
+																											{formatDateTime(
 																												transaction.createdAt
 																											)}
-																										</p>
-																										<p className="text-xs text-gray-500">
-																											{
-																												transaction.description
-																											}
 																										</p>
 																									</div>
 																									{getStatusBadge(
@@ -2914,10 +2910,7 @@ function LoansPageContent() {
 																										{formatCurrency(transaction.amount)}
 																									</p>
 																									<p className="text-xs text-gray-500">
-																										{formatDate(transaction.createdAt)}
-																									</p>
-																									<p className="text-xs text-gray-500">
-																										{transaction.description}
+																										{formatDateTime(transaction.createdAt)}
 																									</p>
 																								</div>
 																								{getStatusBadge(transaction.status)}
@@ -3735,6 +3728,7 @@ function LoansPageContent() {
 						</div>
 					</div>
 				</div>
+			</div>
 
 			{/* Loan Repayment Modal */}
 			{showLoanRepayModal && (

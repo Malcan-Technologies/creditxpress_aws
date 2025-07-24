@@ -60,14 +60,14 @@ export default function AddressForm({
 			<div className="p-4 sm:p-6 lg:p-8">
 				{/* Header */}
 				<div className="flex items-center mb-6 lg:mb-8">
-					<div className="bg-blue-600/10 rounded-xl p-3 mr-4">
-						<HomeIcon className="w-6 h-6 lg:w-7 lg:h-7 text-blue-600" />
+					<div className="bg-purple-primary/10 rounded-xl p-3 mr-4">
+						<HomeIcon className="w-6 h-6 lg:w-7 lg:h-7 text-purple-primary" />
 					</div>
 					<div>
 						<h2 className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-1">
 							Residential Address
 						</h2>
-						<p className="text-sm lg:text-base text-blue-600 font-semibold">
+						<p className="text-sm lg:text-base text-purple-primary font-semibold">
 							Where do you currently live?
 						</p>
 					</div>

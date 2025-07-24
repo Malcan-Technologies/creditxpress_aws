@@ -128,14 +128,14 @@ export default function TransactionsPage() {
 			case "DEPOSIT":
 			case "LOAN_DISBURSEMENT":
 				return (
-					<ArrowDownIcon className="h-5 w-5 text-purple-primary" />
+					<ArrowDownIcon className="h-5 w-5 lg:h-6 lg:w-6 text-green-600" />
 				);
 			case "WITHDRAWAL":
-				return <ArrowUpIcon className="h-5 w-5 text-blue-tertiary" />;
+				return <ArrowUpIcon className="h-5 w-5 lg:h-6 lg:w-6 text-gray-600" />;
 			case "LOAN_REPAYMENT":
 				return (
 					<svg
-						className="h-5 w-5 text-green-600"
+						className="h-5 w-5 lg:h-6 lg:w-6 text-purple-primary"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -149,7 +149,7 @@ export default function TransactionsPage() {
 					</svg>
 				);
 			default:
-				return <WalletIcon className="h-5 w-5 text-gray-500" />;
+				return <WalletIcon className="h-5 w-5 lg:h-6 lg:w-6 text-gray-500" />;
 		}
 	};
 
@@ -157,21 +157,21 @@ export default function TransactionsPage() {
 		switch (status) {
 			case "APPROVED":
 				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200 font-body">
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200 font-body">
 						<CheckCircleIcon className="h-3 w-3 mr-1" />
 						Approved
 					</span>
 				);
 			case "PENDING":
 				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200 font-body">
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200 font-body">
 						<ClockIcon className="h-3 w-3 mr-1" />
 						Pending
 					</span>
 				);
 			case "REJECTED":
 				return (
-					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200 font-body">
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200 font-body">
 						<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
 						Rejected
 					</span>
@@ -217,24 +217,26 @@ export default function TransactionsPage() {
 		<DashboardLayout userName={userName} title="Transactions">
 			<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
 				<div className="space-y-6">
-					<div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-						{/* Card Header */}
-						<div className="p-6 pb-0">
-							<div className="flex items-center space-x-2 mb-6">
-								<div className="p-2 bg-purple-primary/10 rounded-lg border border-purple-primary/20">
-									<WalletIcon className="h-5 w-5 text-purple-primary" />
+					{/* Main Transactions Card */}
+					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
+						{/* Header - Following dashboard card pattern */}
+						<div className="p-4 sm:p-6 lg:p-8">
+							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
+								<div className="flex items-center">
+									<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-primary/10 rounded-xl flex items-center justify-center mr-3 flex-shrink-0">
+										<WalletIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-primary" />
+									</div>
+									<div className="min-w-0">
+										<h3 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
+											Transaction History
+										</h3>
+										<p className="text-sm lg:text-base text-purple-primary font-semibold">
+											{transactions.length} total transaction{transactions.length !== 1 ? "s" : ""}
+										</p>
+									</div>
 								</div>
-								<h3 className="text-lg font-heading text-purple-primary font-semibold">
-									All Transactions
-								</h3>
-								<span className="text-sm text-gray-500 font-body ml-auto">
-									{transactions.length} Total Transaction
-									{transactions.length !== 1 ? "s" : ""}
-								</span>
 							</div>
-						</div>
 
-						<div className="p-6 pt-0">
 							{/* Transaction Type Filter */}
 							{transactions.length > 0 && (
 								<div className="mb-6">
@@ -242,7 +244,7 @@ export default function TransactionsPage() {
 										{[
 											"ALL",
 											"DEPOSIT",
-											"WITHDRAWAL",
+											"WITHDRAWAL", 
 											"LOAN_DISBURSEMENT",
 											"LOAN_REPAYMENT",
 										].map((type) => (
@@ -251,10 +253,10 @@ export default function TransactionsPage() {
 												onClick={() =>
 													setTransactionFilter(type)
 												}
-												className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors font-body ${
+												className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 font-body ${
 													transactionFilter === type
-														? "bg-purple-primary text-white"
-														: "bg-gray-100 text-gray-700 hover:bg-blue-tertiary hover:text-white"
+														? "bg-purple-primary text-white shadow-sm"
+														: "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200"
 												}`}
 											>
 												{getTransactionTypeLabel(type)}
@@ -267,71 +269,55 @@ export default function TransactionsPage() {
 							{/* Transactions List */}
 							<div className="space-y-4">
 								{loading ? (
-									<div className="text-center py-8">
+									<div className="text-center py-12">
 										<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
 										<p className="mt-4 text-gray-500 font-body">
 											Loading transactions...
 										</p>
 									</div>
 								) : getFilteredTransactions().length > 0 ? (
-									<div className="space-y-4">
+									<div className="space-y-3">
 										{getFilteredTransactions().map(
 											(transaction) => (
 												<div
 													key={transaction.id}
-													className="flex items-center justify-between p-4 border border-gray-200 rounded-xl hover:bg-offwhite hover:border-purple-primary/30 transition-all duration-200 bg-white"
+													className="flex items-center justify-between p-4 lg:p-6 border border-gray-200 rounded-xl hover:shadow-md transition-all duration-200 bg-white hover:border-gray-300"
 												>
 													<div className="flex items-center space-x-4 min-w-0 flex-1">
-														<div className="p-2 bg-gray-50 rounded-xl flex-shrink-0 border border-gray-200">
+														<div className="w-12 h-12 lg:w-14 lg:h-14 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-gray-200">
 															{getTransactionIcon(
 																transaction.type
 															)}
 														</div>
 														<div className="min-w-0 flex-1">
-															<p className="font-semibold text-gray-700 truncate font-body">
+															<p className="text-base lg:text-lg font-semibold text-gray-700 truncate font-body">
 																{
 																	transaction.description
 																}
 															</p>
-															<p className="text-sm text-gray-500 mt-1 font-body">
+															<p className="text-sm lg:text-base text-gray-500 mt-1 font-body">
 																{formatDateTime(
 																	transaction.createdAt
 																)}
 															</p>
 															{transaction.reference && (
-																<p className="text-xs text-gray-500 truncate font-body">
-																	Ref:{" "}
-																	{
-																		transaction.reference
-																	}
+																<p className="text-xs lg:text-sm text-gray-500 truncate font-body mt-1">
+																	Ref: {transaction.reference}
 																</p>
 															)}
 														</div>
 													</div>
 													<div className="text-right flex-shrink-0 ml-4">
-														<p
-															className={`font-bold text-lg font-body ${
-																transaction.type ===
-																"LOAN_REPAYMENT"
-																	? "text-green-600"
-																	: transaction.amount >
-																	  0
-																	? "text-purple-primary"
-																	: "text-blue-tertiary"
-															}`}
-														>
-															{transaction.amount >
-															0
-																? "+"
-																: ""}
-															{formatCurrency(
-																transaction.amount
-															)}
+														<p className={`text-lg lg:text-xl font-heading font-bold mb-2 ${
+															transaction.amount > 0
+																? "text-green-600"
+																: "text-gray-700"
+														}`}>
+															{transaction.amount > 0 ? "+" : ""}
+															{formatCurrency(transaction.amount)}
 														</p>
-														<div className="mt-1">
-															{getStatusBadge(
-																transaction.status
-															)}
+														<div>
+															{getStatusBadge(transaction.status)}
 														</div>
 													</div>
 												</div>
@@ -340,34 +326,30 @@ export default function TransactionsPage() {
 									</div>
 								) : transactions.length > 0 ? (
 									<div className="text-center py-12">
-										<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-										<p className="text-gray-500 mb-2 font-body">
-											No{" "}
-											{getTransactionTypeLabel(
-												transactionFilter
-											).toLowerCase()}{" "}
-											transactions found
-										</p>
-										<button
-											onClick={() =>
-												setTransactionFilter("ALL")
-											}
-											className="text-sm text-purple-primary hover:text-blue-tertiary font-medium font-body transition-colors"
-										>
-											Show all transactions
-										</button>
+										<div className="bg-gray-50 rounded-lg p-6 lg:p-8 border border-gray-200">
+											<WalletIcon className="h-12 w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
+											<p className="text-base lg:text-lg font-medium font-heading text-gray-700 mb-2">
+												No {getTransactionTypeLabel(transactionFilter).toLowerCase()} transactions found
+											</p>
+											<button
+												onClick={() => setTransactionFilter("ALL")}
+												className="text-sm lg:text-base text-purple-primary hover:text-purple-700 font-medium font-body transition-colors"
+											>
+												Show all transactions
+											</button>
+										</div>
 									</div>
 								) : (
 									<div className="text-center py-12">
-										<WalletIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-										<h4 className="text-lg font-medium text-gray-700 mb-2 font-heading">
-											No Transactions Yet
-										</h4>
-										<p className="text-gray-500 mb-4 font-body">
-											Your transaction history will appear
-											here once you start using your
-											wallet.
-										</p>
+										<div className="bg-gray-50 rounded-lg p-6 lg:p-8 border border-gray-200">
+											<WalletIcon className="h-12 w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
+											<h4 className="text-base lg:text-lg font-medium font-heading text-gray-700 mb-2">
+												No Transactions Yet
+											</h4>
+											<p className="text-sm lg:text-base text-gray-500 font-body leading-relaxed">
+												Your transaction history will appear here once you start using your wallet.
+											</p>
+										</div>
 									</div>
 								)}
 							</div>

@@ -198,6 +198,36 @@ export function getRelationshipOptions(): string[] {
 }
 
 /**
+ * Calculates age from date of birth
+ * @param dateOfBirth - The date of birth
+ * @returns Age in years
+ */
+export function calculateAge(dateOfBirth: Date): number {
+  const today = new Date();
+  let age = today.getFullYear() - dateOfBirth.getFullYear();
+  const monthDiff = today.getMonth() - dateOfBirth.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dateOfBirth.getDate())) {
+    age--;
+  }
+  
+  return age;
+}
+
+/**
+ * Validates if a person is at least 18 years old
+ * @param dateOfBirth - The date of birth to validate
+ * @returns boolean indicating if the person is 18 or older
+ */
+export function isAtLeast18YearsOld(dateOfBirth: Date | null): boolean {
+  if (!dateOfBirth) {
+    return false;
+  }
+  
+  return calculateAge(dateOfBirth) >= 18;
+}
+
+/**
  * Validates emergency contact phone number
  * @param phoneNumber - The phone number to validate
  * @returns boolean indicating if it's valid

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 
 import {
-	PencilIcon,
 	UserCircleIcon,
 	HomeIcon,
 	BriefcaseIcon,
@@ -21,8 +20,9 @@ import {
 	IdentificationIcon,
 	DocumentTextIcon,
 	EyeIcon,
-	ArrowDownTrayIcon,
 	AcademicCapIcon,
+	PencilIcon,
+	EyeSlashIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
 import { 
@@ -128,27 +128,27 @@ const educationLevels = [
 	"Other",
 ] as const;
 
-type EditingSections = "personal" | "address" | "employment" | "banking" | "password" | null;
-
 export default function ProfilePage() {
 	const router = useRouter();
 	const [profile, setProfile] = useState<UserProfile | null>(null);
 	const [loading, setLoading] = useState(true);
-	const [saving, setSaving] = useState(false);
-	const [editingSection, setEditingSection] = useState<EditingSections>(null);
-	const [formData, setFormData] = useState<Partial<UserProfile>>({});
-	const [passwordData, setPasswordData] = useState({
-		currentPassword: "",
-		newPassword: "",
-		confirmPassword: "",
-	});
-	const [passwordError, setPasswordError] = useState("");
-	const [icError, setIcError] = useState("");
-	const [emailError, setEmailError] = useState("");
-	const [emergencyError, setEmergencyError] = useState("");
 	const [documents, setDocuments] = useState<UserDocument[]>([]);
 	const [documentsLoading, setDocumentsLoading] = useState(true);
 
+	// Password editing state
+	const [isEditingPassword, setIsEditingPassword] = useState(false);
+	const [passwordData, setPasswordData] = useState({
+		currentPassword: "",
+		newPassword: "",
+		confirmPassword: ""
+	});
+	const [showPasswords, setShowPasswords] = useState({
+		current: false,
+		new: false,
+		confirm: false
+	});
+	const [passwordLoading, setPasswordLoading] = useState(false);
+	const [passwordError, setPasswordError] = useState("");
 
 
 	const fetchDocuments = async () => {
@@ -211,7 +211,6 @@ export default function ProfilePage() {
 						.split("T")[0];
 				}
 				setProfile(data);
-				setFormData(data);
 				
 				// Load documents
 				fetchDocuments();
@@ -269,245 +268,7 @@ export default function ProfilePage() {
 
 
 
-	const handleEdit = (section: EditingSections) => {
-		setEditingSection(section);
-	};
-
-	const handleCancel = () => {
-		setEditingSection(null);
-		setFormData(profile || {});
-		// Reset password form when canceling
-		setPasswordData({
-			currentPassword: "",
-			newPassword: "",
-			confirmPassword: "",
-		});
-		setPasswordError("");
-		setIcError("");
-		setEmailError("");
-		setEmergencyError("");
-	};
-
-	const handleInputChange = (
-		e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-	) => {
-		const { name, value } = e.target;
-		
-		// Handle employment status changes
-		if (name === "employmentStatus") {
-			if (value === "Student" || value === "Unemployed") {
-				// Clear employer name and service length for student/unemployed
-				setFormData((prev) => ({
-					...prev,
-					[name]: value,
-					employerName: "",
-					serviceLength: "",
-				}));
-			} else {
-				setFormData((prev) => ({
-					...prev,
-					[name]: value,
-				}));
-			}
-		} else {
-			setFormData((prev) => ({
-				...prev,
-				[name]: value,
-			}));
-		}
-		
-		// Clear errors when user starts typing
-		if (name === "icNumber" && icError) {
-			setIcError("");
-		}
-		if (name === "email" && emailError) {
-			setEmailError("");
-		}
-		if (name.startsWith("emergencyContact") && emergencyError) {
-			setEmergencyError("");
-		}
-	};
-
-	const handleIcNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const { value } = e.target;
-		
-		// Update IC number
-		setFormData((prev) => ({
-			...prev,
-			icNumber: value,
-		}));
-		
-		// Clear error when user starts typing
-		if (icError) {
-			setIcError("");
-		}
-		
-		// Validate IC/Passport and extract DOB if it's a Malaysian IC
-		if (value.trim()) {
-			const validation = validateICOrPassport(value);
-			
-			if (validation.isValid) {
-				// Update IC type
-				setFormData((prev) => ({
-					...prev,
-					icType: validation.type,
-				}));
-				
-				// Extract DOB if it's a Malaysian IC
-				if (validation.type === 'IC' && validation.extractedDOB) {
-					const dobString = validation.extractedDOB.toISOString().split('T')[0];
-					setFormData((prev) => ({
-						...prev,
-						dateOfBirth: dobString,
-					}));
-				}
-			}
-		} else {
-			// Clear IC type if IC number is empty
-			setFormData((prev) => ({
-				...prev,
-				icType: null,
-			}));
-		}
-	};
-
-	const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const { name, value } = e.target;
-		setPasswordData((prev) => ({
-			...prev,
-			[name]: value,
-		}));
-		// Clear error when user starts typing
-		if (passwordError) {
-			setPasswordError("");
-		}
-	};
-
-	const handlePasswordSave = async () => {
-		if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-			setPasswordError("All password fields are required");
-			return;
-		}
-
-		if (passwordData.newPassword !== passwordData.confirmPassword) {
-			setPasswordError("New passwords do not match");
-			return;
-		}
-
-		if (passwordData.newPassword.length < 8) {
-			setPasswordError("New password must be at least 8 characters long");
-			return;
-		}
-
-		setSaving(true);
-		try {
-			await fetchWithTokenRefresh("/api/users/me/password", {
-				method: "PUT",
-				body: JSON.stringify({
-					currentPassword: passwordData.currentPassword,
-					newPassword: passwordData.newPassword,
-				}),
-			});
-
-			// Reset form and close editing
-			setPasswordData({
-				currentPassword: "",
-				newPassword: "",
-				confirmPassword: "",
-			});
-			setEditingSection(null);
-			setPasswordError("");
-			
-			// Show success message (you can implement a toast notification here)
-			alert("Password changed successfully!");
-		} catch (error: any) {
-			console.error("Error changing password:", error);
-			setPasswordError(error.message || "Failed to change password");
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	const handleSave = async () => {
-		if (!profile) return;
-
-		// Validate IC number if editing personal section (which now includes IC)
-		if (editingSection === "personal") {
-			// Validate email format
-			if (formData.email && formData.email.trim()) {
-				const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-				if (!emailRegex.test(formData.email)) {
-					setEmailError("Please enter a valid email address");
-					return;
-				}
-			}
-
-			if (formData.icNumber && formData.icNumber.trim()) {
-				const icValidation = validateICOrPassport(formData.icNumber);
-				if (!icValidation.isValid) {
-					setIcError(icValidation.error || "Please enter a valid IC/Passport number");
-					return;
-				}
-			}
-
-			// Validate emergency contact if any emergency contact field is filled
-			if (formData.emergencyContactName && formData.emergencyContactPhone && formData.emergencyContactRelationship) {
-				// Validate emergency contact phone
-				if (!validateEmergencyContactPhone(formData.emergencyContactPhone)) {
-					setEmergencyError("Please enter a valid emergency contact phone number");
-					return;
-				}
-			} else if (formData.emergencyContactName || formData.emergencyContactPhone || formData.emergencyContactRelationship) {
-				// If any emergency contact field is filled, all must be filled
-				setEmergencyError("All emergency contact fields are required");
-				return;
-			}
-		}
-
-		setSaving(true);
-		try {
-			const dataToSend = { ...formData };
-
-			if (dataToSend.dateOfBirth) {
-				// Keep the date as is since it's already in YYYY-MM-DD format
-				// The API will handle the conversion to UTC
-			}
-
-			const response = await fetchWithTokenRefresh("/api/users/me", {
-				method: "PUT",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(dataToSend),
-			});
-
-			// Since fetchWithTokenRefresh returns the parsed data directly on success,
-			// we need to handle errors differently
-			if (response && typeof response === 'object' && 'message' in response) {
-				// This is an error response
-				const errorData = response as { message: string };
-				
-				// Handle error response
-				throw new Error(errorData.message || "Failed to update profile");
-			}
-
-			// If we get here, the response is the updated user data
-			const updatedUser = response as UserProfile;
-			
-			if (updatedUser.dateOfBirth) {
-				updatedUser.dateOfBirth = new Date(updatedUser.dateOfBirth)
-					.toISOString()
-					.split("T")[0];
-			}
-			
-			setProfile(updatedUser);
-			setEditingSection(null);
-		} catch (error) {
-			console.error("Error updating profile:", error);
-			// For errors, just log them - the user will see the form didn't save
-			console.error("Profile update failed:", error instanceof Error ? error.message : "Unknown error");
-		} finally {
-			setSaving(false);
-		}
-	};
+	const profileStatus = checkProfileCompleteness(profile);
 
 	if (loading) {
 		return (
@@ -558,8 +319,6 @@ export default function ProfilePage() {
 			timeZone: "Asia/Kuala_Lumpur",
 		}) + " (GMT+8)";
 	};
-
-	const profileStatus = checkProfileCompleteness(profile);
 
 	const getDocumentStatusBadge = (status: string) => {
 		switch (status) {
@@ -632,110 +391,91 @@ export default function ProfilePage() {
 		</span>
 	);
 
-	const renderEditButton = (section: EditingSections) => (
-		<button
-			onClick={() => handleEdit(section)}
-			className="text-purple-primary hover:text-blue-tertiary flex items-center text-sm font-medium bg-purple-primary/5 px-3 py-1.5 rounded-lg hover:bg-purple-primary/10 transition-all duration-300 border border-purple-primary/20 font-body"
-		>
-			<PencilIcon className="h-4 w-4 mr-1" />
-			Edit
-		</button>
-	);
+	const handlePasswordChange = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setPasswordError("");
 
-	const renderSaveButtons = () => (
-		<div className="flex justify-end space-x-3 mt-6">
-			<button
-				onClick={handleCancel}
-				className="px-6 py-3 text-sm font-medium text-gray-700 hover:text-gray-900 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors font-body"
-				disabled={saving}
-			>
-				Cancel
-			</button>
-			<button
-				onClick={handleSave}
-				className="px-6 py-3 text-sm font-medium text-white bg-purple-primary hover:bg-purple-600 rounded-lg transition-colors shadow-sm font-body"
-				disabled={saving}
-			>
-				{saving ? "Saving..." : "Save Changes"}
-			</button>
-		</div>
-	);
-
-	const renderInput = (
-		name: keyof UserProfile,
-		label: string,
-		type: string = "text",
-		options?: readonly string[]
-	) => {
-		// Special handling for IC number
-		if (name === "icNumber") {
-			return (
-				<div>
-					<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-						{label}
-					</label>
-					<input
-						type="text"
-						name="icNumber"
-						value={String(formData.icNumber || "")}
-						onChange={handleIcNumberChange}
-						placeholder="Enter IC number (e.g., 820720073808) or Passport number"
-						className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
-					/>
-					{formData.icType && (
-						<p className="mt-1 text-sm text-blue-600 font-body">
-							{formData.icType === 'IC' ? 'Malaysian IC detected' : 'Passport number detected'}
-							{formData.icType === 'IC' && formData.dateOfBirth && (
-								<span> - Date of birth extracted automatically</span>
-							)}
-						</p>
-					)}
-					{icError && (
-						<p className="mt-1 text-sm text-red-600 font-body">
-							{icError}
-						</p>
-					)}
-				</div>
-			);
+		// Validation
+		if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+			setPasswordError("All password fields are required");
+			return;
 		}
-		
 
+		if (passwordData.newPassword.length < 8) {
+			setPasswordError("New password must be at least 8 characters long");
+			return;
+		}
 
-		return (
-			<div>
-				<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-					{label}
-				</label>
-				{options ? (
-					<select
-						name={name}
-						value={String(formData[name] || "")}
-						onChange={handleInputChange}
-						className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
-					>
-						<option value="">Select {label}</option>
-						{options.map((option) => (
-							<option key={option} value={option}>
-								{option}
-							</option>
-						))}
-					</select>
-				) : (
-					<input
-						type={type}
-						name={name}
-						value={String(formData[name] || "")}
-						onChange={handleInputChange}
-						className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
-					/>
-				)}
-			</div>
-		);
+		if (passwordData.newPassword !== passwordData.confirmPassword) {
+			setPasswordError("New passwords do not match");
+			return;
+		}
+
+		if (passwordData.currentPassword === passwordData.newPassword) {
+			setPasswordError("New password must be different from current password");
+			return;
+		}
+
+		try {
+			setPasswordLoading(true);
+
+			const response = await fetchWithTokenRefresh(
+				"/api/users/me/password",
+				{
+					method: "PUT",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						currentPassword: passwordData.currentPassword,
+						newPassword: passwordData.newPassword,
+					}),
+				}
+			);
+
+			if (response) {
+				// Success
+				setIsEditingPassword(false);
+				setPasswordData({
+					currentPassword: "",
+					newPassword: "",
+					confirmPassword: ""
+				});
+				alert("Password changed successfully!");
+			}
+		} catch (error: any) {
+			console.error("Error changing password:", error);
+			setPasswordError(error.message || "Failed to change password. Please try again.");
+		} finally {
+			setPasswordLoading(false);
+		}
+	};
+
+	const cancelPasswordEdit = () => {
+		setIsEditingPassword(false);
+		setPasswordData({
+			currentPassword: "",
+			newPassword: "",
+			confirmPassword: ""
+		});
+		setPasswordError("");
+		setShowPasswords({
+			current: false,
+			new: false,
+			confirm: false
+		});
+	};
+
+	const togglePasswordVisibility = (field: 'current' | 'new' | 'confirm') => {
+		setShowPasswords(prev => ({
+			...prev,
+			[field]: !prev[field]
+		}));
 	};
 
 	return (
 			<DashboardLayout
-				userName={profile.fullName?.split(" ")[0] || "User"}
+				userName={profile?.fullName?.split(" ")[0] || "User"}
 				title="Profile"
 			>
 				<div className="w-full bg-offwhite min-h-screen px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
@@ -750,17 +490,17 @@ export default function ProfilePage() {
 										</div>
 										<div>
 											<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700 mb-1">
-												{profile.fullName || "User Profile"}
+												{profile?.fullName || "User Profile"}
 											</h1>
 											<p className="text-sm lg:text-base text-purple-primary font-semibold">
-												{profile.phoneNumber}
+												{profile?.phoneNumber}
 											</p>
 										</div>
 									</div>
 									<div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
 										<div className="flex flex-col space-y-3">
 											<div className="flex items-center space-x-3">
-												{renderBadge(profile.kycStatus, profile.kycStatus ? "KYC Verified" : "KYC Pending")}
+												{renderBadge(profile?.kycStatus || false, profile?.kycStatus ? "KYC Verified" : "KYC Pending")}
 												{renderBadge(profileStatus.isComplete, profileStatus.isComplete ? "Profile Complete" : `Profile ${profileStatus.completionPercentage}% Complete`)}
 											</div>
 											{!profileStatus.isComplete && profileStatus.missing.length > 0 && (
@@ -803,199 +543,146 @@ export default function ProfilePage() {
 											</p>
 										</div>
 									</div>
-									{editingSection !== "personal" && renderEditButton("personal")}
+									
 								</div>
 
-								{editingSection === "personal" ? (
-									<div className="space-y-6">
-										{emailError && (
-											<div className="bg-red-50 border border-red-200 rounded-lg p-4">
-												<p className="text-sm text-red-700 font-body">{emailError}</p>
-											</div>
-										)}
-										{icError && (
-											<div className="bg-red-50 border border-red-200 rounded-lg p-4">
-												<p className="text-sm text-red-700 font-body">{icError}</p>
-											</div>
-										)}
-										{emergencyError && (
-											<div className="bg-red-50 border border-red-200 rounded-lg p-4">
-												<p className="text-sm text-red-700 font-body">{emergencyError}</p>
-											</div>
-										)}
-										
-										{/* Personal Information Section */}
-										<div>
-											<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Personal Information</h4>
-											<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-												{renderInput("fullName", "Full Name")}
-												{renderInput("email", "Email", "email")}
-												{renderInput("dateOfBirth", "Date of Birth", "date")}
-												{renderInput("educationLevel", "Education Level", "text", educationLevels)}
+								{/* Personal Information Display */}
+								<div>
+									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Personal Information</h4>
+									<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Full Name
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.fullName || "Not provided"}
+													</p>
+												</div>
 											</div>
 										</div>
-
-										{/* IC/Passport Section */}
-										<div className="border-t border-gray-100 pt-6">
-											<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">IC/Passport Information</h4>
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												{renderInput("icNumber", "IC/Passport Number")}
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Email
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.email || "Not provided"}
+													</p>
+												</div>
 											</div>
 										</div>
-
-										{/* Emergency Contact Section */}
-										<div className="border-t border-gray-100 pt-6">
-											<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Emergency Contact</h4>
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-												{renderInput("emergencyContactName", "Full Name")}
-												{renderInput("emergencyContactPhone", "Phone Number", "tel")}
-												{renderInput("emergencyContactRelationship", "Relationship", "text", getRelationshipOptions())}
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<CalendarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Date of Birth
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : "Not provided"}
+													</p>
+												</div>
 											</div>
 										</div>
-
-										{renderSaveButtons()}
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<AcademicCapIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Education Level
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.educationLevel || "Not provided"}
+													</p>
+												</div>
+											</div>
+										</div>
 									</div>
-								) : (
-									<div className="space-y-6">
-										{/* Personal Information Display */}
-										<div>
-											<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Personal Information</h4>
-											<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Full Name
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.fullName || "Not provided"}
-															</p>
-														</div>
-													</div>
-												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Email
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.email || "Not provided"}
-															</p>
-														</div>
-													</div>
-												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<CalendarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Date of Birth
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.dateOfBirth ? formatDate(profile.dateOfBirth) : "Not provided"}
-															</p>
-														</div>
-													</div>
-												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<AcademicCapIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Education Level
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.educationLevel || "Not provided"}
-															</p>
-														</div>
-													</div>
-												</div>
-											</div>
-										</div>
+								</div>
 
-										{/* IC/Passport Display */}
-										<div className="border-t border-gray-100 pt-6">
-											<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">IC/Passport Information</h4>
-											<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0 flex-1">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																IC/Passport Number
-															</label>
-															<div className="mt-1 space-y-1">
-																{profile.icNumber ? (
-																	<>
-																		<p className="text-base text-gray-700 font-body">
-																			{profile.icType === 'IC' ? formatMalaysianIC(profile.icNumber) : profile.icNumber}
-																		</p>
-																		<p className="text-sm text-blue-600 font-body">
-																			{profile.icType === 'IC' ? 'Malaysian IC' : 'Passport'}
-																		</p>
-																	</>
-																) : (
-																	<p className="text-base text-gray-500 font-body italic">
-																		Not provided
-																	</p>
-																)}
-															</div>
-														</div>
-													</div>
-												</div>
-											</div>
-										</div>
-
-										{/* Emergency Contact Display */}
-										<div className="border-t border-gray-100 pt-6">
-											<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Emergency Contact</h4>
-											<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Name
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.emergencyContactName || "Not provided"}
+								{/* IC/Passport Display */}
+								<div className="pt-6">
+									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">IC/Passport Information</h4>
+									<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0 flex-1">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														IC/Passport Number
+													</label>
+													<div className="mt-1 space-y-1">
+														{profile?.icNumber ? (
+															<>
+																<p className="text-base text-gray-700 font-body">
+																	{profile.icType === 'IC' ? formatMalaysianIC(profile.icNumber) : profile.icNumber}
+																</p>
+																<p className="text-sm text-blue-600 font-body">
+																	{profile.icType === 'IC' ? 'Malaysian IC' : 'Passport'}
+																</p>
+															</>
+														) : (
+															<p className="text-base text-gray-500 font-body italic">
+																Not provided
 															</p>
-														</div>
-													</div>
-												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<PhoneIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Phone Number
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.emergencyContactPhone || "Not provided"}
-															</p>
-														</div>
-													</div>
-												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Relationship
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.emergencyContactRelationship || "Not provided"}
-															</p>
-														</div>
+														)}
 													</div>
 												</div>
 											</div>
 										</div>
 									</div>
-								)}
+								</div>
+
+								{/* Emergency Contact Display */}
+								<div className="pt-6">
+									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Emergency Contact</h4>
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Name
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.emergencyContactName || "Not provided"}
+													</p>
+												</div>
+											</div>
+										</div>
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<PhoneIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Phone Number
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.emergencyContactPhone || "Not provided"}
+													</p>
+												</div>
+											</div>
+										</div>
+										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Relationship
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.emergencyContactRelationship || "Not provided"}
+													</p>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
 							</div>
 						</div>
 
@@ -1016,60 +703,44 @@ export default function ProfilePage() {
 											</p>
 										</div>
 									</div>
-									{editingSection !== "address" && renderEditButton("address")}
+									
 								</div>
 
-								{editingSection === "address" ? (
-									<div className="space-y-6">
-										<div className="grid grid-cols-1 gap-4">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												{renderInput("address1", "Address Line 1")}
-												{renderInput("address2", "Address Line 2")}
-											</div>
-											<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-												{renderInput("city", "City")}
-												{renderInput("state", "State", "text", malaysianStates)}
-												{renderInput("zipCode", "Postal Code")}
-											</div>
-										</div>
-										{renderSaveButtons()}
-									</div>
-								) : (
-									<div className="space-y-4">
-										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-											<div className="flex items-start space-x-3">
-												<MapPinIcon className="h-5 w-5 text-purple-primary flex-shrink-0 mt-0.5" />
-												<div className="min-w-0 flex-1">
-													<label className="block text-sm font-medium text-gray-500 font-body">
-														Complete Address
-													</label>
-													<div className="mt-1 space-y-1">
-														{profile.address1 && (
-															<p className="text-base text-gray-700 font-body">
-																{profile.address1}
-															</p>
-														)}
-														{profile.address2 && (
-															<p className="text-base text-gray-700 font-body">
-																{profile.address2}
-															</p>
-														)}
-														{(profile.city || profile.state || profile.zipCode) && (
-															<p className="text-base text-gray-700 font-body">
-																{[profile.city, profile.state, profile.zipCode].filter(Boolean).join(", ")}
-															</p>
-														)}
-														{!profile.address1 && !profile.address2 && !profile.city && (
-															<p className="text-base text-gray-500 font-body italic">
-																Address not provided
-															</p>
-														)}
-													</div>
+								{/* Address Display */}
+								<div className="space-y-4">
+									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+										<div className="flex items-start space-x-3">
+											<MapPinIcon className="h-5 w-5 text-purple-primary flex-shrink-0 mt-0.5" />
+											<div className="min-w-0 flex-1">
+												<label className="block text-sm font-medium text-gray-500 font-body">
+													Complete Address
+												</label>
+												<div className="mt-1 space-y-1">
+													{profile?.address1 && (
+														<p className="text-base text-gray-700 font-body">
+															{profile.address1}
+														</p>
+													)}
+													{profile?.address2 && (
+														<p className="text-base text-gray-700 font-body">
+															{profile.address2}
+														</p>
+													)}
+													{(profile?.city || profile?.state || profile?.zipCode) && (
+														<p className="text-base text-gray-700 font-body">
+															{[profile.city, profile.state, profile.zipCode].filter(Boolean).join(", ")}
+														</p>
+													)}
+													{!profile?.address1 && !profile?.address2 && !profile?.city && (
+														<p className="text-base text-gray-500 font-body italic">
+															Address not provided
+														</p>
+													)}
 												</div>
 											</div>
 										</div>
 									</div>
-								)}
+								</div>
 							</div>
 						</div>
 
@@ -1092,83 +763,66 @@ export default function ProfilePage() {
 												</p>
 											</div>
 										</div>
-										{editingSection !== "employment" && renderEditButton("employment")}
+										
 									</div>
 
-									{editingSection === "employment" ? (
-										<div className="space-y-6">
-											<div className="grid grid-cols-1 gap-4">
-												{renderInput("employmentStatus", "Employment Status", "text", employmentStatuses)}
-												{formData.employmentStatus && 
-													formData.employmentStatus !== "Student" && 
-													formData.employmentStatus !== "Unemployed" && (
-													<>
-														{renderInput("employerName", "Employer Name")}
-														{renderInput("serviceLength", "Years at Current Company", "number")}
-													</>
-												)}
-												{renderInput("monthlyIncome", "Monthly Income (RM)", "number")}
+									{/* Employment Information Display */}
+									<div className="space-y-4">
+										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Employment Status
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile?.employmentStatus || "Not provided"}
+														</p>
+													</div>
+												</div>
 											</div>
-											{renderSaveButtons()}
-										</div>
-									) : (
-										<div className="space-y-4">
-											<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
-												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Employment Status
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.employmentStatus || "Not provided"}
-															</p>
-														</div>
+											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<BuildingOfficeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Employer Name
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile?.employerName || "Not provided"}
+														</p>
 													</div>
 												</div>
-												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<BuildingOfficeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Employer Name
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.employerName || "Not provided"}
-															</p>
-														</div>
+											</div>
+											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Service Length
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile?.serviceLength ? `${profile.serviceLength} years` : "Not provided"}
+														</p>
 													</div>
 												</div>
-												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Service Length
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.serviceLength ? `${profile.serviceLength} years` : "Not provided"}
-															</p>
-														</div>
-													</div>
-												</div>
-												<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<CurrencyDollarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Monthly Income
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.monthlyIncome ? `RM ${Number(profile.monthlyIncome).toLocaleString()}` : "Not provided"}
-															</p>
-														</div>
+											</div>
+											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<CurrencyDollarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Monthly Income
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile?.monthlyIncome ? `RM ${Number(profile.monthlyIncome).toLocaleString()}` : "Not provided"}
+														</p>
 													</div>
 												</div>
 											</div>
 										</div>
-									)}
+									</div>
 								</div>
 							</div>
 
@@ -1189,49 +843,40 @@ export default function ProfilePage() {
 												</p>
 											</div>
 										</div>
-										{editingSection !== "banking" && renderEditButton("banking")}
+										
 									</div>
 
-									{editingSection === "banking" ? (
-										<div className="space-y-6">
-											<div className="grid grid-cols-1 gap-4">
-												{renderInput("bankName", "Bank Name")}
-												{renderInput("accountNumber", "Account Number")}
-											</div>
-											{renderSaveButtons()}
-										</div>
-									) : (
-										<div className="space-y-4">
-											<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<BanknotesIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Bank Name
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.bankName || "Not provided"}
-															</p>
-														</div>
+									{/* Banking Information Display */}
+									<div className="space-y-4">
+										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<BanknotesIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Bank Name
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile?.bankName || "Not provided"}
+														</p>
 													</div>
 												</div>
-												<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-													<div className="flex items-center space-x-3">
-														<ShieldCheckIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-														<div className="min-w-0">
-															<label className="block text-sm font-medium text-gray-500 font-body">
-																Account Number
-															</label>
-															<p className="mt-1 text-base text-gray-700 font-body truncate">
-																{profile.accountNumber ? "••••" + profile.accountNumber.slice(-4) : "Not provided"}
-															</p>
-														</div>
+											</div>
+											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+												<div className="flex items-center space-x-3">
+													<ShieldCheckIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+													<div className="min-w-0">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Account Number
+														</label>
+														<p className="mt-1 text-base text-gray-700 font-body truncate">
+															{profile?.accountNumber ? "••••" + profile.accountNumber.slice(-4) : "Not provided"}
+														</p>
 													</div>
 												</div>
 											</div>
 										</div>
-									)}
+									</div>
 								</div>
 							</div>
 						</div>
@@ -1350,78 +995,19 @@ export default function ProfilePage() {
 												</p>
 											</div>
 										</div>
-										{editingSection !== "password" && renderEditButton("password")}
+										{!isEditingPassword && (
+											<button
+												onClick={() => setIsEditingPassword(true)}
+												className="hidden lg:flex items-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+											>
+												<PencilIcon className="w-4 h-4 mr-2" />
+												Change Password
+											</button>
+										)}
 									</div>
 
-									{editingSection === "password" ? (
-										<div className="space-y-6">
-											{passwordError && (
-												<div className="bg-red-50 border border-red-200 rounded-lg p-4">
-													<p className="text-sm text-red-700 font-body">{passwordError}</p>
-												</div>
-											)}
-											<div className="space-y-4">
-												<div>
-													<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-														Current Password
-													</label>
-													<input
-														type="password"
-														name="currentPassword"
-														value={passwordData.currentPassword}
-														onChange={handlePasswordChange}
-														className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
-														placeholder="Enter your current password"
-													/>
-												</div>
-												<div>
-													<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-														New Password
-													</label>
-													<input
-														type="password"
-														name="newPassword"
-														value={passwordData.newPassword}
-														onChange={handlePasswordChange}
-														className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
-														placeholder="Enter your new password"
-													/>
-													<p className="mt-1 text-sm text-gray-500 font-body">
-														Password must be at least 8 characters long
-													</p>
-												</div>
-												<div>
-													<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-														Confirm New Password
-													</label>
-													<input
-														type="password"
-														name="confirmPassword"
-														value={passwordData.confirmPassword}
-														onChange={handlePasswordChange}
-														className="block w-full h-12 px-4 py-3 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-primary/20 focus:border-purple-primary transition-colors font-body text-gray-700"
-														placeholder="Confirm your new password"
-													/>
-												</div>
-											</div>
-											<div className="flex justify-end space-x-3">
-												<button
-													onClick={handleCancel}
-													className="px-6 py-3 text-sm font-medium text-gray-700 hover:text-gray-900 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-colors font-body"
-													disabled={saving}
-												>
-													Cancel
-												</button>
-												<button
-													onClick={handlePasswordSave}
-													className="px-6 py-3 text-sm font-medium text-white bg-purple-primary hover:bg-purple-600 rounded-lg transition-colors shadow-sm font-body"
-													disabled={saving}
-												>
-													{saving ? "Changing Password..." : "Change Password"}
-												</button>
-											</div>
-										</div>
-									) : (
+									{/* Password & Security Content */}
+									{!isEditingPassword ? (
 										<div className="space-y-4">
 											<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
 												<div className="flex items-center space-x-3">
@@ -1430,9 +1016,9 @@ export default function ProfilePage() {
 														<label className="block text-sm font-medium text-gray-500 font-body">
 															Password
 														</label>
-														<p className="mt-2 text-base text-gray-700 font-body">
-															••••••••••••
-														</p>
+																											<p className="mt-2 text-base text-gray-900 font-body font-medium tracking-wider">
+														••••••••••••
+													</p>
 													</div>
 												</div>
 											</div>
@@ -1449,7 +1035,141 @@ export default function ProfilePage() {
 													</div>
 												</div>
 											</div>
+											{/* Mobile Change Password Button */}
+											<div className="border-t border-gray-100 pt-4 lg:hidden">
+												<button
+													onClick={() => setIsEditingPassword(true)}
+													className="w-full flex items-center justify-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+												>
+													<PencilIcon className="w-4 h-4 mr-2" />
+													Change Password
+												</button>
+											</div>
 										</div>
+									) : (
+										<form onSubmit={handlePasswordChange} className="space-y-4">
+											{passwordError && (
+												<div className="bg-red-50 border border-red-200 rounded-lg p-3">
+													<p className="text-sm text-red-700 font-body">
+														{passwordError}
+													</p>
+												</div>
+											)}
+											
+											{/* Current Password */}
+											<div className="space-y-2">
+												<label className="block text-sm font-medium text-gray-700 font-body">
+													Current Password
+												</label>
+												<div className="relative">
+													<input
+														type={showPasswords.current ? "text" : "password"}
+														value={passwordData.currentPassword}
+														onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+														className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-body text-gray-900 tracking-wide placeholder-gray-400"
+														placeholder="Enter current password"
+														required
+													/>
+													<button
+														type="button"
+														onClick={() => togglePasswordVisibility('current')}
+														className="absolute inset-y-0 right-0 pr-3 flex items-center"
+													>
+														{showPasswords.current ? (
+															<EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+														) : (
+															<EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+														)}
+													</button>
+												</div>
+											</div>
+
+											{/* New Password */}
+											<div className="space-y-2">
+												<label className="block text-sm font-medium text-gray-700 font-body">
+													New Password
+												</label>
+												<div className="relative">
+													<input
+														type={showPasswords.new ? "text" : "password"}
+														value={passwordData.newPassword}
+														onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+														className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-body text-gray-900 tracking-wide placeholder-gray-400"
+														placeholder="Enter new password (min 8 characters)"
+														required
+														minLength={8}
+													/>
+													<button
+														type="button"
+														onClick={() => togglePasswordVisibility('new')}
+														className="absolute inset-y-0 right-0 pr-3 flex items-center"
+													>
+														{showPasswords.new ? (
+															<EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+														) : (
+															<EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+														)}
+													</button>
+												</div>
+											</div>
+
+											{/* Confirm New Password */}
+											<div className="space-y-2">
+												<label className="block text-sm font-medium text-gray-700 font-body">
+													Confirm New Password
+												</label>
+												<div className="relative">
+													<input
+														type={showPasswords.confirm ? "text" : "password"}
+														value={passwordData.confirmPassword}
+														onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+														className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-body text-gray-900 tracking-wide placeholder-gray-400"
+														placeholder="Confirm new password"
+														required
+													/>
+													<button
+														type="button"
+														onClick={() => togglePasswordVisibility('confirm')}
+														className="absolute inset-y-0 right-0 pr-3 flex items-center"
+													>
+														{showPasswords.confirm ? (
+															<EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+														) : (
+															<EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+														)}
+													</button>
+												</div>
+											</div>
+
+											{/* Action Buttons */}
+											<div className="flex flex-col sm:flex-row gap-3 pt-4">
+												<button
+													type="submit"
+													disabled={passwordLoading}
+													className="flex-1 sm:flex-none flex items-center justify-center px-6 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+												>
+													{passwordLoading ? (
+														<>
+															<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+															Changing...
+														</>
+													) : (
+														<>
+															<ShieldCheckIcon className="w-4 h-4 mr-2" />
+															Change Password
+														</>
+													)}
+												</button>
+												<button
+													type="button"
+													onClick={cancelPasswordEdit}
+													disabled={passwordLoading}
+													className="flex-1 sm:flex-none px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+												>
+													Cancel
+												</button>
+											</div>
+										</form>
 									)}
 								</div>
 							</div>
