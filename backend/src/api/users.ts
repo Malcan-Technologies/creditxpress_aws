@@ -4,6 +4,9 @@ import { authenticateAndVerifyPhone } from "../middleware/auth";
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth";
 import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
+import { OTPUtils, OTPType } from "../lib/otpUtils";
+import whatsappService from "../lib/whatsappService";
+import crypto from "crypto";
 
 const router = Router();
 
@@ -566,6 +569,393 @@ router.get(
 					message: "Internal server error",
 					error: error.message,
 				});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/users/me/phone/change-request:
+ *   post:
+ *     summary: Request phone number change
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPhoneNumber
+ *             properties:
+ *               newPhoneNumber:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Phone change request initiated
+ *       400:
+ *         description: Invalid phone number or already in use
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/me/phone/change-request",
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user?.userId;
+			if (!userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			const { newPhoneNumber } = req.body;
+
+			if (!newPhoneNumber) {
+				return res.status(400).json({ message: "New phone number is required" });
+			}
+
+			// Get current user
+			const currentUser = await prisma.user.findUnique({
+				where: { id: userId },
+				select: { phoneNumber: true }
+			});
+
+			if (!currentUser) {
+				return res.status(404).json({ message: "User not found" });
+			}
+
+			// Validate new phone number format
+			const phoneValidation = validatePhoneNumber(newPhoneNumber, {
+				requireMobile: false,
+				allowLandline: true
+			});
+
+			if (!phoneValidation.isValid) {
+				return res.status(400).json({ 
+					message: phoneValidation.error || "Invalid phone number format" 
+				});
+			}
+
+			// Normalize new phone number
+			const normalizedNewPhone = normalizePhoneNumber(newPhoneNumber);
+
+			// Check if new phone is different from current
+			if (normalizedNewPhone === currentUser.phoneNumber) {
+				return res.status(400).json({ message: "New phone number must be different from current" });
+			}
+
+			// Check if new phone number is already in use
+			const existingUser = await prisma.user.findFirst({
+				where: { phoneNumber: normalizedNewPhone }
+			});
+
+			if (existingUser) {
+				return res.status(400).json({ message: "Phone number is already in use" });
+			}
+
+			// Check rate limiting for new phone
+			const rateLimitCheck = await OTPUtils.canRequestNewOTPWithType(
+				normalizedNewPhone, 
+				OTPType.PHONE_CHANGE_NEW
+			);
+
+			if (!rateLimitCheck.canRequest) {
+				return res.status(429).json({ 
+					message: rateLimitCheck.error || `Please wait ${rateLimitCheck.waitTime} seconds before requesting a new code`,
+					waitTime: rateLimitCheck.waitTime
+				});
+			}
+
+			// Generate change token
+			const changeToken = crypto.randomBytes(32).toString('hex');
+			const changeTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+			// Clean up any existing phone change requests for this user
+			await prisma.phoneChangeRequest.deleteMany({
+				where: { userId }
+			});
+
+			// Create new phone change request (skip current phone verification)
+			await prisma.phoneChangeRequest.create({
+				data: {
+					userId,
+					currentPhone: currentUser.phoneNumber,
+					newPhone: normalizedNewPhone,
+					currentVerified: true, // Skip current phone verification since user is already authenticated
+					changeToken,
+					expiresAt: changeTokenExpiry
+				}
+			});
+
+			// Send OTP directly to new phone for verification
+			const otpResult = await OTPUtils.createOTPWithType(
+				userId, 
+				normalizedNewPhone, 
+				OTPType.PHONE_CHANGE_NEW
+			);
+
+			if (otpResult.success) {
+				try {
+					await whatsappService.sendOTP({
+						to: normalizedNewPhone,
+						otp: otpResult.otp!,
+					});
+					console.log(`Phone change OTP sent to new phone: ${normalizedNewPhone}`);
+				} catch (whatsappError) {
+					console.error("Error sending phone change OTP:", whatsappError);
+				}
+			}
+
+			return res.json({
+				message: "Phone change request initiated. Please verify your new phone number.",
+				changeToken,
+				newPhone: normalizedNewPhone
+			});
+
+		} catch (error) {
+			console.error("Error in phone change request:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/users/me/phone/verify-current:
+ *   post:
+ *     summary: Verify current phone for phone change
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - changeToken
+ *               - otp
+ *             properties:
+ *               changeToken:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Current phone verified, OTP sent to new phone
+ *       400:
+ *         description: Invalid token or OTP
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/me/phone/verify-current",
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user?.userId;
+			if (!userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			const { changeToken, otp } = req.body;
+
+			if (!changeToken || !otp) {
+				return res.status(400).json({ message: "Change token and OTP are required" });
+			}
+
+			// Find valid phone change request
+			const changeRequest = await prisma.phoneChangeRequest.findFirst({
+				where: {
+					userId,
+					changeToken,
+					expiresAt: { gt: new Date() },
+					currentVerified: true
+				}
+			});
+
+			if (!changeRequest) {
+				return res.status(400).json({ message: "Invalid or expired change token" });
+			}
+
+			// Verify OTP for current phone
+			const otpResult = await OTPUtils.validateOTPWithType(
+				changeRequest.currentPhone, 
+				otp, 
+				OTPType.PHONE_CHANGE_CURRENT
+			);
+
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.error });
+			}
+
+			// Mark current phone as verified
+			await prisma.phoneChangeRequest.update({
+				where: { id: changeRequest.id },
+				data: { currentVerified: true }
+			});
+
+			// Send OTP to new phone
+			const newOtpResult = await OTPUtils.createOTPWithType(
+				userId, 
+				changeRequest.newPhone, 
+				OTPType.PHONE_CHANGE_NEW
+			);
+
+			if (newOtpResult.success) {
+				try {
+					await whatsappService.sendOTP({
+						to: changeRequest.newPhone,
+						otp: newOtpResult.otp!,
+					});
+					console.log(`Phone change OTP sent to new phone: ${changeRequest.newPhone}`);
+				} catch (whatsappError) {
+					console.error("Error sending OTP to new phone:", whatsappError);
+				}
+			}
+
+			return res.json({
+				message: "Current phone verified. Please verify your new phone number.",
+				newPhone: changeRequest.newPhone
+			});
+
+		} catch (error) {
+			console.error("Error verifying current phone:", error);
+			return res.status(500).json({ message: "Internal server error" });
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/users/me/phone/verify-new:
+ *   post:
+ *     summary: Verify new phone and complete phone change
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - changeToken
+ *               - otp
+ *             properties:
+ *               changeToken:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Phone number changed successfully
+ *       400:
+ *         description: Invalid token or OTP
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/me/phone/verify-new",
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user?.userId;
+			if (!userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			const { changeToken, otp } = req.body;
+
+			if (!changeToken || !otp) {
+				return res.status(400).json({ message: "Change token and OTP are required" });
+			}
+
+			// Find valid phone change request with both verifications completed
+			const changeRequest = await prisma.phoneChangeRequest.findFirst({
+				where: {
+					userId,
+					changeToken,
+					expiresAt: { gt: new Date() },
+					currentVerified: true,
+					newVerified: false
+				}
+			});
+
+			if (!changeRequest) {
+				return res.status(400).json({ message: "Invalid change token or current phone not verified" });
+			}
+
+			// Verify OTP for new phone
+			const otpResult = await OTPUtils.validateOTPWithType(
+				changeRequest.newPhone, 
+				otp, 
+				OTPType.PHONE_CHANGE_NEW
+			);
+
+			if (!otpResult.success) {
+				return res.status(400).json({ message: otpResult.error });
+			}
+
+			// Double-check that new phone is still available
+			const existingUser = await prisma.user.findFirst({
+				where: { 
+					phoneNumber: changeRequest.newPhone,
+					id: { not: userId }
+				}
+			});
+
+			if (existingUser) {
+				return res.status(400).json({ message: "Phone number is no longer available" });
+			}
+
+			// Perform the phone change in a transaction
+			await prisma.$transaction(async (tx) => {
+				// Update user's phone number
+				await tx.user.update({
+					where: { id: userId },
+					data: {
+						phoneNumber: changeRequest.newPhone,
+						phoneVerified: true // Mark new phone as verified
+					}
+				});
+
+				// Mark change request as completed
+				await tx.phoneChangeRequest.update({
+					where: { id: changeRequest.id },
+					data: { newVerified: true }
+				});
+
+				// Clean up all phone change requests for this user
+				await tx.phoneChangeRequest.deleteMany({
+					where: { userId }
+				});
+
+				// Invalidate all existing OTPs for both old and new phone numbers
+				await tx.phoneVerification.updateMany({
+					where: {
+						OR: [
+							{ phoneNumber: changeRequest.currentPhone },
+							{ phoneNumber: changeRequest.newPhone }
+						],
+						verified: false
+					},
+					data: { verified: true }
+				});
+			});
+
+			return res.json({
+				message: "Phone number changed successfully",
+				newPhoneNumber: changeRequest.newPhone
+			});
+
+		} catch (error) {
+			console.error("Error completing phone change:", error);
+			return res.status(500).json({ message: "Internal server error" });
 		}
 	}
 );

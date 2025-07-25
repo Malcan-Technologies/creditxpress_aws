@@ -1,6 +1,14 @@
 import { prisma } from "./prisma";
 import crypto from "crypto";
 
+// OTP Types for different purposes
+export enum OTPType {
+	PHONE_VERIFICATION = "PHONE_VERIFICATION",
+	PASSWORD_RESET = "PASSWORD_RESET",
+	PHONE_CHANGE_CURRENT = "PHONE_CHANGE_CURRENT",
+	PHONE_CHANGE_NEW = "PHONE_CHANGE_NEW",
+}
+
 interface CreateOTPResult {
 	success: boolean;
 	otp?: string;
@@ -19,6 +27,14 @@ export class OTPUtils {
 	private static readonly OTP_EXPIRY_MINUTES = 5;
 	private static readonly MAX_ATTEMPTS = 5;
 
+	// Rate limiting configurations per OTP type
+	private static readonly RATE_LIMITS = {
+		[OTPType.PHONE_VERIFICATION]: { requests: 10, windowMinutes: 15 }, // 10 per 15 minutes (for development)
+		[OTPType.PASSWORD_RESET]: { requests: 6, windowMinutes: 15 }, // 6 per 15 minutes (for development)
+		[OTPType.PHONE_CHANGE_CURRENT]: { requests: 6, windowMinutes: 15 }, // 6 per 15 minutes (for development)
+		[OTPType.PHONE_CHANGE_NEW]: { requests: 6, windowMinutes: 15 }, // 6 per 15 minutes (for development)
+	};
+
 	/**
 	 * Generate a secure 6-digit OTP
 	 */
@@ -29,11 +45,12 @@ export class OTPUtils {
 	}
 
 	/**
-	 * Create and store an OTP for a user
+	 * Create and store an OTP for a user with specific type
 	 */
-	static async createOTP(
+	static async createOTPWithType(
 		userId: string,
-		phoneNumber: string
+		phoneNumber: string,
+		type: OTPType = OTPType.PHONE_VERIFICATION
 	): Promise<CreateOTPResult> {
 		try {
 			// Generate OTP and expiry time
@@ -42,11 +59,12 @@ export class OTPUtils {
 				Date.now() + this.OTP_EXPIRY_MINUTES * 60 * 1000
 			);
 
-			// Invalidate any existing OTPs for this user
+			// Invalidate any existing OTPs for this user and type
 			await prisma.phoneVerification.updateMany({
 				where: {
 					userId,
 					verified: false,
+					otpType: type,
 				},
 				data: {
 					verified: true, // Mark as used so they can't be reused
@@ -62,10 +80,11 @@ export class OTPUtils {
 					expiresAt,
 					verified: false,
 					attempts: 0,
+					otpType: type,
 				},
 			});
 
-			console.log(`OTP created for user ${userId}: ${otp} (expires at ${expiresAt})`);
+			console.log(`OTP created for user ${userId} (${type}): ${otp} (expires at ${expiresAt})`);
 
 			return {
 				success: true,
@@ -82,18 +101,20 @@ export class OTPUtils {
 	}
 
 	/**
-	 * Validate an OTP and mark user as verified if valid
+	 * Validate an OTP with specific type
 	 */
-	static async validateOTP(
+	static async validateOTPWithType(
 		phoneNumber: string,
-		otpCode: string
+		otpCode: string,
+		type: OTPType = OTPType.PHONE_VERIFICATION
 	): Promise<ValidateOTPResult> {
 		try {
-			// Find the most recent unverified OTP for this phone number
+			// Find the most recent unverified OTP for this phone number and type
 			const otpRecord = await prisma.phoneVerification.findFirst({
 				where: {
 					phoneNumber,
 					verified: false,
+					otpType: type,
 					expiresAt: {
 						gt: new Date(), // Not expired
 					},
@@ -137,22 +158,21 @@ export class OTPUtils {
 				};
 			}
 
-			// OTP is valid - mark as verified and update user
-			await prisma.$transaction(async (tx) => {
-				// Mark OTP as verified
-				await tx.phoneVerification.update({
-					where: { id: otpRecord.id },
-					data: { verified: true },
-				});
+			// OTP is valid - mark as verified
+			await prisma.phoneVerification.update({
+				where: { id: otpRecord.id },
+				data: { verified: true },
+			});
 
-				// Mark user's phone as verified
-				await tx.user.update({
+			// For phone verification, also update user's phone verification status
+			if (type === OTPType.PHONE_VERIFICATION) {
+				await prisma.user.update({
 					where: { id: otpRecord.userId },
 					data: { phoneVerified: true },
 				});
-			});
+			}
 
-			console.log(`Phone verification successful for user ${otpRecord.userId}`);
+			console.log(`${type} verification successful for user ${otpRecord.userId}`);
 
 			return {
 				success: true,
@@ -168,20 +188,27 @@ export class OTPUtils {
 	}
 
 	/**
-	 * Check if user can request a new OTP (rate limiting)
+	 * Check if user can request a new OTP with type-specific rate limiting
 	 */
-	static async canRequestNewOTP(phoneNumber: string): Promise<{
+	static async canRequestNewOTPWithType(
+		phoneNumber: string, 
+		type: OTPType = OTPType.PHONE_VERIFICATION
+	): Promise<{
 		canRequest: boolean;
 		waitTime?: number;
 		error?: string;
 	}> {
 		try {
-			// Check for recent OTP requests (within last minute)
-			const recentOTP = await prisma.phoneVerification.findFirst({
+			const rateLimit = this.RATE_LIMITS[type];
+			const windowStart = new Date(Date.now() - rateLimit.windowMinutes * 60 * 1000);
+
+			// Check for recent OTP requests within the rate limit window
+			const recentOTPs = await prisma.phoneVerification.findMany({
 				where: {
 					phoneNumber,
+					otpType: type,
 					createdAt: {
-						gt: new Date(Date.now() - 60 * 1000), // Last minute
+						gt: windowStart,
 					},
 				},
 				orderBy: {
@@ -189,14 +216,32 @@ export class OTPUtils {
 				},
 			});
 
-			if (recentOTP) {
-				const waitTime = Math.ceil(
-					(60 * 1000 - (Date.now() - recentOTP.createdAt.getTime())) / 1000
-				);
+			// Check if we've exceeded the rate limit
+			if (recentOTPs.length >= rateLimit.requests) {
+				const oldestInWindow = recentOTPs[recentOTPs.length - 1];
+				const resetTime = new Date(oldestInWindow.createdAt.getTime() + rateLimit.windowMinutes * 60 * 1000);
+				const waitTimeSeconds = Math.ceil((resetTime.getTime() - Date.now()) / 1000); // seconds
+
 				return {
 					canRequest: false,
-					waitTime: waitTime > 0 ? waitTime : 0,
+					waitTime: waitTimeSeconds > 0 ? waitTimeSeconds : 0,
+					error: `Rate limit exceeded. Please wait ${waitTimeSeconds} seconds before requesting a new OTP.`,
 				};
+			}
+
+			// Check for recent OTP requests (within last minute for immediate rate limiting)
+			const recentOTP = recentOTPs[0];
+			if (recentOTP) {
+				const timeSinceLastRequest = Date.now() - recentOTP.createdAt.getTime();
+				const oneMinuteInMs = 60 * 1000;
+				
+				if (timeSinceLastRequest < oneMinuteInMs) {
+					const waitTime = Math.ceil((oneMinuteInMs - timeSinceLastRequest) / 1000);
+					return {
+						canRequest: false,
+						waitTime: waitTime > 0 ? waitTime : 0,
+					};
+				}
 			}
 
 			return { canRequest: true };
@@ -207,6 +252,23 @@ export class OTPUtils {
 				error: error instanceof Error ? error.message : "Unknown error",
 			};
 		}
+	}
+
+	// Legacy methods for backward compatibility
+	static async createOTP(userId: string, phoneNumber: string): Promise<CreateOTPResult> {
+		return this.createOTPWithType(userId, phoneNumber, OTPType.PHONE_VERIFICATION);
+	}
+
+	static async validateOTP(phoneNumber: string, otpCode: string): Promise<ValidateOTPResult> {
+		return this.validateOTPWithType(phoneNumber, otpCode, OTPType.PHONE_VERIFICATION);
+	}
+
+	static async canRequestNewOTP(phoneNumber: string): Promise<{
+		canRequest: boolean;
+		waitTime?: number;
+		error?: string;
+	}> {
+		return this.canRequestNewOTPWithType(phoneNumber, OTPType.PHONE_VERIFICATION);
 	}
 
 	/**
@@ -231,9 +293,12 @@ export class OTPUtils {
 	}
 
 	/**
-	 * Get OTP status for a phone number
+	 * Get OTP status for a phone number with specific type
 	 */
-	static async getOTPStatus(phoneNumber: string): Promise<{
+	static async getOTPStatusWithType(
+		phoneNumber: string, 
+		type: OTPType = OTPType.PHONE_VERIFICATION
+	): Promise<{
 		hasActivePendingOTP: boolean;
 		attemptsRemaining?: number;
 		expiresAt?: Date;
@@ -243,6 +308,7 @@ export class OTPUtils {
 				where: {
 					phoneNumber,
 					verified: false,
+					otpType: type,
 					expiresAt: {
 						gt: new Date(),
 					},
@@ -265,5 +331,14 @@ export class OTPUtils {
 			console.error("Error getting OTP status:", error);
 			return { hasActivePendingOTP: false };
 		}
+	}
+
+	// Legacy method for backward compatibility
+	static async getOTPStatus(phoneNumber: string): Promise<{
+		hasActivePendingOTP: boolean;
+		attemptsRemaining?: number;
+		expiresAt?: Date;
+	}> {
+		return this.getOTPStatusWithType(phoneNumber, OTPType.PHONE_VERIFICATION);
 	}
 } 

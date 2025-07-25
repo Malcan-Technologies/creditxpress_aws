@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import "react-phone-input-2/lib/style.css";
 
 import {
 	UserCircleIcon,
@@ -25,6 +26,9 @@ import {
 	EyeSlashIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
+import { validatePhoneNumber } from "@/lib/phoneUtils";
+import EnhancedOTPVerification from "@/components/EnhancedOTPVerification";
+import PhoneInput from "react-phone-input-2";
 import { 
 	validateICOrPassport, 
 	extractDOBFromMalaysianIC, 
@@ -149,6 +153,14 @@ export default function ProfilePage() {
 	});
 	const [passwordLoading, setPasswordLoading] = useState(false);
 	const [passwordError, setPasswordError] = useState("");
+
+	// Phone change states
+	const [isChangingPhone, setIsChangingPhone] = useState(false);
+	const [phoneChangeStep, setPhoneChangeStep] = useState<'new-phone' | 'verify-new' | 'success'>('new-phone');
+	const [newPhoneNumber, setNewPhoneNumber] = useState("");
+	const [phoneChangeToken, setPhoneChangeToken] = useState("");
+	const [phoneChangeError, setPhoneChangeError] = useState("");
+	const [phoneChangeLoading, setPhoneChangeLoading] = useState(false);
 
 
 	const fetchDocuments = async () => {
@@ -473,6 +485,74 @@ export default function ProfilePage() {
 		}));
 	};
 
+	// Phone change handlers
+	const handleStartPhoneChange = () => {
+		setIsChangingPhone(true);
+		setPhoneChangeStep('new-phone');
+		setNewPhoneNumber("");
+		setPhoneChangeToken("");
+		setPhoneChangeError("");
+	};
+
+	const handleCancelPhoneChange = () => {
+		setIsChangingPhone(false);
+		setPhoneChangeStep('new-phone');
+		setNewPhoneNumber("");
+		setPhoneChangeToken("");
+		setPhoneChangeError("");
+	};
+
+	const handleNewPhoneSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setPhoneChangeError("");
+
+		// Validate phone number
+		const phoneValidation = validatePhoneNumber(newPhoneNumber, {
+			requireMobile: false,
+			allowLandline: true
+		});
+
+		if (!phoneValidation.isValid) {
+			setPhoneChangeError(phoneValidation.error || "Please enter a valid phone number");
+			return;
+		}
+
+		// Check if it's different from current
+		if (newPhoneNumber === profile?.phoneNumber) {
+			setPhoneChangeError("New phone number must be different from current");
+			return;
+		}
+
+		setPhoneChangeLoading(true);
+
+		try {
+			const data = await fetchWithTokenRefresh<{ changeToken: string; newPhone: string; message: string }>("/api/users/me/phone/change-request", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ newPhoneNumber }),
+			});
+
+			setPhoneChangeToken(data.changeToken);
+			setPhoneChangeStep('verify-new');
+		} catch (error) {
+			setPhoneChangeError(error instanceof Error ? error.message : "Failed to initiate phone change");
+		} finally {
+			setPhoneChangeLoading(false);
+		}
+	};
+
+	const handleNewPhoneVerified = (data: any) => {
+		setPhoneChangeStep('success');
+		
+		// Refresh profile data
+		fetchProfile();
+		
+		// Auto-close after success
+		setTimeout(() => {
+			handleCancelPhoneChange();
+		}, 3000);
+	};
+
 	return (
 			<DashboardLayout
 				userName={profile?.fullName?.split(" ")[0] || "User"}
@@ -492,9 +572,17 @@ export default function ProfilePage() {
 											<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700 mb-1">
 												{profile?.fullName || "User Profile"}
 											</h1>
-											<p className="text-sm lg:text-base text-purple-primary font-semibold">
-												{profile?.phoneNumber}
-											</p>
+																			<div className="flex items-center space-x-3">
+									<p className="text-sm lg:text-base text-purple-primary font-semibold">
+										{profile?.phoneNumber}
+									</p>
+									<button
+										onClick={handleStartPhoneChange}
+										className="text-xs px-3 py-1.5 bg-purple-primary/10 hover:bg-purple-primary/20 text-purple-primary rounded-lg transition-all duration-200 font-medium border border-purple-primary/20 hover:border-purple-primary/30"
+									>
+										Change
+									</button>
+								</div>
 										</div>
 									</div>
 									<div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
@@ -1178,6 +1266,193 @@ export default function ProfilePage() {
 						</div>
 					</div>
 				</div>
+
+				{/* Phone Change Modal */}
+				{isChangingPhone && (
+					<div 
+						className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+						onClick={(e) => {
+							if (e.target === e.currentTarget) {
+								handleCancelPhoneChange();
+							}
+						}}
+					>
+						<div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border border-gray-100 relative">
+							{phoneChangeStep === 'new-phone' && (
+								<div className="p-8">
+									<div className="flex items-center justify-between mb-8">
+										<div className="flex items-center space-x-3">
+											<div className="w-10 h-10 bg-purple-primary/10 rounded-xl flex items-center justify-center">
+												<PhoneIcon className="w-5 h-5 text-purple-primary" />
+											</div>
+											<h3 className="text-xl font-heading font-bold text-gray-700">
+												Change Phone Number
+											</h3>
+										</div>
+										<button
+											onClick={handleCancelPhoneChange}
+											className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+										>
+											<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+											</svg>
+										</button>
+									</div>
+
+									<div className="space-y-6">
+										<div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+											<div className="flex items-start space-x-3">
+												<div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+													<PhoneIcon className="w-4 h-4 text-blue-600" />
+												</div>
+																							<div>
+												<p className="text-sm font-medium text-blue-800 font-body mb-1">
+													Current phone: {profile?.phoneNumber}
+												</p>
+												<p className="text-sm text-blue-700 font-body">
+													You'll need to verify your new phone number to complete the change.
+												</p>
+											</div>
+											</div>
+										</div>
+
+										<form onSubmit={handleNewPhoneSubmit} className="space-y-6">
+											<div className="space-y-3">
+												<label className="block text-sm font-medium text-gray-700 font-body">
+													New Phone Number
+												</label>
+												<div className="relative">
+													<PhoneInput
+														country="my"
+														value={newPhoneNumber}
+														onChange={(value) => {
+															setNewPhoneNumber(value);
+															if (phoneChangeError) setPhoneChangeError("");
+														}}
+														inputProps={{
+															required: true,
+															placeholder: "12 345 6789",
+														}}
+														containerClass="!w-full !relative"
+														inputClass="!w-full !h-12 !pl-16 !pr-4 !py-3 !text-base !font-body !bg-white !border !border-gray-300 !text-gray-900 !placeholder-gray-400 hover:!border-purple-primary focus:!border-purple-primary focus:!ring-2 focus:!ring-purple-primary/20 !transition-all !rounded-xl !outline-none"
+														buttonClass="!h-12 !w-14 !border !border-gray-300 !bg-white hover:!bg-gray-50 !text-gray-700 !transition-colors !border-r-0 !rounded-l-xl !absolute !left-0 !top-0 !z-10"
+														dropdownClass="!bg-white !border !border-gray-300 !text-gray-900 !shadow-2xl !rounded-xl !mt-2 !max-h-60 !overflow-y-auto !min-w-80 !z-50"
+														enableSearch
+														disableSearchIcon
+														searchPlaceholder="Search country..."
+														searchClass="!px-3 !py-2 !border-b !border-gray-200 !text-sm"
+													/>
+												</div>
+												{phoneChangeError && (
+													<div className="bg-red-50 border border-red-200 rounded-lg p-3">
+														<p className="text-sm text-red-700 font-body">
+															{phoneChangeError}
+														</p>
+													</div>
+												)}
+											</div>
+
+											<div className="flex space-x-4 pt-6 border-t border-gray-100">
+												<button
+													type="button"
+													onClick={handleCancelPhoneChange}
+													className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+												>
+													Cancel
+												</button>
+												<button
+													type="submit"
+													disabled={phoneChangeLoading}
+													className="flex-1 px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-sm font-medium"
+												>
+													{phoneChangeLoading ? (
+														<div className="flex items-center justify-center">
+															<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+															Starting...
+														</div>
+													) : (
+														"Continue"
+													)}
+												</button>
+											</div>
+										</form>
+									</div>
+								</div>
+							)}
+
+							{phoneChangeStep === 'verify-new' && (
+								<div className="p-8">
+									<div className="flex items-center justify-between mb-8">
+										<div className="flex items-center space-x-3">
+											<div className="w-10 h-10 bg-purple-primary/10 rounded-xl flex items-center justify-center">
+												<ShieldCheckIcon className="w-5 h-5 text-purple-primary" />
+											</div>
+											<h3 className="text-xl font-heading font-bold text-gray-700">
+												Verify New Phone
+											</h3>
+										</div>
+										<button
+											onClick={handleCancelPhoneChange}
+											className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+										>
+											<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+											</svg>
+										</button>
+									</div>
+
+									<div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-5">
+										<div className="flex items-start space-x-3">
+											<div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+												<PhoneIcon className="w-4 h-4 text-blue-600" />
+											</div>
+											<div>
+												<p className="text-sm font-medium text-blue-800 font-body mb-1">
+													Verifying: {newPhoneNumber}
+												</p>
+												<p className="text-sm text-blue-700 font-body">
+													Please enter the verification code sent to your new phone number.
+												</p>
+											</div>
+										</div>
+									</div>
+
+									<EnhancedOTPVerification
+										phoneNumber={newPhoneNumber}
+										purpose="phone-change-new"
+										changeToken={phoneChangeToken}
+										onVerificationSuccess={handleNewPhoneVerified}
+										onBack={() => setPhoneChangeStep('new-phone')}
+									/>
+								</div>
+							)}
+
+							{phoneChangeStep === 'success' && (
+								<div className="p-8">
+									<div className="text-center">
+										<div className="w-20 h-20 mx-auto mb-6 bg-green-100 rounded-full flex items-center justify-center">
+											<svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+											</svg>
+										</div>
+										<h3 className="text-2xl font-heading font-bold text-gray-700 mb-3">
+											Phone Number Updated!
+										</h3>
+										<p className="text-base text-gray-600 font-body mb-6">
+											Your phone number has been successfully changed.
+										</p>
+										<div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
+											<div className="flex items-center justify-center space-x-2 text-sm text-green-700 font-body">
+												<div className="w-4 h-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent"></div>
+												<span>Closing automatically in 3 seconds...</span>
+											</div>
+										</div>
+									</div>
+								</div>
+							)}
+						</div>
+					</div>
+				)}
 			</DashboardLayout>
 	);
 }

@@ -9,8 +9,9 @@ import {
 import { prisma } from "../lib/prisma";
 import * as bcrypt from "bcryptjs";
 import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
-import { OTPUtils } from "../lib/otpUtils";
+import { OTPUtils, OTPType } from "../lib/otpUtils";
 import whatsappService from "../lib/whatsappService";
+import crypto from "crypto";
 
 const router = Router();
 
@@ -699,6 +700,291 @@ router.get("/test-bcrypt", async (_req, res) => {
 	} catch (error) {
 		console.error("Test bcrypt error:", error);
 		return res.status(500).json({ message: "Error testing bcrypt" });
+	}
+});
+
+/**
+ * @swagger
+ * /api/auth/forgot-password:
+ *   post:
+ *     summary: Initialize password reset flow with OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *                 example: "+1234567890"
+ *     responses:
+ *       200:
+ *         description: Password reset OTP sent successfully
+ *       400:
+ *         description: Invalid phone number
+ *       429:
+ *         description: Rate limit exceeded
+ *       500:
+ *         description: Server error
+ */
+router.post("/forgot-password", async (req, res) => {
+	try {
+		const { phoneNumber } = req.body;
+
+		// Validate phone number format
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: false,
+			allowLandline: true
+		});
+
+		if (!phoneValidation.isValid) {
+			return res.status(400).json({ 
+				message: phoneValidation.error || "Invalid phone number format" 
+			});
+		}
+
+		// Normalize phone number
+		const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+		// Check rate limiting for password reset OTPs
+		const rateLimitCheck = await OTPUtils.canRequestNewOTPWithType(
+			normalizedPhone, 
+			OTPType.PASSWORD_RESET
+		);
+
+		if (!rateLimitCheck.canRequest) {
+			return res.status(429).json({ 
+				message: rateLimitCheck.error || `Please wait ${rateLimitCheck.waitTime} seconds before requesting a new reset code`,
+				waitTime: rateLimitCheck.waitTime
+			});
+		}
+
+		// Find user by phone number (same logic as login)
+		let user = await User.findByPhoneNumber(normalizedPhone);
+		
+		if (!user && normalizedPhone.startsWith('+')) {
+			const phoneWithoutPlus = normalizedPhone.substring(1);
+			user = await User.findByPhoneNumber(phoneWithoutPlus);
+		}
+		
+		if (!user && !phoneNumber.startsWith('+')) {
+			const phoneWithPlus = '+' + phoneNumber;
+			user = await User.findByPhoneNumber(phoneWithPlus);
+		}
+
+		// Always return success to prevent user enumeration attacks
+		// But only send OTP if user exists
+		if (user) {
+			// Generate and send password reset OTP
+			const otpResult = await OTPUtils.createOTPWithType(
+				user.id, 
+				normalizedPhone, 
+				OTPType.PASSWORD_RESET
+			);
+
+			if (otpResult.success) {
+				// Send OTP via WhatsApp
+				try {
+					await whatsappService.sendOTP({
+						to: normalizedPhone,
+						otp: otpResult.otp!,
+					});
+					console.log(`Password reset OTP sent to ${normalizedPhone}`);
+				} catch (whatsappError) {
+					console.error("Error sending password reset OTP via WhatsApp:", whatsappError);
+					// Continue without failing - user can still request resend
+				}
+			}
+		}
+
+		// Always return success response to prevent user enumeration
+		return res.json({
+			message: "If this phone number is registered, you will receive a password reset code via WhatsApp"
+		});
+
+	} catch (error) {
+		console.error("Error in forgot-password:", error);
+		return res.status(500).json({ message: "Internal server error" });
+	}
+});
+
+/**
+ * @swagger
+ * /api/auth/verify-reset-otp:
+ *   post:
+ *     summary: Verify password reset OTP
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *               - otp
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *       400:
+ *         description: Invalid OTP or phone number
+ *       500:
+ *         description: Server error
+ */
+router.post("/verify-reset-otp", async (req, res) => {
+	try {
+		const { phoneNumber, otp } = req.body;
+
+		if (!phoneNumber || !otp) {
+			return res.status(400).json({ message: "Phone number and OTP are required" });
+		}
+
+		// Validate phone number format
+		const phoneValidation = validatePhoneNumber(phoneNumber, {
+			requireMobile: false,
+			allowLandline: true
+		});
+
+		if (!phoneValidation.isValid) {
+			return res.status(400).json({ 
+				message: phoneValidation.error || "Invalid phone number format" 
+			});
+		}
+
+		// Normalize phone number
+		const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+		// Validate the password reset OTP
+		const otpResult = await OTPUtils.validateOTPWithType(
+			normalizedPhone, 
+			otp, 
+			OTPType.PASSWORD_RESET
+		);
+
+		if (!otpResult.success) {
+			return res.status(400).json({ message: otpResult.error });
+		}
+
+		// Generate a temporary reset token for the password reset step
+		const resetToken = crypto.randomBytes(32).toString('hex');
+		const resetTokenExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+		// Store reset token in user record
+		await prisma.user.update({
+			where: { id: otpResult.userId },
+			data: {
+				// We'll need to add these fields to the User model
+				resetToken,
+				resetTokenExpiry
+			}
+		});
+
+		return res.json({
+			message: "OTP verified successfully",
+			resetToken,
+			userId: otpResult.userId
+		});
+
+	} catch (error) {
+		console.error("Error in verify-reset-otp:", error);
+		return res.status(500).json({ message: "Internal server error" });
+	}
+});
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password with verified token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - resetToken
+ *               - newPassword
+ *             properties:
+ *               resetToken:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid token or password
+ *       500:
+ *         description: Server error
+ */
+router.post("/reset-password", async (req, res) => {
+	try {
+		const { resetToken, newPassword } = req.body;
+
+		if (!resetToken || !newPassword) {
+			return res.status(400).json({ message: "Reset token and new password are required" });
+		}
+
+		// Validate password strength
+		if (newPassword.length < 8) {
+			return res.status(400).json({ message: "Password must be at least 8 characters long" });
+		}
+
+		// Find user with valid reset token
+		const user = await prisma.user.findFirst({
+			where: {
+				resetToken,
+				resetTokenExpiry: {
+					gt: new Date() // Token not expired
+				}
+			}
+		});
+
+		if (!user) {
+			return res.status(400).json({ message: "Invalid or expired reset token" });
+		}
+
+		// Hash new password
+		const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+		// Update password and clear reset token
+		await prisma.user.update({
+			where: { id: user.id },
+			data: {
+				password: hashedPassword,
+				resetToken: null,
+				resetTokenExpiry: null
+			}
+		});
+
+		// Invalidate all existing password reset OTPs for this user
+		await prisma.phoneVerification.updateMany({
+			where: {
+				userId: user.id,
+				otpType: OTPType.PASSWORD_RESET,
+				verified: false
+			},
+			data: {
+				verified: true
+			}
+		});
+
+		return res.json({ message: "Password reset successfully" });
+
+	} catch (error) {
+		console.error("Error in reset-password:", error);
+		return res.status(500).json({ message: "Internal server error" });
 	}
 });
 

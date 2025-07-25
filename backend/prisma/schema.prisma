@@ -72,6 +72,8 @@ model User {
   icType                       String?
   educationLevel               String?
   phoneVerified                Boolean             @default(false)
+  resetToken                   String?
+  resetTokenExpiry             DateTime?
   applications                 LoanApplication[]
   loans                        Loan[]
   notifications                Notification[]
@@ -79,6 +81,7 @@ model User {
   walletTransactions           WalletTransaction[]
   wallet                       Wallet?
   phoneVerifications           PhoneVerification[]
+  phoneChangeRequests          PhoneChangeRequest[]
 
   @@map("users")
 }
@@ -347,6 +350,7 @@ model PhoneVerification {
   expiresAt   DateTime
   verified    Boolean  @default(false)
   attempts    Int      @default(0)
+  otpType     String   @default("PHONE_VERIFICATION") // OTP type for different purposes
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -354,7 +358,27 @@ model PhoneVerification {
   @@index([phoneNumber])
   @@index([expiresAt])
   @@index([userId, verified])
+  @@index([phoneNumber, otpType])
   @@map("phone_verifications")
+}
+
+model PhoneChangeRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  currentPhone    String
+  newPhone        String
+  currentVerified Boolean  @default(false)
+  newVerified     Boolean  @default(false)
+  changeToken     String   @unique
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([changeToken])
+  @@index([expiresAt])
+  @@map("phone_change_requests")
 }
 
 enum WalletTransactionStatus {
