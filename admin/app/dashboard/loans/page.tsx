@@ -124,6 +124,23 @@ interface LoanData {
 		phoneNumber: string;
 	};
 	repayments?: LoanRepayment[];
+	overdueInfo?: {
+		hasOverduePayments: boolean;
+		totalOverdueAmount: number;
+		totalLateFees: number;
+		overdueRepayments: Array<{
+			id: string;
+			amount: number;
+			outstandingAmount: number;
+			totalLateFees: number;
+			totalAmountDue: number;
+			dueDate: string;
+			daysOverdue: number;
+			lateFeeAmount: number;
+			lateFeesPaid: number;
+			installmentNumber?: number;
+		}>;
+	};
 }
 
 function ActiveLoansContent() {
@@ -216,6 +233,23 @@ function ActiveLoansContent() {
 			if (response.success && response.data) {
 				// Include all loan statuses (ACTIVE, PENDING_DISCHARGE, DISCHARGED)
 				setLoans(response.data);
+				
+				// Debug: Log overdue info for each loan
+				console.log("🔍 DEBUG: Loans data received:", response.data.length);
+				response.data.forEach((loan, index) => {
+					if (loan.overdueInfo) {
+						console.log(`🔍 Loan ${index + 1} (${loan.id.substring(0, 8)}):`, {
+							hasOverduePayments: loan.overdueInfo.hasOverduePayments,
+							totalOverdueAmount: loan.overdueInfo.totalOverdueAmount,
+							totalLateFees: loan.overdueInfo.totalLateFees,
+							overdueRepaymentsCount: loan.overdueInfo.overdueRepayments.length,
+							status: loan.status,
+							nextPaymentDue: loan.nextPaymentDue
+						});
+					} else {
+						console.log(`❌ Loan ${index + 1} (${loan.id.substring(0, 8)}): No overdueInfo`);
+					}
+				});
 			} else {
 				setError("Failed to load loans data");
 			}
@@ -731,13 +765,29 @@ function ActiveLoansContent() {
 		});
 	};
 
-	const getDaysLate = (nextPaymentDue: string | null) => {
-		if (!nextPaymentDue) return 0;
-		const dueDate = new Date(nextPaymentDue);
+	// Helper function to calculate days late for a specific date
+	const getDaysLateFromDate = (dueDate: string | null) => {
+		if (!dueDate) return 0;
+		const due = new Date(dueDate);
 		const today = new Date();
-		const diffTime = today.getTime() - dueDate.getTime();
+		const diffTime = today.getTime() - due.getTime();
 		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 		return diffDays > 0 ? diffDays : 0;
+	};
+
+	const getDaysLate = (loan: LoanData) => {
+		// Use backend's overdueInfo if available and has overdue payments
+		if (loan.overdueInfo?.hasOverduePayments && loan.overdueInfo.overdueRepayments.length > 0) {
+			// Return the maximum days overdue from all overdue repayments
+			const maxDaysLate = Math.max(...loan.overdueInfo.overdueRepayments.map(r => r.daysOverdue));
+			console.log(`🔍 getDaysLate for loan ${loan.id.substring(0, 8)}: Using overdueInfo, maxDaysLate=${maxDaysLate}`);
+			return maxDaysLate;
+		}
+		
+		// Fallback to nextPaymentDue check for backward compatibility
+		const fallbackDays = getDaysLateFromDate(loan.nextPaymentDue);
+		console.log(`🔍 getDaysLate for loan ${loan.id.substring(0, 8)}: Using fallback, days=${fallbackDays}, hasOverdueInfo=${!!loan.overdueInfo}, hasOverduePayments=${loan.overdueInfo?.hasOverduePayments}`);
+		return fallbackDays;
 	};
 
 	const getLateStatusColor = (daysLate: number) => {
@@ -884,12 +934,20 @@ function ActiveLoansContent() {
 
 	const getHistoryActionDescription = (
 		previousStatus: string | null,
-		newStatus: string
+		newStatus: string,
+		changeReason?: string
 	): string => {
+		// If changeReason is provided, use it directly
+		if (changeReason) {
+			return changeReason;
+		}
+
+		// If no previous status, this is application creation
 		if (!previousStatus) {
 			return `Application created with status: ${getStatusLabel(newStatus)}`;
 		}
 
+		// Otherwise, this is a status change
 		return `Status changed to ${getStatusLabel(newStatus)}`;
 	};
 
@@ -1623,9 +1681,7 @@ function ActiveLoansContent() {
 							{filteredLoans.length > 0 ? (
 								<ul className="divide-y divide-gray-700/30">
 									{filteredLoans.map((loan) => {
-										const daysLate = getDaysLate(
-											loan.nextPaymentDue
-										);
+										const daysLate = getDaysLate(loan);
 										const lateStatus =
 											getLateStatusColor(daysLate);
 										const loanStatus = getLoanStatusColor(
@@ -2014,21 +2070,19 @@ function ActiveLoansContent() {
 
 										{/* Payment Status Alert */}
 										{(() => {
-											const nextPayment =
-												getNextPaymentDetails(
-													selectedLoan.repayments ||
-														[]
-												);
-											const daysLate = nextPayment.dueDate
-												? getDaysLate(
-														nextPayment.dueDate
-												  )
-												: 0;
+											// Use backend's overdueInfo for consistent overdue detection
+											const hasOverduePayments = selectedLoan.overdueInfo?.hasOverduePayments;
+											const overdueRepayments = selectedLoan.overdueInfo?.overdueRepayments || [];
+											
+											// Get the most overdue repayment for display
+											const mostOverdueRepayment = overdueRepayments.length > 0 
+												? overdueRepayments.reduce((max, current) => 
+													current.daysOverdue > max.daysOverdue ? current : max
+												)
+												: null;
 
-											if (
-												daysLate > 0 &&
-												nextPayment.amount > 0
-											) {
+											if (hasOverduePayments && mostOverdueRepayment) {
+												const daysLate = mostOverdueRepayment.daysOverdue;
 												const lateStatus =
 													getLateStatusColor(
 														daysLate
@@ -2053,18 +2107,18 @@ function ActiveLoansContent() {
 																<p className="text-sm text-gray-300 mt-1">
 																	Payment of{" "}
 																	{formatCurrency(
-																		nextPayment.amount
+																		mostOverdueRepayment.totalAmountDue
 																	)}{" "}
 																	was due:{" "}
 																	{formatDate(
-																		nextPayment.dueDate
+																		mostOverdueRepayment.dueDate
 																	)}
-																	{nextPayment.installmentNumber && (
+																	{mostOverdueRepayment.installmentNumber && (
 																		<span className="ml-1">
 																			(Installment
 																			#
 																			{
-																				nextPayment.installmentNumber
+																				mostOverdueRepayment.installmentNumber
 																			}
 																			)
 																		</span>
@@ -3115,7 +3169,8 @@ function ActiveLoansContent() {
 																						<p className="text-sm font-medium text-white">
 																							{getHistoryActionDescription(
 																								event.data.previousStatus,
-																								event.data.newStatus
+																								event.data.newStatus,
+																								event.data.changeReason
 																							)}
 																						</p>
 																						<p className="text-xs text-gray-400">
@@ -3206,14 +3261,14 @@ function ActiveLoansContent() {
 						<h3 className="text-lg font-medium text-white mb-4">
 							Create Manual Payment
 						</h3>
-						<p className="text-gray-300 mb-6 text-sm">
-							Create a manual payment for direct bank transfers or other offline payments.
+						<div className="text-gray-300 mb-6 text-sm">
+							<p>Create a manual payment for direct bank transfers or other offline payments.</p>
 							{selectedLoan && (
-								<span className="block mt-2 text-purple-300">
+								<p className="mt-2 text-purple-300">
 									For: {selectedLoan.user.fullName} (Loan ID: {selectedLoan.id.substring(0, 8)})
-								</span>
+								</p>
 							)}
-						</p>
+						</div>
 						
 						<div className="space-y-4">
 							{/* Loan ID - Pre-filled and read-only */}

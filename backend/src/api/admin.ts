@@ -13,6 +13,10 @@ import lateFeeRoutes from "./admin/late-fees";
 import whatsappService from "../lib/whatsappService";
 
 import { CronScheduler } from "../lib/cronScheduler";
+import { TimeUtils } from "../lib/precisionUtils";
+
+// Grace period before late fees start accruing (in days) - same as lateFeeProcessor
+const LATE_FEE_GRACE_PERIOD_DAYS = 3;
 
 // Helper function to format date for WhatsApp notification
 function formatDateForWhatsApp(date: Date): string {
@@ -3861,6 +3865,8 @@ router.get(
 	authenticateToken,
 	async (req: AuthRequest, res: Response) => {
 		try {
+			console.log("🔍 DEBUG: Admin loans endpoint called - enhanced version");
+			
 			// Get user data from database to check role instead of relying on req.user.role
 			const user = await prisma.user.findUnique({
 				where: { id: req.user?.userId },
@@ -3923,11 +3929,19 @@ router.get(
 							dueDate: true,
 							paidAt: true,
 							createdAt: true,
+							actualAmount: true,
+							lateFeeAmount: true,
+							lateFeesPaid: true,
+							principalPaid: true,
+							installmentNumber: true,
+							scheduledAmount: true,
+							paymentType: true,
+							daysEarly: true,
+							daysLate: true,
 						},
 						orderBy: {
-							dueDate: "desc",
+							dueDate: "asc",
 						},
-						take: 5, // Just for summary - full data loaded on repayments tab
 					},
 				},
 				orderBy: {
@@ -3935,9 +3949,123 @@ router.get(
 				},
 			});
 
+			// Enhanced loans with overdue information (same logic as user loans endpoint)
+
+			const loansWithOverdueInfo = await Promise.all(
+				loans.map(async (loan) => {
+					// Get overdue repayments and late fee information
+					let overdueInfo = {
+						hasOverduePayments: false,
+						totalOverdueAmount: 0,
+						totalLateFees: 0,
+						overdueRepayments: [] as any[],
+					};
+
+					try {
+						// Get all pending/partial repayments that are overdue using raw query
+						const today = TimeUtils.malaysiaStartOfDay();
+
+						// Apply 3-day grace period - only consider repayments overdue after grace period
+						const gracePeriodDate = new Date(today);
+						gracePeriodDate.setDate(gracePeriodDate.getDate() - LATE_FEE_GRACE_PERIOD_DAYS);
+
+						const overdueRepaymentsQuery = `
+							SELECT 
+								lr.*,
+								COALESCE(lr."lateFeeAmount" - lr."lateFeesPaid", 0) as total_late_fees,
+								COALESCE(lr."principalPaid", 0) as principal_paid
+							FROM loan_repayments lr
+							WHERE lr."loanId" = $1
+							  AND lr.status IN ('PENDING', 'PARTIAL')
+							  AND lr."dueDate" < $2
+							ORDER BY lr."dueDate" ASC
+						`;
+
+						const overdueRepayments = (await prisma.$queryRawUnsafe(
+							overdueRepaymentsQuery,
+							loan.id,
+							gracePeriodDate
+						)) as any[];
+
+						if (overdueRepayments.length > 0) {
+							console.log(
+								`🔍 DEBUG: Admin - Overdue repayments for loan ${loan.id} (after ${LATE_FEE_GRACE_PERIOD_DAYS}-day grace period):`,
+								overdueRepayments.map((r) => ({
+									id: r.id,
+									amount: r.amount,
+									actualAmount: r.actualAmount,
+									status: r.status,
+									dueDate: r.dueDate,
+									total_late_fees: r.total_late_fees,
+									daysOverdue: TimeUtils.daysOverdue(new Date(r.dueDate)),
+								}))
+							);
+
+							// Only set hasOverduePayments = true if late fees have been processed
+							// Check if any repayment has lateFeeAmount > 0 (late fees have been calculated)
+							const hasProcessedLateFees = overdueRepayments.some(r => 
+								(r.lateFeeAmount || 0) > 0
+							);
+							overdueInfo.hasOverduePayments = hasProcessedLateFees;
+
+							// Calculate total overdue amount and late fees
+							for (const repayment of overdueRepayments) {
+								// Use principalPaid instead of actualAmount for correct calculation
+								// actualAmount includes late fees paid, so it's not suitable for calculating remaining scheduled amount
+								const principalPaid = repayment.principal_paid || 0;
+								const outstandingAmount = Math.max(
+									0,
+									repayment.amount - principalPaid
+								);
+
+								const totalLateFees =
+									Number(repayment.total_late_fees) || 0;
+
+								overdueInfo.totalOverdueAmount += outstandingAmount;
+								overdueInfo.totalLateFees += totalLateFees;
+
+								overdueInfo.overdueRepayments.push({
+									id: repayment.id,
+									amount: repayment.amount,
+									outstandingAmount,
+									totalLateFees,
+									totalAmountDue:
+										outstandingAmount + totalLateFees,
+									dueDate: repayment.dueDate,
+									daysOverdue: TimeUtils.daysOverdue(new Date(repayment.dueDate)),
+									// Add breakdown of late fees for better frontend tracking
+									lateFeeAmount: Number(repayment.lateFeeAmount) || 0,
+									lateFeesPaid: Number(repayment.lateFeesPaid) || 0,
+									installmentNumber: repayment.installmentNumber,
+								});
+							}
+						}
+					} catch (error) {
+						console.error(
+							`Error calculating late fees for loan ${loan.id}:`,
+							error
+						);
+						// Continue without late fee info if there's an error
+					}
+
+					// Debug logging
+					console.log(`🔍 DEBUG Admin: Loan ${loan.id.substring(0, 8)} overdueInfo:`, {
+						hasOverduePayments: overdueInfo.hasOverduePayments,
+						totalOverdueAmount: overdueInfo.totalOverdueAmount,
+						totalLateFees: overdueInfo.totalLateFees,
+						overdueRepaymentsCount: overdueInfo.overdueRepayments.length
+					});
+
+					return {
+						...loan,
+						overdueInfo,
+					};
+				})
+			);
+
 			return res.status(200).json({
 				success: true,
-				data: loans,
+				data: loansWithOverdueInfo,
 			});
 		} catch (error) {
 			console.error("Error fetching loans:", error);
