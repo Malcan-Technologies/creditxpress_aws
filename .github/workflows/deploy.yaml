@@ -275,25 +275,39 @@ jobs:
               export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
               export GENERATE_SOURCEMAP=false
               
-              # Run build with timeout
-              if ! timeout 400 pnpm run build:prod; then
-                echo "⚠️ Build failed with pnpm. Trying direct Next.js command..."
-                if ! timeout 400 next build --no-lint; then
-                  echo "⚠️ Build also failed with direct Next.js command."
-                  echo "Creating empty .next directory to continue deployment..."
-                  mkdir -p .next/static
-                  touch .next/static/.gitkeep
+              # Run build and check for success
+              BUILD_SUCCESS=false
+              if timeout 400 pnpm run build:prod; then
+                echo "✅ Build completed successfully with pnpm"
+                BUILD_SUCCESS=true
+              else
+                echo "⚠️ Build failed with pnpm. Trying with npx next build..."
+                if timeout 400 npx next build --no-lint; then
+                  echo "✅ Build completed successfully with npx"
+                  BUILD_SUCCESS=true
+                else
+                  echo "❌ Build failed with both pnpm and npx"
+                  BUILD_SUCCESS=false
                 fi
               fi
               
               # Start or restart the frontend service
               if pm2 list | grep -q "growkapital-frontend"; then
                 echo "🔄 Restarting frontend service..."
-                pm2 restart growkapital-frontend
+                if [ "$BUILD_SUCCESS" = "true" ]; then
+                  pm2 restart growkapital-frontend
+                else
+                  echo "❌ Build failed - stopping frontend service"
+                  pm2 stop growkapital-frontend
+                fi
               else
-                echo "▶️ Starting frontend service..."
-                pm2 start npm --name "growkapital-frontend" -- start -- --port 3002 --hostname 0.0.0.0
-                pm2 save
+                if [ "$BUILD_SUCCESS" = "true" ]; then
+                  echo "▶️ Starting frontend service..."
+                  pm2 start npm --name "growkapital-frontend" -- start -- --port 3002 --hostname 0.0.0.0
+                  pm2 save
+                else
+                  echo "❌ Build failed - cannot start frontend service"
+                fi
               fi
             '
             echo "✅ Frontend deployment completed"
@@ -378,14 +392,19 @@ jobs:
               export NEXT_PUBLIC_SKIP_BUILD_ERROR=1
               export GENERATE_SOURCEMAP=false
               
-              # Run build with timeout
-              if ! timeout 400 pnpm run build:prod; then
-                echo "⚠️ Build failed with pnpm. Trying direct Next.js command..."
-                if ! timeout 400 next build --no-lint; then
-                  echo "⚠️ Build also failed with direct Next.js command."
-                  echo "Creating empty .next directory to continue deployment..."
-                  mkdir -p .next/static
-                  touch .next/static/.gitkeep
+              # Run build and check for success
+              BUILD_SUCCESS=false
+              if timeout 400 pnpm run build:prod; then
+                echo "✅ Build completed successfully with pnpm"
+                BUILD_SUCCESS=true
+              else
+                echo "⚠️ Build failed with pnpm. Trying with npx next build..."
+                if timeout 400 npx next build --no-lint; then
+                  echo "✅ Build completed successfully with npx"
+                  BUILD_SUCCESS=true
+                else
+                  echo "❌ Build failed with both pnpm and npx"
+                  BUILD_SUCCESS=false
                 fi
               fi
               
@@ -397,16 +416,26 @@ jobs:
               fi
               
               echo "▶️ Starting admin service..."
-              # Try multiple startup methods in order of preference
-              if [ -f "ecosystem.config.js" ]; then
-                echo "Using ecosystem config..."
-                pm2 start ecosystem.config.js
-              elif [ -f ".next/standalone/server.js" ]; then
+              # Choose startup method based on build success and available files
+              if [ "$BUILD_SUCCESS" = "true" ] && [ -f ".next/standalone/server.js" ]; then
                 echo "Using standalone server..."
                 PORT=3003 pm2 start .next/standalone/server.js --name "growkapital-admin"
-              else
-                echo "Using npm start..."
+              elif [ "$BUILD_SUCCESS" = "true" ] && [ -f "ecosystem.config.js" ] && [ -d ".next" ]; then
+                echo "Build succeeded but no standalone server - using npm start via ecosystem..."
+                # Temporarily modify ecosystem to use npm start
+                cp ecosystem.config.js ecosystem.config.js.backup
+                sed 's|script: ".next/standalone/server.js"|script: "npm"|' ecosystem.config.js.backup > ecosystem.config.js
+                sed -i 's|exec_mode: "fork"|exec_mode: "fork", args: "start"|' ecosystem.config.js
+                pm2 start ecosystem.config.js
+                mv ecosystem.config.js.backup ecosystem.config.js
+              elif [ "$BUILD_SUCCESS" = "true" ]; then
+                echo "Using npm start directly..."
                 pm2 start npm --name "growkapital-admin" -- start
+              else
+                echo "❌ Build failed - cannot start admin service"
+                echo "Creating placeholder service that will show build error..."
+                echo "console.log('Admin build failed - please check build logs'); process.exit(1);" > build-failed.js
+                pm2 start build-failed.js --name "growkapital-admin"
               fi
               pm2 save
             '
