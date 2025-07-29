@@ -413,8 +413,15 @@ function ActiveLoansContent() {
 			filtered = filtered.filter((loan) => loan.status === "DISCHARGED");
 		} else if (statusFilter === "late") {
 			filtered = filtered.filter((loan) => {
-				if (loan.status !== "ACTIVE" || !loan.nextPaymentDue)
-					return false;
+				if (loan.status !== "ACTIVE") return false;
+				
+				// Use backend's overdueInfo if available
+				if (loan.overdueInfo) {
+					return loan.overdueInfo.hasOverduePayments && loan.overdueInfo.overdueRepayments.length > 0;
+				}
+				
+				// Fallback to nextPaymentDue check for backward compatibility
+				if (!loan.nextPaymentDue) return false;
 				const dueDate = new Date(loan.nextPaymentDue);
 				const today = new Date();
 				return dueDate < today;
