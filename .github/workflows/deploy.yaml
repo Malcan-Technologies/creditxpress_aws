@@ -420,22 +420,12 @@ jobs:
               if [ "$BUILD_SUCCESS" = "true" ] && [ -f ".next/standalone/server.js" ]; then
                 echo "Using standalone server..."
                 PORT=3003 pm2 start .next/standalone/server.js --name "growkapital-admin"
-              elif [ "$BUILD_SUCCESS" = "true" ] && [ -f "ecosystem.config.js" ] && [ -d ".next" ]; then
-                echo "Build succeeded but no standalone server - using npm start via ecosystem..."
-                # Temporarily modify ecosystem to use npm start
-                cp ecosystem.config.js ecosystem.config.js.backup
-                sed 's|script: ".next/standalone/server.js"|script: "npm"|' ecosystem.config.js.backup > ecosystem.config.js
-                sed -i 's|exec_mode: "fork"|exec_mode: "fork", args: "start"|' ecosystem.config.js
-                pm2 start ecosystem.config.js
-                mv ecosystem.config.js.backup ecosystem.config.js
               elif [ "$BUILD_SUCCESS" = "true" ]; then
-                echo "Using npm start directly..."
+                echo "Using npm start..."
                 pm2 start npm --name "growkapital-admin" -- start
               else
                 echo "❌ Build failed - cannot start admin service"
-                echo "Creating placeholder service that will show build error..."
-                echo "console.log('Admin build failed - please check build logs'); process.exit(1);" > build-failed.js
-                pm2 start build-failed.js --name "growkapital-admin"
+                echo "Skipping service start due to build failure"
               fi
               pm2 save
             '
