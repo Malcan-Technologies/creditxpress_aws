@@ -6498,24 +6498,26 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 	
 	// Calculate pro-rated first payment for actual period from disbursement to first payment
 	const daysInFirstPeriod = calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
-	const daysInFullTerm = term * 30; // Total days for the entire loan term (using 30-day months)
-	const monthlyInterestRateDecimal = SafeMath.toNumber(loan.interestRate) / 100; // Monthly interest rate as decimal
-	const dailyInterestRate = monthlyInterestRateDecimal / 30; // Daily interest rate from monthly (consistent with 30-day months)
 	
-	// Calculate interest for the actual period from disbursement to first payment
-	const firstPeriodInterest = SafeMath.toNumber(
-		principal * dailyInterestRate * daysInFirstPeriod
-	);
+	// PROPORTIONAL METHOD: Use actual average days per period instead of assumed 30 days
+	const actualAverageDaysPerPeriod = calculateActualAverageDaysPerPeriod(disbursementDate, term);
+	const standardMonthlyPayment = SafeMath.divide(totalAmountToPay, term);
+	const proRatedRatio = SafeMath.divide(daysInFirstPeriod, actualAverageDaysPerPeriod); // Ratio of actual days to actual average days
 	
-	// Calculate principal portion for first payment (proportional to time period)
-	const firstPeriodPrincipalRatio = SafeMath.divide(daysInFirstPeriod, daysInFullTerm);
-	const firstPeriodPrincipal = SafeMath.multiply(principal, firstPeriodPrincipalRatio);
+	// Calculate pro-rated amounts by applying the ratio to standard monthly amounts
+	const monthlyInterestPortion = SafeMath.divide(totalInterest, term);
+	const monthlyPrincipalPortion = SafeMath.divide(principal, term);
 	
-	console.log(`First payment calculation:`);
+	const firstPeriodInterest = SafeMath.multiply(monthlyInterestPortion, proRatedRatio);
+	const firstPeriodPrincipal = SafeMath.multiply(monthlyPrincipalPortion, proRatedRatio);
+	
+	console.log(`First payment calculation (Proportional Method):`);
 	console.log(`  Disbursement: ${disbursementDate.toISOString()}`);
 	console.log(`  First payment due: ${firstPaymentDate.toISOString()}`);
 	console.log(`  Days in first period: ${daysInFirstPeriod}`);
-	console.log(`  Daily interest rate: ${dailyInterestRate.toFixed(6)}`);
+	console.log(`  Actual average days per period: ${actualAverageDaysPerPeriod.toFixed(1)}`);
+	console.log(`  Standard monthly payment: ${standardMonthlyPayment.toFixed(2)}`);
+	console.log(`  Pro-rated ratio: ${(proRatedRatio * 100).toFixed(2)}% (vs actual average, not assumed 30 days)`);
 	console.log(`  First period interest: ${firstPeriodInterest.toFixed(2)}`);
 	console.log(`  First period principal: ${firstPeriodPrincipal.toFixed(2)}`);
 
@@ -8684,6 +8686,39 @@ function calculateDaysBetweenMalaysia(startDate: Date, endDate: Date): number {
 	
 	const diffMs = endDay.getTime() - startDay.getTime();
 	return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+}
+
+// Helper function to calculate actual average days per period for the entire loan term
+function calculateActualAverageDaysPerPeriod(disbursementDate: Date, term: number): number {
+	const firstPaymentDate = calculateFirstPaymentDate(disbursementDate);
+	let totalDays = 0;
+	
+	// Calculate days for the first period (disbursement to first payment)
+	totalDays += calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
+	
+	// Calculate days for subsequent periods (payment to payment)
+	let currentPaymentDate = firstPaymentDate;
+	for (let month = 2; month <= term; month++) {
+		// Calculate next payment date (1st of next month)
+		const currentMalaysia = new Date(currentPaymentDate.getTime() + (8 * 60 * 60 * 1000));
+		let nextMonth = currentMalaysia.getUTCMonth() + 1;
+		let nextYear = currentMalaysia.getUTCFullYear();
+		
+		if (nextMonth > 11) {
+			nextMonth = 0;
+			nextYear++;
+		}
+		
+		const nextPaymentDate = new Date(Date.UTC(nextYear, nextMonth, 1, 15, 59, 59, 999));
+		
+		// Add days in this period
+		totalDays += calculateDaysBetweenMalaysia(currentPaymentDate, nextPaymentDate);
+		
+		// Move to next period
+		currentPaymentDate = nextPaymentDate;
+	}
+	
+	return totalDays / term;
 }
 
 /**
