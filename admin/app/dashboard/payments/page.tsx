@@ -545,10 +545,10 @@ function PaymentsContent() {
 				setCSVResults(data.data);
 				setShowMatchingResults(true);
 				
-				// Auto-select high-confidence matches (score >= 70)
+				// Auto-select high-confidence matches (score >= 50%) - High confidence threshold
 				const highConfidenceMatches = new Set<string>();
 				data.data.matches?.forEach((match: any) => {
-					if (match.matchScore >= 70) {
+					if (match.matchScore >= 50) {
 						highConfidenceMatches.add(match.payment.id);
 					}
 				});
@@ -1583,6 +1583,9 @@ function PaymentsContent() {
 															Match Score
 														</th>
 														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+															Transaction Date
+														</th>
+														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
 															Bank Transaction
 														</th>
 														<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
@@ -1610,8 +1613,8 @@ function PaymentsContent() {
 															<td className="px-4 py-3">
 																<div className="flex items-center">
 																	<span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-																		match.matchScore >= 80 ? 'bg-green-500/20 text-green-200 border border-green-400/20' :
-																		match.matchScore >= 60 ? 'bg-yellow-500/20 text-yellow-200 border border-yellow-400/20' :
+																		match.matchScore >= 70 ? 'bg-green-500/20 text-green-200 border border-green-400/20' :
+																		match.matchScore >= 50 ? 'bg-yellow-500/20 text-yellow-200 border border-yellow-400/20' :
 																		'bg-red-500/20 text-red-200 border border-red-400/20'
 																	}`}>
 																		{match.matchScore}%
@@ -1620,8 +1623,24 @@ function PaymentsContent() {
 															</td>
 															<td className="px-4 py-3">
 																<div className="text-white text-sm">
-																	<div className="font-medium">{match.transaction.refCode}</div>
-																	<div className="text-gray-400 text-xs">{match.transaction.beneficiary}</div>
+																	{match.transaction.transactionDate ? (
+																		<div className="text-purple-400 font-medium">
+																			{new Date(match.transaction.transactionDate).toLocaleDateString('en-MY', {
+																				year: 'numeric',
+																				month: 'short',
+																				day: 'numeric',
+																				timeZone: 'Asia/Kuala_Lumpur'
+																			})}
+																		</div>
+																	) : (
+																		<div className="text-gray-500 text-xs">No date</div>
+																	)}
+																</div>
+															</td>
+															<td className="px-4 py-3">
+																<div className="text-white text-sm">
+																	<div className="font-medium">{match.transaction.beneficiary}</div>
+																	<div className="text-gray-400 text-xs">{match.transaction.refCode}</div>
 																	<div className="text-green-400 font-medium">{formatCurrency(match.transaction.amount)}</div>
 																</div>
 															</td>

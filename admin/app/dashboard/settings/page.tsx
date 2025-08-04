@@ -312,20 +312,46 @@ function SettingsPageContent() {
 	const renderSettingInput = (setting: SystemSetting) => {
 		const { key, dataType, value, options } = setting;
 
+		// Check if this setting should be conditionally displayed
+		const shouldShowSetting = () => {
+			// Show custom date and cutoff settings only when CUSTOM_DATE is selected
+			if (key === "CUSTOM_DUE_DATE" || key === "PRORATION_CUTOFF_DATE") {
+				const scheduleTypeSetting = Object.values(settings).flat().find(s => s.key === "PAYMENT_SCHEDULE_TYPE");
+				return scheduleTypeSetting?.value === "CUSTOM_DATE";
+			}
+			return true;
+		};
+
+		if (!shouldShowSetting()) {
+			return (
+				<div className="text-sm text-gray-500 italic">
+					Only applies when "Custom Date of Month" is selected
+				</div>
+			);
+		}
+
 		switch (dataType) {
 			case "ENUM":
 				return (
-					<select
-						value={value}
-						onChange={(e) => handleSettingChange(key, e.target.value)}
-						className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-					>
-						{options && Object.entries(options).map(([optionKey, optionData]: [string, any]) => (
-							<option key={optionKey} value={optionKey}>
-								{optionData.label}
-							</option>
-						))}
-					</select>
+					<div className="space-y-2">
+						<select
+							value={value}
+							onChange={(e) => handleSettingChange(key, e.target.value)}
+							className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+						>
+							{options && Object.entries(options).map(([optionKey, optionData]: [string, any]) => (
+								<option key={optionKey} value={optionKey}>
+									{optionData.label}
+								</option>
+							))}
+						</select>
+						{/* Show description of selected option */}
+						{options && options[value] && (
+							<div className="text-xs text-blue-300 bg-blue-900/20 p-2 rounded border border-blue-700/30">
+								<strong>Current:</strong> {options[value].description}
+							</div>
+						)}
+					</div>
 				);
 
 			case "BOOLEAN":
@@ -346,15 +372,28 @@ function SettingsPageContent() {
 
 			case "NUMBER":
 				return (
-					<input
-						type="number"
-						value={value}
-						onChange={(e) => handleSettingChange(key, parseFloat(e.target.value))}
-						min={options?.min}
-						max={options?.max}
-						step={options?.step || 1}
-						className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-					/>
+					<div className="space-y-2">
+						<input
+							type="number"
+							value={value}
+							onChange={(e) => handleSettingChange(key, parseFloat(e.target.value))}
+							min={options?.min}
+							max={options?.max}
+							step={options?.step || 1}
+							className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+						/>
+						{/* Show example for specific settings */}
+						{key === "CUSTOM_DUE_DATE" && (
+							<div className="text-xs text-green-300 bg-green-900/20 p-2 rounded border border-green-700/30">
+								<strong>Example:</strong> Setting to "1" means all payments due on 1st of each month, "15" means 15th of each month
+							</div>
+						)}
+						{key === "PRORATION_CUTOFF_DATE" && (
+							<div className="text-xs text-yellow-300 bg-yellow-900/20 p-2 rounded border border-yellow-700/30">
+								<strong>Example:</strong> Setting to "20" means loans disbursed on 20th or later get pushed to next month's payment cycle
+							</div>
+						)}
+					</div>
 				);
 
 			case "STRING":
@@ -388,9 +427,20 @@ function SettingsPageContent() {
 	};
 
 	const getCategoryDisplayName = (category: string) => {
-		return category.split("_").map(word => 
-			word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-		).join(" ");
+		switch (category) {
+			case "LOAN_CALCULATION":
+				return "Interest & Principal Allocation";
+			case "PAYMENT_SCHEDULE":
+				return "Payment Due Date Schedule";
+			case "LATE_FEES":
+				return "Late Fee Settings";
+			case "NOTIFICATIONS":
+				return "Notification Settings";
+			default:
+				return category.split("_").map(word => 
+					word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+				).join(" ");
+		}
 	};
 
 	if (loading) {
@@ -461,55 +511,149 @@ function SettingsPageContent() {
 									<span className="mr-2 text-2xl">{getCategoryIcon(category)}</span>
 									{getCategoryDisplayName(category)}
 								</h2>
+								{/* Add subtitle explanations for specific categories */}
+								{category === "LOAN_CALCULATION" && (
+									<p className="text-sm text-gray-400 mt-2 leading-relaxed">
+										Controls how the total loan amount (principal + interest) is split across each payment installment. 
+										This affects the <span className="text-blue-300 font-medium">principalAmount</span> and <span className="text-blue-300 font-medium">interestAmount</span> columns in the database.
+									</p>
+								)}
+								{category === "PAYMENT_SCHEDULE" && (
+									<p className="text-sm text-gray-400 mt-2 leading-relaxed">
+										Determines when loan payments are due each month. This controls the actual due dates that appear 
+										on payment schedules and affects pro-ration calculations for first payments.
+									</p>
+								)}
 							</div>
 
 							<div className="p-6 space-y-6">
-								{categorySettings.map((setting) => (
-									<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
-										<div className="flex items-start justify-between">
-											<div className="flex-1 min-w-0 mr-6">
-												<div className="flex items-center space-x-2 mb-2">
-													<h3 className="text-base font-medium text-white">
-														{setting.name}
-													</h3>
-													{setting.requiresRestart && (
-														<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-															Requires Restart
-														</span>
-													)}
-													{setting.affectsExistingLoans && (
-														<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-															Affects Existing Loans
-														</span>
-													)}
+								{/* Special handling for Payment Schedule category to group related settings */}
+								{category === "PAYMENT_SCHEDULE" ? (
+									<div className="space-y-8">
+										{/* Main payment schedule type */}
+										{categorySettings.filter(s => s.key === "PAYMENT_SCHEDULE_TYPE").map((setting) => (
+											<div key={setting.key} className="border-b border-gray-700/30 pb-6">
+												<div className="flex items-start justify-between">
+													<div className="flex-1 min-w-0 mr-6">
+														<div className="flex items-center space-x-2 mb-2">
+															<h3 className="text-base font-medium text-white">
+																{setting.name}
+															</h3>
+															{setting.requiresRestart && (
+																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
+																	Requires Restart
+																</span>
+															)}
+															{setting.affectsExistingLoans && (
+																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
+																	Affects Existing Loans
+																</span>
+															)}
+														</div>
+														<p className="text-sm text-gray-300 mb-3">
+															{setting.description}
+														</p>
+														{setting.options && setting.dataType === "ENUM" && (
+															<div className="text-xs text-gray-400">
+																<strong>Available Options:</strong>
+																<ul className="mt-2 space-y-2">
+																	{Object.entries(setting.options).map(([key, option]: [string, any]) => (
+																		<li key={key} className="ml-2 p-2 bg-gray-800/50 rounded border-l-2 border-gray-600">
+																			<strong className="text-gray-200">{option.label}:</strong>
+																			<div className="text-gray-400 mt-1">{option.description}</div>
+																		</li>
+																	))}
+																</ul>
+															</div>
+														)}
+													</div>
+													<div className="flex-shrink-0 w-64">
+														{renderSettingInput(setting)}
+													</div>
 												</div>
-												<p className="text-sm text-gray-300 mb-3">
-													{setting.description}
-												</p>
-												{setting.options && setting.dataType === "ENUM" && (
-													<div className="text-xs text-gray-400">
-														<strong>Options:</strong>
-														<ul className="mt-1 space-y-1">
-															{Object.entries(setting.options).map(([key, option]: [string, any]) => (
-																<li key={key} className="ml-2">
-																	• <strong>{option.label}:</strong> {option.description}
-																</li>
-															))}
-														</ul>
-													</div>
-												)}
 											</div>
-											<div className="flex-shrink-0 w-64">
-												{renderSettingInput(setting)}
-												{setting.options && setting.dataType === "NUMBER" && (
-													<div className="mt-1 text-xs text-gray-400">
-														Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+										))}
+										
+										{/* Custom date configuration (conditional) */}
+										<div className="bg-gray-800/30 border border-gray-600/30 rounded-lg p-4">
+											<h4 className="text-sm font-semibold text-white mb-3 flex items-center">
+												⚙️ Custom Date Configuration
+												<span className="ml-2 text-xs text-gray-400 font-normal">(Only applies to Custom Date of Month)</span>
+											</h4>
+											<div className="grid md:grid-cols-2 gap-6">
+												{categorySettings.filter(s => s.key === "CUSTOM_DUE_DATE" || s.key === "PRORATION_CUTOFF_DATE").map((setting) => (
+													<div key={setting.key}>
+														<div className="flex items-center space-x-2 mb-2">
+															<h5 className="text-sm font-medium text-white">
+																{setting.name}
+															</h5>
+														</div>
+														<p className="text-xs text-gray-400 mb-3">
+															{setting.description}
+														</p>
+														<div className="w-full">
+															{renderSettingInput(setting)}
+															{setting.options && setting.dataType === "NUMBER" && (
+																<div className="mt-1 text-xs text-gray-500">
+																	Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+																</div>
+															)}
+														</div>
 													</div>
-												)}
+												))}
 											</div>
 										</div>
 									</div>
-								))}
+								) : (
+									/* Standard layout for other categories */
+									categorySettings.map((setting) => (
+										<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
+											<div className="flex items-start justify-between">
+												<div className="flex-1 min-w-0 mr-6">
+													<div className="flex items-center space-x-2 mb-2">
+														<h3 className="text-base font-medium text-white">
+															{setting.name}
+														</h3>
+														{setting.requiresRestart && (
+															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
+																Requires Restart
+															</span>
+														)}
+														{setting.affectsExistingLoans && (
+															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
+																Affects Existing Loans
+															</span>
+														)}
+													</div>
+													<p className="text-sm text-gray-300 mb-3">
+														{setting.description}
+													</p>
+													{setting.options && setting.dataType === "ENUM" && (
+														<div className="text-xs text-gray-400">
+															<strong>Available Options:</strong>
+															<ul className="mt-2 space-y-2">
+																{Object.entries(setting.options).map(([key, option]: [string, any]) => (
+																	<li key={key} className="ml-2 p-2 bg-gray-800/50 rounded border-l-2 border-gray-600">
+																		<strong className="text-gray-200">{option.label}:</strong>
+																		<div className="text-gray-400 mt-1">{option.description}</div>
+																	</li>
+																))}
+															</ul>
+														</div>
+													)}
+												</div>
+												<div className="flex-shrink-0 w-64">
+													{renderSettingInput(setting)}
+													{setting.options && setting.dataType === "NUMBER" && (
+														<div className="mt-1 text-xs text-gray-400">
+															Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+														</div>
+													)}
+												</div>
+											</div>
+										</div>
+									))
+								)}
 							</div>
 						</div>
 					))}

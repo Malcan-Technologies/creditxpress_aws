@@ -179,22 +179,18 @@ async function main() {
 				{
 					key: "LOAN_CALCULATION_METHOD",
 					category: "LOAN_CALCULATION",
-					name: "Loan Calculation Method",
-					description: "Method used for calculating loan payment schedules and pro-rated amounts",
+					name: "Interest & Principal Allocation Method",
+					description: "How interest and principal amounts are allocated across payment installments",
 					dataType: "ENUM",
-					value: JSON.stringify("PROPORTIONAL"),
+					value: JSON.stringify("STRAIGHT_LINE"),
 					options: {
-						PROPORTIONAL: {
-							label: "Proportional Method",
-							description: "Uses actual average days per period for pro-rating (current method)"
+						STRAIGHT_LINE: {
+							label: "Straight Line Method",
+							description: "Equal principal and interest amounts for all scheduled payments (recommended)"
 						},
 						RULE_OF_78: {
 							label: "Rule of 78",
-							description: "Uses Rule of 78 calculation for front-loaded interest"
-						},
-						FIXED_30_DAY: {
-							label: "Fixed 30-Day",
-							description: "Uses fixed 30-day assumption (legacy method)"
+							description: "Front-loaded interest allocation - more interest in early payments, less in later payments"
 						}
 					},
 					isActive: true,
@@ -204,23 +200,53 @@ async function main() {
 				{
 					key: "PAYMENT_SCHEDULE_TYPE",
 					category: "PAYMENT_SCHEDULE",
-					name: "Payment Schedule Type",
-					description: "How payment due dates are calculated and scheduled",
+					name: "Payment Due Date Schedule",
+					description: "How payment due dates are determined for loan installments",
 					dataType: "ENUM",
-					value: JSON.stringify("FIRST_OF_MONTH"),
+					value: JSON.stringify("CUSTOM_DATE"),
 					options: {
-						FIRST_OF_MONTH: {
-							label: "1st of Month",
-							description: "Payments due on 1st of each month with 20th cutoff rule (current)"
+						CUSTOM_DATE: {
+							label: "Custom Date of Month",
+							description: "All payments due on a specific date each month (e.g., 1st, 15th) with configurable cutoff for pro-rating"
 						},
 						EXACT_MONTHLY: {
-							label: "Exact Monthly",
-							description: "Payments due on exact monthly intervals from disbursement (legacy)"
-						},
-						CUSTOM_DAY: {
-							label: "Custom Day",
-							description: "Payments due on a custom day of each month (future feature)"
+							label: "30-Day Intervals",
+							description: "Payments due exactly 30 days apart from disbursement date (e.g., disbursed 18th → due 18th next month)"
 						}
+					},
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "CUSTOM_DUE_DATE",
+					category: "PAYMENT_SCHEDULE",
+					name: "Custom Due Date",
+					description: "Which day of the month payments are due (1-31)",
+					dataType: "NUMBER",
+					value: JSON.stringify(1),
+					options: {
+						min: 1,
+						max: 31,
+						step: 1,
+						unit: "day of month"
+					},
+					isActive: true,
+					requiresRestart: false,
+					affectsExistingLoans: false,
+				},
+				{
+					key: "PRORATION_CUTOFF_DATE",
+					category: "PAYMENT_SCHEDULE",
+					name: "Pro-ration Cutoff Date",
+					description: "Disbursements on or after this date get pushed to next month's cycle (1-31)",
+					dataType: "NUMBER",
+					value: JSON.stringify(20),
+					options: {
+						min: 1,
+						max: 31,
+						step: 1,
+						unit: "day of month"
 					},
 					isActive: true,
 					requiresRestart: false,

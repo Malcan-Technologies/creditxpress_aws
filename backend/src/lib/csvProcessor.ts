@@ -5,6 +5,7 @@ export interface RawTransaction {
 	refCode: string;
 	beneficiary: string;
 	amount: number;
+	transactionDate: Date | null;
 	rawData: Record<string, any>;
 }
 
@@ -14,8 +15,10 @@ export interface BankFormatConfig {
 		refCode: string[];
 		beneficiary: string[];
 		amount: string[];
+		date?: string[];
 	};
 	amountParser: (value: string) => number;
+	dateParser?: (value: string) => Date | null;
 	detector: (headers: string[]) => boolean;
 }
 
@@ -62,7 +65,8 @@ const STANDARDIZED_FORMAT: BankFormatConfig = {
 	patterns: {
 		refCode: ["description_1", "description_2"], // Check both description fields for references
 		beneficiary: ["beneficiary"],
-		amount: ["cash_in"]
+		amount: ["cash_in"],
+		date: ["transaction_date"]
 	},
 	amountParser: (value: string) => {
 		if (!value || typeof value !== 'string') return 0;
@@ -70,6 +74,44 @@ const STANDARDIZED_FORMAT: BankFormatConfig = {
 		const cleaned = value.replace(/RM\s?|,/g, "").trim();
 		const amount = parseFloat(cleaned);
 		return isNaN(amount) ? 0 : amount;
+	},
+	dateParser: (value: string) => {
+		if (!value || typeof value !== 'string') return null;
+		
+		// Handle various date formats: "31 Jul 2025", "31/07/2025", "2025-07-31"
+		const trimmed = value.trim();
+		
+		// Try parsing different formats
+		let date: Date | null = null;
+		
+		// Format: "31 Jul 2025"
+		if (trimmed.match(/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/)) {
+			date = new Date(trimmed);
+		}
+		// Format: "31/07/2025" or "07/31/2025"
+		else if (trimmed.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+			const parts = trimmed.split('/');
+			// Assume DD/MM/YYYY format (common in Malaysia)
+			date = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+		}
+		// Format: "2025-07-31"
+		else if (trimmed.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
+			date = new Date(trimmed);
+		}
+		// Fallback: try direct parsing
+		else {
+			date = new Date(trimmed);
+		}
+		
+		// Convert to GMT+8 (Malaysia timezone) and return as UTC
+		if (date && !isNaN(date.getTime())) {
+			// Adjust for GMT+8 timezone
+			const malaysiaOffset = 8 * 60; // 8 hours in minutes
+			const utcTime = date.getTime() + (malaysiaOffset * 60 * 1000);
+			return new Date(utcTime);
+		}
+		
+		return null;
 	},
 	detector: (headers: string[]) => {
 		const lowerHeaders = headers.map(h => h.toLowerCase().trim());
@@ -323,6 +365,22 @@ export function extractTransactions(
 	const beneficiaryIndex = headers.indexOf(beneficiaryColumn);
 	const amountIndex = headers.indexOf(amountColumn);
 	
+	// Find date column if patterns are defined
+	let dateColumn: string | undefined;
+	let dateIndex = -1;
+	if (bankFormat.patterns.date) {
+		for (const pattern of bankFormat.patterns.date) {
+			dateColumn = headers.find(h => 
+				h.toLowerCase().trim().includes(pattern.toLowerCase()) ||
+				pattern.toLowerCase().includes(h.toLowerCase().trim())
+			);
+			if (dateColumn) {
+				dateIndex = headers.indexOf(dateColumn);
+				break;
+			}
+		}
+	}
+	
 	// Process data rows
 	for (let i = headerRowIndex + 1; i < csvData.length; i++) {
 		const row = csvData[i];
@@ -336,6 +394,7 @@ export function extractTransactions(
 			let refCode = "";
 			const beneficiary = row[beneficiaryIndex]?.trim() || "";
 			const amountStr = row[amountIndex]?.trim() || "";
+			const dateStr = dateIndex >= 0 ? row[dateIndex]?.trim() || "" : "";
 			
 			// For standardized format, check both description fields for reference codes
 			if (bankFormat.name === "Standardized Format") {
@@ -357,6 +416,15 @@ export function extractTransactions(
 			}
 			
 			const amount = bankFormat.amountParser(amountStr);
+			
+			// Parse transaction date
+			let transactionDate: Date | null = null;
+			if (dateStr && bankFormat.dateParser) {
+				transactionDate = bankFormat.dateParser(dateStr);
+				if (!transactionDate) {
+					errors.push(`Row ${i + 1}: Invalid date format "${dateStr}"`);
+				}
+			}
 			
 			// Skip rows with no meaningful data (no ref code, no beneficiary, and zero amount)
 			if (!refCode && !beneficiary && amount === 0) {
@@ -380,6 +448,7 @@ export function extractTransactions(
 				refCode,
 				beneficiary,
 				amount: isNaN(amount) ? 0 : amount, // Default to 0 if amount is invalid
+				transactionDate,
 				rawData
 			});
 		} catch (error) {
@@ -403,7 +472,8 @@ function calculateMatchScore(
 	console.log('Matching transaction:', {
 		refCode: transaction.refCode,
 		beneficiary: transaction.beneficiary,
-		amount: transaction.amount
+		amount: transaction.amount,
+		transactionDate: transaction.transactionDate
 	});
 	console.log('Against payment:', {
 		reference: payment.reference,
@@ -426,50 +496,59 @@ function calculateMatchScore(
 		console.log('No reference match - transaction.refCode:', transaction.refCode, 'payment.reference:', payment.reference);
 	}
 	
-	// Amount match (critical)
+	// Amount match (critical - exact match required)
 	const amountDiff = Math.abs(transaction.amount - Math.abs(payment.amount));
-	const amountTolerance = Math.max(0.01, Math.abs(payment.amount) * 0.001); // 0.1% tolerance or 1 cent minimum
 	
 	if (amountDiff === 0) {
 		score += 40;
 		reasons.push("Exact amount match");
-	} else if (amountDiff <= amountTolerance) {
-		score += 35;
-		reasons.push("Amount match within tolerance");
-	} else if (amountDiff <= 1.00) {
-		score += 10;
-		reasons.push("Amount close match");
+	} else {
+		// No points for non-exact amounts - this is now a hard requirement
+		console.log(`Amount mismatch - transaction: ${transaction.amount}, payment: ${Math.abs(payment.amount)}, diff: ${amountDiff}`);
+		return { score: 0, reasons: ["Amount must match exactly"] };
 	}
 	
-	// Beneficiary name match (if available)
+	// Beneficiary name match (if available) - Case-insensitive matching
 	if (transaction.beneficiary && payment.user?.fullName) {
-		const transactionName = transaction.beneficiary.toLowerCase();
-		const paymentName = payment.user.fullName.toLowerCase();
+		// Normalize names: lowercase, trim, remove extra spaces
+		const transactionName = transaction.beneficiary.toLowerCase().trim().replace(/\s+/g, ' ');
+		const paymentName = payment.user.fullName.toLowerCase().trim().replace(/\s+/g, ' ');
 		
-		// Split names into words for better matching
-		const transactionWords = transactionName.split(/\s+/);
-		const paymentWords = paymentName.split(/\s+/);
+		console.log('Name matching:', {
+			transactionName,
+			paymentName
+		});
 		
-		// Check for word matches
-		let wordMatches = 0;
-		for (const tWord of transactionWords) {
-			for (const pWord of paymentWords) {
-				if (tWord.length > 2 && pWord.length > 2) {
-					if (tWord === pWord) {
-						wordMatches++;
-					} else if (tWord.includes(pWord) || pWord.includes(tWord)) {
-						wordMatches += 0.5;
+		// Check for exact match first (after normalization)
+		if (transactionName === paymentName) {
+			score += 20;
+			reasons.push("Exact beneficiary name match (case-insensitive)");
+		} else {
+			// Split names into words for partial matching
+			const transactionWords = transactionName.split(/\s+/);
+			const paymentWords = paymentName.split(/\s+/);
+			
+			// Check for word matches
+			let wordMatches = 0;
+			for (const tWord of transactionWords) {
+				for (const pWord of paymentWords) {
+					if (tWord.length > 2 && pWord.length > 2) {
+						if (tWord === pWord) {
+							wordMatches++;
+						} else if (tWord.includes(pWord) || pWord.includes(tWord)) {
+							wordMatches += 0.5;
+						}
 					}
 				}
 			}
-		}
-		
-		if (wordMatches >= 2) {
-			score += 20;
-			reasons.push("Strong beneficiary name match");
-		} else if (wordMatches >= 1) {
-			score += 10;
-			reasons.push("Partial beneficiary name match");
+			
+			if (wordMatches >= 2) {
+				score += 15; // Slightly less than exact match
+				reasons.push("Strong beneficiary name match");
+			} else if (wordMatches >= 1) {
+				score += 8; // Slightly less than strong match
+				reasons.push("Partial beneficiary name match");
+			}
 		}
 	}
 	
@@ -481,8 +560,40 @@ function calculateMatchScore(
 		}
 	}
 	
-	console.log('Match score:', score, 'reasons:', reasons);
-	return { score, reasons };
+	// Date match (transaction date vs payment due date or creation date)
+	if (transaction.transactionDate && payment.dueDate) {
+		const transactionDate = transaction.transactionDate;
+		const dueDate = new Date(payment.dueDate);
+		
+		// Calculate difference in days
+		const daysDiff = Math.abs((transactionDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+		
+		if (daysDiff <= 1) {
+			score += 15;
+			reasons.push("Transaction date matches due date");
+		} else if (daysDiff <= 7) {
+			score += 10;
+			reasons.push("Transaction date within 1 week of due date");
+		} else if (daysDiff <= 30) {
+			score += 5;
+			reasons.push("Transaction date within 1 month of due date");
+		}
+	}
+	
+	// Normalize score to 100% maximum
+	// Core criteria: 50 (ref) + 40 (amount) + 20 (name) = 110 points for "perfect match"
+	// Bonus criteria: 15 (loan ID) + 15 (date) = 30 points extra
+	// Use 110 as base for 100%, allowing bonus to exceed 100%
+	const coreMaxScore = 110; // ref + amount + name = practical "perfect match"
+	const normalizedScore = Math.min(100, Math.round((score / coreMaxScore) * 100));
+	
+	console.log('Match score breakdown:', {
+		rawScore: score,
+		coreMaxScore: coreMaxScore,
+		normalizedScore: normalizedScore,
+		reasons: reasons
+	});
+	return { score: normalizedScore, reasons };
 }
 
 /**
@@ -496,7 +607,7 @@ export function matchTransactions(
 	const usedPaymentIds = new Set<string>();
 	const usedTransactionIndices = new Set<number>();
 	
-	// First pass: Find high-confidence matches (score >= 60)
+	// First pass: Find high-confidence matches (score >= 40%) - Amount match is now required baseline
 	for (let i = 0; i < transactions.length; i++) {
 		if (usedTransactionIndices.has(i)) continue;
 		
@@ -508,7 +619,8 @@ export function matchTransactions(
 			
 			const { score, reasons } = calculateMatchScore(transaction, payment);
 			
-			if (score >= 60) {
+			// Score > 0 means amount matched exactly, then check for additional criteria
+			if (score >= 40) {
 				if (!bestMatch || score > bestMatch.matchScore) {
 					bestMatch = {
 						transaction,
@@ -527,7 +639,7 @@ export function matchTransactions(
 		}
 	}
 	
-	// Second pass: Find medium-confidence matches (score >= 40)
+	// Second pass: Find any remaining matches with exact amount (score > 0, ~29% minimum for amount-only match)
 	for (let i = 0; i < transactions.length; i++) {
 		if (usedTransactionIndices.has(i)) continue;
 		
@@ -539,7 +651,8 @@ export function matchTransactions(
 			
 			const { score, reasons } = calculateMatchScore(transaction, payment);
 			
-			if (score >= 40) {
+			// Any score > 0 means amount matched exactly
+			if (score > 0) {
 				if (!bestMatch || score > bestMatch.matchScore) {
 					bestMatch = {
 						transaction,
@@ -646,7 +759,6 @@ export function processCSVFile(
 		);
 		
 		// Calculate summary
-		const totalTransactionAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
 		const matchedAmount = matches.reduce((sum, m) => sum + m.transaction.amount, 0);
 		
 		return {
