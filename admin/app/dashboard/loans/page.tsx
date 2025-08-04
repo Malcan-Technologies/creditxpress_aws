@@ -97,6 +97,11 @@ interface LoanData {
 	updatedAt: string;
 	totalPaid?: number;
 	remainingPrepayment?: number;
+	// Calculation method metadata stored at time of disbursement
+	calculationMethod?: string | null; // RULE_OF_78 or STRAIGHT_LINE
+	scheduleType?: string | null; // EXACT_MONTHLY or CUSTOM_DATE
+	customDueDate?: number | null; // For CUSTOM_DATE schedule type
+	prorationCutoffDate?: number | null; // For CUSTOM_DATE proration
 	application?: {
 		id: string;
 		amount: number;
@@ -228,11 +233,24 @@ function ActiveLoansContent() {
 			const response = await fetchWithAdminTokenRefresh<{
 				success: boolean;
 				data: LoanData[];
+				systemSettings?: {
+					calculationMethod: string;
+					scheduleType: string;
+					customDueDate: number;
+					prorationCutoffDate: number;
+				};
 			}>("/api/admin/loans");
 
 			if (response.success && response.data) {
 				// Include all loan statuses (ACTIVE, PENDING_DISCHARGE, DISCHARGED)
 				setLoans(response.data);
+				
+				// Store system settings for displaying calculation methods
+				if (response.systemSettings) {
+					console.log("📋 System settings loaded:", response.systemSettings);
+					// Store in state if needed, or use directly in rendering
+					(window as any).loanSystemSettings = response.systemSettings;
+				}
 				
 				// Debug: Log overdue info for each loan
 				console.log("🔍 DEBUG: Loans data received:", response.data.length);
@@ -772,6 +790,21 @@ function ActiveLoansContent() {
 		});
 	};
 
+	const getOrdinalSuffix = (num: number) => {
+		const j = num % 10;
+		const k = num % 100;
+		if (j === 1 && k !== 11) {
+			return "st";
+		}
+		if (j === 2 && k !== 12) {
+			return "nd";
+		}
+		if (j === 3 && k !== 13) {
+			return "rd";
+		}
+		return "th";
+	};
+
 	// Helper function to calculate days late for a specific date
 	const getDaysLateFromDate = (dueDate: string | null) => {
 		if (!dueDate) return 0;
@@ -1036,8 +1069,8 @@ function ActiveLoansContent() {
 				'Installment #',
 				'Due Date',
 				'Amount',
-				'Principal',
-				'Interest',
+				'Principal Amount',
+				'Interest Amount',
 				'Status',
 				'Paid At',
 				'Payment Type',
@@ -1243,8 +1276,8 @@ function ActiveLoansContent() {
 				'Installment #',
 				'Due Date',
 				'Amount',
-				'Principal',
-				'Interest',
+				'Principal Amount',
+				'Interest Amount',
 				'Status',
 				'Paid At',
 				'Payment Type',
@@ -2276,7 +2309,7 @@ function ActiveLoansContent() {
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
 												<h4 className="text-white font-medium mb-3 flex items-center">
 													<DocumentTextIcon className="h-5 w-5 mr-2 text-green-400" />
-													Loan Terms
+													Loan Terms & Calculation Method
 												</h4>
 												<div className="space-y-3">
 													<div>
@@ -2330,6 +2363,100 @@ function ActiveLoansContent() {
 																selectedLoan.disbursedAt
 															)}
 														</p>
+													</div>
+													{/* Loan Calculation Settings */}
+													<div className="border-t border-gray-600/30 pt-3 mt-4">
+														<p className="text-gray-400 text-sm mb-2">
+															Interest & Principal Allocation
+														</p>
+														{(() => {
+															// Use loan's stored calculation method, fallback to legacy badge for old loans
+															const loanMethod = selectedLoan.calculationMethod;
+															
+															if (!loanMethod) {
+																return (
+																	<div className="flex flex-col gap-1">
+																		<span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-500/20 text-gray-200 border-gray-400/20">
+																			Legacy
+																		</span>
+																		<p className="text-xs text-gray-400">
+																			Pre-dates calculation method storage
+																		</p>
+																	</div>
+																);
+															}
+															
+															if (loanMethod === 'RULE_OF_78') {
+																return (
+																	<div className="flex flex-col gap-1">
+																		<span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-orange-500/20 text-orange-200 border-orange-400/20">
+																			Rule of 78 Method
+																		</span>
+																		<p className="text-xs text-gray-400">
+																			Front-loaded interest with decreasing amounts over time
+																		</p>
+																	</div>
+																);
+															} else {
+																return (
+																	<div className="flex flex-col gap-1">
+																		<span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-200 border-blue-400/20">
+																			Straight Line Method
+																		</span>
+																		<p className="text-xs text-gray-400">
+																			Equal interest and principal allocation
+																		</p>
+																	</div>
+																);
+															}
+														})()}
+													</div>
+													<div className="mt-3">
+														<p className="text-gray-400 text-sm mb-2">
+															Payment Due Date Schedule
+														</p>
+														{(() => {
+															// Use loan's stored schedule type, fallback to legacy badge for old loans
+															const loanSchedule = selectedLoan.scheduleType;
+															const customDate = selectedLoan.customDueDate;
+															
+															if (!loanSchedule) {
+																return (
+																	<div className="flex flex-col gap-1">
+																		<span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-500/20 text-gray-200 border-gray-400/20">
+																			Legacy
+																		</span>
+																		<p className="text-xs text-gray-400">
+																			Pre-dates schedule type storage
+																		</p>
+																	</div>
+																);
+															}
+															
+															if (loanSchedule === 'EXACT_MONTHLY') {
+																return (
+																	<div className="flex flex-col gap-1">
+																		<span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-200 border-emerald-400/20">
+																			Same Day Each Month
+																		</span>
+																		<p className="text-xs text-gray-400">
+																			Payments due on same day as disbursement
+																		</p>
+																	</div>
+																);
+															} else {
+																return (
+																	<div className="flex flex-col gap-1">
+																		<span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-500/20 text-purple-200 border-purple-400/20">
+																			Custom Date ({customDate}{getOrdinalSuffix(customDate || 1)} of month)
+																		</span>
+																		<p className="text-xs text-gray-400">
+																			All payments due on {customDate}{getOrdinalSuffix(customDate || 1)} of each month
+																		</p>
+																	</div>
+																);
+															}
+														})()}
 													</div>
 												</div>
 											</div>
@@ -2714,6 +2841,37 @@ function ActiveLoansContent() {
 													</div>
 												</div>
 
+												{/* Payment Allocation Information */}
+												<div className="bg-blue-900/20 p-4 rounded-lg border border-blue-400/20 mb-6">
+													<h5 className="text-blue-200 font-medium mb-3 flex items-center">
+														<svg className="h-5 w-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+														</svg>
+														Payment Allocation Hierarchy
+													</h5>
+													<div className="text-sm text-blue-100 space-y-2">
+														<p>When payments are received, amounts are allocated in the following priority order:</p>
+														<div className="flex flex-wrap gap-4 mt-3">
+															<div className="flex items-center">
+																<span className="w-3 h-3 bg-red-400 rounded-full mr-2"></span>
+																<span className="text-red-200">1. Late Fees</span>
+															</div>
+															<div className="flex items-center">
+																<span className="w-3 h-3 bg-blue-400 rounded-full mr-2"></span>
+																<span className="text-blue-200">2. Interest</span>
+															</div>
+															<div className="flex items-center">
+																<span className="w-3 h-3 bg-green-400 rounded-full mr-2"></span>
+																<span className="text-green-200">3. Principal</span>
+															</div>
+														</div>
+														<p className="text-xs text-blue-300 mt-2">
+															<strong>Example:</strong> For a RM 100 payment on an installment with RM 20 late fees, RM 30 interest, and RM 50 principal:
+															RM 20 covers late fees, RM 30 covers interest, RM 50 covers principal. All paid amounts are shown in green.
+														</p>
+													</div>
+												</div>
+
 												{/* Repayment Schedule Table */}
 												<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 overflow-hidden">
 													<div className="p-4 border-b border-gray-700/30">
@@ -2740,6 +2898,9 @@ function ActiveLoansContent() {
 																	</th>
 																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
 																		Principal
+																	</th>
+																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+																		Interest
 																	</th>
 																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
 																		Late Fees
@@ -2876,19 +3037,54 @@ function ActiveLoansContent() {
 																					{/* Principal Column */}
 																					<td className="px-4 py-3 whitespace-nowrap text-sm text-white">
 																						<div>
-																							{formatCurrency(
-																								repayment.amount
-																							)}
-																							{/* Show principal paid info */}
-																							{repayment.principalPaid && 
-																								repayment.principalPaid > 0 && (
-																								<div className="text-xs text-green-400 mt-1">
-																									{formatCurrency(
-																										repayment.principalPaid
-																									)}{" "}
-																									paid
-																								</div>
-																							)}
+																							<div className="font-medium">
+																								{formatCurrency(
+																									repayment.principalAmount || 0
+																								)}
+																							</div>
+																							{/* Show principal paid info with correct allocation logic */}
+																							{(() => {
+																								const totalPaid = repayment.actualAmount || 0;
+																								const lateFeesPaid = repayment.lateFeesPaid || 0;
+																								const interestDue = repayment.interestAmount || 0;
+																								
+																								// Calculate interest paid based on allocation priority
+																								const interestPaid = Math.max(0, Math.min(interestDue, totalPaid - lateFeesPaid));
+																								
+																								// Principal paid = remaining after late fees and interest
+																								const principalPaid = Math.max(0, totalPaid - lateFeesPaid - interestPaid);
+																								
+																								return principalPaid > 0 && (
+																									<div className="text-xs text-green-400 mt-1">
+																										{formatCurrency(principalPaid)} paid
+																									</div>
+																								);
+																							})()}
+																						</div>
+																					</td>
+																					{/* Interest Column */}
+																					<td className="px-4 py-3 whitespace-nowrap text-sm text-white">
+																						<div>
+																							<div className="font-medium">
+																								{formatCurrency(
+																									repayment.interestAmount || 0
+																								)}
+																							</div>
+																							{/* Show interest paid info with correct allocation logic */}
+																							{(() => {
+																								const totalPaid = repayment.actualAmount || 0;
+																								const lateFeesPaid = repayment.lateFeesPaid || 0;
+																								const interestDue = repayment.interestAmount || 0;
+																								
+																								// Interest paid = (total paid - late fees paid), capped at interest due
+																								const interestPaid = Math.max(0, Math.min(interestDue, totalPaid - lateFeesPaid));
+																								
+																								return interestPaid > 0 && (
+																									<div className="text-xs text-green-400 mt-1">
+																										{formatCurrency(interestPaid)} paid
+																									</div>
+																								);
+																							})()}
 																						</div>
 																					</td>
 																					{/* Late Fees Column */}
@@ -2897,13 +3093,15 @@ function ActiveLoansContent() {
 																							{repayment.lateFeeAmount && 
 																								repayment.lateFeeAmount > 0 ? (
 																								<>
-																									{formatCurrency(
-																										repayment.lateFeeAmount
-																									)}
+																									<div className="font-medium">
+																										{formatCurrency(
+																											repayment.lateFeeAmount
+																										)}
+																									</div>
 																									{/* Show late fees paid info */}
 																									{repayment.lateFeesPaid && 
 																										repayment.lateFeesPaid > 0 && (
-																										<div className="text-xs text-orange-400 mt-1">
+																										<div className="text-xs text-green-400 mt-1">
 																											{formatCurrency(
 																												repayment.lateFeesPaid
 																											)}{" "}
@@ -2916,34 +3114,69 @@ function ActiveLoansContent() {
 																							)}
 																						</div>
 																					</td>
-																					{/* Total Due Column */}
+																					{/* Total Due Column - Sum of Principal + Interest + Late Fees */}
 																					<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
 																						{formatCurrency(
-																							repayment.amount + (repayment.lateFeeAmount || 0)
+																							(repayment.principalAmount || 0) + 
+																							(repayment.interestAmount || 0) + 
+																							(repayment.lateFeeAmount || 0)
 																						)}
 																					</td>
-																					{/* Balance Column */}
+																					{/* Balance Column - Payment Allocation Logic: Late Fees → Interest → Principal */}
 																					<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">
 																						<div>
 																							{(() => {
-																								const principalBalance = repayment.status === "COMPLETED" 
-																									? 0 
-																									: repayment.amount - (repayment.principalPaid || 0);
-																								const lateFeeBalance = (repayment.lateFeeAmount || 0) - (repayment.lateFeesPaid || 0);
-																								const totalBalance = principalBalance + lateFeeBalance;
+																								if (repayment.status === "COMPLETED") {
+																									return <span className="text-green-400">Paid in Full</span>;
+																								}
 																								
-																								return formatCurrency(Math.max(0, totalBalance));
+																								// Payment allocation logic: Late Fees → Interest → Principal
+																								const totalDue = (repayment.principalAmount || 0) + (repayment.interestAmount || 0) + (repayment.lateFeeAmount || 0);
+																								const totalPaid = (repayment.actualAmount || 0);
+																								const totalBalance = Math.max(0, totalDue - totalPaid);
+																								
+																								// Calculate remaining balances with allocation priority (consistent with display logic)
+																								const lateFeesDue = repayment.lateFeeAmount || 0;
+																								const lateFeesPaid = repayment.lateFeesPaid || 0;
+																								const lateFeesRemaining = Math.max(0, lateFeesDue - lateFeesPaid);
+																								
+																								const interestDue = repayment.interestAmount || 0;
+																								// Interest paid = (total paid - late fees paid), capped at interest due
+																								const interestPaid = Math.max(0, Math.min(interestDue, totalPaid - lateFeesPaid));
+																								const interestRemaining = Math.max(0, interestDue - interestPaid);
+																								
+																								const principalDue = repayment.principalAmount || 0;
+																								// Principal paid = remaining after late fees and interest
+																								const principalPaid = Math.max(0, totalPaid - lateFeesPaid - interestPaid);
+																								const principalRemaining = Math.max(0, principalDue - principalPaid);
+																								
+																								return (
+																									<div>
+																										<div className="font-medium">
+																											{formatCurrency(totalBalance)}
+																										</div>
+																										{totalBalance > 0 && (
+																											<div className="text-xs mt-1 space-y-1">
+																												{lateFeesRemaining > 0 && (
+																													<div className="text-red-400">
+																														{formatCurrency(lateFeesRemaining)} late fees
+																													</div>
+																												)}
+																												{interestRemaining > 0 && (
+																													<div className="text-blue-400">
+																														{formatCurrency(interestRemaining)} interest
+																													</div>
+																												)}
+																												{principalRemaining > 0 && (
+																													<div className="text-green-400">
+																														{formatCurrency(principalRemaining)} principal
+																													</div>
+																												)}
+																											</div>
+																										)}
+																									</div>
+																								);
 																							})()}
-																							{/* Show payment breakdown for partial payments */}
-																							{(repayment.status === "PARTIAL" ||
-																								repayment.paymentType === "PARTIAL") && (
-																								<div className="text-xs text-blue-400 mt-1">
-																									{(() => {
-																										const totalPaid = (repayment.principalPaid || 0) + (repayment.lateFeesPaid || 0);
-																										return totalPaid > 0 ? `${formatCurrency(totalPaid)} paid` : "";
-																									})()}
-																								</div>
-																							)}
 																						</div>
 																					</td>
 																					<td className="px-4 py-3 whitespace-nowrap">

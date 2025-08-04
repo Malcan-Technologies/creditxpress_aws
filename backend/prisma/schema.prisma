@@ -139,6 +139,10 @@ model Loan {
   updatedAt          DateTime            @updatedAt
   dischargedAt       DateTime?
   totalAmount        Float
+  calculationMethod  String?             // RULE_OF_78 or STRAIGHT_LINE
+  scheduleType       String?             // EXACT_MONTHLY or CUSTOM_DATE  
+  customDueDate      Int?                // For CUSTOM_DATE schedule type
+  prorationCutoffDate Int?               // For CUSTOM_DATE proration
   lateFee            LateFee?
   repayments         LoanRepayment[]
   application        LoanApplication     @relation(fields: [applicationId], references: [id])

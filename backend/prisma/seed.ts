@@ -210,8 +210,8 @@ async function main() {
 							description: "All payments due on a specific date each month (e.g., 1st, 15th) with configurable cutoff for pro-rating"
 						},
 						EXACT_MONTHLY: {
-							label: "30-Day Intervals",
-							description: "Payments due exactly 30 days apart from disbursement date (e.g., disbursed 18th → due 18th next month)"
+							label: "Same Day Each Month",
+							description: "Payments due on the same day of each month as disbursement (e.g., disbursed 18th → due 18th each month)"
 						}
 					},
 					isActive: true,

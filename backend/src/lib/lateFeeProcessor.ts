@@ -5,8 +5,32 @@ import { prisma } from "../../lib/prisma";
 // Lock constants for PostgreSQL advisory locks
 const LATE_FEE_PROCESSING_LOCK_ID = 123456789; // Unique identifier for late fee processing
 
-// Grace period before late fees start accruing (in days)
-const LATE_FEE_GRACE_PERIOD_DAYS = 3;
+// Helper function to get late fee grace period settings from database
+async function getLateFeeGraceSettings(prismaClient: any = prisma) {
+	try {
+		const settings = await prismaClient.systemSettings.findMany({
+			where: {
+				key: {
+					in: ['ENABLE_LATE_FEE_GRACE_PERIOD', 'LATE_FEE_GRACE_DAYS']
+				},
+				isActive: true
+			}
+		});
+
+		const enableGraceSetting = settings.find((s: any) => s.key === 'ENABLE_LATE_FEE_GRACE_PERIOD');
+		const graceDaysSetting = settings.find((s: any) => s.key === 'LATE_FEE_GRACE_DAYS');
+
+		const isGraceEnabled = enableGraceSetting ? JSON.parse(enableGraceSetting.value) : true;
+		const graceDays = graceDaysSetting ? JSON.parse(graceDaysSetting.value) : 3;
+
+		// If grace period is disabled, return 0 days
+		return isGraceEnabled ? graceDays : 0;
+	} catch (error) {
+		logger.error('Error fetching late fee grace settings:', error);
+		// Default fallback: 3 days grace period
+		return 3;
+	}
+}
 
 /**
  * Acquire a PostgreSQL advisory lock for late fee processing
@@ -88,10 +112,12 @@ export class LateFeeProcessor {
 		}
 
 		try {
+			// Get grace period settings once at the start
+			const gracePeriodDays = await getLateFeeGraceSettings();
 			logger.info(
 				`Starting late fee processing... ${
 					force ? "(Manual/Force mode)" : "(Automatic mode)"
-				}`
+				}. Grace period: ${gracePeriodDays} days`
 			);
 
 			// Check if processing has already been done today (only for non-force mode)
@@ -169,11 +195,12 @@ export class LateFeeProcessor {
 					for (const repayment of loanRepayments) {
 						try {
 							// Calculate late fees for this repayment
-							const repaymentUpdate =
-								await LateFeeProcessor.calculateRepaymentLateFees(
-							repayment,
-							force
-						);
+													const repaymentUpdate =
+							await LateFeeProcessor.calculateRepaymentLateFees(
+						repayment,
+						force,
+						gracePeriodDays
+					);
 							
 							if (repaymentUpdate) {
 								repaymentUpdates.push(repaymentUpdate);
@@ -216,7 +243,7 @@ export class LateFeeProcessor {
 
 			// Save all calculations in a transaction
 			if (repaymentUpdates.length > 0) {
-				await LateFeeProcessor.saveLateFees(repaymentUpdates, Array.from(loanCalculations.values()), force);
+				await LateFeeProcessor.saveLateFees(repaymentUpdates, Array.from(loanCalculations.values()), force, gracePeriodDays);
 				
 				// Update outstanding balances for all affected loans to reflect new late fees
 				logger.info(`Recalculating outstanding balances for ${loanCalculations.size} loans...`);
@@ -326,10 +353,12 @@ export class LateFeeProcessor {
 	 * Calculate late fees for a specific repayment
 	 * @param repayment - The repayment data
 	 * @param force - If true, bypass processing locks (daily limits still apply at loan level)
+	 * @param gracePeriodDays - Grace period in days from settings
 	 */
 	private static async calculateRepaymentLateFees(
 		repayment: any,
-		force: boolean = false
+		force: boolean = false,
+		gracePeriodDays: number = 3
 	): Promise<RepaymentLateFeeUpdate | null> {
 		const dueDate = new Date(repayment.dueDate);
 		
@@ -341,11 +370,11 @@ export class LateFeeProcessor {
 		}
 
 		// Apply grace period - late fees only start after grace period expires
-		const daysOverdueForFees = Math.max(0, totalDaysOverdue - LATE_FEE_GRACE_PERIOD_DAYS);
+		const daysOverdueForFees = Math.max(0, totalDaysOverdue - gracePeriodDays);
 
 		if (daysOverdueForFees <= 0) {
 			// Still within grace period, no late fees applied
-			console.log(`⏰ Repayment ${repayment.id} is ${totalDaysOverdue} days overdue but within ${LATE_FEE_GRACE_PERIOD_DAYS}-day grace period. No late fees applied.`);
+			console.log(`⏰ Repayment ${repayment.id} is ${totalDaysOverdue} days overdue but within ${gracePeriodDays}-day grace period. No late fees applied.`);
 			return null;
 		}
 
@@ -372,7 +401,7 @@ export class LateFeeProcessor {
 			outstandingPrincipal: outstandingPrincipal,
 			totalDaysOverdue: totalDaysOverdue,
 			daysOverdueForFees: daysOverdueForFees,
-			gracePeriod: LATE_FEE_GRACE_PERIOD_DAYS,
+			gracePeriod: gracePeriodDays,
 			status: repayment.status,
 			currentLateFeeAmount: SafeMath.toNumber(repayment.lateFeeAmount || 0)
 		});
@@ -437,7 +466,8 @@ export class LateFeeProcessor {
 	private static async saveLateFees(
 		repaymentUpdates: RepaymentLateFeeUpdate[], 
 		loanCalculations: LoanLateFeeCalculation[],
-		isManualRun: boolean = false
+		isManualRun: boolean = false,
+		gracePeriodDays: number = 3
 	) {
 		const today = TimeUtils.malaysiaStartOfDay();
 
@@ -552,7 +582,7 @@ export class LateFeeProcessor {
 									loanId: loanCalc.loanId,
 									totalFeesCharged: loanCalc.totalAccruedFees,
 									outstandingFees: totalOutstandingLateFees,
-									gracePeriodDays: LATE_FEE_GRACE_PERIOD_DAYS,
+									gracePeriodDays: gracePeriodDays,
 									calculationDate: today.toISOString(),
 									repaymentDetails: loanCalc.calculationDetails,
 									affectedRepayments: Object.keys(loanCalc.calculationDetails).length,

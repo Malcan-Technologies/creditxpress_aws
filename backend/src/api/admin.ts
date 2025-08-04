@@ -17,8 +17,32 @@ import { processCSVFile } from "../lib/csvProcessor";
 import { CronScheduler } from "../lib/cronScheduler";
 import { TimeUtils } from "../lib/precisionUtils";
 
-// Grace period before late fees start accruing (in days) - same as lateFeeProcessor
-const LATE_FEE_GRACE_PERIOD_DAYS = 3;
+// Helper function to get late fee grace period settings from database
+async function getLateFeeGraceSettings(prismaClient: any = prisma) {
+	try {
+		const settings = await prismaClient.systemSettings.findMany({
+			where: {
+				key: {
+					in: ['ENABLE_LATE_FEE_GRACE_PERIOD', 'LATE_FEE_GRACE_DAYS']
+				},
+				isActive: true
+			}
+		});
+
+		const enableGraceSetting = settings.find((s: any) => s.key === 'ENABLE_LATE_FEE_GRACE_PERIOD');
+		const graceDaysSetting = settings.find((s: any) => s.key === 'LATE_FEE_GRACE_DAYS');
+
+		const isGraceEnabled = enableGraceSetting ? JSON.parse(enableGraceSetting.value) : true;
+		const graceDays = graceDaysSetting ? JSON.parse(graceDaysSetting.value) : 3;
+
+		// If grace period is disabled, return 0 days
+		return isGraceEnabled ? graceDays : 0;
+	} catch (error) {
+		console.error('Error fetching late fee grace settings:', error);
+		// Default fallback: 3 days grace period
+		return 3;
+	}
+}
 
 // Helper function to format date for WhatsApp notification
 function formatDateForWhatsApp(date: Date): string {
@@ -935,21 +959,21 @@ router.get(
 			? (manualReviewApplications / totalApplicationsCount) * 100 
 			: 0;
 
-		res.json({
+			res.json({
 			// Legacy KPIs (keep for backward compatibility)
-			totalUsers,
-			totalApplications,
-			pendingReviewApplications,
-			approvedLoans,
-			pendingDisbursementCount,
-			disbursedLoans,
-			totalDisbursedAmount: totalDisbursedAmount._sum.amount || 0,
-			totalLoanValue,
-			currentLoanValue,
-			totalFeesCollected,
-			totalLateFeesCollected,
-			totalRepayments,
-			recentApplications,
+				totalUsers,
+				totalApplications,
+				pendingReviewApplications,
+				approvedLoans,
+				pendingDisbursementCount,
+				disbursedLoans,
+				totalDisbursedAmount: totalDisbursedAmount._sum.amount || 0,
+				totalLoanValue,
+				currentLoanValue,
+				totalFeesCollected,
+				totalLateFeesCollected,
+				totalRepayments,
+				recentApplications,
 
 			// 🔹 NEW INDUSTRY-STANDARD LOAN PORTFOLIO KPIs
 			// 1. Portfolio Overview
@@ -1008,7 +1032,7 @@ router.get(
 				applicationApprovalRatio: Math.round(applicationApprovalRatio * 100) / 100,
 				manualReviewRate: Math.round(manualReviewRate * 100) / 100,
 			}
-		});
+			});
 		} catch (error) {
 			console.error("Error fetching dashboard stats:", error);
 			res.status(500).json({ message: "Internal server error" });
@@ -3279,6 +3303,9 @@ router.patch(
 										Math.round(
 											(principal + totalInterest) * 100
 										) / 100;
+																	// Get current calculation settings to store with loan
+								const calculationSettings = await getLoanCalculationSettings(prismaTransaction);
+								
 									updatedLoan =
 										await prismaTransaction.loan.create({
 											data: {
@@ -3288,13 +3315,18 @@ router.patch(
 													application.amount,
 												totalAmount: totalAmount,
 												outstandingBalance: totalAmount,
-												interestRate: application.product.interestRate, // Use product's interest rate
+											interestRate: application.product.interestRate, // Use product's interest rate
 												term: application.term || 12,
 												monthlyPayment:
 													application.monthlyRepayment ||
 													application.amount / 12,
 												status: "ACTIVE",
 												disbursedAt: new Date(),
+											// Store calculation method used at time of disbursement
+											calculationMethod: calculationSettings.calculationMethod,
+											scheduleType: calculationSettings.scheduleType,
+											customDueDate: calculationSettings.customDueDate,
+											prorationCutoffDate: calculationSettings.prorationCutoffDate,
 											},
 										});
 									console.log(
@@ -3952,6 +3984,8 @@ router.get(
 			});
 
 			// Enhanced loans with overdue information (same logic as user loans endpoint)
+			// Get grace period settings once for all loans
+			const gracePeriodDays = await getLateFeeGraceSettings();
 
 			const loansWithOverdueInfo = await Promise.all(
 				loans.map(async (loan) => {
@@ -3967,9 +4001,9 @@ router.get(
 						// Get all pending/partial repayments that are overdue using raw query
 						const today = TimeUtils.malaysiaStartOfDay();
 
-						// Apply 3-day grace period - only consider repayments overdue after grace period
+						// Apply dynamic grace period - only consider repayments overdue after grace period
 						const gracePeriodDate = new Date(today);
-						gracePeriodDate.setDate(gracePeriodDate.getDate() - LATE_FEE_GRACE_PERIOD_DAYS);
+						gracePeriodDate.setDate(gracePeriodDate.getDate() - gracePeriodDays);
 
 						const overdueRepaymentsQuery = `
 							SELECT 
@@ -3991,7 +4025,7 @@ router.get(
 
 						if (overdueRepayments.length > 0) {
 							console.log(
-								`🔍 DEBUG: Admin - Overdue repayments for loan ${loan.id} (after ${LATE_FEE_GRACE_PERIOD_DAYS}-day grace period):`,
+								`🔍 DEBUG: Admin - Overdue repayments for loan ${loan.id} (after ${gracePeriodDays}-day grace period):`,
 								overdueRepayments.map((r) => ({
 									id: r.id,
 									amount: r.amount,
@@ -4065,9 +4099,18 @@ router.get(
 				})
 			);
 
+			// Fetch current system settings for loan calculation methods
+			const systemSettings = await getLoanCalculationSettings(prisma);
+
 			return res.status(200).json({
 				success: true,
 				data: loansWithOverdueInfo,
+				systemSettings: {
+					calculationMethod: systemSettings.calculationMethod,
+					scheduleType: systemSettings.scheduleType,
+					customDueDate: systemSettings.customDueDate,
+					prorationCutoffDate: systemSettings.prorationCutoffDate
+				}
 			});
 		} catch (error) {
 			console.error("Error fetching loans:", error);
@@ -4262,6 +4305,9 @@ router.post(
 										(principal + totalInterest) * 100
 									) / 100;
 
+								// Get current calculation settings to store with loan
+								const calculationSettings = await getLoanCalculationSettings(prismaTransaction);
+
 								updatedLoan =
 									await prismaTransaction.loan.create({
 										data: {
@@ -4277,6 +4323,11 @@ router.post(
 												application.amount / 12,
 											status: "ACTIVE",
 											disbursedAt: new Date(),
+											// Store calculation method used at time of disbursement
+											calculationMethod: calculationSettings.calculationMethod,
+											scheduleType: calculationSettings.scheduleType,
+											customDueDate: calculationSettings.customDueDate,
+											prorationCutoffDate: calculationSettings.prorationCutoffDate,
 										},
 									});
 								console.log("Loan record created successfully");
@@ -6466,6 +6517,10 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 		throw new Error("Loan not found or not disbursed");
 	}
 
+	// Fetch loan calculation and payment schedule settings
+	const calculationSettings = await getLoanCalculationSettings(tx);
+	console.log(`🧮 Using loan calculation settings:`, calculationSettings);
+
 	// Clear any existing schedule first
 	await tx.loanRepayment.deleteMany({
 		where: { loanId: loan.id },
@@ -6494,52 +6549,32 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 	console.log(`Principal: ${principal}, Interest Rate: ${loan.interestRate}%, Term: ${term} months`);
 	console.log(`Total Interest: ${totalInterest}, Total Amount: ${totalAmountToPay}`);
 
-	// Calculate first payment date using new cutoff logic
-	const firstPaymentDate = calculateFirstPaymentDate(new Date(loan.disbursedAt));
 	const disbursementDate = new Date(loan.disbursedAt);
+	
+	// Calculate first payment date based on schedule type
+	const firstPaymentDate = calculateFirstPaymentDateDynamic(disbursementDate, calculationSettings);
 	
 	// Calculate pro-rated first payment for actual period from disbursement to first payment
 	const daysInFirstPeriod = calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
 	
-	// PROPORTIONAL METHOD: Use actual average days per period instead of assumed 30 days
-	const actualAverageDaysPerPeriod = calculateActualAverageDaysPerPeriod(disbursementDate, term);
-	const standardMonthlyPayment = SafeMath.divide(totalAmountToPay, term);
-	const proRatedRatio = SafeMath.divide(daysInFirstPeriod, actualAverageDaysPerPeriod); // Ratio of actual days to actual average days
-	
-	// Calculate pro-rated amounts by applying the ratio to standard monthly amounts
-	const monthlyInterestPortion = SafeMath.divide(totalInterest, term);
-	const monthlyPrincipalPortion = SafeMath.divide(principal, term);
-	
-	const firstPeriodInterest = SafeMath.multiply(monthlyInterestPortion, proRatedRatio);
-	const firstPeriodPrincipal = SafeMath.multiply(monthlyPrincipalPortion, proRatedRatio);
-	
-	console.log(`First payment calculation (Proportional Method):`);
-	console.log(`  Disbursement: ${disbursementDate.toISOString()}`);
-	console.log(`  First payment due: ${firstPaymentDate.toISOString()}`);
-	console.log(`  Days in first period: ${daysInFirstPeriod}`);
-	console.log(`  Actual average days per period: ${actualAverageDaysPerPeriod.toFixed(1)}`);
-	console.log(`  Standard monthly payment: ${standardMonthlyPayment.toFixed(2)}`);
-	console.log(`  Pro-rated ratio: ${(proRatedRatio * 100).toFixed(2)}% (vs actual average, not assumed 30 days)`);
-	console.log(`  First period interest: ${firstPeriodInterest.toFixed(2)}`);
-	console.log(`  First period principal: ${firstPeriodPrincipal.toFixed(2)}`);
+	// Calculate interest and principal allocations based on calculation method
+	console.log(`💰 Using allocation method: ${calculationSettings.calculationMethod}`);
+	const allPaymentAllocations = calculateAllPaymentAllocations(
+		principal, 
+		totalInterest, 
+		term, 
+		daysInFirstPeriod, 
+		calculationSettings
+	);
 
-	// Calculate remaining amounts after first payment
-	const remainingTerm = term - 1; // Remaining payments after first payment
-	const remainingInterest = SafeMath.subtract(totalInterest, firstPeriodInterest);
-	const remainingPrincipal = SafeMath.subtract(principal, firstPeriodPrincipal);
-	const remainingTotal = SafeMath.add(remainingInterest, remainingPrincipal);
-	
-	// Calculate monthly amounts for remaining payments
-	const baseMonthlyPayment = remainingTerm > 0 ? SafeMath.divide(remainingTotal, remainingTerm) : 0;
-	const baseMonthlyInterest = remainingTerm > 0 ? SafeMath.divide(remainingInterest, remainingTerm) : 0;
-	const baseMonthlyPrincipal = remainingTerm > 0 ? SafeMath.divide(remainingPrincipal, remainingTerm) : 0;
+	// Store calculation method metadata in console for debugging
+	console.log(`🏦 Loan calculation metadata:`);
+	console.log(`  Calculation Method: ${calculationSettings.calculationMethod}`);
+	console.log(`  Schedule Type: ${calculationSettings.scheduleType}`);
+	console.log(`  Custom Due Date: ${calculationSettings.customDueDate}`);
+	console.log(`  Proration Cutoff: ${calculationSettings.prorationCutoffDate}`);
 
-	console.log(`Remaining calculation:`);
-	console.log(`  Remaining term: ${remainingTerm} payments`);
-	console.log(`  Remaining total: ${remainingTotal.toFixed(2)}`);
-	console.log(`  Base monthly payment: ${baseMonthlyPayment.toFixed(2)}`);
-
-	// Generate all installments with new logic
+	// Generate all installments with dynamic logic
 	let totalScheduled = 0;
 	let totalInterestScheduled = 0;
 	let totalPrincipalScheduled = 0;
@@ -6551,54 +6586,24 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 			// First payment uses calculated first payment date
 			dueDate = firstPaymentDate;
 		} else {
-			// Subsequent payments are on 1st of each following month
-			const firstPaymentMalaysia = new Date(firstPaymentDate.getTime() + (8 * 60 * 60 * 1000));
-			const targetMonth = firstPaymentMalaysia.getUTCMonth() + (month - 1);
-			let targetYear = firstPaymentMalaysia.getUTCFullYear();
-			
-			// Handle multiple year rollovers correctly
-			const actualMonth = targetMonth % 12;
-			targetYear += Math.floor(targetMonth / 12);
-			
-			dueDate = new Date(
-				Date.UTC(targetYear, actualMonth, 1, 15, 59, 59, 999)
-			);
+			// Subsequent payments calculated based on schedule type
+			dueDate = calculateSubsequentPaymentDate(disbursementDate, firstPaymentDate, month, calculationSettings);
 		}
 
-		let installmentAmount, interestAmount, principalAmount;
-
-		if (month === term) {
-			// Final installment: adjust to ensure total matches exactly
-			// This handles both single-payment loans (term=1) and final payments of multi-term loans
-			installmentAmount = SafeMath.subtract(totalAmountToPay, totalScheduled);
-			interestAmount = SafeMath.subtract(totalInterest, totalInterestScheduled);
-			principalAmount = SafeMath.subtract(principal, totalPrincipalScheduled);
-			
-			console.log(`Final installment adjustment (month ${month} of ${term}):`);
-			console.log(`  Target total: ${totalAmountToPay}, Scheduled so far: ${totalScheduled}`);
-			console.log(`  Final payment: ${installmentAmount}`);
-		} else if (month === 1) {
-			// First payment: pro-rated based on actual days from disbursement to first payment
-			// Only applies to multi-term loans (term > 1)
-			interestAmount = firstPeriodInterest;
-			principalAmount = firstPeriodPrincipal;
-			installmentAmount = SafeMath.add(interestAmount, principalAmount);
-			
-			// Track running totals
+		// Get payment allocation for this month from pre-calculated allocations
+		const paymentAllocation = allPaymentAllocations.find(p => p.month === month);
+		if (!paymentAllocation) {
+			throw new Error(`Payment allocation not found for month ${month}`);
+		}
+		
+		const installmentAmount = paymentAllocation.totalPayment;
+		const interestAmount = paymentAllocation.interestAmount;
+		const principalAmount = paymentAllocation.principalAmount;
+		
+		// Track running totals for verification
 			totalScheduled = SafeMath.add(totalScheduled, installmentAmount);
 			totalInterestScheduled = SafeMath.add(totalInterestScheduled, interestAmount);
 			totalPrincipalScheduled = SafeMath.add(totalPrincipalScheduled, principalAmount);
-		} else {
-			// Regular installment: use base amounts
-			installmentAmount = baseMonthlyPayment;
-			interestAmount = baseMonthlyInterest;
-			principalAmount = baseMonthlyPrincipal;
-			
-			// Track running totals
-			totalScheduled = SafeMath.add(totalScheduled, installmentAmount);
-			totalInterestScheduled = SafeMath.add(totalInterestScheduled, interestAmount);
-			totalPrincipalScheduled = SafeMath.add(totalPrincipalScheduled, principalAmount);
-		}
 
 		repayments.push({
 			loanId: loan.id,
@@ -6626,10 +6631,13 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 
 	// Update loan with next payment due date and correct monthly payment
 	if (repayments.length > 0) {
+		// For monthly payment, use the most common payment amount (usually the 2nd payment for variable first payments)
+		const monthlyPayment = repayments.length > 1 ? repayments[1].amount : repayments[0].amount;
+		
 		await tx.loan.update({
 			where: { id: loanId },
 			data: {
-				monthlyPayment: repayments.length > 1 ? baseMonthlyPayment : repayments[0].amount,
+				monthlyPayment: monthlyPayment,
 				nextPaymentDue: repayments[0].dueDate,
 			},
 		});
@@ -8622,48 +8630,7 @@ router.post(
 	}
 );
 
-// Helper function to calculate first payment date with 20th cutoff rule
-function calculateFirstPaymentDate(disbursementDate: Date): Date {
-	// Convert disbursement date to Malaysia timezone for cutoff logic
-	const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
-	
-	const day = malaysiaTime.getUTCDate();
-	const month = malaysiaTime.getUTCMonth();
-	const year = malaysiaTime.getUTCFullYear();
-	
-	let firstPaymentMonth: number;
-	let firstPaymentYear: number;
-	
-	if (day < 20) {
-		// If disbursed before 20th, first payment is 1st of next month
-		firstPaymentMonth = month + 1;
-		firstPaymentYear = year;
-		
-		// Handle year rollover
-		if (firstPaymentMonth > 11) {
-			firstPaymentMonth = 0;
-			firstPaymentYear++;
-		}
-	} else {
-		// If disbursed on or after 20th, first payment is 1st of month after next
-		firstPaymentMonth = month + 2;
-		firstPaymentYear = year;
-		
-		// Handle year rollover
-		if (firstPaymentMonth > 11) {
-			firstPaymentMonth = firstPaymentMonth - 12;
-			firstPaymentYear++;
-		}
-	}
-	
-	// Create first payment date as 1st of target month at end of day (Malaysia timezone)
-	// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
-	const firstPaymentDate = new Date(
-		Date.UTC(firstPaymentYear, firstPaymentMonth, 1, 15, 59, 59, 999)
-	);
-	
-	return firstPaymentDate;
-}
+
 
 // Helper function to calculate days between two dates in Malaysia timezone
 function calculateDaysBetweenMalaysia(startDate: Date, endDate: Date): number {
@@ -8690,37 +8657,385 @@ function calculateDaysBetweenMalaysia(startDate: Date, endDate: Date): number {
 	return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 }
 
-// Helper function to calculate actual average days per period for the entire loan term
-function calculateActualAverageDaysPerPeriod(disbursementDate: Date, term: number): number {
-	const firstPaymentDate = calculateFirstPaymentDate(disbursementDate);
-	let totalDays = 0;
+
+
+// Helper function to get loan calculation settings from database
+async function getLoanCalculationSettings(tx: any) {
+	try {
+		const settings = await tx.systemSettings.findMany({
+			where: {
+				key: {
+					in: ['PAYMENT_SCHEDULE_TYPE', 'CUSTOM_DUE_DATE', 'PRORATION_CUTOFF_DATE', 'LOAN_CALCULATION_METHOD']
+				},
+				isActive: true
+			}
+		});
+
+		const scheduleType = settings.find((s: any) => s.key === 'PAYMENT_SCHEDULE_TYPE')?.value || '"CUSTOM_DATE"';
+		const customDueDate = settings.find((s: any) => s.key === 'CUSTOM_DUE_DATE')?.value || '1';
+		const prorationCutoffDate = settings.find((s: any) => s.key === 'PRORATION_CUTOFF_DATE')?.value || '20';
+		const calculationMethod = settings.find((s: any) => s.key === 'LOAN_CALCULATION_METHOD')?.value || '"STRAIGHT_LINE"';
+
+		return {
+			scheduleType: JSON.parse(scheduleType),
+			customDueDate: JSON.parse(customDueDate),
+			prorationCutoffDate: JSON.parse(prorationCutoffDate),
+			calculationMethod: JSON.parse(calculationMethod)
+		};
+	} catch (error) {
+		console.error('Error fetching loan calculation settings, using defaults:', error);
+		// Return defaults if settings not found
+		return {
+			scheduleType: 'CUSTOM_DATE',
+			customDueDate: 1,
+			prorationCutoffDate: 20,
+			calculationMethod: 'STRAIGHT_LINE'
+		};
+	}
+}
+
+// Helper function to calculate all payment allocations based on calculation method
+function calculateAllPaymentAllocations(principal: number, totalInterest: number, term: number, daysInFirstPeriod: number, calculationSettings: any) {
+	console.log(`📊 Calculating payment allocations with ${calculationSettings.calculationMethod} method`);
 	
-	// Calculate days for the first period (disbursement to first payment)
-	totalDays += calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
+	if (calculationSettings.calculationMethod === 'RULE_OF_78') {
+		return calculateRuleOf78Allocations(principal, totalInterest, term, daysInFirstPeriod, calculationSettings);
+	} else {
+		// Default to STRAIGHT_LINE method
+		return calculateStraightLineAllocations(principal, totalInterest, term, daysInFirstPeriod, calculationSettings);
+	}
+}
+
+// Helper function to calculate Rule of 78 allocations
+function calculateRuleOf78Allocations(principal: number, totalInterest: number, term: number, daysInFirstPeriod: number, calculationSettings: any) {
+	const { SafeMath } = require("../lib/precisionUtils");
+	const payments = [];
 	
-	// Calculate days for subsequent periods (payment to payment)
-	let currentPaymentDate = firstPaymentDate;
-	for (let month = 2; month <= term; month++) {
-		// Calculate next payment date (1st of next month)
-		const currentMalaysia = new Date(currentPaymentDate.getTime() + (8 * 60 * 60 * 1000));
-		let nextMonth = currentMalaysia.getUTCMonth() + 1;
-		let nextYear = currentMalaysia.getUTCFullYear();
+	// Calculate sum of digits (1 + 2 + 3 + ... + n)
+	const sumOfDigits = (term * (term + 1)) / 2;
+	
+	console.log(`🎯 Rule of 78 calculation:`);
+	console.log(`  Term: ${term} months`);
+	console.log(`  Sum of digits: ${sumOfDigits}`);
+	console.log(`  Total amount: ${SafeMath.add(principal, totalInterest)}`);
+	
+	// Calculate equal payment amount (same for all months in Rule of 78)
+	const equalPaymentAmount = SafeMath.divide(SafeMath.add(principal, totalInterest), term);
+	console.log(`  Equal monthly payment: ${equalPaymentAmount.toFixed(2)}`);
+	
+	let totalInterestAllocated = 0;
+	let totalPrincipalAllocated = 0;
+	
+	for (let month = 1; month <= term; month++) {
+		// Rule of 78: Higher weights for earlier payments (front-loaded interest)
+		const interestWeight = (term - month + 1) / sumOfDigits;
+		let interestAmount = SafeMath.multiply(totalInterest, interestWeight);
 		
-		if (nextMonth > 11) {
-			nextMonth = 0;
-			nextYear++;
+		// Principal amount = Equal payment - Interest amount
+		let principalAmount = SafeMath.subtract(equalPaymentAmount, interestAmount);
+		
+		// Handle pro-rating for first payment in CUSTOM_DATE
+		if (month === 1 && calculationSettings.scheduleType === 'CUSTOM_DATE') {
+			// Apply pro-rating to the entire first payment, then recalculate interest/principal split
+			const actualAverageDaysPerPeriod = calculateActualAverageDaysPerPeriodDynamic(new Date(), term, calculationSettings);
+			const proRatedRatio = SafeMath.divide(daysInFirstPeriod, actualAverageDaysPerPeriod);
+			
+			// Pro-rate the total payment amount
+			const proRatedTotalPayment = SafeMath.multiply(equalPaymentAmount, proRatedRatio);
+			
+			// Keep the same interest weight but apply to pro-rated total
+			const proRatedInterestAmount = SafeMath.multiply(totalInterest, interestWeight);
+			const adjustedInterestAmount = SafeMath.multiply(proRatedInterestAmount, proRatedRatio);
+			const adjustedPrincipalAmount = SafeMath.subtract(proRatedTotalPayment, adjustedInterestAmount);
+			
+			interestAmount = adjustedInterestAmount;
+			principalAmount = adjustedPrincipalAmount;
+			
+			console.log(`  Month ${month}: Pro-rated payment ${proRatedTotalPayment.toFixed(2)} (${(proRatedRatio * 100).toFixed(2)}% of ${equalPaymentAmount.toFixed(2)})`);
+			console.log(`    Interest: ${interestAmount.toFixed(2)}, Principal: ${principalAmount.toFixed(2)}`);
+		} else {
+			console.log(`  Month ${month}: Interest weight ${(interestWeight * 100).toFixed(2)}% = ${interestAmount.toFixed(2)}, Principal = ${principalAmount.toFixed(2)}`);
 		}
 		
-		const nextPaymentDate = new Date(Date.UTC(nextYear, nextMonth, 1, 15, 59, 59, 999));
+		totalInterestAllocated = SafeMath.add(totalInterestAllocated, interestAmount);
+		totalPrincipalAllocated = SafeMath.add(totalPrincipalAllocated, principalAmount);
 		
-		// Add days in this period
-		totalDays += calculateDaysBetweenMalaysia(currentPaymentDate, nextPaymentDate);
+		// For final payment, adjust to ensure exact totals
+		if (month === term) {
+			const interestAdjustment = SafeMath.subtract(totalInterest, SafeMath.subtract(totalInterestAllocated, interestAmount));
+			const principalAdjustment = SafeMath.subtract(principal, SafeMath.subtract(totalPrincipalAllocated, principalAmount));
+			
+			// Apply adjustments to final payment
+			interestAmount = interestAdjustment;
+			principalAmount = principalAdjustment;
+			
+			console.log(`  Final payment adjustment: Interest = ${interestAmount.toFixed(2)}, Principal = ${principalAmount.toFixed(2)}`);
+		}
 		
-		// Move to next period
-		currentPaymentDate = nextPaymentDate;
+		const totalPayment = SafeMath.add(interestAmount, principalAmount);
+		
+		payments.push({
+			month: month,
+			interestAmount: interestAmount,
+			principalAmount: principalAmount,
+			totalPayment: totalPayment
+		});
+		
+		console.log(`  Month ${month} final: Payment = ${totalPayment.toFixed(2)} (Interest: ${interestAmount.toFixed(2)}, Principal: ${principalAmount.toFixed(2)})`);
 	}
 	
-	return totalDays / term;
+	return payments;
+}
+
+// Helper function to calculate Straight Line allocations (current method)
+function calculateStraightLineAllocations(principal: number, totalInterest: number, term: number, daysInFirstPeriod: number, calculationSettings: any) {
+	const { SafeMath } = require("../lib/precisionUtils");
+	const payments = [];
+	
+	console.log(`📐 Straight Line calculation:`);
+	
+	if (calculationSettings.scheduleType === 'EXACT_MONTHLY') {
+		// For same day each month: equal payments with equal interest/principal allocation
+		const monthlyInterest = SafeMath.divide(totalInterest, term);
+		const monthlyPrincipal = SafeMath.divide(principal, term);
+		const monthlyPayment = SafeMath.add(monthlyInterest, monthlyPrincipal);
+		
+		console.log(`  Same day each month: Equal ${monthlyPayment.toFixed(2)} (${monthlyInterest.toFixed(2)} interest + ${monthlyPrincipal.toFixed(2)} principal)`);
+		
+		for (let month = 1; month <= term; month++) {
+			payments.push({
+				month: month,
+				interestAmount: monthlyInterest,
+				principalAmount: monthlyPrincipal,
+				totalPayment: monthlyPayment
+			});
+		}
+	} else {
+		// For CUSTOM_DATE: pro-rated first payment, then equal remaining payments
+		const actualAverageDaysPerPeriod = calculateActualAverageDaysPerPeriodDynamic(new Date(), term, calculationSettings);
+		const proRatedRatio = SafeMath.divide(daysInFirstPeriod, actualAverageDaysPerPeriod);
+		
+		// Calculate pro-rated first payment
+		const monthlyInterestPortion = SafeMath.divide(totalInterest, term);
+		const monthlyPrincipalPortion = SafeMath.divide(principal, term);
+		
+		const firstPeriodInterest = SafeMath.multiply(monthlyInterestPortion, proRatedRatio);
+		const firstPeriodPrincipal = SafeMath.multiply(monthlyPrincipalPortion, proRatedRatio);
+		const firstPayment = SafeMath.add(firstPeriodInterest, firstPeriodPrincipal);
+		
+		console.log(`  Pro-rated first payment: ${firstPayment.toFixed(2)} (${firstPeriodInterest.toFixed(2)} interest + ${firstPeriodPrincipal.toFixed(2)} principal)`);
+		
+		// Add first payment
+		payments.push({
+			month: 1,
+			interestAmount: firstPeriodInterest,
+			principalAmount: firstPeriodPrincipal,
+			totalPayment: firstPayment
+		});
+		
+		// Calculate remaining payments
+		const remainingTerm = term - 1;
+		if (remainingTerm > 0) {
+			const remainingInterest = SafeMath.subtract(totalInterest, firstPeriodInterest);
+			const remainingPrincipal = SafeMath.subtract(principal, firstPeriodPrincipal);
+			const remainingTotal = SafeMath.add(remainingInterest, remainingPrincipal);
+			
+			const baseMonthlyPayment = SafeMath.divide(remainingTotal, remainingTerm);
+			const baseMonthlyInterest = SafeMath.divide(remainingInterest, remainingTerm);
+			const baseMonthlyPrincipal = SafeMath.divide(remainingPrincipal, remainingTerm);
+			
+			console.log(`  Remaining ${remainingTerm} payments: ${baseMonthlyPayment.toFixed(2)} each (${baseMonthlyInterest.toFixed(2)} interest + ${baseMonthlyPrincipal.toFixed(2)} principal)`);
+			
+			for (let month = 2; month <= term; month++) {
+				payments.push({
+					month: month,
+					interestAmount: baseMonthlyInterest,
+					principalAmount: baseMonthlyPrincipal,
+					totalPayment: baseMonthlyPayment
+				});
+			}
+		}
+		
+		// Final payment adjustment to ensure exact totals
+		if (payments.length > 0) {
+			const totalAllocatedInterest = payments.reduce((sum, p) => SafeMath.add(sum, p.interestAmount), 0);
+			const totalAllocatedPrincipal = payments.reduce((sum, p) => SafeMath.add(sum, p.principalAmount), 0);
+			
+			const interestAdjustment = SafeMath.subtract(totalInterest, totalAllocatedInterest);
+			const principalAdjustment = SafeMath.subtract(principal, totalAllocatedPrincipal);
+			
+			if (Math.abs(interestAdjustment) > 0.001 || Math.abs(principalAdjustment) > 0.001) {
+				const finalPayment = payments[payments.length - 1];
+				finalPayment.interestAmount = SafeMath.add(finalPayment.interestAmount, interestAdjustment);
+				finalPayment.principalAmount = SafeMath.add(finalPayment.principalAmount, principalAdjustment);
+				finalPayment.totalPayment = SafeMath.add(finalPayment.interestAmount, finalPayment.principalAmount);
+				
+				console.log(`  Final adjustment: Interest +${interestAdjustment.toFixed(2)}, Principal +${principalAdjustment.toFixed(2)}`);
+			}
+		}
+	}
+	
+	return payments;
+}
+
+// Helper function to calculate first payment date based on schedule type and settings
+function calculateFirstPaymentDateDynamic(disbursementDate: Date, scheduleSettings: any): Date {
+	if (scheduleSettings.scheduleType === 'EXACT_MONTHLY') {
+		// For 30-day intervals: same day of next month (e.g., 18th → 18th next month)
+		const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
+		const day = malaysiaTime.getUTCDate();
+		const month = malaysiaTime.getUTCMonth();
+		const year = malaysiaTime.getUTCFullYear();
+		
+		// First payment is same day of next month
+		let firstPaymentMonth = month + 1;
+		let firstPaymentYear = year;
+		
+		// Handle year rollover
+		if (firstPaymentMonth > 11) {
+			firstPaymentMonth = 0;
+			firstPaymentYear++;
+		}
+		
+		// Create first payment date as same day of next month at end of day (Malaysia timezone)
+		// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
+		const firstPaymentDate = new Date(
+			Date.UTC(firstPaymentYear, firstPaymentMonth, day, 15, 59, 59, 999)
+		);
+		
+		return firstPaymentDate;
+	} else {
+		// For CUSTOM_DATE: use cutoff logic with configurable date
+	const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
+	
+	const day = malaysiaTime.getUTCDate();
+	const month = malaysiaTime.getUTCMonth();
+	const year = malaysiaTime.getUTCFullYear();
+	
+	let firstPaymentMonth: number;
+	let firstPaymentYear: number;
+	
+		if (day < scheduleSettings.prorationCutoffDate) {
+			// If disbursed before cutoff, first payment is custom date of next month
+		firstPaymentMonth = month + 1;
+		firstPaymentYear = year;
+		
+		// Handle year rollover
+		if (firstPaymentMonth > 11) {
+			firstPaymentMonth = 0;
+			firstPaymentYear++;
+		}
+	} else {
+			// If disbursed on or after cutoff, first payment is custom date of month after next
+		firstPaymentMonth = month + 2;
+		firstPaymentYear = year;
+		
+		// Handle year rollover
+		if (firstPaymentMonth > 11) {
+			firstPaymentMonth = firstPaymentMonth - 12;
+			firstPaymentYear++;
+		}
+	}
+	
+		// Create first payment date as custom date of target month at end of day (Malaysia timezone)
+	// Set to 15:59:59 UTC so it becomes 23:59:59 Malaysia time (GMT+8)
+	const firstPaymentDate = new Date(
+			Date.UTC(firstPaymentYear, firstPaymentMonth, scheduleSettings.customDueDate, 15, 59, 59, 999)
+	);
+	
+	return firstPaymentDate;
+	}
+}
+
+// Helper function to calculate subsequent payment dates based on schedule type
+function calculateSubsequentPaymentDate(disbursementDate: Date, firstPaymentDate: Date, month: number, scheduleSettings: any): Date {
+	if (scheduleSettings.scheduleType === 'EXACT_MONTHLY') {
+		// For 30-day intervals: same day of each subsequent month
+		const malaysiaTime = new Date(disbursementDate.getTime() + (8 * 60 * 60 * 1000));
+		const day = malaysiaTime.getUTCDate();
+		const originalMonth = malaysiaTime.getUTCMonth();
+		const originalYear = malaysiaTime.getUTCFullYear();
+		
+		// Calculate target month and year
+		const targetMonth = originalMonth + month;
+		let targetYear = originalYear;
+		let actualMonth = targetMonth;
+		
+		// Handle year rollover
+		if (targetMonth > 11) {
+			actualMonth = targetMonth % 12;
+			targetYear += Math.floor(targetMonth / 12);
+		}
+		
+		// Create payment date as same day of target month at end of day (Malaysia timezone)
+		const subsequentDate = new Date(
+			Date.UTC(targetYear, actualMonth, day, 15, 59, 59, 999)
+		);
+		
+		return subsequentDate;
+	} else {
+		// For CUSTOM_DATE: custom date of each following month
+		const firstPaymentMalaysia = new Date(firstPaymentDate.getTime() + (8 * 60 * 60 * 1000));
+		const targetMonth = firstPaymentMalaysia.getUTCMonth() + (month - 1);
+		let targetYear = firstPaymentMalaysia.getUTCFullYear();
+		
+		// Handle multiple year rollovers correctly
+		const actualMonth = targetMonth % 12;
+		targetYear += Math.floor(targetMonth / 12);
+		
+		const dueDate = new Date(
+			Date.UTC(targetYear, actualMonth, scheduleSettings.customDueDate, 15, 59, 59, 999)
+		);
+		
+		return dueDate;
+	}
+}
+
+// Dynamic version of calculateActualAverageDaysPerPeriod that uses schedule settings
+function calculateActualAverageDaysPerPeriodDynamic(disbursementDate: Date, term: number, scheduleSettings: any): number {
+	if (scheduleSettings.scheduleType === 'EXACT_MONTHLY') {
+		// For same-day-of-month intervals, calculate actual average based on calendar months
+		const firstPaymentDate = calculateFirstPaymentDateDynamic(disbursementDate, scheduleSettings);
+		let totalDays = 0;
+		
+		// Calculate days for the first period (disbursement to first payment)
+		totalDays += calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
+		
+		// Calculate days for subsequent periods (payment to payment)
+		let currentPaymentDate = firstPaymentDate;
+		for (let month = 2; month <= term; month++) {
+			const nextPaymentDate = calculateSubsequentPaymentDate(disbursementDate, firstPaymentDate, month, scheduleSettings);
+			
+			// Add days in this period
+			totalDays += calculateDaysBetweenMalaysia(currentPaymentDate, nextPaymentDate);
+			
+			// Move to next period
+			currentPaymentDate = nextPaymentDate;
+		}
+		
+		return totalDays / term;
+	} else {
+		// For CUSTOM_DATE, calculate actual average based on payment dates
+		const firstPaymentDate = calculateFirstPaymentDateDynamic(disbursementDate, scheduleSettings);
+		let totalDays = 0;
+		
+		// Calculate days for the first period (disbursement to first payment)
+		totalDays += calculateDaysBetweenMalaysia(disbursementDate, firstPaymentDate);
+		
+		// Calculate days for subsequent periods (payment to payment)
+		let currentPaymentDate = firstPaymentDate;
+		for (let month = 2; month <= term; month++) {
+			const nextPaymentDate = calculateSubsequentPaymentDate(disbursementDate, firstPaymentDate, month, scheduleSettings);
+			
+			// Add days in this period
+			totalDays += calculateDaysBetweenMalaysia(currentPaymentDate, nextPaymentDate);
+			
+			// Move to next period
+			currentPaymentDate = nextPaymentDate;
+		}
+		
+		return totalDays / term;
+	}
 }
 
 /**

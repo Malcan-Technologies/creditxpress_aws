@@ -552,11 +552,12 @@ function calculateMatchScore(
 		}
 	}
 	
-	// Loan ID in reference (additional check)
+	// Loan ID in reference (bonus criteria) - Check first 8 digits only
 	if (transaction.refCode && payment.loan?.id) {
-		if (transaction.refCode.includes(payment.loan.id)) {
+		const loanIdFirst8 = payment.loan.id.substring(0, 8);
+		if (transaction.refCode.includes(loanIdFirst8)) {
 			score += 15;
-			reasons.push("Loan ID found in reference");
+			reasons.push("✨ Bonus: Loan ID found in reference");
 		}
 	}
 	
@@ -570,13 +571,13 @@ function calculateMatchScore(
 		
 		if (daysDiff <= 1) {
 			score += 15;
-			reasons.push("Transaction date matches due date");
+			reasons.push("✨ Bonus: Transaction date matches due date");
 		} else if (daysDiff <= 7) {
 			score += 10;
-			reasons.push("Transaction date within 1 week of due date");
+			reasons.push("✨ Bonus: Transaction date within 1 week of due date");
 		} else if (daysDiff <= 30) {
 			score += 5;
-			reasons.push("Transaction date within 1 month of due date");
+			reasons.push("✨ Bonus: Transaction date within 1 month of due date");
 		}
 	}
 	

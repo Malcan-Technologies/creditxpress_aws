@@ -604,6 +604,76 @@ function SettingsPageContent() {
 											</div>
 										</div>
 									</div>
+								) : category === "LATE_FEES" ? (
+									/* Special handling for Late Fee category to ensure enabled setting comes first */
+									<div className="space-y-6">
+										{/* First show the enable/disable toggle */}
+										{categorySettings.filter(s => s.key === "ENABLE_LATE_FEE_GRACE_PERIOD").map((setting) => (
+											<div key={setting.key} className="border-b border-gray-700/30 pb-6">
+												<div className="flex items-start justify-between">
+													<div className="flex-1 min-w-0 mr-6">
+														<div className="flex items-center space-x-2 mb-2">
+															<h3 className="text-base font-medium text-white">
+																{setting.name}
+															</h3>
+															{setting.requiresRestart && (
+																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
+																	Requires Restart
+																</span>
+															)}
+															{setting.affectsExistingLoans && (
+																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
+																	Affects Existing Loans
+																</span>
+															)}
+														</div>
+														<p className="text-sm text-gray-300 mb-3">
+															{setting.description}
+														</p>
+													</div>
+													<div className="flex-shrink-0 w-64">
+														{renderSettingInput(setting)}
+													</div>
+												</div>
+											</div>
+										))}
+										
+										{/* Then show other late fee settings */}
+										{categorySettings.filter(s => s.key !== "ENABLE_LATE_FEE_GRACE_PERIOD").map((setting) => (
+											<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
+												<div className="flex items-start justify-between">
+													<div className="flex-1 min-w-0 mr-6">
+														<div className="flex items-center space-x-2 mb-2">
+															<h3 className="text-base font-medium text-white">
+																{setting.name}
+															</h3>
+															{setting.requiresRestart && (
+																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
+																	Requires Restart
+																</span>
+															)}
+															{setting.affectsExistingLoans && (
+																<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
+																	Affects Existing Loans
+																</span>
+															)}
+														</div>
+														<p className="text-sm text-gray-300 mb-3">
+															{setting.description}
+														</p>
+													</div>
+													<div className="flex-shrink-0 w-64">
+														{renderSettingInput(setting)}
+														{setting.options && setting.dataType === "NUMBER" && (
+															<div className="mt-1 text-xs text-gray-400">
+																Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+															</div>
+														)}
+													</div>
+												</div>
+											</div>
+										))}
+									</div>
 								) : (
 									/* Standard layout for other categories */
 									categorySettings.map((setting) => (
