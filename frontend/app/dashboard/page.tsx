@@ -193,6 +193,7 @@ export default function DashboardPage() {
 					"PENDING_APP_FEE",
 					"PENDING_KYC",
 					"PENDING_APPROVAL",
+					"PENDING_FRESH_OFFER",
 					"APPROVED",
 					"PENDING_ATTESTATION",
 					"REJECTED",
@@ -256,6 +257,8 @@ export default function DashboardPage() {
 				return "Pending KYC";
 			case "PENDING_APPROVAL":
 				return "Under Review";
+			case "PENDING_FRESH_OFFER":
+				return "Fresh Offer Available";
 			case "APPROVED":
 				return "Approved";
 			case "REJECTED":
@@ -277,6 +280,8 @@ export default function DashboardPage() {
 			case "PENDING_KYC":
 			case "PENDING_APPROVAL":
 				return "bg-blue-500/20 text-blue-300 border border-blue-400/30";
+			case "PENDING_FRESH_OFFER":
+				return "bg-pink-500/20 text-pink-300 border border-pink-400/30";
 			case "APPROVED":
 				return "bg-green-500/20 text-green-300 border border-green-400/30";
 			case "REJECTED":
@@ -498,6 +503,7 @@ export default function DashboardPage() {
 				"INCOMPLETE",
 				"PENDING_APP_FEE", 
 				"APPROVED",
+				"PENDING_FRESH_OFFER",
 				"PENDING_ATTESTATION"
 			].includes(app.status)
 		);
@@ -550,6 +556,17 @@ export default function DashboardPage() {
 							buttonHref: `/dashboard/applications/${app.id}`,
 							priority: 'MEDIUM' as const,
 						};
+					case "PENDING_FRESH_OFFER":
+						return {
+							type: 'PENDING_FRESH_OFFER' as const,
+							title: "🔄 Fresh Offer Available",
+							description: `We have a new offer for your ${
+								app.product?.name || "loan"
+							} application. Please review and respond to the revised terms`,
+							buttonText: "Review Offer",
+							buttonHref: `/dashboard/loans?tab=applications&scroll=true`,
+							priority: 'HIGH' as const,
+						};
 					case "PENDING_ATTESTATION":
 						return {
 							type: 'PENDING_ATTESTATION' as const,
@@ -562,7 +579,7 @@ export default function DashboardPage() {
 									: ""
 							} requires attestation to proceed`,
 							buttonText: "Complete Attestation",
-							buttonHref: `/dashboard/loans?tab=applications`,
+							buttonHref: `/dashboard/loans?tab=applications&scroll=true`,
 							priority: 'HIGH' as const,
 						};
 					default:

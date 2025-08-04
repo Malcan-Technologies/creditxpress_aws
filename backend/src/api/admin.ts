@@ -2545,6 +2545,7 @@ router.get(
 				"PENDING_KYC",
 				"PENDING_APPROVAL",
 				"APPROVED",
+				"PENDING_FRESH_OFFER",
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
@@ -3127,6 +3128,7 @@ router.patch(
 				"PENDING_KYC",
 				"PENDING_APPROVAL",
 				"APPROVED",
+				"PENDING_FRESH_OFFER",
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
@@ -3777,6 +3779,253 @@ router.patch(
 					.status(404)
 					.json({ message: "Application not found" });
 			}
+			return res.status(500).json({
+				message: "Internal server error",
+				error: error.message || "Unknown error",
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/fresh-offer:
+ *   post:
+ *     summary: Submit a fresh offer for a loan application (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *               - term
+ *               - interestRate
+ *               - monthlyRepayment
+ *               - netDisbursement
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Fresh offer amount
+ *               term:
+ *                 type: integer
+ *                 description: Fresh offer term in months
+ *               interestRate:
+ *                 type: number
+ *                 description: Fresh offer interest rate
+ *               monthlyRepayment:
+ *                 type: number
+ *                 description: Fresh offer monthly repayment
+ *               netDisbursement:
+ *                 type: number
+ *                 description: Fresh offer net disbursement amount
+ *               notes:
+ *                 type: string
+ *                 description: Admin notes for the fresh offer
+ *     responses:
+ *       200:
+ *         description: Fresh offer submitted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       400:
+ *         description: Invalid request or application not in correct status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Submit fresh offer for loan application (admin only)
+// @ts-ignore
+router.post(
+	"/applications/:id/fresh-offer",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { amount, term, interestRate, monthlyRepayment, netDisbursement, productId, notes } = req.body;
+			const adminUserId = req.user?.userId;
+
+			// Validate required fields
+			if (!amount || !term || !interestRate || !monthlyRepayment || !netDisbursement) {
+				return res.status(400).json({ 
+					message: "All offer fields are required: amount, term, interestRate, monthlyRepayment, netDisbursement" 
+				});
+			}
+
+			// Get the current application
+			const currentApplication = await prisma.loanApplication.findUnique({
+				where: { id },
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+			});
+
+			if (!currentApplication) {
+				return res.status(404).json({ message: "Application not found" });
+			}
+
+			// Check if application is in PENDING_APPROVAL status
+			if (currentApplication.status !== "PENDING_APPROVAL") {
+				return res.status(400).json({ 
+					message: `Fresh offers can only be submitted for applications in PENDING_APPROVAL status. Current status: ${currentApplication.status}` 
+				});
+			}
+
+			// Store original offer values if not already stored
+			const originalOfferAmount = currentApplication.originalOfferAmount || currentApplication.amount;
+			const originalOfferTerm = currentApplication.originalOfferTerm || currentApplication.term;
+			const originalOfferInterestRate = currentApplication.originalOfferInterestRate || currentApplication.interestRate;
+			const originalOfferMonthlyRepayment = currentApplication.originalOfferMonthlyRepayment || currentApplication.monthlyRepayment;
+			const originalOfferNetDisbursement = currentApplication.originalOfferNetDisbursement || currentApplication.netDisbursement;
+
+			// Update application with fresh offer
+			const updateData: any = {
+				status: "PENDING_FRESH_OFFER",
+				freshOfferAmount: amount,
+				freshOfferTerm: term,
+				freshOfferInterestRate: interestRate,
+				freshOfferMonthlyRepayment: monthlyRepayment,
+				freshOfferNetDisbursement: netDisbursement,
+				freshOfferNotes: notes,
+				freshOfferSubmittedAt: new Date(),
+				freshOfferSubmittedBy: adminUserId,
+				// Store original offer if not already stored
+				originalOfferAmount: originalOfferAmount,
+				originalOfferTerm: originalOfferTerm,
+				originalOfferInterestRate: originalOfferInterestRate,
+				originalOfferMonthlyRepayment: originalOfferMonthlyRepayment,
+				originalOfferNetDisbursement: originalOfferNetDisbursement,
+			};
+
+			// Update productId if provided
+			if (productId) {
+				updateData.productId = productId;
+			}
+
+			const updatedApplication = await prisma.loanApplication.update({
+				where: { id },
+				data: updateData,
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+			});
+
+			// Track the status change in history
+			await trackApplicationStatusChange(
+				prisma,
+				id,
+				"PENDING_APPROVAL",
+				"PENDING_FRESH_OFFER",
+				adminUserId,
+				"Fresh offer submitted",
+				notes || "Admin submitted a fresh offer with revised terms",
+				{
+					freshOffer: {
+						amount,
+						term,
+						interestRate,
+						monthlyRepayment,
+						netDisbursement,
+					},
+					originalOffer: {
+						amount: originalOfferAmount,
+						term: originalOfferTerm,
+						interestRate: originalOfferInterestRate,
+						monthlyRepayment: originalOfferMonthlyRepayment,
+						netDisbursement: originalOfferNetDisbursement,
+					},
+					submittedBy: adminUserId,
+					submittedAt: new Date().toISOString(),
+				}
+			);
+
+			// Create notification for the user about fresh offer
+			try {
+				await prisma.notification.create({
+					data: {
+						userId: updatedApplication.user.id,
+						title: "New Loan Offer Available",
+						message: `We have a new loan offer for you! Amount: RM${amount.toFixed(2)}, Term: ${term} months. Please review and respond.`,
+						type: "FRESH_OFFER",
+						priority: "HIGH",
+						metadata: {
+							applicationId: id,
+							freshOffer: {
+								amount,
+								term,
+								interestRate,
+								monthlyRepayment,
+								netDisbursement,
+							},
+							originalOffer: {
+								amount: originalOfferAmount,
+								term: originalOfferTerm,
+								interestRate: originalOfferInterestRate,
+								monthlyRepayment: originalOfferMonthlyRepayment,
+								netDisbursement: originalOfferNetDisbursement,
+							},
+							submittedBy: adminUserId,
+							submittedAt: new Date().toISOString(),
+							notes: notes || "",
+						},
+					},
+				});
+			} catch (notificationError) {
+				console.error("Could not create fresh offer notification:", notificationError);
+			}
+
+			console.log(`Fresh offer submitted for application ${id} by admin ${adminUserId}`);
+			return res.json(updatedApplication);
+
+		} catch (error) {
+			console.error("Error submitting fresh offer:", error);
 			return res.status(500).json({
 				message: "Internal server error",
 				error: error.message || "Unknown error",
@@ -9721,6 +9970,86 @@ router.post(
 				message: "Failed to process batch approval",
 				error: error instanceof Error ? error.message : "Unknown error"
 			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/products:
+ *   get:
+ *     summary: Get all products (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of all products
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   code:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *                   interestRate:
+ *                     type: number
+ *                   isActive:
+ *                     type: boolean
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       500:
+ *         description: Server error
+ */
+// Get all products (admin only)
+router.get(
+	"/products",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			const products = await prisma.product.findMany({
+				select: {
+					id: true,
+					code: true,
+					name: true,
+					description: true,
+					minAmount: true,
+					maxAmount: true,
+					repaymentTerms: true,
+					interestRate: true,
+					eligibility: true,
+					lateFeeRate: true,
+					lateFeeFixedAmount: true,
+					lateFeeFrequencyDays: true,
+					originationFee: true,
+					legalFee: true,
+					applicationFee: true,
+					requiredDocuments: true,
+					features: true,
+					loanTypes: true,
+					isActive: true,
+					collateralRequired: true,
+				},
+				orderBy: {
+					createdAt: "asc",
+				},
+			});
+
+			return res.json(products);
+		} catch (error) {
+			console.error("Error fetching products:", error);
+			return res.status(500).json({ message: "Internal server error" });
 		}
 	}
 );

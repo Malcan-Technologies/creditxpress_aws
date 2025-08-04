@@ -1829,4 +1829,273 @@ router.post(
 	}
 );
 
+/**
+ * @swagger
+ * /api/loan-applications/{id}/fresh-offer-response:
+ *   post:
+ *     summary: Respond to a fresh offer (accept or reject)
+ *     tags: [Loan Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan application ID or URL link
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - action
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [accept, reject]
+ *                 description: User's response to the fresh offer
+ *     responses:
+ *       200:
+ *         description: Fresh offer response recorded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoanApplication'
+ *       400:
+ *         description: Invalid action or application not in correct status
+ *       404:
+ *         description: Loan application not found
+ *       500:
+ *         description: Server error
+ */
+// Respond to fresh offer (user endpoint)
+router.post(
+	"/:id/fresh-offer-response",
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id } = req.params;
+			const { action } = req.body;
+			const userId = req.user!.userId;
+
+			// Validate action
+			if (!action || !["accept", "reject"].includes(action)) {
+				return res.status(400).json({ 
+					message: "Action must be either 'accept' or 'reject'" 
+				});
+			}
+
+			// Check if the application exists and belongs to the user
+			const existingApplication = await prisma.loanApplication.findFirst({
+				where: {
+					OR: [{ id }, { urlLink: id }],
+					userId,
+				},
+				include: {
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					product: {
+						select: {
+							id: true,
+							name: true,
+							code: true,
+						},
+					},
+				},
+			});
+
+			if (!existingApplication) {
+				return res.status(404).json({ 
+					message: "Loan application not found" 
+				});
+			}
+
+			// Check if application is in PENDING_FRESH_OFFER status
+			if (existingApplication.status !== "PENDING_FRESH_OFFER") {
+				return res.status(400).json({ 
+					message: `Cannot respond to fresh offer. Application status: ${existingApplication.status}` 
+				});
+			}
+
+			// Check if there's actually a fresh offer
+			if (!existingApplication.freshOfferAmount) {
+				return res.status(400).json({ 
+					message: "No fresh offer found for this application" 
+				});
+			}
+
+			let updatedApplication;
+			let newStatus;
+			let statusChangeReason;
+
+			if (action === "accept") {
+				// User accepts fresh offer - update application with fresh offer terms and go back to PENDING_APPROVAL
+				newStatus = "PENDING_APPROVAL";
+				statusChangeReason = "User accepted fresh offer";
+
+				updatedApplication = await prisma.loanApplication.update({
+					where: { id: existingApplication.id },
+					data: {
+						status: newStatus,
+						// Replace current terms with fresh offer terms
+						amount: existingApplication.freshOfferAmount,
+						term: existingApplication.freshOfferTerm,
+						interestRate: existingApplication.freshOfferInterestRate,
+						monthlyRepayment: existingApplication.freshOfferMonthlyRepayment,
+						netDisbursement: existingApplication.freshOfferNetDisbursement,
+						// Clear fresh offer fields since they're now accepted
+						freshOfferAmount: null,
+						freshOfferTerm: null,
+						freshOfferInterestRate: null,
+						freshOfferMonthlyRepayment: null,
+						freshOfferNetDisbursement: null,
+						freshOfferNotes: null,
+						freshOfferSubmittedAt: null,
+						freshOfferSubmittedBy: null,
+					},
+					include: {
+						user: {
+							select: {
+								id: true,
+								fullName: true,
+								phoneNumber: true,
+								email: true,
+							},
+						},
+						product: {
+							select: {
+								id: true,
+								name: true,
+								code: true,
+							},
+						},
+					},
+				});
+			} else {
+				// User rejects fresh offer - restore original terms and go back to PENDING_APPROVAL
+				newStatus = "PENDING_APPROVAL";
+				statusChangeReason = "User rejected fresh offer - restored original terms";
+
+				updatedApplication = await prisma.loanApplication.update({
+					where: { id: existingApplication.id },
+					data: {
+						status: newStatus,
+						// Restore original terms if they exist
+						amount: existingApplication.originalOfferAmount || existingApplication.amount,
+						term: existingApplication.originalOfferTerm || existingApplication.term,
+						interestRate: existingApplication.originalOfferInterestRate || existingApplication.interestRate,
+						monthlyRepayment: existingApplication.originalOfferMonthlyRepayment || existingApplication.monthlyRepayment,
+						netDisbursement: existingApplication.originalOfferNetDisbursement || existingApplication.netDisbursement,
+						// Clear fresh offer fields
+						freshOfferAmount: null,
+						freshOfferTerm: null,
+						freshOfferInterestRate: null,
+						freshOfferMonthlyRepayment: null,
+						freshOfferNetDisbursement: null,
+						freshOfferNotes: null,
+						freshOfferSubmittedAt: null,
+						freshOfferSubmittedBy: null,
+						// Clear original offer backup fields since they're restored
+						originalOfferAmount: null,
+						originalOfferTerm: null,
+						originalOfferInterestRate: null,
+						originalOfferMonthlyRepayment: null,
+						originalOfferNetDisbursement: null,
+					},
+					include: {
+						user: {
+							select: {
+								id: true,
+								fullName: true,
+								phoneNumber: true,
+								email: true,
+							},
+						},
+						product: {
+							select: {
+								id: true,
+								name: true,
+								code: true,
+							},
+						},
+					},
+				});
+			}
+
+			// Track the status change in history
+			await trackApplicationStatusChange(
+				prisma,
+				existingApplication.id,
+				"PENDING_FRESH_OFFER",
+				newStatus,
+				existingApplication.user?.fullName || "User",
+				statusChangeReason,
+				`User ${action}ed the fresh offer`,
+				{
+					userAction: action,
+					userId: userId,
+					freshOfferResponse: action,
+					respondedAt: new Date().toISOString(),
+					freshOfferDetails: {
+						amount: existingApplication.freshOfferAmount,
+						term: existingApplication.freshOfferTerm,
+						interestRate: existingApplication.freshOfferInterestRate,
+						monthlyRepayment: existingApplication.freshOfferMonthlyRepayment,
+						netDisbursement: existingApplication.freshOfferNetDisbursement,
+						notes: existingApplication.freshOfferNotes,
+					},
+				}
+			);
+
+			// Create notification for admin about user's response
+			try {
+				await prisma.notification.create({
+					data: {
+						userId: "ADMIN", // Special admin notification
+						title: `Fresh Offer ${action === "accept" ? "Accepted" : "Rejected"}`,
+						message: `${existingApplication.user.fullName} has ${action}ed the fresh offer for application ${existingApplication.id}`,
+						type: "FRESH_OFFER_RESPONSE",
+						priority: "HIGH",
+						metadata: {
+							applicationId: existingApplication.id,
+							userResponse: action,
+							userId: userId,
+							userName: existingApplication.user.fullName,
+							respondedAt: new Date().toISOString(),
+							freshOfferDetails: {
+								amount: existingApplication.freshOfferAmount,
+								term: existingApplication.freshOfferTerm,
+								interestRate: existingApplication.freshOfferInterestRate,
+								monthlyRepayment: existingApplication.freshOfferMonthlyRepayment,
+								netDisbursement: existingApplication.freshOfferNetDisbursement,
+							},
+						},
+					},
+				});
+			} catch (notificationError) {
+				console.error("Could not create admin notification:", notificationError);
+			}
+
+			console.log(`User ${userId} ${action}ed fresh offer for application ${existingApplication.id}`);
+			return res.json(updatedApplication);
+
+		} catch (error) {
+			console.error("Error responding to fresh offer:", error);
+			return res.status(500).json({
+				message: "Failed to respond to fresh offer",
+				error: error.message || "Unknown error",
+			});
+		}
+	}
+);
+
 export default router;

@@ -20,6 +20,7 @@ import {
 	PlusIcon,
 	DocumentTextIcon,
 	XMarkIcon,
+	CheckIcon,
 	VideoCameraIcon,
 	ChartPieIcon,
 	DocumentIcon,
@@ -145,6 +146,17 @@ interface LoanApplication {
 	amount: number;
 	term: number;
 	purpose: string;
+	monthlyRepayment?: number;
+	interestRate?: number;
+	netDisbursement?: number;
+	// Fresh offer fields
+	freshOfferAmount?: number;
+	freshOfferTerm?: number;
+	freshOfferInterestRate?: number;
+	freshOfferMonthlyRepayment?: number;
+	freshOfferNetDisbursement?: number;
+	freshOfferNotes?: string;
+	freshOfferSubmittedAt?: string;
 	createdAt: string;
 	updatedAt: string;
 	attestationType?: string;
@@ -356,9 +368,11 @@ function LoansPageContent() {
 		checkAuthAndLoadData();
 	}, [router]);
 
-	// Handle tab query parameter
+	// Handle tab query parameter and scrolling
 	useEffect(() => {
 		const tab = searchParams.get("tab");
+		const shouldScroll = searchParams.get("scroll");
+		
 		if (tab === "applications") {
 			setActiveTab("applications");
 		} else if (tab === "discharged") {
@@ -367,6 +381,43 @@ function LoansPageContent() {
 			setActiveTab("incomplete");
 		} else if (tab === "rejected") {
 			setActiveTab("rejected");
+		}
+
+		// Scroll to loans section only if explicitly requested
+		if (shouldScroll === "true") {
+			// Try multiple times with increasing delays to ensure content is loaded
+			const attemptScroll = (attempt = 1, maxAttempts = 5) => {
+				const loansSection = document.getElementById("loans-section");
+				if (loansSection) {
+					console.log("Scrolling to loans section");
+					
+					// Try scrollIntoView first
+					try {
+						loansSection.scrollIntoView({ 
+							behavior: "smooth", 
+							block: "start" 
+						});
+					} catch (error) {
+						console.log("scrollIntoView failed, trying alternative method");
+						// Fallback to manual scroll calculation
+						const rect = loansSection.getBoundingClientRect();
+						const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+						const targetPosition = rect.top + scrollTop - 20; // 20px offset from top
+						
+						window.scrollTo({
+							top: targetPosition,
+							behavior: "smooth"
+						});
+					}
+				} else if (attempt < maxAttempts) {
+					console.log(`Scroll attempt ${attempt} failed, retrying...`);
+					setTimeout(() => attemptScroll(attempt + 1, maxAttempts), 300 * attempt);
+				} else {
+					console.log("Failed to find loans section after", maxAttempts, "attempts");
+				}
+			};
+			
+			setTimeout(() => attemptScroll(), 500);
 		}
 	}, [searchParams]);
 
@@ -697,6 +748,37 @@ function LoansPageContent() {
 		}
 	};
 
+	// Helper functions to get display values (fresh offer or original)
+	const getDisplayAmount = (app: LoanApplication) => {
+		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferAmount 
+			? app.freshOfferAmount 
+			: app.amount;
+	};
+
+	const getDisplayTerm = (app: LoanApplication) => {
+		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferTerm 
+			? app.freshOfferTerm 
+			: app.term;
+	};
+
+	const getDisplayMonthlyRepayment = (app: LoanApplication) => {
+		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferMonthlyRepayment 
+			? app.freshOfferMonthlyRepayment 
+			: app.monthlyRepayment;
+	};
+
+	const getDisplayInterestRate = (app: LoanApplication) => {
+		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferInterestRate 
+			? app.freshOfferInterestRate 
+			: app.interestRate;
+	};
+
+	const getDisplayNetDisbursement = (app: LoanApplication) => {
+		return app.status === "PENDING_FRESH_OFFER" && app.freshOfferNetDisbursement 
+			? app.freshOfferNetDisbursement 
+			: app.netDisbursement;
+	};
+
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString("en-MY", {
 			day: "numeric",
@@ -846,6 +928,8 @@ function LoansPageContent() {
 			case "PENDING_KYC":
 			case "PENDING_APPROVAL":
 				return "bg-blue-100 text-blue-800";
+			case "PENDING_FRESH_OFFER":
+				return "bg-purple-100 text-purple-800";
 			case "PENDING_ATTESTATION":
 				// Special color for live call requests
 				if (attestationType === "MEETING") {
@@ -882,6 +966,8 @@ function LoansPageContent() {
 				return "Pending KYC";
 			case "PENDING_APPROVAL":
 				return "Under Review";
+			case "PENDING_FRESH_OFFER":
+				return "Fresh Offer Available";
 			case "PENDING_ATTESTATION":
 				// Show special status for live call requests
 				if (attestationType === "MEETING") {
@@ -1108,6 +1194,45 @@ function LoansPageContent() {
 	const handleLiveCallModalClose = () => {
 		setShowLiveCallConfirmationModal(false);
 		setSelectedAttestationApplication(null);
+	};
+
+	// Handle fresh offer response
+	const handleFreshOfferResponse = async (applicationId: string, action: 'accept' | 'reject') => {
+		try {
+			const actionText = action === 'accept' ? 'accept' : 'reject';
+			const confirmMessage = `Are you sure you want to ${actionText} this fresh offer?`;
+			
+			if (!window.confirm(confirmMessage)) {
+				return;
+			}
+
+			const response = await fetchWithTokenRefresh(
+				`/api/loan-applications/${applicationId}/fresh-offer-response`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						action: action,
+					}),
+				}
+			);
+
+			if (response) {
+				// Reload applications to show updated status
+				await loadApplications();
+				
+				const message = action === 'accept' 
+					? 'Fresh offer accepted! Your application will proceed with the new terms.'
+					: 'Fresh offer rejected. Your application has been restored to the original terms.';
+				
+				alert(message);
+			}
+		} catch (error) {
+			console.error(`Error ${action}ing fresh offer:`, error);
+			alert(`Failed to ${action} fresh offer. Please try again.`);
+		}
 	};
 
 	// Handle bar click to show details
@@ -1633,7 +1758,7 @@ function LoansPageContent() {
 					</div>
 
 					{/* Loans and Applications Tabs */}
-					<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 w-full min-w-0 overflow-hidden">
+					<div id="loans-section" className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 w-full min-w-0 overflow-hidden">
 						{/* Card Header */}
 						<div className="p-6 lg:p-8 pb-0">
 							<div className="flex items-center mb-4">
@@ -2166,6 +2291,8 @@ function LoansPageContent() {
 																	);
 																})()}
 																	</div>
+
+																	
 																</div>
 
 																{/* View Details Button - Subtle and Centered */}
@@ -3070,6 +3197,24 @@ function LoansPageContent() {
 																						)}
 																					</>
 																				)}
+																				{app.status === "PENDING_FRESH_OFFER" && (
+																					<div className="flex items-center space-x-3">
+																						<button
+																							onClick={() => handleFreshOfferResponse(app.id, 'accept')}
+																							className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+																						>
+																							<CheckIcon className="h-4 w-4 mr-2" />
+																							Accept Offer
+																						</button>
+																						<button
+																							onClick={() => handleFreshOfferResponse(app.id, 'reject')}
+																							className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+																						>
+																							<XMarkIcon className="h-4 w-4 mr-2" />
+																							Reject Offer
+																						</button>
+																					</div>
+																				)}
 																				{[
 																					"PENDING_APP_FEE",
 																					"PENDING_KYC",
@@ -3158,18 +3303,23 @@ function LoansPageContent() {
 																					</div>
 																					<div>
 																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
-																							Amount Requested
+																							{app.status === "PENDING_FRESH_OFFER" ? "Revised Amount" : "Amount Requested"}
 																						</h4>
 																					</div>
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
 																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{app.amount ? formatCurrency(app.amount) : "-"}
+																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																						</p>
+																						{app.status === "PENDING_FRESH_OFFER" && (
+																							<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-pink-100 text-pink-800 border border-pink-200">
+																								Fresh Offer
+																							</span>
+																						)}
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
-																						Loan amount requested
+																						{app.status === "PENDING_FRESH_OFFER" ? "Revised loan amount" : "Loan amount requested"}
 																					</div>
 																				</div>
 																			</div>
@@ -3191,7 +3341,7 @@ function LoansPageContent() {
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
 																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{app.term ? `${app.term} months` : "-"}
+																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																						</p>
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
@@ -3201,27 +3351,35 @@ function LoansPageContent() {
 																			</div>
 																		</div>
 
-																		{/* Applied Date */}
+
+																		{/* Monthly Repayment */}
 																		<div className="text-left">
 																			<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
 																				<div className="flex items-center mb-4">
 																					<div className="w-12 h-12 lg:w-14 lg:h-14 bg-purple-600/10 rounded-xl flex items-center justify-center mr-3">
-																						<CalendarIcon className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" />
+																						<svg className="h-6 w-6 lg:h-7 lg:w-7 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+																						</svg>
 																					</div>
 																					<div>
 																						<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
-																							Applied On
+																							{app.status === "PENDING_FRESH_OFFER" ? "Revised Monthly Payment" : "Monthly Payment"}
 																						</h4>
 																					</div>
 																				</div>
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
 																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{formatDate(app.updatedAt)}
+																							{getDisplayMonthlyRepayment(app) ? formatCurrency(getDisplayMonthlyRepayment(app)!) : "-"}
 																						</p>
+																						{app.status === "PENDING_FRESH_OFFER" && (
+																							<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-pink-100 text-pink-800 border border-pink-200">
+																								Fresh Offer
+																							</span>
+																						)}
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
-																						Application date
+																						{app.status === "PENDING_FRESH_OFFER" ? "Revised monthly payment amount" : "Expected monthly payment"}
 																					</div>
 																				</div>
 																			</div>
@@ -3288,7 +3446,7 @@ function LoansPageContent() {
 																							Loan Amount
 																						</span>
 																						<span className="font-medium text-gray-700 font-body">
-																							{app.amount ? formatCurrency(app.amount) : "-"}
+																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
@@ -3296,7 +3454,7 @@ function LoansPageContent() {
 																							Loan Term
 																						</span>
 																						<span className="font-medium text-gray-700 font-body">
-																							{app.term ? `${app.term} months` : "-"}
+																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
@@ -3629,7 +3787,7 @@ function LoansPageContent() {
 																		<div className="space-y-4 lg:space-y-6">
 																			<div>
 																				<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																					{app.amount ? formatCurrency(app.amount) : "-"}
+																					{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																				</p>
 																			</div>
 																			<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
@@ -3655,7 +3813,7 @@ function LoansPageContent() {
 																		<div className="space-y-4 lg:space-y-6">
 																			<div>
 																				<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																					{app.term ? `${app.term} months` : "-"}
+																					{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																				</p>
 																			</div>
 																			<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
@@ -3803,7 +3961,7 @@ function LoansPageContent() {
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
 																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{app.amount ? formatCurrency(app.amount) : "-"}
+																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																						</p>
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
@@ -3829,7 +3987,7 @@ function LoansPageContent() {
 																				<div className="space-y-4 lg:space-y-6">
 																					<div>
 																						<p className="text-xl lg:text-2xl font-heading font-bold text-gray-700 mb-3">
-																							{app.term ? `${app.term} months` : "-"}
+																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																						</p>
 																					</div>
 																					<div className="text-sm lg:text-base text-gray-600 font-body leading-relaxed">
@@ -3927,7 +4085,7 @@ function LoansPageContent() {
 																							Loan Amount
 																						</span>
 																						<span className="font-medium text-gray-700 font-body">
-																							{app.amount ? formatCurrency(app.amount) : "-"}
+																							{getDisplayAmount(app) ? formatCurrency(getDisplayAmount(app)!) : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">
@@ -3935,7 +4093,7 @@ function LoansPageContent() {
 																							Loan Term
 																						</span>
 																						<span className="font-medium text-gray-700 font-body">
-																							{app.term ? `${app.term} months` : "-"}
+																							{getDisplayTerm(app) ? `${getDisplayTerm(app)} months` : "-"}
 																						</span>
 																					</div>
 																					<div className="flex justify-between py-2">

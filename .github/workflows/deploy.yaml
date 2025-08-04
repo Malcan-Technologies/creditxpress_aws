@@ -408,6 +408,18 @@ jobs:
                 fi
               fi
               
+              # Copy public files to standalone build directory
+              if [ "$BUILD_SUCCESS" = "true" ] && [ -d ".next/standalone" ]; then
+                echo "📁 Copying public files to standalone build..."
+                mkdir -p .next/standalone/public
+                if [ -d "public" ] && [ "$(ls -A public)" ]; then
+                  cp -r public/* .next/standalone/public/ 2>/dev/null || echo "No files to copy from public directory"
+                  echo "✅ Public files copied to standalone build"
+                else
+                  echo "⚠️ No public directory or files found"
+                fi
+              fi
+              
               # Start or restart the admin service
               if pm2 list | grep -q "growkapital-admin"; then
                 echo "🔄 Restarting admin service..."

@@ -314,6 +314,24 @@ export default function ApplicationWorkflowPage() {
 			actionLabel: "Make Decision",
 		},
 		{
+			id: "fresh-offer",
+			title: "Fresh Offer Review",
+			description:
+				"Customer reviews and responds to revised loan terms",
+			type: "user",
+			statuses: [
+				{
+					name: "PENDING_FRESH_OFFER",
+					label: "Pending Fresh Offer Response",
+					count: counts.PENDING_FRESH_OFFER || 0,
+					color: "purple",
+					icon: DocumentTextIcon,
+				},
+			],
+			linkPath: "/dashboard/applications",
+			actionLabel: "Monitor Response",
+		},
+		{
 			id: "attestation",
 			title: "Terms Attestation",
 			description:

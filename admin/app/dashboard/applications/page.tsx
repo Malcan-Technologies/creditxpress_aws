@@ -33,6 +33,7 @@ import {
 	ClipboardDocumentCheckIcon,
 	PencilSquareIcon,
 	ArrowLeftIcon,
+	ArrowsUpDownIcon,
 	XMarkIcon,
 	ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
@@ -148,6 +149,7 @@ function AdminApplicationsPageContent() {
 				"PENDING_APP_FEE",
 				"PENDING_KYC",
 				"PENDING_APPROVAL",
+				"PENDING_FRESH_OFFER",
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
 				"PENDING_DISBURSEMENT",
@@ -168,6 +170,18 @@ function AdminApplicationsPageContent() {
 	const [processingDecision, setProcessingDecision] = useState(false);
 	const [processingCollateral, setProcessingCollateral] = useState(false);
 	const [processingDisbursement, setProcessingDisbursement] = useState(false);
+	
+	// Fresh offer states
+	const [showFreshOfferForm, setShowFreshOfferForm] = useState(false);
+	const [freshOfferAmount, setFreshOfferAmount] = useState("");
+	const [freshOfferTerm, setFreshOfferTerm] = useState("");
+	const [freshOfferInterestRate, setFreshOfferInterestRate] = useState("");
+	const [freshOfferMonthlyRepayment, setFreshOfferMonthlyRepayment] = useState("");
+	const [freshOfferNetDisbursement, setFreshOfferNetDisbursement] = useState("");
+	const [freshOfferNotes, setFreshOfferNotes] = useState("");
+	const [freshOfferProductId, setFreshOfferProductId] = useState("");
+	const [products, setProducts] = useState<any[]>([]);
+	const [processingFreshOffer, setProcessingFreshOffer] = useState(false);
 	const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
 	const [lastKnownStatus, setLastKnownStatus] = useState<string | null>(null);
 	const [showStatusChangeAlert, setShowStatusChangeAlert] = useState(false);
@@ -218,6 +232,8 @@ function AdminApplicationsPageContent() {
 				return ClipboardDocumentCheckIcon;
 			case "PENDING_APPROVAL":
 				return DocumentMagnifyingGlassIcon;
+			case "PENDING_FRESH_OFFER":
+				return ArrowsUpDownIcon;
 			case "PENDING_ATTESTATION":
 				return ClipboardDocumentCheckIcon;
 			case "PENDING_SIGNATURE":
@@ -245,6 +261,8 @@ function AdminApplicationsPageContent() {
 				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
 			case "PENDING_APPROVAL":
 				return "bg-amber-500/20 text-amber-200 border-amber-400/20";
+			case "PENDING_FRESH_OFFER":
+				return "bg-pink-500/20 text-pink-200 border-pink-400/20";
 			case "PENDING_ATTESTATION":
 				return "bg-cyan-500/20 text-cyan-200 border-cyan-400/20";
 			case "PENDING_SIGNATURE":
@@ -272,6 +290,8 @@ function AdminApplicationsPageContent() {
 				return "Pending KYC";
 			case "PENDING_APPROVAL":
 				return "Pending Approval";
+			case "PENDING_FRESH_OFFER":
+				return "Fresh Offer Pending";
 			case "PENDING_ATTESTATION":
 				return "Pending Attestation";
 			case "PENDING_SIGNATURE":
@@ -1136,6 +1156,159 @@ function AdminApplicationsPageContent() {
 		}
 	};
 
+	// Fresh offer handler
+	const handleFreshOfferSubmission = async () => {
+		if (!selectedApplication) return;
+
+		// Validate required fields
+		if (!freshOfferAmount || !freshOfferTerm || !freshOfferInterestRate || !freshOfferMonthlyRepayment || !freshOfferNetDisbursement || !freshOfferProductId) {
+			setError("All fresh offer fields are required, including product selection");
+			return;
+		}
+
+		// Show confirmation dialog
+		const confirmMessage = `Are you sure you want to submit a fresh offer to ${selectedApplication.user?.fullName}?\n\nNew Amount: RM${parseFloat(freshOfferAmount).toFixed(2)}\nNew Term: ${freshOfferTerm} months\nNew Interest Rate: ${freshOfferInterestRate}%`;
+
+		if (!window.confirm(confirmMessage)) {
+			return;
+		}
+
+		setProcessingFreshOffer(true);
+		try {
+			const response = await fetchWithAdminTokenRefresh(
+				`/api/admin/applications/${selectedApplication.id}/fresh-offer`,
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						amount: parseFloat(freshOfferAmount),
+						term: parseInt(freshOfferTerm),
+						interestRate: parseFloat(freshOfferInterestRate),
+						monthlyRepayment: parseFloat(freshOfferMonthlyRepayment),
+						netDisbursement: parseFloat(freshOfferNetDisbursement),
+						productId: freshOfferProductId,
+						notes: freshOfferNotes,
+					}),
+				}
+			);
+
+			console.log("Fresh offer submitted successfully");
+			
+			// Clear form and refresh data
+			setShowFreshOfferForm(false);
+			setFreshOfferAmount("");
+			setFreshOfferTerm("");
+			setFreshOfferInterestRate("");
+			setFreshOfferMonthlyRepayment("");
+			setFreshOfferNetDisbursement("");
+			setFreshOfferProductId("");
+			setFreshOfferNotes("");
+			
+			await fetchApplications();
+			await fetchApplicationHistory(selectedApplication.id);
+
+			// Update selected application status
+			setSelectedApplication(prev => 
+				prev ? { ...prev, status: "PENDING_FRESH_OFFER" } : null
+			);
+
+		} catch (error) {
+			console.error("Error submitting fresh offer:", error);
+			setError("Failed to submit fresh offer");
+		} finally {
+			setProcessingFreshOffer(false);
+		}
+	};
+
+	// Fetch products for selection
+	const fetchProducts = async () => {
+		try {
+			const productsData = await fetchWithAdminTokenRefresh<any[]>("/api/admin/products");
+			setProducts(productsData || []);
+		} catch (error) {
+			console.error("Error fetching products:", error);
+		}
+	};
+
+	// Calculate monthly repayment based on amount, term, and interest rate
+	const calculateMonthlyRepayment = (principal: number, termInMonths: number, interestRate: number) => {
+		// Convert interest rate from percentage to decimal
+		const monthlyInterestRate = interestRate / 100;
+
+		// Calculate total interest for the loan period (flat rate)
+		const totalInterest = principal * monthlyInterestRate * termInMonths;
+
+		// Monthly interest payment
+		const monthlyInterest = totalInterest / termInMonths;
+
+		// Monthly principal payment
+		const monthlyPrincipal = principal / termInMonths;
+
+		// Total monthly payment is principal + interest
+		const monthlyPayment = monthlyPrincipal + monthlyInterest;
+
+		return monthlyPayment;
+	};
+
+	// Auto-calculate monthly repayment when amount, term, or interest rate changes
+	const updateCalculatedFields = () => {
+		const amount = parseFloat(freshOfferAmount);
+		const term = parseInt(freshOfferTerm);
+		const interestRate = parseFloat(freshOfferInterestRate);
+
+		if (amount && term && interestRate) {
+			const monthlyRepayment = calculateMonthlyRepayment(amount, term, interestRate);
+			setFreshOfferMonthlyRepayment(monthlyRepayment.toFixed(2));
+
+			// Calculate net disbursement based on selected product fees
+			const selectedProduct = products.find(p => p.id === freshOfferProductId);
+			if (selectedProduct) {
+				// Legal fee and origination fee are stored as percentages in the database
+				const legalFeeValue = (amount * selectedProduct.legalFee) / 100;
+				const originationFeeValue = (amount * selectedProduct.originationFee) / 100;
+				
+				// Net disbursement = loan amount - all fees
+				const netDisbursement = amount - legalFeeValue - originationFeeValue;
+				setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
+			} else {
+				// If no product selected, clear net disbursement
+				setFreshOfferNetDisbursement("");
+			}
+		} else {
+			// Clear calculated fields if required inputs are missing
+			setFreshOfferMonthlyRepayment("");
+			setFreshOfferNetDisbursement("");
+		}
+	};
+
+	// Populate fresh offer form with current application data
+	const populateFreshOfferForm = async () => {
+		if (selectedApplication) {
+			// Fetch products if not already loaded
+			if (products.length === 0) {
+				await fetchProducts();
+			}
+
+			setFreshOfferAmount(selectedApplication.amount?.toString() || "");
+			setFreshOfferTerm(selectedApplication.term?.toString() || "");
+			setFreshOfferInterestRate(selectedApplication.interestRate?.toString() || "");
+			setFreshOfferMonthlyRepayment(selectedApplication.monthlyRepayment?.toString() || "");
+			setFreshOfferNetDisbursement(selectedApplication.netDisbursement?.toString() || "");
+			setFreshOfferProductId(selectedApplication.productId || "");
+			setFreshOfferNotes("");
+			setShowFreshOfferForm(true);
+		}
+	};
+
+	// Auto-calculate when fresh offer values change
+	useEffect(() => {
+		if (showFreshOfferForm) {
+			updateCalculatedFields();
+		}
+	}, [freshOfferAmount, freshOfferTerm, freshOfferInterestRate, freshOfferProductId, products]);
+
 	if (loading) {
 		return (
 			<AdminLayout userName={userName}>
@@ -1273,13 +1446,14 @@ function AdminApplicationsPageContent() {
 								"PENDING_APP_FEE",
 								"PENDING_KYC",
 								"PENDING_APPROVAL",
+								"PENDING_FRESH_OFFER",
 								"PENDING_ATTESTATION",
 								"PENDING_SIGNATURE",
 								"PENDING_DISBURSEMENT",
 								"COLLATERAL_REVIEW",
 							])}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 7 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW")
+								selectedFilters.length === 8 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW") && selectedFilters.includes("PENDING_FRESH_OFFER")
 									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
@@ -1295,6 +1469,16 @@ function AdminApplicationsPageContent() {
 							}`}
 						>
 							Pending Approval
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_FRESH_OFFER"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_FRESH_OFFER")
+									? "bg-pink-500/30 text-pink-100 border-pink-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Fresh Offers
 						</button>
 						<button
 							onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
@@ -1316,16 +1500,7 @@ function AdminApplicationsPageContent() {
 						>
 							Collateral Review
 						</button>
-						<button
-							onClick={() => setSelectedFilters(["PENDING_ATTESTATION"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("PENDING_ATTESTATION")
-									? "bg-cyan-500/30 text-cyan-100 border-cyan-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending Attestation
-						</button>
+
 						<button
 							onClick={() => setSelectedFilters(["REJECTED", "WITHDRAWN"])}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
@@ -2098,6 +2273,147 @@ function AdminApplicationsPageContent() {
 														trail with timestamps
 													</li>
 												</ul>
+											</div>
+
+											{/* Fresh Offer Section */}
+											<div className="mt-6 p-4 bg-purple-500/10 border border-purple-400/20 rounded-lg">
+												<div className="flex items-center justify-between mb-4">
+													<h5 className="text-sm font-medium text-purple-200">
+														Fresh Offer Option
+													</h5>
+													{!showFreshOfferForm && (
+														<button
+															onClick={populateFreshOfferForm}
+															className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+														>
+															Submit Fresh Offer
+														</button>
+													)}
+												</div>
+												
+												{showFreshOfferForm && (
+													<div className="space-y-4">
+														{/* Product Selection */}
+														<div>
+															<label className="block text-sm font-medium text-gray-300 mb-2">
+																Product
+															</label>
+															<select
+																value={freshOfferProductId}
+																onChange={(e) => setFreshOfferProductId(e.target.value)}
+																className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+															>
+																<option value="">Select product</option>
+																{products.map((product) => (
+																	<option key={product.id} value={product.id}>
+																		{product.name} - {product.interestRate}% interest
+																	</option>
+																))}
+															</select>
+														</div>
+														
+														<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+															<div>
+																<label className="block text-sm font-medium text-gray-300 mb-2">
+																	Amount (RM)
+																</label>
+																<input
+																	type="number"
+																	value={freshOfferAmount}
+																	onChange={(e) => setFreshOfferAmount(e.target.value)}
+																	placeholder="Enter amount"
+																	className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+																	step="0.01"
+																/>
+															</div>
+															<div>
+																<label className="block text-sm font-medium text-gray-300 mb-2">
+																	Term (months)
+																</label>
+																<input
+																	type="number"
+																	value={freshOfferTerm}
+																	onChange={(e) => setFreshOfferTerm(e.target.value)}
+																	placeholder="Enter term"
+																	className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+																/>
+															</div>
+															<div>
+																<label className="block text-sm font-medium text-gray-300 mb-2">
+																	Interest Rate (%)
+																</label>
+																<input
+																	type="number"
+																	value={freshOfferInterestRate}
+																	onChange={(e) => setFreshOfferInterestRate(e.target.value)}
+																	placeholder="Enter interest rate"
+																	className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+																	step="0.01"
+																/>
+															</div>
+															<div>
+																<label className="block text-sm font-medium text-gray-300 mb-2">
+																	Monthly Repayment (RM)
+																</label>
+																<input
+																	type="number"
+																	value={freshOfferMonthlyRepayment}
+																	readOnly
+																	placeholder="Auto-calculated"
+																	className="w-full px-3 py-2 bg-gray-700/50 border border-gray-500 rounded-lg text-gray-300 placeholder-gray-500 cursor-not-allowed"
+																	step="0.01"
+																/>
+															</div>
+															<div className="md:col-span-2">
+																<label className="block text-sm font-medium text-gray-300 mb-2">
+																	Net Disbursement (RM)
+																</label>
+																<input
+																	type="number"
+																	value={freshOfferNetDisbursement}
+																	readOnly
+																	placeholder="Auto-calculated"
+																	className="w-full px-3 py-2 bg-gray-700/50 border border-gray-500 rounded-lg text-gray-300 placeholder-gray-500 cursor-not-allowed"
+																	step="0.01"
+																/>
+															</div>
+														</div>
+														
+														<div>
+															<label className="block text-sm font-medium text-gray-300 mb-2">
+																Fresh Offer Notes (Optional)
+															</label>
+															<textarea
+																value={freshOfferNotes}
+																onChange={(e) => setFreshOfferNotes(e.target.value)}
+																placeholder="Add notes about the fresh offer..."
+																className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+																rows={3}
+															/>
+														</div>
+														
+														<div className="flex space-x-4">
+															<button
+																onClick={handleFreshOfferSubmission}
+																disabled={processingFreshOffer}
+																className="flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white font-medium rounded-lg transition-colors"
+															>
+																{processingFreshOffer ? "Submitting..." : "Submit Fresh Offer"}
+															</button>
+															<button
+																onClick={() => setShowFreshOfferForm(false)}
+																disabled={processingFreshOffer}
+																className="flex items-center px-6 py-3 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-600/50 text-white font-medium rounded-lg transition-colors"
+															>
+																Cancel
+															</button>
+														</div>
+													</div>
+												)}
+												
+												<p className="text-xs text-purple-200/70 mt-2">
+													Submit a fresh offer with revised terms. The user will be notified and can accept or reject the new offer.
+												</p>
 											</div>
 										</div>
 									</div>
