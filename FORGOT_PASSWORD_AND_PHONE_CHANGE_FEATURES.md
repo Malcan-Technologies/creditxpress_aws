@@ -41,7 +41,7 @@ Both features enhance user account security and management capabilities while ma
 - **Auto-cleanup** - Invalidates all related OTPs after password reset
 
 ### Security Features
-- Password strength validation (minimum 8 characters)
+- Password strength validation (minimum 8 characters, at least 1 uppercase letter, at least 1 special character, no spaces)
 - Secure token generation using `crypto.randomBytes(32)`
 - OTP expiration (5 minutes)
 - Automatic token cleanup after successful reset
@@ -240,7 +240,7 @@ model PhoneChangeRequest {
 
 ### Validation Errors
 - **Phone Format**: Real-time validation with country-specific rules
-- **Password Strength**: Clear requirements and validation feedback
+- **Password Strength**: Clear requirements and validation feedback (min 8, 1 uppercase, 1 special, no spaces)
 - **OTP Format**: 6-digit numeric validation with proper error messages
 
 ### Network Errors

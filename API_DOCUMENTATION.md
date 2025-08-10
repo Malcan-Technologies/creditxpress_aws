@@ -67,6 +67,12 @@ POST /api/auth/signup
 
 **Description**: Register a new user and send OTP verification
 
+**Password Requirements (effective):**
+- Minimum 8 characters
+- Must include at least 1 uppercase letter
+- Must include at least 1 special character (non-alphanumeric)
+- Must not contain any spaces
+
 **Request Body**:
 ```json
 {
@@ -232,6 +238,12 @@ PUT /api/users/me/password
 
 **Description**: Change user's password
 
+**New Password Requirements (effective):**
+- Minimum 8 characters
+- Must include at least 1 uppercase letter
+- Must include at least 1 special character (non-alphanumeric)
+- Must not contain any spaces
+
 **Request Body**:
 ```json
 {
@@ -385,6 +397,27 @@ PATCH /api/loan-applications/{id}/status
   "status": "PENDING"
 }
 ```
+
+### Respond to Fresh Offer
+```http
+POST /api/loan-applications/{id}/fresh-offer-response
+```
+🔒 **Requires Authentication**
+
+**Description**: Respond to a fresh offer proposed by admin.
+
+**Request Body**:
+```json
+{
+  "action": "accept" | "reject"
+}
+```
+
+**Behavior**:
+- When `action` is `accept`: application terms are updated to the fresh-offer terms and status moves to `PENDING_ATTESTATION`.
+- When `action` is `reject`: original terms are restored (if available) and status returns to `PENDING_APPROVAL`.
+
+Errors are returned if the application is not in `PENDING_FRESH_OFFER` or no fresh offer exists.
 
 ### Document Management
 

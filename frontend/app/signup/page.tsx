@@ -176,6 +176,29 @@ export default function SignupPage() {
 		const password = formData.get("password") as string;
 		const confirmPassword = formData.get("confirmPassword") as string;
 
+		// Disallow passwords that are empty or only whitespace
+		if (!password || password.trim().length === 0) {
+			setError("Password cannot be empty or only spaces");
+			setLoading(false);
+			return;
+		}
+
+		// Enforce strong password: at least 8 chars, 1 uppercase, 1 special
+		const hasUppercase = /[A-Z]/.test(password);
+		const hasSpecial = /[^A-Za-z0-9]/.test(password);
+		// Disallow any whitespace characters in password
+		if (/\s/.test(password)) {
+			setError("Password cannot contain spaces");
+			setLoading(false);
+			return;
+		}
+
+		if (password.length < 8 || !hasUppercase || !hasSpecial) {
+			setError("Password must be at least 8 characters, include 1 uppercase letter and 1 special character");
+			setLoading(false);
+			return;
+		}
+
 		if (password !== confirmPassword) {
 			setError("Passwords do not match");
 			setLoading(false);

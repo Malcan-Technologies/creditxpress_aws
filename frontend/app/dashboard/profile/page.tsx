@@ -413,8 +413,17 @@ export default function ProfilePage() {
 			return;
 		}
 
-		if (passwordData.newPassword.length < 8) {
-			setPasswordError("New password must be at least 8 characters long");
+		// Disallow whitespace anywhere in the new password
+		if (/\s/.test(passwordData.newPassword)) {
+			setPasswordError("New password cannot contain spaces");
+			return;
+		}
+
+		// Require at least 8 chars, 1 uppercase, 1 special character
+		const hasUppercase = /[A-Z]/.test(passwordData.newPassword);
+		const hasSpecial = /[^A-Za-z0-9]/.test(passwordData.newPassword);
+		if (passwordData.newPassword.length < 8 || !hasUppercase || !hasSpecial) {
+			setPasswordError("New password must be at least 8 characters, include 1 uppercase letter and 1 special character");
 			return;
 		}
 

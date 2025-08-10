@@ -311,6 +311,36 @@ router.post("/signup", async (req, res) => {
 	try {
 		const { phoneNumber, password } = req.body;
 
+        // Validate password: disallow empty or whitespace-only
+        if (!password || typeof password !== "string" || password.trim().length === 0) {
+            return res.status(400).json({
+                message: "Password cannot be empty or only spaces",
+            });
+        }
+
+        // Optional: enforce minimum length (aligns with frontend and reset-password)
+        if (password.length < 8) {
+            return res.status(400).json({
+                message: "Password must be at least 8 characters long",
+            });
+        }
+
+        // Require at least 1 uppercase letter and 1 special character
+        const hasUppercase = /[A-Z]/.test(password);
+        const hasSpecialChar = /[^A-Za-z0-9]/.test(password);
+        if (!hasUppercase || !hasSpecialChar) {
+            return res.status(400).json({
+                message: "Password must include at least 1 uppercase letter and 1 special character",
+            });
+        }
+
+        // Disallow any whitespace characters in password
+        if (/\s/.test(password)) {
+            return res.status(400).json({
+                message: "Password cannot contain spaces",
+            });
+        }
+
 		// Validate phone number format
 		const phoneValidation = validatePhoneNumber(phoneNumber, {
 			requireMobile: true, // Require mobile numbers for signup
@@ -936,7 +966,12 @@ router.post("/reset-password", async (req, res) => {
 			return res.status(400).json({ message: "Reset token and new password are required" });
 		}
 
-		// Validate password strength
+        // Disallow whitespace-only passwords
+        if (typeof newPassword !== "string" || newPassword.trim().length === 0) {
+            return res.status(400).json({ message: "Password cannot be empty or only spaces" });
+        }
+
+        // Validate password strength
 		if (newPassword.length < 8) {
 			return res.status(400).json({ message: "Password must be at least 8 characters long" });
 		}

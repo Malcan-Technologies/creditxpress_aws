@@ -1938,9 +1938,9 @@ router.post(
 			let statusChangeReason;
 
 			if (action === "accept") {
-				// User accepts fresh offer - update application with fresh offer terms and go back to PENDING_APPROVAL
-				newStatus = "PENDING_APPROVAL";
-				statusChangeReason = "User accepted fresh offer";
+				// User accepts fresh offer - update application with fresh offer terms and proceed to PENDING_ATTESTATION
+				newStatus = "PENDING_ATTESTATION";
+				statusChangeReason = "User accepted fresh offer - proceed to attestation";
 
 				updatedApplication = await prisma.loanApplication.update({
 					where: { id: existingApplication.id },

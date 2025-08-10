@@ -37,6 +37,7 @@ Notes
 - Access token (15m) + refresh token (90d)
 - Phone verification via WhatsApp OTP
 - Admin routes require `role = ADMIN`
+- Password policy (signup and password change): min 8 chars, at least 1 uppercase, at least 1 special character, and no spaces. Existing passwords unaffected; policy enforced on new signups and changes.
 
 ## Scheduling (Cron)
 - Daily late-fee processing at 1:00 AM MYT (UTC+8) via node-cron
@@ -47,7 +48,7 @@ Notes
 - `auth.ts`: login, signup, OTP, refresh, reset
 - `users.ts`: profile, docs, phone change
 - `products.ts`: list/one (query by code)
-- `loan-applications.ts`: CRUD, docs, attestation, history, fresh-offer response
+- `loan-applications.ts`: CRUD, docs, attestation, history, fresh-offer response (accept → PENDING_ATTESTATION; reject → PENDING_APPROVAL)
 - `loans.ts`: loans, details, repayments, transactions, late-fees
 - `wallet.ts`: wallet, transactions, deposit/withdraw, repay-loan
 - `notifications.ts`: list/mark/delete

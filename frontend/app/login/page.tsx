@@ -266,6 +266,13 @@ function LoginPageContent() {
 		const formData = new FormData(e.currentTarget);
 		const password = formData.get("password") as string;
 
+		// Disallow passwords that are empty or only whitespace
+		if (!password || password.trim().length === 0) {
+			setError("Password cannot be empty or only spaces");
+			setLoading(false);
+			return;
+		}
+
 		try {
 			console.log("Login - Attempting login with:", { phoneNumber });
 

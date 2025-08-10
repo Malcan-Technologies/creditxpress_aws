@@ -375,12 +375,31 @@ router.put(
 				});
 			}
 
-			// Validate new password strength (minimum 8 characters)
-			if (newPassword.length < 8) {
-				return res.status(400).json({ 
-					message: "New password must be at least 8 characters long" 
-				});
-			}
+            // Validate new password: whitespace-only check
+            if (typeof newPassword !== "string" || newPassword.trim().length === 0) {
+                return res.status(400).json({ message: "New password cannot be empty or only spaces" });
+            }
+
+            // Validate new password strength (minimum 8 characters)
+            if (newPassword.length < 8) {
+                return res.status(400).json({ 
+                    message: "New password must be at least 8 characters long" 
+                });
+            }
+
+            // Require at least 1 uppercase letter and 1 special character
+            const hasUppercase = /[A-Z]/.test(newPassword);
+            const hasSpecialChar = /[^A-Za-z0-9]/.test(newPassword);
+            if (!hasUppercase || !hasSpecialChar) {
+                return res.status(400).json({
+                    message: "New password must include at least 1 uppercase letter and 1 special character",
+                });
+            }
+
+            // Disallow any whitespace characters in new password
+            if (/\s/.test(newPassword)) {
+                return res.status(400).json({ message: "New password cannot contain spaces" });
+            }
 
 			// Get current user with password
 			const user = await prisma.user.findUnique({
