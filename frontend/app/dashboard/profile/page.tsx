@@ -25,7 +25,7 @@ import {
 	PencilIcon,
 	EyeSlashIcon,
 } from "@heroicons/react/24/outline";
-import { fetchWithTokenRefresh, checkAuth } from "@/lib/authUtils";
+import { fetchWithTokenRefresh, checkAuth, TokenStorage } from "@/lib/authUtils";
 import { validatePhoneNumber } from "@/lib/phoneUtils";
 import EnhancedOTPVerification from "@/components/EnhancedOTPVerification";
 import PhoneInput from "react-phone-input-2";
@@ -403,6 +403,29 @@ export default function ProfilePage() {
 		</span>
 	);
 
+  const handleStartKyc = async () => {
+    try {
+      const token = TokenStorage.getAccessToken();
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+      // Start a profile-only KYC session (no applicationId)
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/kyc/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'Failed to start KYC');
+      // Open QR page without applicationId
+      router.push(`/dashboard/kyc`);
+    } catch (e) {
+      console.error('Failed to start KYC:', e);
+      alert(e instanceof Error ? e.message : 'Failed to start KYC');
+    }
+  };
+
 	const handlePasswordChange = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setPasswordError("");
@@ -600,6 +623,7 @@ export default function ProfilePage() {
 												{renderBadge(profile?.kycStatus || false, profile?.kycStatus ? "KYC Verified" : "KYC Pending")}
 												{renderBadge(profileStatus.isComplete, profileStatus.isComplete ? "Profile Complete" : `Profile ${profileStatus.completionPercentage}% Complete`)}
 											</div>
+                        {/* KYC button moved next to Update Profile button */}
 											{!profileStatus.isComplete && profileStatus.missing.length > 0 && (
 												<div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
 													<p className="text-sm font-medium text-amber-800 font-body mb-1">
@@ -611,13 +635,21 @@ export default function ProfilePage() {
 												</div>
 											)}
 										</div>
-										<button
-											onClick={() => router.push('/onboarding?step=0')}
-											className="flex items-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
-										>
-											<UserCircleIcon className="w-4 h-4 mr-2" />
-											{profileStatus.isComplete ? "Update Profile" : "Complete Profile"}
-										</button>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                onClick={() => router.push('/onboarding?step=0')}
+                                                className="flex items-center px-4 py-2 bg-purple-primary text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+                                            >
+                                                <UserCircleIcon className="w-4 h-4 mr-2" />
+                                                {profileStatus.isComplete ? "Update Profile" : "Complete Profile"}
+                                            </button>
+                                            <button
+                                                onClick={handleStartKyc}
+                                                className="flex items-center px-4 py-2 border border-purple-primary text-purple-primary bg-white rounded-lg hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:ring-offset-2 transition-all duration-200 text-sm font-medium"
+                                            >
+                                                {profile?.kycStatus ? 'Redo KYC' : 'Start KYC'}
+                                            </button>
+                                        </div>
 									</div>
 								</div>
 							</div>

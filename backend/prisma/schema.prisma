@@ -83,6 +83,7 @@ model User {
   wallet                       Wallet?
   phoneVerifications           PhoneVerification[]
   phoneChangeRequests          PhoneChangeRequest[]
+  kycSessions                  KycSession[]
 
   @@map("users")
 }
@@ -234,6 +235,7 @@ model LoanApplication {
   disbursement             LoanDisbursement?
   loan                     Loan?
   documents                UserDocument[]
+  kycSessions              KycSession[]
 
   @@map("loan_applications")
 }
@@ -450,6 +452,42 @@ model SystemSettings {
   lastChangedAt         DateTime?             // When it was last changed
 
   @@map("system_settings")
+}
+
+/// KYC session for e-KYC processing
+model KycSession {
+  id            String           @id @default(cuid())
+  userId        String
+  applicationId String?
+  status        String           @default("PENDING") // PENDING, IN_PROGRESS, APPROVED, REJECTED, MANUAL_REVIEW, FAILED
+  ocrData       Json?
+  faceMatchScore Float?
+  livenessScore Float?
+  retryCount    Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  completedAt   DateTime?
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application   LoanApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  documents     KycDocument[]
+
+  @@index([userId])
+  @@index([applicationId])
+  @@map("kyc_sessions")
+}
+
+/// KYC documents associated with a session
+model KycDocument {
+  id         String      @id @default(cuid())
+  kycId      String
+  type       String      // 'front' | 'back' | 'selfie'
+  storageUrl String
+  hashSha256 String
+  createdAt  DateTime    @default(now())
+  kycSession KycSession  @relation(fields: [kycId], references: [id], onDelete: Cascade)
+
+  @@index([kycId])
+  @@map("kyc_documents")
 }
 
 model BankAccount {

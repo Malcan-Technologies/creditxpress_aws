@@ -49,6 +49,14 @@ services:
             - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
             - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
             - WHATSAPP_USE_OTP_TEMPLATE=${WHATSAPP_USE_OTP_TEMPLATE:-true}
+            # KYC settings
+            - KYC_DOCKER=${KYC_DOCKER:-false}
+            - KYC_JWT_SECRET=${KYC_JWT_SECRET:-${JWT_SECRET}}
+            - KYC_TOKEN_TTL_MINUTES=${KYC_TOKEN_TTL_MINUTES:-15}
+            # Optional: point to external OCR/Face/Liveness endpoints if available
+            - KYC_OCR_URL=${KYC_OCR_URL}
+            - KYC_FACE_URL=${KYC_FACE_URL}
+            - KYC_LIVENESS_URL=${KYC_LIVENESS_URL}
         depends_on:
             postgres:
                 condition: service_healthy

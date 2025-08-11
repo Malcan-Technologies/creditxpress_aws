@@ -3215,27 +3215,40 @@ function LoansPageContent() {
 																						</button>
 																					</div>
 																				)}
-																				{[
-																					"PENDING_APP_FEE",
-																					"PENDING_KYC",
-																					"PENDING_APPROVAL",
-																				].includes(
-																					app.status
-																				) && (
-																					<button
-																						onClick={() => {
-																							setSelectedApplication(
-																								app
-																							);
-																							setShowWithdrawModal(
-																								true
-																							);
-																						}}
-																						className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
-																					>
-																						Withdraw
-																					</button>
-																				)}
+                                                                                {app.status === "PENDING_KYC" && (
+                                                                                    <div className="flex items-center space-x-3">
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                // Deep link into KYC flow
+                                                                                                window.location.href = `/dashboard/kyc?applicationId=${app.id}`;
+                                                                                            }}
+                                                                                            className="inline-flex items-center px-4 py-2 border border-blue-200 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                                                                                        >
+                                                                                            Continue KYC
+                                                                                            <ArrowRightIcon className="ml-2 h-4 w-4" />
+                                                                                        </button>
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                setSelectedApplication(app);
+                                                                                                setShowWithdrawModal(true);
+                                                                                            }}
+                                                                                            className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                                                                                        >
+                                                                                            Withdraw
+                                                                                        </button>
+                                                                                    </div>
+                                                                                )}
+                                                                                {["PENDING_APP_FEE","PENDING_APPROVAL"].includes(app.status) && (
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            setSelectedApplication(app);
+                                                                                            setShowWithdrawModal(true);
+                                                                                        }}
+                                                                                        className="inline-flex items-center px-4 py-2 border border-red-200 text-sm font-medium rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                                                                                    >
+                                                                                        Withdraw
+                                                                                    </button>
+                                                                                )}
 																			</div>
 																		</div>
 																	</div>

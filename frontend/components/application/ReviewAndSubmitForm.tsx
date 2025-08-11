@@ -454,12 +454,30 @@ function ReviewAndSubmitFormContent({
 				);
 			}
 
-			// Call the onSubmit callback with the terms acceptance
-			onSubmit({ termsAccepted });
+			// If KYC already done before, skip; else start KYC flow page with QR
+			try {
+				const kycStartRes = await fetch(
+					`/api/kyc`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ applicationId }),
+					}
+				);
+				const kycData = await kycStartRes.json();
+				if (kycStartRes.ok && kycData?.status === "APPROVED") {
+					// Already KYC-ed; proceed to loans
+					onSubmit({ termsAccepted });
+					router.push("/dashboard/loans");
+					return;
+				}
+			} catch (e) {
+				console.warn("KYC start check failed, proceeding to KYC page", e);
+			}
 
-			// Use Next.js router for navigation instead of window.location
-			// This prevents context issues with React
-			router.push("/dashboard/loans");
+			// Start KYC flow
+			onSubmit({ termsAccepted });
+			router.push(`/dashboard/kyc?applicationId=${applicationId}`);
 		} catch (err) {
 			console.error("Error submitting application:", err);
 			setError(

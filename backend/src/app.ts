@@ -13,6 +13,7 @@ import adminRoutes from "./api/admin";
 import walletRoutes from "./api/wallet";
 import notificationsRoutes from "./api/notifications";
 import settingsRoutes from "./api/settings";
+import kycRoutes from "./api/kyc";
 import bankAccountsRoutes from "./api/bank-accounts";
 import fs from "fs";
 import path from "path";
@@ -43,15 +44,17 @@ app.use(
 		origin: corsOrigins,
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-		allowedHeaders: [
-			"Content-Type",
-			"Authorization",
-			"Cache-Control",
-			"Pragma",
-			"Expires",
-			"If-Modified-Since",
-			"If-None-Match",
-		],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization",
+            "Cache-Control",
+            "Pragma",
+            "Expires",
+            "If-Modified-Since",
+            "If-None-Match",
+            "X-KYC-TOKEN",
+            "x-kyc-token",
+        ],
 		exposedHeaders: ["Authorization"],
 	})
 );
@@ -103,6 +106,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/loan-applications", loanApplicationRoutes);
+app.use("/api/kyc", kycRoutes);
 app.use("/api/loans", loanRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/wallet", walletRoutes);

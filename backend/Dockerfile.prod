@@ -70,4 +70,5 @@ RUN node scripts/verify-prisma-client.js
 EXPOSE 4001
 
 # Start the application with proper migration handling (cron is now built-in)
-CMD ["sh", "-c", "npx prisma generate && node dist/src/index.js"] 
+# Ensure Prisma client exists post-mount, then start app
+CMD ["sh", "-c", "npx prisma generate && node dist/src/index.js"]

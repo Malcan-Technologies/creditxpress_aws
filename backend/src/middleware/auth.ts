@@ -131,3 +131,39 @@ export const authenticateAndVerifyPhone = [
 	authenticateToken,
 	requirePhoneVerification
 ];
+
+// KYC token support: accept either standard Authorization or signed one-time KYC token
+export const authenticateKycOrAuth = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  // Try standard bearer first
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && (authHeader as string).split(" ")[1];
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key") as { userId: string };
+      req.user = { userId: decoded.userId };
+      return next();
+    } catch {}
+  }
+
+  // Then allow one-time KYC token via query `t` or header `x-kyc-token`
+  const kycToken = (req.query?.t as string) || (req.headers["x-kyc-token"] as string);
+  if (!kycToken) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  try {
+    const decoded = jwt.verify(kycToken, process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key")) as { userId: string; kycId: string; };
+    // If route contains :kycId param, ensure it matches token
+    const paramKycId = (req.params as any)?.kycId;
+    if (paramKycId && decoded.kycId !== paramKycId) {
+      return res.status(403).json({ message: "KYC token does not match session" });
+    }
+    req.user = { userId: decoded.userId };
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: "Invalid or expired KYC token" });
+  }
+};

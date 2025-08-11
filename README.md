@@ -42,6 +42,57 @@ Notes
 - Admin API calls must include Authorization headers (JWT with refresh tokens)
  - Daily late-fee processing cron runs at 1:00 AM MYT (UTC+8) via node-cron; see `backend/src/lib/cronScheduler.ts` (scheduling) and `backend/src/lib/lateFeeProcessor.ts` (processing)
 
+### KYC microservices (OCR, Face, Liveness) – Dev
+
+These run as Python FastAPI sidecars and are orchestrated by the backend compose file.
+
+```bash
+# Start backend + KYC services (from project root)
+docker compose -f backend/docker-compose.dev.yml up -d --build backend ocr face liveness
+
+# Start everything defined in backend compose (backend, postgres, KYC services)
+docker compose -f backend/docker-compose.dev.yml up -d --build
+
+# Tail logs for a specific service
+docker compose -f backend/docker-compose.dev.yml logs -f backend | cat
+docker compose -f backend/docker-compose.dev.yml logs -f ocr | cat
+docker compose -f backend/docker-compose.dev.yml logs -f face | cat
+docker compose -f backend/docker-compose.dev.yml logs -f liveness | cat
+
+# Rebuild only one KYC service
+docker compose -f backend/docker-compose.dev.yml up -d --build ocr
+```
+
+- Service ports and endpoints (dev):
+  - **OCR**: `http://localhost:7001/ocr`
+  - **Face**: `http://localhost:7002/face-match`
+  - **Liveness**: `http://localhost:7003/liveness`
+- Uploaded images are served by the backend at `http://localhost:4001/uploads/...`.
+- When running these services via Docker, the backend auto-targets them if `KYC_DOCKER=true`.
+
+Minimum backend `.env` additions for KYC:
+
+```bash
+# KYC one-time token + routing
+KYC_DOCKER=true
+KYC_JWT_SECRET=change-me
+KYC_TOKEN_TTL_MINUTES=15
+
+# Optional thresholds (defaults shown)
+KYC_FACE_THRESHOLD=0.75
+KYC_LIVENESS_THRESHOLD=0.5
+```
+
+Troubleshooting:
+
+```bash
+# Check backend health
+curl -s http://localhost:4001/api/health | jq
+
+# Verify OCR stub is reachable
+curl -s -X POST http://localhost:7001/ocr -H 'Content-Type: application/json' -d '{"frontUrl":"/uploads/kyc/example.png"}' | cat
+```
+
 ### Start Apps with PM2 (local)
 
 Frontend (port 3002)

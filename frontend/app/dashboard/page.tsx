@@ -498,15 +498,16 @@ export default function DashboardPage() {
 			});
 		}
 
-		const actionableApps = incompleteApplications.filter((app: any) =>
-			[
-				"INCOMPLETE",
-				"PENDING_APP_FEE", 
-				"APPROVED",
-				"PENDING_FRESH_OFFER",
-				"PENDING_ATTESTATION"
-			].includes(app.status)
-		);
+        const actionableApps = incompleteApplications.filter((app: any) =>
+            [
+                "INCOMPLETE",
+                "PENDING_APP_FEE", 
+                "PENDING_KYC",
+                "APPROVED",
+                "PENDING_FRESH_OFFER",
+                "PENDING_ATTESTATION"
+            ].includes(app.status)
+        );
 
 		const appNotifications = actionableApps.map((app: any) => {
 			const getNotificationData = (status: string) => {
@@ -541,6 +542,21 @@ export default function DashboardPage() {
 							buttonHref: `/dashboard/applications/${app.id}`,
 							priority: 'HIGH' as const,
 						};
+                    case "PENDING_KYC":
+                        return {
+                            type: 'PENDING_KYC' as const,
+                            title: "KYC Verification Required",
+                            description: `Your application for ${
+                                app.product?.name || "loan"
+                            }${
+                                app.amount
+                                    ? ` of ${formatCurrency(parseFloat(app.amount))}`
+                                    : ""
+                            } requires identity verification to proceed`,
+                            buttonText: "Continue KYC",
+                            buttonHref: `/dashboard/kyc?applicationId=${app.id}`,
+                            priority: 'HIGH' as const,
+                        };
 					case "APPROVED":
 						return {
 							type: 'APPROVED' as const,

@@ -36,9 +36,49 @@ services:
             - WHATSAPP_ACCESS_TOKEN=${WHATSAPP_ACCESS_TOKEN}
             - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
             - WHATSAPP_USE_OTP_TEMPLATE=true
+            - KYC_DOCKER=true
+            - KYC_OCR_URL=http://ocr:7001/ocr
+            - KYC_FACE_URL=http://face:7002/face-match
+            - KYC_LIVENESS_URL=http://liveness:7003/liveness
         depends_on:
             postgres:
                 condition: service_healthy
+
+    ocr:
+        image: python:3.11-slim
+        working_dir: /srv
+        volumes:
+            - ./python/ocr:/srv
+            - ./uploads:/srv/uploads:ro
+        command: bash -lc "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7001"
+        ports:
+            - "7001:7001"
+        depends_on:
+            - backend
+
+    face:
+        image: python:3.11-slim
+        working_dir: /srv
+        volumes:
+            - ./python/face:/srv
+            - ./uploads:/srv/uploads:ro
+        command: bash -lc "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7002"
+        ports:
+            - "7002:7002"
+        depends_on:
+            - backend
+
+    liveness:
+        image: python:3.11-slim
+        working_dir: /srv
+        volumes:
+            - ./python/liveness:/srv
+            - ./uploads:/srv/uploads:ro
+        command: bash -lc "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7003"
+        ports:
+            - "7003:7003"
+        depends_on:
+            - backend
 
 volumes:
     postgres_data:
