@@ -94,7 +94,12 @@ function CaptureFrontContent() {
                     audio={false}
                     screenshotFormat="image/jpeg"
                     screenshotQuality={0.92}
-                    videoConstraints={{ width: 1280, height: 720, facingMode: { ideal: "environment" } }}
+                    videoConstraints={{
+                      facingMode: { ideal: "environment" },
+                      width: { ideal: 1920 },
+                      height: { ideal: 1080 },
+                      aspectRatio: 16 / 9,
+                    }}
                     className="w-full h-full object-contain"
                   />
                   <div className="pointer-events-none absolute inset-0 border-2 border-white/60 rounded-xl" />
