@@ -50,11 +50,13 @@ services:
         volumes:
             - ./python/ocr:/srv
             - ./uploads:/srv/uploads:ro
-        command: bash -lc "pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7001"
+        command: bash -lc "apt-get update && apt-get install -y libglib2.0-0 libsm6 libxext6 libxrender1 && pip install -r requirements.txt && uvicorn app:app --host 0.0.0.0 --port 7001"
         ports:
             - "7001:7001"
         depends_on:
             - backend
+        environment:
+            - OCR_LANG=en
 
     face:
         image: python:3.11-slim

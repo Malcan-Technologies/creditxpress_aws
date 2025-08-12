@@ -8,8 +8,8 @@ from paddleocr import PaddleOCR
 
 app = FastAPI()
 
-# Singleton OCR model (Malay/English)
-OCR_LANG = os.getenv("OCR_LANG", "ms")
+# Singleton OCR model (English)
+OCR_LANG = os.getenv("OCR_LANG", "en")
 ocr_engine: Optional[PaddleOCR] = None
 
 
