@@ -82,14 +82,6 @@ jobs:
           echo "${{ secrets.ADMIN_ENV }}" > admin/.env.local
           echo "${{ secrets.BACKEND_ENV }}" > backend/.env
           
-          # Ensure KYC envs exist with safe defaults for production
-          if ! grep -q "KYC_JWT_SECRET" backend/.env; then
-            echo "KYC_JWT_SECRET=${JWT_SECRET}" >> backend/.env
-          fi
-          if ! grep -q "KYC_TOKEN_TTL_MINUTES" backend/.env; then
-            echo "KYC_TOKEN_TTL_MINUTES=15" >> backend/.env
-          fi
-          
           # Make sure CORS_ALLOWED_ORIGINS is set in the backend .env file
           if ! grep -q "CORS_ALLOWED_ORIGINS" backend/.env; then
             echo "Adding CORS_ALLOWED_ORIGINS to backend/.env"
