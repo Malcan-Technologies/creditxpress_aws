@@ -18,18 +18,19 @@ const db: any = prisma as any;
 // Helper function to check if user has uploaded all required KYC documents (front, back, selfie)
 async function userHasAllKycDocuments(userId: string): Promise<boolean> {
   try {
-    // Check if user has a KYC session with all 3 document types (status doesn't matter since verification is handled later)
+    // Check if user has a KYC session with all 3 document types (any status)
     const kycSession = await db.kycSession.findFirst({
       where: {
-        userId,
-        status: "APPROVED" // Still check for approved since that means documents were uploaded and processed
+        userId
+        // Removed status check - we want to find sessions with documents regardless of approval status
       },
       include: {
         documents: true
-      }
+      },
+      orderBy: { createdAt: 'desc' } // Get the most recent session
     });
 
-    if (!kycSession) {
+    if (!kycSession || kycSession.documents.length === 0) {
       return false;
     }
 
@@ -80,13 +81,17 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
       applicationId = loan.applicationId;
     }
     
-    // Check for existing approved KYC session
-    const existingApproved = await db.kycSession.findFirst({ where: { userId: req.user.userId, status: { in: ["APPROVED"] } } });
+    // Check for existing KYC session (any status)
+    const existingSession = await db.kycSession.findFirst({ 
+      where: { userId: req.user.userId },
+      include: { documents: true },
+      orderBy: { createdAt: 'desc' }
+    });
     
-    // If user wants to redo KYC (indicated by query param ?redo=true), allow starting fresh
+    // If user wants to redo KYC (indicated by query param ?redo=true), reset existing session
     const redoKyc = req.query?.redo === 'true';
     
-    if (existingApproved && !redoKyc) {
+    if (existingSession && existingSession.status === "APPROVED" && !redoKyc) {
       if (applicationId) {
         // If tied to an application, advance it
         const application = await prisma.loanApplication.findUnique({ where: { id: applicationId } });
@@ -97,11 +102,54 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
       // Return approved session (existing behavior when not redoing)
       const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
       const kycToken = jwt.sign(
-        { userId: req.user.userId, kycId: existingApproved.id },
+        { userId: req.user.userId, kycId: existingSession.id },
         process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
         { expiresIn: `${ttlMinutes}m` }
       );
-      return res.json({ reused: true, kycId: existingApproved.id, status: "APPROVED", kycToken, ttlMinutes });
+      return res.json({ reused: true, kycId: existingSession.id, status: "APPROVED", kycToken, ttlMinutes });
+    }
+    
+    // If redoing KYC and there's an existing session, reset it
+    if (redoKyc && existingSession) {
+      console.log(`Resetting KYC session ${existingSession.id} for redo`);
+      
+      // Delete old files from disk
+      for (const doc of existingSession.documents) {
+        const oldFilePath = path.join(process.cwd(), doc.storageUrl);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+            console.log(`Deleted old file during redo: ${oldFilePath}`);
+          } catch (deleteErr) {
+            console.warn(`Failed to delete old file ${oldFilePath}:`, deleteErr);
+          }
+        }
+      }
+      
+      // Delete all documents from database
+      await db.kycDocument.deleteMany({ where: { kycId: existingSession.id } });
+      
+      // Reset session status and clear processing data
+      await db.kycSession.update({
+        where: { id: existingSession.id },
+        data: {
+          status: "PENDING",
+          ocrData: null,
+          faceMatchScore: null,
+          livenessScore: null,
+          completedAt: null,
+          retryCount: 0
+        }
+      });
+      
+      // Return the reset session
+      const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
+      const kycToken = jwt.sign(
+        { userId: req.user.userId, kycId: existingSession.id },
+        process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
+        { expiresIn: `${ttlMinutes}m` }
+      );
+      return res.json({ reused: false, kycId: existingSession.id, status: "PENDING", kycToken, ttlMinutes });
     }
 
     let session = null as any;
@@ -194,6 +242,7 @@ router.post("/:kycId/upload", authenticateKycOrAuth, upload.fields([
         });
       } else {
         // Create new document record
+        console.log(`Creating new ${key} document for KYC session ${kycId}`);
         await db.kycDocument.create({ 
           data: { kycId, type: key, storageUrl, hashSha256: hash } 
         });
