@@ -109,47 +109,35 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
       return res.json({ reused: true, kycId: existingSession.id, status: "APPROVED", kycToken, ttlMinutes });
     }
     
-    // If redoing KYC and there's an existing session, reset it
+    // If redoing KYC and there's an existing session, create a NEW session instead of deleting the old one
+    // This way we preserve the old documents until the new KYC is completed
     if (redoKyc && existingSession) {
-      console.log(`Resetting KYC session ${existingSession.id} for redo`);
+      console.log(`Creating new KYC session for redo, preserving existing session ${existingSession.id}`);
       
-      // Delete old files from disk
-      for (const doc of existingSession.documents) {
-        const oldFilePath = path.join(process.cwd(), doc.storageUrl);
-        if (fs.existsSync(oldFilePath)) {
-          try {
-            fs.unlinkSync(oldFilePath);
-            console.log(`Deleted old file during redo: ${oldFilePath}`);
-          } catch (deleteErr) {
-            console.warn(`Failed to delete old file ${oldFilePath}:`, deleteErr);
-          }
-        }
-      }
-      
-      // Delete all documents from database
-      await db.kycDocument.deleteMany({ where: { kycId: existingSession.id } });
-      
-      // Reset session status and clear processing data
-      await db.kycSession.update({
-        where: { id: existingSession.id },
+      // Create a brand new KYC session for the redo
+      const newSession = await db.kycSession.create({
         data: {
+          userId: req.user.userId,
           status: "PENDING",
           ocrData: null,
           faceMatchScore: null,
           livenessScore: null,
           completedAt: null,
-          retryCount: 0
+          retryCount: 0,
+          ...(applicationId ? { applicationId } : {}),
         }
       });
       
-      // Return the reset session
+      console.log(`Created new KYC session ${newSession.id} for redo`);
+      
+      // Return the new session
       const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
       const kycToken = jwt.sign(
-        { userId: req.user.userId, kycId: existingSession.id },
+        { userId: req.user.userId, kycId: newSession.id },
         process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
         { expiresIn: `${ttlMinutes}m` }
       );
-      return res.json({ reused: false, kycId: existingSession.id, status: "PENDING", kycToken, ttlMinutes });
+      return res.json({ reused: false, kycId: newSession.id, status: "PENDING", kycToken, ttlMinutes });
     }
 
     let session = null as any;
@@ -195,12 +183,22 @@ router.post("/:kycId/upload", authenticateKycOrAuth, upload.fields([
 ]), async (req: FileAuthRequest, res: Response) => {
   try {
     const { kycId } = req.params;
+    console.log(`KYC Upload - Starting upload for session ${kycId}`);
+    
     const session = await db.kycSession.findUnique({ 
       where: { id: kycId },
       include: { documents: true }
     });
-    if (!session) return res.status(404).json({ message: "KYC session not found" });
-    if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
+    if (!session) {
+      console.log(`KYC Upload - Session ${kycId} not found`);
+      return res.status(404).json({ message: "KYC session not found" });
+    }
+    if (session.userId !== req.user?.userId) {
+      console.log(`KYC Upload - Forbidden access to session ${kycId} by user ${req.user?.userId}`);
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    
+    console.log(`KYC Upload - Session ${kycId} found with ${session.documents.length} existing documents`);
 
     const filesMap = req.files as { [fieldname: string]: Express.Multer.File[] };
     const required = ["front", "back", "selfie"] as const;
@@ -243,12 +241,14 @@ router.post("/:kycId/upload", authenticateKycOrAuth, upload.fields([
       } else {
         // Create new document record
         console.log(`Creating new ${key} document for KYC session ${kycId}`);
-        await db.kycDocument.create({ 
+        const newDoc = await db.kycDocument.create({ 
           data: { kycId, type: key, storageUrl, hashSha256: hash } 
         });
+        console.log(`Successfully created new ${key} document with ID ${newDoc.id}`);
       }
     }
 
+    console.log(`KYC Upload - Successfully completed upload for session ${kycId}`);
     return res.json({ message: "Uploaded", kycId });
   } catch (err) {
     console.error("KYC upload error", err);
@@ -336,15 +336,16 @@ router.get("/:kycId/status", authenticateKycOrAuth, async (req: AuthRequest, res
 router.get("/:kycId/details", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { kycId } = req.params as any;
-    const session = await db.kycSession.findUnique({ where: { id: kycId } });
+    const session = await db.kycSession.findUnique({ 
+      where: { id: kycId },
+      include: { documents: true }
+    });
     if (!session) return res.status(404).json({ message: "Not found" });
     if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
     return res.json({
       kycId: session.id,
       status: session.status,
-      ocr: session.ocrData,
-      faceMatchScore: session.faceMatchScore,
-      livenessScore: session.livenessScore,
+      documents: session.documents,
       completedAt: session.completedAt
     });
   } catch (err) {
@@ -450,12 +451,47 @@ router.get("/images/:imageId", authenticateAndVerifyPhone, async (req: AuthReque
 router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { kycId } = req.params as any;
-    const session = await db.kycSession.findUnique({ where: { id: kycId } });
+    const session = await db.kycSession.findUnique({ 
+      where: { id: kycId },
+      include: { documents: true }
+    });
     if (!session) return res.status(404).json({ message: "KYC session not found" });
     if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
 
     if (session.status !== "APPROVED") {
       return res.status(400).json({ message: "KYC is not approved yet" });
+    }
+
+    // Check if there are any older KYC sessions for this user that should be cleaned up
+    const olderSessions = await db.kycSession.findMany({
+      where: {
+        userId: req.user?.userId,
+        id: { not: kycId },
+        createdAt: { lt: session.createdAt }
+      },
+      include: { documents: true }
+    });
+
+    // Clean up older sessions and their documents
+    for (const oldSession of olderSessions) {
+      console.log(`Cleaning up old KYC session ${oldSession.id} after accepting new session ${kycId}`);
+      
+      // Delete old files from disk
+      for (const doc of oldSession.documents) {
+        const oldFilePath = path.join(process.cwd(), doc.storageUrl);
+        if (fs.existsSync(oldFilePath)) {
+          try {
+            fs.unlinkSync(oldFilePath);
+            console.log(`Deleted old file during cleanup: ${oldFilePath}`);
+          } catch (deleteErr) {
+            console.warn(`Failed to delete old file ${oldFilePath}:`, deleteErr);
+          }
+        }
+      }
+      
+      // Delete documents and session from database
+      await db.kycDocument.deleteMany({ where: { kycId: oldSession.id } });
+      await db.kycSession.delete({ where: { id: oldSession.id } });
     }
 
     const ocr: any = session.ocrData || {};

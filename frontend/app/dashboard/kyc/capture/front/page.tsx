@@ -6,9 +6,9 @@ import { TokenStorage } from "@/lib/authUtils";
 
 function CaptureFrontContent() {
   const router = useRouter();
-  const params = useSearchParams();
-  const kycId = params.get("kycId");
-  const kycToken = params.get("t");
+  const searchParams = useSearchParams();
+  const kycId = searchParams.get("kycId");
+  const kycToken = searchParams.get("t");
   const cardCamRef = useRef<Webcam | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,8 +48,15 @@ function CaptureFrontContent() {
         const upData = await uploadRes.json().catch(() => ({}));
         throw new Error(upData?.message || "Upload failed");
       }
-      // OCR validation disabled - proceed directly to next step
-      router.replace(`/dashboard/kyc/capture/back?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      // Check if this is a retake from review page
+      const isRetake = searchParams.get('retake') === 'true';
+      if (isRetake) {
+        // Return to review page after individual retake
+        router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      } else {
+        // OCR validation disabled - proceed directly to next step
+        router.replace(`/dashboard/kyc/capture/back?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      }
     } catch (e: any) {
       setError(e.message || "Failed to upload front image");
     } finally {

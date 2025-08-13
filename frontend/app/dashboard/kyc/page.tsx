@@ -11,6 +11,7 @@ function KycPageContent() {
   const searchParams = useSearchParams();
   const applicationId = searchParams.get("applicationId");
   const [kycId, setKycId] = useState<string | null>(null);
+  const [kycToken, setKycToken] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +31,7 @@ function KycPageContent() {
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || "Failed to start KYC");
         setKycId(data.kycId);
+        setKycToken(data.kycToken);
 
         // Desktop: show QR to open mobile capture url
         const tokenParam = data.kycToken ? `&t=${encodeURIComponent(data.kycToken)}` : "";
@@ -113,9 +115,28 @@ function KycPageContent() {
             </div>
           </div>
 
-          <div className="text-center space-y-2">
+          <div className="text-center space-y-3">
             <p className="text-sm sm:text-base text-gray-600 font-body">Use your mobile phone to complete e-KYC.</p>
-            <p className="text-xs sm:text-sm text-gray-500 font-body">Keep this page open — you’ll be redirected when verification is done.</p>
+            <p className="text-xs sm:text-sm text-gray-500 font-body">Keep this page open — you'll be redirected when verification is done.</p>
+            
+            {/* Direct link option for laptop users */}
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  if (kycId) {
+                    const tokenParam = kycToken ? `&t=${encodeURIComponent(kycToken)}` : "";
+                    const url = `/dashboard/kyc/capture/front?kycId=${kycId}${tokenParam}`;
+                    console.log("Opening KYC URL in new tab:", url);
+                    console.log("KYC ID:", kycId);
+                    console.log("KYC Token:", kycToken ? "PRESENT" : "MISSING");
+                    window.open(url, '_blank');
+                  }
+                }}
+                className="text-xs text-blue-tertiary hover:text-blue-600 underline font-medium transition-colors"
+              >
+                Or continue in a new tab instead
+              </button>
+            </div>
           </div>
         </div>
       </div>

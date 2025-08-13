@@ -49,8 +49,15 @@ function CaptureBackContent() {
         const upData = await uploadRes.json().catch(() => ({}));
         throw new Error(upData?.message || "Upload failed");
       }
-      // OCR validation disabled - proceed directly to next step
-      router.replace(`/dashboard/kyc/capture/selfie?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      // Check if this is a retake from review page
+      const isRetake = params.get('retake') === 'true';
+      if (isRetake) {
+        // Return to review page after individual retake
+        router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      } else {
+        // OCR validation disabled - proceed directly to next step
+        router.replace(`/dashboard/kyc/capture/selfie?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      }
     } catch (e: any) {
       setError(e.message || "Failed to upload back image");
     } finally {

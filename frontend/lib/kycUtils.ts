@@ -27,12 +27,14 @@ export interface KycImages {
  */
 export async function fetchKycImages(): Promise<KycImages | null> {
 	try {
+		console.log("kycUtils - Fetching KYC images...");
 		const data = await fetchWithTokenRefresh<KycImages>(
 			`/api/kyc/images?t=${Date.now()}`
 		);
+		console.log("kycUtils - KYC images response:", data);
 		return data;
 	} catch (error) {
-		console.error("Error fetching KYC images:", error);
+		console.error("kycUtils - Error fetching KYC images:", error);
 		return null;
 	}
 }

@@ -14,7 +14,16 @@ export default function TokenRefresher() {
 	useEffect(() => {
 		// Helper to check if we're on a protected route
 		const isProtectedRoute = () => {
-			// Dashboard and onboarding routes are protected
+			// Dashboard and onboarding routes are protected, except KYC routes with tokens
+			if (pathname?.startsWith("/dashboard/kyc/")) {
+				// KYC routes with temporary tokens don't need authentication tokens
+				const urlParams = new URLSearchParams(window.location.search);
+				const kycToken = urlParams.get('t');
+				if (kycToken) {
+					return false; // Not protected if we have a KYC token
+				}
+			}
+			
 			return (
 				pathname?.startsWith("/dashboard") ||
 				pathname?.startsWith("/onboarding")

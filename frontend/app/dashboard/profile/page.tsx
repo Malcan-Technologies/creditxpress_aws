@@ -206,6 +206,7 @@ export default function ProfilePage() {
 		try {
 			setKycImagesLoading(true);
 			const data = await fetchKycImages();
+			console.log("Profile page - KYC images fetched:", data);
 			setKycImages(data);
 		} catch (error) {
 			console.error("Error fetching KYC images:", error);
@@ -1062,7 +1063,8 @@ export default function ProfilePage() {
 						{/* Full Width Cards */}
 						<div className="grid grid-cols-1 gap-6">
 												{/* KYC Images Card - Show if user is verified, has images, or needs to start KYC */}
-					{(profile?.kycStatus || kycImages || (!kycImagesLoading && !kycImages)) && (
+					{/* Always show KYC section - whether verified, has images, or needs to start */}
+					{true && (
 								<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-gray-100 overflow-hidden">
 									<div className="p-6 lg:p-8">
 										<div className="flex items-center justify-between mb-6">

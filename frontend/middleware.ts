@@ -6,9 +6,25 @@ export function middleware(request: NextRequest) {
 	const path = request.nextUrl.pathname;
 
 	console.log(`[Middleware] Checking path: ${path}`);
+	console.log(`[Middleware] Full URL: ${request.url}`);
+	console.log(`[Middleware] Search params: ${request.nextUrl.searchParams.toString()}`);
 
 	// Check if the path starts with /dashboard
 	if (path.startsWith("/dashboard")) {
+		// Special handling for KYC routes with temporary tokens
+		if (path.startsWith("/dashboard/kyc/")) {
+			const kycToken = request.nextUrl.searchParams.get("t");
+			console.log(`[Middleware] KYC route detected for path: ${path}`);
+			console.log(`[Middleware] Token check - kycToken: ${kycToken ? 'PRESENT' : 'MISSING'}`);
+			console.log(`[Middleware] Full search params: ${request.nextUrl.searchParams.toString()}`);
+			if (kycToken) {
+				console.log(`[Middleware] ✅ KYC token found, allowing access without cookies`);
+				return NextResponse.next();
+			} else {
+				console.log(`[Middleware] ❌ No KYC token found, continuing to regular auth check`);
+			}
+		}
+
 		// Get the token from the cookies
 		const token = request.cookies.get("token")?.value;
 		const refreshToken = request.cookies.get("refreshToken")?.value;

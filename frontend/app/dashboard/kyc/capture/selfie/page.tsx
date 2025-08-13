@@ -67,7 +67,15 @@ function CaptureSelfieContent() {
         setServerHint({ nextStep: proc?.nextStep, message: msg });
         throw new Error(msg);
       }
-      router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      // Check if this is a retake from review page or normal flow
+      const isRetake = params.get('retake') === 'true';
+      if (isRetake) {
+        // Return to review page after individual retake
+        router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      } else {
+        // Normal flow - first time completion, go to review
+        router.replace(`/dashboard/kyc/review?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      }
     } catch (e: any) {
       setError(e.message || "Failed to submit KYC");
     } finally {
