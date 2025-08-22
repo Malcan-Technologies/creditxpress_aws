@@ -1,4 +1,7 @@
 import axios from 'axios';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0';
 const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -24,8 +27,42 @@ interface WhatsAppResponse {
 }
 
 class WhatsAppService {
+	// Check if a specific WhatsApp notification type is enabled
+	private async isNotificationEnabled(settingKey: string): Promise<boolean> {
+		try {
+			const setting = await prisma.systemSettings.findUnique({
+				where: { key: settingKey }
+			});
+			
+			if (!setting || !setting.isActive) {
+				return false;
+			}
+			
+			return JSON.parse(setting.value) === true;
+		} catch (error) {
+			console.error(`Error checking notification setting ${settingKey}:`, error);
+			return false; // Default to disabled if there's an error
+		}
+	}
+
+	// Check if WhatsApp notifications are enabled globally
+	private async isWhatsAppEnabled(): Promise<boolean> {
+		return this.isNotificationEnabled('ENABLE_WHATSAPP_NOTIFICATIONS');
+	}
 	async sendOTP({ to, otp }: WhatsAppOTPRequest): Promise<WhatsAppResponse> {
 		try {
+			// Check if WhatsApp notifications are enabled globally
+			// OTP is mandatory for security, so we only check global setting
+			const isGlobalEnabled = await this.isWhatsAppEnabled();
+			
+			if (!isGlobalEnabled) {
+				console.log('WhatsApp notifications are globally disabled');
+				return {
+					success: false,
+					error: 'WhatsApp notifications are globally disabled'
+				};
+			}
+
 			if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
 				console.error('WhatsApp credentials not configured');
 				return {
@@ -211,6 +248,18 @@ class WhatsAppService {
 		productName: string;
 		firstRepaymentDate: string;
 	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp loan disbursement notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isDisbursementEnabled = await this.isNotificationEnabled('WHATSAPP_LOAN_DISBURSEMENT');
+		
+		if (!isGlobalEnabled || !isDisbursementEnabled) {
+			console.log('WhatsApp loan disbursement notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp loan disbursement notifications are disabled'
+			};
+		}
+
 		return this.sendUtilityNotification({
 			to,
 			templateName: 'loan_disburse',
@@ -230,6 +279,18 @@ class WhatsAppService {
 		productName: string;
 		amount: string;
 	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp loan approval notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isApprovalEnabled = await this.isNotificationEnabled('WHATSAPP_LOAN_APPROVAL');
+		
+		if (!isGlobalEnabled || !isApprovalEnabled) {
+			console.log('WhatsApp loan approval notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp loan approval notifications are disabled'
+			};
+		}
+
 		return this.sendUtilityNotification({
 			to,
 			templateName: 'loan_approved',
@@ -247,6 +308,18 @@ class WhatsAppService {
 		fullName: string;
 		productName: string;
 	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp loan rejection notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isRejectionEnabled = await this.isNotificationEnabled('WHATSAPP_LOAN_REJECTION');
+		
+		if (!isGlobalEnabled || !isRejectionEnabled) {
+			console.log('WhatsApp loan rejection notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp loan rejection notifications are disabled'
+			};
+		}
+
 		return this.sendUtilityNotification({
 			to,
 			templateName: 'loan_rejected',
@@ -274,10 +347,144 @@ class WhatsAppService {
 		completedPayments: string;
 		totalPayments: string;
 	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp payment approved notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isPaymentEnabled = await this.isNotificationEnabled('WHATSAPP_PAYMENT_APPROVED');
+		
+		if (!isGlobalEnabled || !isPaymentEnabled) {
+			console.log('WhatsApp payment approved notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp payment approved notifications are disabled'
+			};
+		}
+
 		return this.sendUtilityNotification({
 			to,
 			templateName: 'payment_approved',
 			parameters: [fullName, paymentAmount, loanName, nextPaymentAmount, nextDueDate, completedPayments, totalPayments]
+		});
+	}
+
+	// Specific method for revised loan offer notifications
+	async sendRevisedLoanOfferNotification({
+		to,
+		fullName
+	}: {
+		to: string;
+		fullName: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp revised loan offer notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isRevisedOfferEnabled = await this.isNotificationEnabled('WHATSAPP_LOAN_REVISED_OFFER');
+		
+		if (!isGlobalEnabled || !isRevisedOfferEnabled) {
+			console.log('WhatsApp revised loan offer notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp revised loan offer notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'loan_revised_offer',
+			parameters: [fullName]
+		});
+	}
+
+	// Specific method for payment failed notifications
+	async sendPaymentFailedNotification({
+		to,
+		fullName,
+		paymentAmount,
+		loanName
+	}: {
+		to: string;
+		fullName: string;
+		paymentAmount: string;
+		loanName: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp payment failed notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isPaymentFailedEnabled = await this.isNotificationEnabled('WHATSAPP_PAYMENT_FAILED');
+		
+		if (!isGlobalEnabled || !isPaymentFailedEnabled) {
+			console.log('WhatsApp payment failed notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp payment failed notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'payment_failed',
+			parameters: [fullName, paymentAmount, loanName]
+		});
+	}
+
+	// Specific method for loan discharged notifications
+	async sendLoanDischargedNotification({
+		to,
+		fullName,
+		loanName
+	}: {
+		to: string;
+		fullName: string;
+		loanName: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp loan discharged notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isLoanDischargedEnabled = await this.isNotificationEnabled('WHATSAPP_LOAN_DISCHARGED');
+		
+		if (!isGlobalEnabled || !isLoanDischargedEnabled) {
+			console.log('WhatsApp loan discharged notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp loan discharged notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'loan_discharged',
+			parameters: [fullName, loanName]
+		});
+	}
+
+	// Specific method for upcoming payment notifications
+	async sendUpcomingPaymentNotification({
+		to,
+		fullName,
+		paymentAmount,
+		loanName,
+		daysUntilDue,
+		dueDate
+	}: {
+		to: string;
+		fullName: string;
+		paymentAmount: string;
+		loanName: string;
+		daysUntilDue: string;
+		dueDate: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp upcoming payment notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isUpcomingPaymentEnabled = await this.isNotificationEnabled('WHATSAPP_UPCOMING_PAYMENT');
+		
+		if (!isGlobalEnabled || !isUpcomingPaymentEnabled) {
+			console.log('WhatsApp upcoming payment notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp upcoming payment notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'upcoming_payment',
+			parameters: [fullName, paymentAmount, loanName, daysUntilDue, dueDate]
 		});
 	}
 }

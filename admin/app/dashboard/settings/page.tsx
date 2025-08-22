@@ -81,6 +81,10 @@ function SettingsPageContent() {
 		isDefault: false,
 	});
 
+	// Manual trigger state
+	const [manualTriggerLoading, setManualTriggerLoading] = useState(false);
+	const [manualTriggerResult, setManualTriggerResult] = useState<any>(null);
+
 	// Load data on component mount and tab change
 	useEffect(() => {
 		if (activeTab === "system") {
@@ -309,6 +313,35 @@ function SettingsPageContent() {
 		loadSettings(); // Reload original settings
 	};
 
+	// Manual trigger for upcoming payment notifications
+	const triggerUpcomingPaymentNotifications = async () => {
+		try {
+			setManualTriggerLoading(true);
+			setManualTriggerResult(null);
+			setError(null);
+
+			// fetchWithAdminTokenRefresh already returns parsed JSON, not Response object
+			const result = await fetchWithAdminTokenRefresh("/api/admin/trigger-upcoming-payment-notifications", {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			}) as ApiResponse;
+
+			if (result.success) {
+				setManualTriggerResult(result.data);
+				console.log('Manual trigger successful:', result.data);
+			} else {
+				throw new Error(result.message || "Failed to trigger notifications");
+			}
+		} catch (err) {
+			console.error("Error triggering notifications:", err);
+			setError(err instanceof Error ? err.message : "Failed to trigger notifications");
+		} finally {
+			setManualTriggerLoading(false);
+		}
+	};
+
 	const renderSettingInput = (setting: SystemSetting) => {
 		const { key, dataType, value, options } = setting;
 
@@ -396,7 +429,116 @@ function SettingsPageContent() {
 					</div>
 				);
 
+			case "JSON":
+				// Special handling for reminder days array
+				if (key === "UPCOMING_PAYMENT_REMINDER_DAYS") {
+					const reminderDays = Array.isArray(value) ? value : [];
+					const inputId = `reminder-days-input-${key}`;
+					
+					const addReminderDay = () => {
+						const input = document.getElementById(inputId) as HTMLInputElement;
+						if (input) {
+							const newDay = parseInt(input.value);
+							if (newDay && newDay > 0 && newDay <= 30 && !reminderDays.includes(newDay)) {
+								const newDays = [...reminderDays, newDay].sort((a, b) => b - a);
+								handleSettingChange(key, newDays);
+								input.value = '';
+							}
+						}
+					};
+					
+					return (
+						<div className="space-y-3">
+							<div className="flex flex-wrap gap-2">
+								{reminderDays.map((day: number, index: number) => (
+									<div key={index} className="flex items-center bg-orange-800/30 border border-orange-700/50 rounded-md px-3 py-1">
+										<span className="text-orange-300 text-sm font-medium">{day} day{day !== 1 ? 's' : ''}</span>
+										<button
+											type="button"
+											onClick={() => {
+												const newDays = reminderDays.filter((_: number, i: number) => i !== index);
+												handleSettingChange(key, newDays);
+											}}
+											className="ml-2 text-orange-400 hover:text-orange-200 transition-colors"
+										>
+											<TrashIcon className="w-4 h-4" />
+										</button>
+									</div>
+								))}
+							</div>
+							<div className="flex gap-2">
+								<input
+									id={inputId}
+									type="number"
+									placeholder="Days (e.g., 7)"
+									min={1}
+									max={30}
+									className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+									onKeyPress={(e) => {
+										if (e.key === 'Enter') {
+											addReminderDay();
+										}
+									}}
+								/>
+								<button
+									type="button"
+									onClick={addReminderDay}
+									className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors flex items-center"
+								>
+									<PlusIcon className="w-4 h-4" />
+								</button>
+							</div>
+							<div className="text-xs text-orange-300 bg-orange-900/20 p-2 rounded border border-orange-700/30">
+								<strong>Instructions:</strong> Enter number of days before payment due date to send reminder. Press Enter or click + to add. Example: 7, 3, 1 for reminders 7, 3, and 1 day before due date.
+							</div>
+						</div>
+					);
+				}
+				// Default JSON handling (raw text)
+				return (
+					<textarea
+						value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+						onChange={(e) => {
+							try {
+								const parsed = JSON.parse(e.target.value);
+								handleSettingChange(key, parsed);
+							} catch {
+								// Invalid JSON, store as string for now
+								handleSettingChange(key, e.target.value);
+							}
+						}}
+						rows={3}
+						className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+					/>
+				);
+
 			case "STRING":
+				// Special handling for time input
+				if (key === "UPCOMING_PAYMENT_CHECK_TIME") {
+					return (
+						<div className="space-y-2">
+							<input
+								type="time"
+								value={value}
+								onChange={(e) => handleSettingChange(key, e.target.value)}
+								className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+							/>
+							<div className="text-xs text-blue-300 bg-blue-900/20 p-2 rounded border border-blue-700/30">
+								<strong>Timezone:</strong> UTC+8 (Malaysia time). Current setting: {value} will run daily at {value} Malaysian time. Requires restart to take effect.
+							</div>
+						</div>
+					);
+				}
+				// Default string handling
+				return (
+					<input
+						type="text"
+						value={value}
+						onChange={(e) => handleSettingChange(key, e.target.value)}
+						className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+					/>
+				);
+
 			default:
 				return (
 					<input
@@ -986,70 +1128,372 @@ function SettingsPageContent() {
 			);
 		}
 
+		// Separate WhatsApp settings from general notification settings
+		const whatsappSettings = notificationSettings[0]?.[1]?.filter(setting => 
+			setting.key.startsWith('WHATSAPP_') || setting.key === 'ENABLE_WHATSAPP_NOTIFICATIONS'
+		) || [];
+		
+		const generalSettings = notificationSettings[0]?.[1]?.filter(setting => 
+			!setting.key.startsWith('WHATSAPP_') && setting.key !== 'ENABLE_WHATSAPP_NOTIFICATIONS'
+		) || [];
+
 		return (
 			<div className="space-y-6">
-				{/* Notification Settings */}
-				<div className="space-y-4">
-					{notificationSettings.map(([category, categorySettings]) => (
-						<div key={category} className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-							<div className="px-6 py-4 border-b border-gray-700/30">
-								<h2 className="text-lg font-semibold text-white flex items-center">
-									<span className="mr-2 text-2xl">{getCategoryIcon(category)}</span>
-									{getCategoryDisplayName(category)}
-								</h2>
+				{/* WhatsApp Notifications Card */}
+				{whatsappSettings.length > 0 && (
+					<div className="bg-gradient-to-br from-green-800/20 to-green-900/20 backdrop-blur-md border border-green-700/30 rounded-xl shadow-lg overflow-hidden">
+						<div className="px-6 py-4 border-b border-green-700/30">
+							<div className="flex items-center">
+								<div className="w-12 h-12 bg-green-600/20 rounded-xl flex items-center justify-center mr-4">
+									<svg className="w-6 h-6 text-green-400" fill="currentColor" viewBox="0 0 24 24">
+										<path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+									</svg>
+								</div>
+								<div>
+									<h2 className="text-lg font-semibold text-white">WhatsApp Notifications</h2>
+									<p className="text-sm text-green-300 mt-1">Configure WhatsApp Business API notifications for loan and payment events</p>
+								</div>
 							</div>
+						</div>
 
-							<div className="p-6 space-y-6">
-								{categorySettings.map((setting) => (
-									<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
-										<div className="flex items-start justify-between">
-											<div className="flex-1 min-w-0 mr-6">
-												<div className="flex items-center space-x-2 mb-2">
-													<h3 className="text-base font-medium text-white">
-														{setting.name}
-													</h3>
-													{setting.requiresRestart && (
-														<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
-															Requires Restart
-														</span>
-													)}
-													{setting.affectsExistingLoans && (
-														<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
-															Affects Existing Loans
-														</span>
+						<div className="p-6 space-y-6">
+							{/* Master toggle first */}
+							{whatsappSettings.filter(s => s.key === "ENABLE_WHATSAPP_NOTIFICATIONS").map((setting) => (
+								<div key={setting.key} className="border-b border-green-700/30 pb-6">
+									<div className="flex items-start justify-between">
+										<div className="flex-1 min-w-0 mr-6">
+											<div className="flex items-center space-x-2 mb-2">
+												<h3 className="text-base font-medium text-white">
+													🔧 {setting.name}
+												</h3>
+											</div>
+											<p className="text-sm text-gray-300 mb-3">
+												{setting.description}
+											</p>
+											<div className="text-xs text-blue-300 bg-blue-900/20 p-3 rounded border border-blue-700/30">
+												<strong>💰 WhatsApp Pricing Information:</strong><br/>
+												WhatsApp Business Platform charges per message delivered. <strong>Authentication templates</strong> (like OTP) and <strong>utility templates</strong> (loan/payment notifications) have lower rates than marketing messages. 
+												<br/><br/>
+												<strong>Cost-saving tips:</strong>
+												<ul className="list-disc list-inside mt-2 space-y-1">
+													<li>Utility templates sent within customer service windows are <strong>free</strong></li>
+													<li>Volume discounts available for high-volume senders</li>
+													<li>Authentication templates have preferential rates</li>
+												</ul>
+												<br/>
+												📋 <a href="https://developers.facebook.com/docs/whatsapp/pricing/" target="_blank" rel="noopener noreferrer" className="text-blue-200 hover:text-blue-100 underline font-medium">
+													View Meta's official rate card and pricing details →
+												</a>
+											</div>
+										</div>
+										<div className="flex-shrink-0 w-64">
+											{renderSettingInput(setting)}
+										</div>
+									</div>
+								</div>
+							))}
+							
+							{/* Individual notification types */}
+							<div className="grid md:grid-cols-2 gap-6">
+								{whatsappSettings.filter(s => 
+									s.key !== "ENABLE_WHATSAPP_NOTIFICATIONS" && 
+									s.key !== "UPCOMING_PAYMENT_REMINDER_DAYS" && 
+									s.key !== "UPCOMING_PAYMENT_CHECK_TIME"
+								).map((setting) => {
+									const isMandatory = setting.key === "WHATSAPP_OTP_VERIFICATION";
+									const getNotificationIcon = (key: string) => {
+										switch (key) {
+											case "WHATSAPP_OTP_VERIFICATION": return "🔐";
+											case "WHATSAPP_LOAN_APPROVAL": return "✅";
+											case "WHATSAPP_LOAN_REJECTION": return "❌";
+											case "WHATSAPP_LOAN_DISBURSEMENT": return "💰";
+											case "WHATSAPP_LOAN_DISCHARGED": return "🏆";
+											case "WHATSAPP_LOAN_REVISED_OFFER": return "🔄";
+											case "WHATSAPP_PAYMENT_APPROVED": return "💳";
+											case "WHATSAPP_PAYMENT_FAILED": return "⚠️";
+											case "WHATSAPP_UPCOMING_PAYMENT": return "⏰";
+											default: return "📱";
+										}
+									};
+
+									const getNotificationColorClasses = (key: string) => {
+										switch (key) {
+											case "WHATSAPP_OTP_VERIFICATION": return "bg-blue-800/20 border-blue-700/30";
+											case "WHATSAPP_LOAN_APPROVAL": return "bg-green-800/20 border-green-700/30";
+											case "WHATSAPP_LOAN_REJECTION": return "bg-red-800/20 border-red-700/30";
+											case "WHATSAPP_LOAN_DISBURSEMENT": return "bg-yellow-800/20 border-yellow-700/30";
+											case "WHATSAPP_LOAN_DISCHARGED": return "bg-green-800/20 border-green-700/30";
+											case "WHATSAPP_LOAN_REVISED_OFFER": return "bg-indigo-800/20 border-indigo-700/30";
+											case "WHATSAPP_PAYMENT_APPROVED": return "bg-purple-800/20 border-purple-700/30";
+											case "WHATSAPP_PAYMENT_FAILED": return "bg-red-800/20 border-red-700/30";
+											case "WHATSAPP_UPCOMING_PAYMENT": return "bg-orange-800/20 border-orange-700/30";
+											default: return "bg-gray-800/20 border-gray-700/30";
+										}
+									};
+
+									const colorClasses = getNotificationColorClasses(setting.key);
+									
+									return (
+										<div key={setting.key} className={`${colorClasses} rounded-lg p-4 ${isMandatory ? 'border-2 border-orange-500/50' : ''}`}>
+											<div className="flex items-start justify-between mb-3">
+												<div className="flex-1 min-w-0">
+													<div className="flex items-center space-x-2 mb-2">
+														<span className="text-lg">{getNotificationIcon(setting.key)}</span>
+														<h4 className="text-sm font-medium text-white">
+															{setting.name.replace('WhatsApp ', '')}
+															{isMandatory && (
+																<span className="ml-2 text-xs bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded border border-orange-400/30">
+																	REQUIRED
+																</span>
+															)}
+														</h4>
+													</div>
+													<p className="text-xs text-gray-400">
+														{setting.description}
+													</p>
+													{isMandatory && (
+														<div className="text-xs text-orange-300 bg-orange-900/20 p-2 rounded border border-orange-700/30 mt-2">
+															<strong>Security Requirement:</strong> OTP verification cannot be disabled as it's essential for account security and fraud prevention.
+														</div>
 													)}
 												</div>
-												<p className="text-sm text-gray-300 mb-3">
-													{setting.description}
-												</p>
-												{setting.options && setting.dataType === "ENUM" && (
-													<div className="text-xs text-gray-400">
-														<strong>Options:</strong>
-														<ul className="mt-1 space-y-1">
-															{Object.entries(setting.options).map(([key, option]: [string, any]) => (
-																<li key={key} className="ml-2">
-																	• <strong>{option.label}:</strong> {option.description}
-																</li>
-															))}
-														</ul>
-													</div>
-												)}
 											</div>
-											<div className="flex-shrink-0 w-64">
-												{renderSettingInput(setting)}
-												{setting.options && setting.dataType === "NUMBER" && (
-													<div className="mt-1 text-xs text-gray-400">
-														Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+											<div className="w-full">
+												{isMandatory ? (
+													<div className="space-y-2">
+														{/* Greyed out toggle to show it's non-editable */}
+														<label className="relative inline-flex items-center cursor-not-allowed opacity-60">
+															<input
+																type="checkbox"
+																checked={true}
+																disabled={true}
+																className="sr-only peer"
+															/>
+															<div className="w-11 h-6 bg-gray-500 rounded-full peer peer-checked:bg-green-500 cursor-not-allowed">
+																<div className="absolute top-[2px] left-[22px] bg-white border border-gray-400 rounded-full h-5 w-5 transition-all"></div>
+															</div>
+															<span className="ml-3 text-sm font-medium text-gray-400">
+																Always Enabled
+															</span>
+														</label>
+														{/* Status indicator */}
+														<div className="flex items-center space-x-2 text-xs text-green-300">
+															<div className="w-2 h-2 bg-green-400 rounded-full"></div>
+															<span>Security requirement - cannot be disabled</span>
+														</div>
 													</div>
+												) : (
+													renderSettingInput(setting)
 												)}
 											</div>
 										</div>
-									</div>
-								))}
+									);
+								})}
 							</div>
+
+							{/* Upcoming Payment Configuration */}
+							{whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") && (
+								<div className="bg-orange-900/20 border border-orange-700/30 rounded-xl p-6">
+									<div className="flex items-center mb-6">
+										<div className="w-12 h-12 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4">
+											<span className="text-2xl">⏰</span>
+										</div>
+										<div>
+											<h3 className="text-lg font-semibold text-white">Upcoming Payment Reminders</h3>
+											<p className="text-sm text-orange-300 mt-1">Configure when and how often to send payment reminders</p>
+										</div>
+									</div>
+
+									<div className="grid lg:grid-cols-3 gap-6">
+										{/* Main Toggle */}
+										{whatsappSettings.filter(s => s.key === "WHATSAPP_UPCOMING_PAYMENT").map((setting) => (
+											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">⏰</span>
+													<h4 className="text-sm font-medium text-white">Enable Reminders</h4>
+												</div>
+												<p className="text-xs text-gray-400 mb-4">
+													{setting.description}
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
+
+										{/* Reminder Days Configuration */}
+										{whatsappSettings.filter(s => s.key === "UPCOMING_PAYMENT_REMINDER_DAYS").map((setting) => (
+											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">📅</span>
+													<h4 className="text-sm font-medium text-white">Reminder Days</h4>
+												</div>
+												<p className="text-xs text-gray-400 mb-4">
+													{setting.description}
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
+
+										{/* Check Time Configuration */}
+										{(() => {
+											// Find the time setting from all settings, not just WhatsApp settings
+											const timeSetting = Object.values(settings).flat().find(s => s.key === "UPCOMING_PAYMENT_CHECK_TIME");
+											if (!timeSetting) return null;
+											
+											return (
+												<div key={timeSetting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
+													<div className="flex items-center space-x-2 mb-3">
+														<span className="text-lg">🕙</span>
+														<h4 className="text-sm font-medium text-white">Daily Check Time</h4>
+														{timeSetting.requiresRestart && (
+															<span className="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded border border-red-400/30">
+																RESTART REQUIRED
+															</span>
+														)}
+													</div>
+													<p className="text-xs text-gray-400 mb-4">
+														{timeSetting.description}
+													</p>
+													<div className="w-full">
+														{renderSettingInput(timeSetting)}
+													</div>
+												</div>
+											);
+										})()}
+									</div>
+
+									{/* Example Configuration */}
+									<div className="mt-6 text-xs text-orange-300 bg-orange-900/20 p-3 rounded border border-orange-700/30">
+										<strong>📋 Example Configuration:</strong><br/>
+										• <strong>Reminder Days:</strong> [7, 3, 1] = Send reminders 7 days, 3 days, and 1 day before payment due<br/>
+										• <strong>Check Time:</strong> 10:00 = Process reminders daily at 10:00 AM Malaysian time<br/>
+										• <strong>Template:</strong> "Hi John, this is a reminder that your payment of RM 1000 for your PayAdvance loan is due in 3 days. Please ensure payment is made before 28/8/2025 to avoid late charges."
+									</div>
+
+									{/* Manual Trigger Section */}
+									<div className="mt-6 bg-gradient-to-r from-orange-800/10 to-red-800/10 border border-orange-600/30 rounded-lg p-4">
+										<div className="flex items-center justify-between mb-4">
+											<div>
+												<h4 className="text-sm font-semibold text-white flex items-center">
+													<span className="mr-2 text-lg">🚀</span>
+													Manual Trigger
+												</h4>
+												<p className="text-xs text-gray-400 mt-1">
+													Run upcoming payment notifications immediately without waiting for the scheduled cron job
+												</p>
+											</div>
+											<button
+												onClick={triggerUpcomingPaymentNotifications}
+												disabled={manualTriggerLoading}
+												className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-2"
+											>
+												{manualTriggerLoading ? (
+													<>
+														<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+														<span>Processing...</span>
+													</>
+												) : (
+													<>
+														<span className="text-lg">▶️</span>
+														<span>Trigger Now</span>
+													</>
+												)}
+											</button>
+										</div>
+
+										{/* Result Display */}
+										{manualTriggerResult && (
+											<div className="mt-4 p-3 bg-green-900/20 border border-green-700/30 rounded text-xs">
+												<div className="flex items-center mb-2">
+													<span className="text-green-400 mr-2">✅</span>
+													<strong className="text-green-300">Processing Complete</strong>
+													<span className="ml-auto text-gray-400">
+														{new Date(manualTriggerResult.processedAt).toLocaleString()}
+													</span>
+												</div>
+												<div className="grid grid-cols-3 gap-4 text-center">
+													<div>
+														<div className="text-lg font-bold text-white">{manualTriggerResult.totalChecked}</div>
+														<div className="text-gray-400">Checked</div>
+													</div>
+													<div>
+														<div className="text-lg font-bold text-green-400">{manualTriggerResult.notificationsSent}</div>
+														<div className="text-gray-400">Sent</div>
+													</div>
+													<div>
+														<div className="text-lg font-bold text-red-400">{manualTriggerResult.errors}</div>
+														<div className="text-gray-400">Errors</div>
+													</div>
+												</div>
+												{manualTriggerResult.details && manualTriggerResult.details.length > 0 && (
+													<div className="mt-3 pt-3 border-t border-green-700/30">
+														<strong className="text-green-300 text-xs">Details:</strong>
+														<div className="mt-2 max-h-32 overflow-y-auto space-y-1">
+															{manualTriggerResult.details.slice(0, 10).map((detail: any, index: number) => (
+																<div key={index} className="text-xs flex items-center justify-between">
+																	<span className="text-gray-300">User {detail.userId.slice(-8)}</span>
+																	<span className={`px-2 py-0.5 rounded text-xs ${
+																		detail.status === 'sent' ? 'bg-green-600/30 text-green-300' :
+																		detail.status === 'error' ? 'bg-red-600/30 text-red-300' :
+																		'bg-yellow-600/30 text-yellow-300'
+																	}`}>
+																		{detail.status}
+																	</span>
+																</div>
+															))}
+															{manualTriggerResult.details.length > 10 && (
+																<div className="text-xs text-gray-400 text-center pt-2">
+																	... and {manualTriggerResult.details.length - 10} more
+																</div>
+															)}
+														</div>
+													</div>
+												)}
+											</div>
+										)}
+									</div>
+								</div>
+							)}
 						</div>
-					))}
-				</div>
+					</div>
+				)}
+
+				{/* General Notification Settings (if any) */}
+				{generalSettings.length > 0 && (
+					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
+						<div className="px-6 py-4 border-b border-gray-700/30">
+							<h2 className="text-lg font-semibold text-white flex items-center">
+								<span className="mr-2 text-2xl">📱</span>
+								General Notifications
+							</h2>
+						</div>
+
+						<div className="p-6 space-y-6">
+							{generalSettings.map((setting) => (
+								<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
+									<div className="flex items-start justify-between">
+										<div className="flex-1 min-w-0 mr-6">
+											<div className="flex items-center space-x-2 mb-2">
+												<h3 className="text-base font-medium text-white">
+													{setting.name}
+												</h3>
+											</div>
+											<p className="text-sm text-gray-300 mb-3">
+												{setting.description}
+											</p>
+										</div>
+										<div className="flex-shrink-0 w-64">
+											{renderSettingInput(setting)}
+										</div>
+									</div>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
 
 				{/* Footer Actions for Notifications */}
 				<div className="flex items-center justify-between">

@@ -11,12 +11,12 @@ const baseUrl = (process.env.BASE_URL || `http://localhost:${port}`).replace(
 const cronScheduler = CronScheduler.getInstance();
 
 // Start server
-app.listen(port, () => {
+app.listen(port, async () => {
 	console.log(`Server is running on port ${port}`);
 	console.log(`API Documentation available at ${baseUrl}/api-docs`);
 
 	// Start cron scheduler after server is ready
-	cronScheduler.start();
+	await cronScheduler.start();
 });
 
 // Graceful shutdown

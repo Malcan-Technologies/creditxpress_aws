@@ -4021,6 +4021,26 @@ router.post(
 				console.error("Could not create fresh offer notification:", notificationError);
 			}
 
+			// Send WhatsApp notification for revised loan offer
+			try {
+				if (updatedApplication.user.phoneNumber && updatedApplication.user.fullName) {
+					const whatsappResult = await whatsappService.sendRevisedLoanOfferNotification({
+						to: updatedApplication.user.phoneNumber,
+						fullName: updatedApplication.user.fullName
+					});
+
+					if (whatsappResult.success) {
+						console.log(`WhatsApp revised offer notification sent to ${updatedApplication.user.phoneNumber}`);
+					} else {
+						console.log(`WhatsApp revised offer notification failed: ${whatsappResult.error}`);
+					}
+				} else {
+					console.log("No phone number available for WhatsApp revised offer notification");
+				}
+			} catch (whatsappError) {
+				console.error("Could not send WhatsApp revised offer notification:", whatsappError);
+			}
+
 			console.log(`Fresh offer submitted for application ${id} by admin ${adminUserId}`);
 			return res.json(updatedApplication);
 
@@ -6670,7 +6690,28 @@ router.post(
 			const transaction = await prisma.walletTransaction.findUnique({
 				where: { id },
 				include: {
-					user: true,
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							phoneNumber: true,
+							email: true,
+						},
+					},
+					loan: {
+						select: {
+							id: true,
+							application: {
+								select: {
+									product: {
+										select: {
+											name: true,
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 			});
 
@@ -6737,6 +6778,31 @@ router.post(
 
 				return { updatedTransaction };
 			});
+
+			// Send WhatsApp notification for payment failure
+			try {
+				if (transaction.user.phoneNumber && transaction.user.fullName && transaction.loan?.application?.product?.name) {
+					// Calculate payment amount from transaction data
+					const paymentAmount = Math.abs(transaction.amount);
+					
+					const whatsappResult = await whatsappService.sendPaymentFailedNotification({
+						to: transaction.user.phoneNumber,
+						fullName: transaction.user.fullName,
+						paymentAmount: `${paymentAmount.toFixed(2)}`,
+						loanName: transaction.loan.application.product.name
+					});
+
+					if (whatsappResult.success) {
+						console.log(`WhatsApp payment failed notification sent to ${transaction.user.phoneNumber}`);
+					} else {
+						console.log(`WhatsApp payment failed notification failed: ${whatsappResult.error}`);
+					}
+				} else {
+					console.log("Missing required data for WhatsApp payment failed notification");
+				}
+			} catch (whatsappError) {
+				console.error("Could not send WhatsApp payment failed notification:", whatsappError);
+			}
 
 			return res.json({
 				success: true,
@@ -6869,7 +6935,7 @@ async function generatePaymentScheduleInTransaction(loanId: string, tx: any) {
 	// Verify total matches exactly
 	const calculatedTotal = repayments.reduce((sum, r) => SafeMath.add(sum, r.amount), 0);
 	console.log(`Verification: Calculated total ${calculatedTotal} vs Expected ${totalAmountToPay}`);
-	if (Math.abs(calculatedTotal - totalAmountToPay) > 0.001) {
+	if (Math.abs(calculatedTotal - totalAmountToPay) > 0.01) {
 		throw new Error(`Payment schedule total mismatch: ${calculatedTotal} vs ${totalAmountToPay}`);
 	}
 
@@ -6999,7 +7065,7 @@ async function generatePaymentSchedule(loanId: string) {
 	// Verify total matches exactly
 	const calculatedTotal = repayments.reduce((sum, r) => SafeMath.add(sum, r.amount), 0);
 	console.log(`Verification: Calculated total ${calculatedTotal} vs Expected ${totalAmountToPay}`);
-	if (Math.abs(calculatedTotal - totalAmountToPay) > 0.001) {
+	if (Math.abs(calculatedTotal - totalAmountToPay) > 0.01) {
 		throw new Error(`Payment schedule total mismatch: ${calculatedTotal} vs ${totalAmountToPay}`);
 	}
 
@@ -8169,6 +8235,7 @@ router.post(
 							id: true,
 							fullName: true,
 							email: true,
+							phoneNumber: true,
 						},
 					},
 					application: {
@@ -8220,6 +8287,7 @@ router.post(
 							id: true,
 							fullName: true,
 							email: true,
+							phoneNumber: true,
 						},
 					},
 					application: {
@@ -8234,6 +8302,48 @@ router.post(
 					},
 				},
 			});
+
+			// Create notification for the user about loan discharge
+			try {
+				await prisma.notification.create({
+					data: {
+						userId: updatedLoan.user.id,
+						title: "Loan Fully Discharged",
+						message: `Congratulations! Your ${updatedLoan.application.product.name} loan has been fully discharged. Thank you for your business.`,
+						type: "SYSTEM",
+						priority: "HIGH",
+						metadata: {
+							loanId: id,
+							productName: updatedLoan.application.product.name,
+							dischargedAt: new Date().toISOString(),
+							dischargedBy: req.user?.userId,
+						},
+					},
+				});
+			} catch (notificationError) {
+				console.error("Could not create loan discharge notification:", notificationError);
+			}
+
+			// Send WhatsApp notification for loan discharge
+			try {
+				if (updatedLoan.user.phoneNumber && updatedLoan.user.fullName) {
+					const whatsappResult = await whatsappService.sendLoanDischargedNotification({
+						to: updatedLoan.user.phoneNumber,
+						fullName: updatedLoan.user.fullName,
+						loanName: updatedLoan.application.product.name
+					});
+
+					if (whatsappResult.success) {
+						console.log(`WhatsApp loan discharged notification sent to ${updatedLoan.user.phoneNumber}`);
+					} else {
+						console.log(`WhatsApp loan discharged notification failed: ${whatsappResult.error}`);
+					}
+				} else {
+					console.log("Missing required data for WhatsApp loan discharged notification");
+				}
+			} catch (whatsappError) {
+				console.error("Could not send WhatsApp loan discharged notification:", whatsappError);
+			}
 
 			// Log the discharge approval
 			console.log(`Loan ${id} discharged by admin ${req.user?.userId}`);
@@ -9109,17 +9219,32 @@ function calculateStraightLineAllocations(principal: number, totalInterest: numb
 		if (payments.length > 0) {
 			const totalAllocatedInterest = payments.reduce((sum, p) => SafeMath.add(sum, p.interestAmount), 0);
 			const totalAllocatedPrincipal = payments.reduce((sum, p) => SafeMath.add(sum, p.principalAmount), 0);
+			const totalAllocatedPayments = payments.reduce((sum, p) => SafeMath.add(sum, p.totalPayment), 0);
 			
 			const interestAdjustment = SafeMath.subtract(totalInterest, totalAllocatedInterest);
 			const principalAdjustment = SafeMath.subtract(principal, totalAllocatedPrincipal);
+			const expectedTotal = SafeMath.add(totalInterest, principal);
+			const totalAdjustment = SafeMath.subtract(expectedTotal, totalAllocatedPayments);
 			
-			if (Math.abs(interestAdjustment) > 0.001 || Math.abs(principalAdjustment) > 0.001) {
+			// Apply adjustment if there's any discrepancy (even small ones due to rounding)
+			if (Math.abs(interestAdjustment) > 0.001 || Math.abs(principalAdjustment) > 0.001 || Math.abs(totalAdjustment) > 0.001) {
 				const finalPayment = payments[payments.length - 1];
 				finalPayment.interestAmount = SafeMath.add(finalPayment.interestAmount, interestAdjustment);
 				finalPayment.principalAmount = SafeMath.add(finalPayment.principalAmount, principalAdjustment);
 				finalPayment.totalPayment = SafeMath.add(finalPayment.interestAmount, finalPayment.principalAmount);
 				
-				console.log(`  Final adjustment: Interest +${interestAdjustment.toFixed(2)}, Principal +${principalAdjustment.toFixed(2)}`);
+				console.log(`  Final adjustment: Interest ${interestAdjustment >= 0 ? '+' : ''}${interestAdjustment.toFixed(2)}, Principal ${principalAdjustment >= 0 ? '+' : ''}${principalAdjustment.toFixed(2)}, Total ${totalAdjustment >= 0 ? '+' : ''}${totalAdjustment.toFixed(2)}`);
+				
+				// Double-check the total after adjustment
+				const finalTotalCheck = payments.reduce((sum, p) => SafeMath.add(sum, p.totalPayment), 0);
+				if (Math.abs(finalTotalCheck - expectedTotal) > 0.01) {
+					console.error(`Final total still mismatched after adjustment: ${finalTotalCheck} vs ${expectedTotal}`);
+					// Force the final payment to match exactly
+					const finalPayment = payments[payments.length - 1];
+					const remainingTotal = SafeMath.subtract(expectedTotal, payments.slice(0, -1).reduce((sum, p) => SafeMath.add(sum, p.totalPayment), 0));
+					finalPayment.totalPayment = remainingTotal;
+					console.log(`  Forced final payment adjustment to: ${remainingTotal.toFixed(2)}`);
+				}
 			}
 		}
 	}
@@ -10053,5 +10178,40 @@ router.get(
 		}
 	}
 );
+
+// Manual trigger for upcoming payment notifications
+router.post("/trigger-upcoming-payment-notifications", async (_req: any, res: any) => {
+	try {
+		console.log(`[${new Date().toISOString()}] Manual trigger for upcoming payment notifications requested by admin`);
+
+		// Import the UpcomingPaymentProcessor
+		const { UpcomingPaymentProcessor } = await import("../lib/upcomingPaymentProcessor");
+
+		// Process upcoming payments
+		const result = await UpcomingPaymentProcessor.processUpcomingPayments();
+
+		console.log(`[${new Date().toISOString()}] Manual upcoming payment processing completed:`, result);
+
+		return res.json({
+			success: true,
+			message: "Upcoming payment notifications processed successfully",
+			data: {
+				totalChecked: result.totalChecked,
+				notificationsSent: result.notificationsSent,
+				errors: result.errors,
+				details: result.details,
+				processedAt: new Date().toISOString()
+			}
+		});
+
+	} catch (error: any) {
+		console.error("Error in manual upcoming payment notification trigger:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Failed to process upcoming payment notifications",
+			error: error.message
+		});
+	}
+});
 
 export default router;

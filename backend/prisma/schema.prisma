@@ -503,3 +503,20 @@ model BankAccount {
   
   @@map("bank_accounts")
 }
+
+/// Log of sent notifications to prevent duplicates
+model NotificationLog {
+  id               String   @id @default(cuid())
+  notificationKey  String   // Unique key for the notification (e.g., "upcoming_payment_scheduleId_7days")
+  messageId        String?  // WhatsApp message ID if applicable
+  status           String   @default("SENT") // SENT, FAILED, PENDING
+  notificationType String   // Type of notification (e.g., "UPCOMING_PAYMENT", "LATE_FEE", etc.)
+  metadata         Json?    // Additional data about the notification
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([notificationKey])
+  @@index([createdAt])
+  @@index([notificationType])
+  @@map("notification_logs")
+}
