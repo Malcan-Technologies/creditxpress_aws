@@ -26,11 +26,11 @@ const navigation = [
 		href: "/dashboard",
 		icon: <HomeIcon className="h-5 w-5" />,
 	},
-	{
-		name: "Wallet",
-		href: "/dashboard/wallet",
-		icon: <WalletIcon className="h-5 w-5" />,
-	},
+	// {
+	// 	name: "Wallet",
+	// 	href: "/dashboard/wallet",
+	// 	icon: <WalletIcon className="h-5 w-5" />,
+	// },
 	{
 		name: "Loans",
 		href: "/dashboard/loans",

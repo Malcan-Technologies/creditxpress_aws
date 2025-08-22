@@ -234,13 +234,13 @@ function ReviewAndSubmitFormContent({
 				const requiredFields = [
 					"productId",
 					"amount",
-					"purpose",
 					"term",
 					"monthlyRepayment",
 					"interestRate",
 					"legalFee",
 					"netDisbursement",
 				];
+				// Note: 'purpose' is not required as some loan products don't need it
 				const missingFields = requiredFields.filter(
 					(field) => data[field] === undefined || data[field] === null
 				);

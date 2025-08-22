@@ -249,7 +249,7 @@ export default function TransactionsPage() {
 							{/* Transaction Type Filter */}
 							{transactions.length > 0 && (
 								<div className="mb-6">
-									<div className="flex flex-wrap gap-2">
+									<div className="flex flex-wrap gap-2 sm:gap-3">
 										{[
 											"ALL",
 											"DEPOSIT",
@@ -262,7 +262,7 @@ export default function TransactionsPage() {
 												onClick={() =>
 													setTransactionFilter(type)
 												}
-												className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 font-body ${
+												className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 font-body whitespace-nowrap ${
 													transactionFilter === type
 														? "bg-purple-primary text-white shadow-sm"
 														: "bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200"
@@ -278,9 +278,9 @@ export default function TransactionsPage() {
 							{/* Transactions List */}
 							<div className="space-y-4">
 								{loading ? (
-									<div className="text-center py-12">
-										<div className="w-16 h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
-										<p className="mt-4 text-gray-500 font-body">
+									<div className="text-center py-8 sm:py-12">
+										<div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-purple-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+										<p className="mt-4 text-sm sm:text-base text-gray-500 font-body">
 											Loading transactions...
 										</p>
 									</div>
@@ -288,74 +288,74 @@ export default function TransactionsPage() {
 									<div className="space-y-3">
 										{getFilteredTransactions().map(
 											(transaction) => (
-												<div
-													key={transaction.id}
-													className="flex items-center justify-between p-4 lg:p-6 border border-gray-200 rounded-xl hover:shadow-md transition-all duration-200 bg-white hover:border-gray-300"
-												>
-													<div className="flex items-center space-x-4 min-w-0 flex-1">
-														<div className="w-12 h-12 lg:w-14 lg:h-14 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-gray-200">
-															{getTransactionIcon(
-																transaction.type
-															)}
-														</div>
-														<div className="min-w-0 flex-1">
-															<p className="text-base lg:text-lg font-semibold text-gray-700 truncate font-body">
-																{
-																	transaction.description
-																}
-															</p>
-															<p className="text-sm lg:text-base text-gray-500 mt-1 font-body">
-																{formatDateTime(
-																	transaction.createdAt
-																)}
-															</p>
-															{transaction.reference && (
-																<p className="text-xs lg:text-sm text-gray-500 truncate font-body mt-1">
-																	Ref: {transaction.reference}
-																</p>
-															)}
-														</div>
+																							<div
+												key={transaction.id}
+												className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 lg:p-6 border border-gray-200 rounded-xl hover:shadow-md transition-all duration-200 bg-white hover:border-gray-300 gap-4 sm:gap-0"
+											>
+												<div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
+													<div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0 border border-gray-200">
+														{getTransactionIcon(
+															transaction.type
+														)}
 													</div>
-													<div className="text-right flex-shrink-0 ml-4">
-														<p className={`text-lg lg:text-xl font-heading font-bold mb-2 ${
-															transaction.amount > 0
-																? "text-green-600"
-																: "text-gray-700"
-														}`}>
-															{transaction.amount > 0 ? "+" : ""}
-															{formatCurrency(transaction.amount)}
+													<div className="min-w-0 flex-1 overflow-hidden">
+														<p className="text-sm sm:text-base lg:text-lg font-semibold text-gray-700 font-body line-clamp-2 sm:line-clamp-1 break-words leading-tight">
+															{
+																transaction.description
+															}
 														</p>
-														<div>
-															{getStatusBadge(transaction.status)}
-														</div>
+														<p className="text-xs sm:text-sm lg:text-base text-gray-500 mt-1 font-body truncate">
+															{formatDateTime(
+																transaction.createdAt
+															)}
+														</p>
+														{transaction.reference && (
+															<p className="text-xs lg:text-sm text-gray-500 font-body mt-1 truncate">
+																<span className="text-gray-400">Ref:</span> {transaction.reference}
+															</p>
+														)}
 													</div>
 												</div>
+												<div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start flex-shrink-0 sm:ml-4 sm:text-right gap-2 sm:gap-0">
+													<p className={`text-base sm:text-lg lg:text-xl font-heading font-bold sm:mb-2 ${
+														transaction.amount > 0
+															? "text-green-600"
+															: "text-gray-700"
+													}`}>
+														{transaction.amount > 0 ? "+" : ""}
+														{formatCurrency(transaction.amount)}
+													</p>
+													<div className="flex-shrink-0">
+														{getStatusBadge(transaction.status)}
+													</div>
+												</div>
+											</div>
 											)
 										)}
 									</div>
 								) : transactions.length > 0 ? (
-									<div className="text-center py-12">
-										<div className="bg-gray-50 rounded-lg p-6 lg:p-8 border border-gray-200">
-											<WalletIcon className="h-12 w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
-											<p className="text-base lg:text-lg font-medium font-heading text-gray-700 mb-2">
+									<div className="text-center py-8 sm:py-12">
+										<div className="bg-gray-50 rounded-lg p-4 sm:p-6 lg:p-8 border border-gray-200 max-w-md mx-auto">
+											<WalletIcon className="h-10 w-10 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
+											<p className="text-sm sm:text-base lg:text-lg font-medium font-heading text-gray-700 mb-2 px-2">
 												No {getTransactionTypeLabel(transactionFilter).toLowerCase()} transactions found
 											</p>
 											<button
 												onClick={() => setTransactionFilter("ALL")}
-												className="text-sm lg:text-base text-purple-primary hover:text-purple-700 font-medium font-body transition-colors"
+												className="text-xs sm:text-sm lg:text-base text-purple-primary hover:text-purple-700 font-medium font-body transition-colors"
 											>
 												Show all transactions
 											</button>
 										</div>
 									</div>
 								) : (
-									<div className="text-center py-12">
-										<div className="bg-gray-50 rounded-lg p-6 lg:p-8 border border-gray-200">
-											<WalletIcon className="h-12 w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
-											<h4 className="text-base lg:text-lg font-medium font-heading text-gray-700 mb-2">
+									<div className="text-center py-8 sm:py-12">
+										<div className="bg-gray-50 rounded-lg p-4 sm:p-6 lg:p-8 border border-gray-200 max-w-md mx-auto">
+											<WalletIcon className="h-10 w-10 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-gray-400 mx-auto mb-4" />
+											<h4 className="text-sm sm:text-base lg:text-lg font-medium font-heading text-gray-700 mb-2 px-2">
 												No Transactions Yet
 											</h4>
-											<p className="text-sm lg:text-base text-gray-500 font-body leading-relaxed">
+											<p className="text-xs sm:text-sm lg:text-base text-gray-500 font-body leading-relaxed px-2">
 												Your transaction history will appear here once you start using your wallet.
 											</p>
 										</div>

@@ -873,6 +873,24 @@ function LoansPageContent() {
 		return diffDays;
 	};
 
+	// Helper function to get the correct due date for display
+	const getCorrectDueDate = (loan: Loan): string | null => {
+		// Check for overdue payments first
+		const hasOverduePayments = loan.overdueInfo?.hasOverduePayments;
+		const overdueRepayments = loan.overdueInfo?.overdueRepayments;
+		
+		if (hasOverduePayments && overdueRepayments && overdueRepayments.length > 0) {
+			// Show the earliest overdue repayment due date
+			const earliestOverdue = overdueRepayments
+				.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+			return earliestOverdue.dueDate;
+		} else {
+			// Use nextPaymentInfo.dueDate if available (this comes from backend calculation of next unpaid/partial repayment)
+			// Otherwise fall back to loan.nextPaymentDue
+			return loan.nextPaymentInfo?.dueDate || loan.nextPaymentDue;
+		}
+	};
+
 	const getPaymentUrgency = (daysUntilDue: number) => {
 		if (daysUntilDue < 0) return { color: "text-red-600", text: "Overdue" };
 		if (daysUntilDue === 0) return { color: "text-red-600", text: "Due Today" };
@@ -1982,12 +2000,14 @@ function LoansPageContent() {
 													let urgency;
 													if (isOverdue) {
 														urgency = { color: "text-red-600", text: "Overdue" };
-													} else if (loan.nextPaymentDue) {
-														// Use the updated urgency function for consistent messaging
-														const daysUntilDue = calculateDaysUntilDue(loan.nextPaymentDue);
-														urgency = getPaymentUrgency(daysUntilDue);
+													} else {
+														const dueDateToUse = getCorrectDueDate(loan);
+														if (dueDateToUse) {
+															const daysUntilDue = calculateDaysUntilDue(dueDateToUse);
+															urgency = getPaymentUrgency(daysUntilDue);
 														} else {
-														urgency = { color: "text-gray-500", text: "No Due Date" };
+															urgency = { color: "text-gray-500", text: "No Due Date" };
+														}
 													}
 													const isExpanded =
 														showLoanDetails[
@@ -1999,7 +2019,7 @@ function LoansPageContent() {
 															key={loan.id}
 															className="bg-blue-50/30 rounded-xl lg:rounded-2xl shadow-sm hover:shadow-lg transition-all border border-blue-200 overflow-hidden w-full min-w-0"
 														>
-															{/* Loan Header */}
+																															{/* Loan Header */}
 															<div className="p-6 lg:p-8">
 																<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 lg:mb-6 space-y-4 sm:space-y-0">
 																	<div className="flex items-center space-x-4">
@@ -2007,14 +2027,22 @@ function LoansPageContent() {
 																			<CreditCardIcon className="h-8 w-8 lg:h-10 lg:w-10 text-blue-600" />
 																		</div>
 																		<div>
-																			<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-1">
-																				{
-																					loan
-																						.application
-																						.product
-																						.name
-																				}
-																			</h4>
+																			<div className="flex items-center space-x-3 mb-1">
+																				<h4 className="text-lg lg:text-xl font-heading font-bold text-gray-700">
+																					{
+																						loan
+																							.application
+																							.product
+																							.name
+																					}
+																				</h4>
+																				{loan.status.toUpperCase() === "PENDING_DISCHARGE" && (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 font-body">
+																						<ClockIcon className="h-3 w-3 mr-1" />
+																						Pending Discharge
+																					</span>
+																				)}
+																			</div>
 																			<p className="text-sm lg:text-base text-blue-600 font-semibold font-body">
 																				ID: {loan.id
 																					.slice(
@@ -2213,7 +2241,8 @@ function LoansPageContent() {
 																				: 0;
 																			
 																			// Calculate days until due for color coding
-																			const daysUntilDue = calculateDaysUntilDue(loan.nextPaymentDue);
+																			const dueDateToUse = getCorrectDueDate(loan);
+																			const daysUntilDue = dueDateToUse ? calculateDaysUntilDue(dueDateToUse) : 0;
 																			let cardColors, iconColor, textColor;
 																			
 																			if (hasOverduePayments) {
@@ -2255,17 +2284,8 @@ function LoansPageContent() {
 																					</div>
 																					<div className="space-y-4 lg:space-y-6">
 																		{(() => {
-																			// For overdue payments, show the earliest overdue repayment due date
-																			// For regular payments, show the loan's next payment due date
-																			let displayDate = loan.nextPaymentDue;
-																			
-																			if (hasOverduePayments && loan.overdueInfo?.overdueRepayments && loan.overdueInfo.overdueRepayments.length > 0) {
-																				// Find the earliest overdue repayment due date
-																				const earliestOverdueDate = loan.overdueInfo.overdueRepayments
-																					.map(rep => new Date(rep.dueDate))
-																					.sort((a, b) => a.getTime() - b.getTime())[0];
-																				displayDate = earliestOverdueDate.toISOString();
-																			}
+																			// Get the correct due date using our helper function
+																			const displayDate = getCorrectDueDate(loan);
 																			
 																			return displayDate ? (
 																				<>
@@ -2464,7 +2484,64 @@ function LoansPageContent() {
 																											</td>
 																											<td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
 																												<div className="flex flex-col">
-																													<span>{formatCurrency(repayment.amount || 0)}</span>
+																													<div className="flex items-center space-x-1">
+																														<span>{formatCurrency(repayment.amount || 0)}</span>
+																														{/* Show prorated interest info for first payment if amount is different from regular monthly payment */}
+																														{(repayment.installmentNumber === 1 || (index === 0 && !repayment.installmentNumber)) && 
+																														 Math.abs((repayment.amount || 0) - loan.monthlyPayment) > 1 && (
+																															<div className="relative group">
+																																<svg className="h-3 w-3 text-blue-500 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+																																</svg>
+																																<div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap">
+																																	{(() => {
+																																		// Calculate approximate days based on amount difference
+																																		// Assuming monthly interest rate, estimate daily rate
+																																		const monthlyInterestAmount = loan.principalAmount * (loan.interestRate / 100);
+																																		const dailyInterestAmount = monthlyInterestAmount / 30; // Approximate 30 days per month
+																																		const amountDifference = Math.abs((repayment.amount || 0) - loan.monthlyPayment);
+																																		const estimatedDays = Math.round(amountDifference / dailyInterestAmount);
+																																		
+																																		// Get disbursed date and first due date to calculate actual days
+																																		const disbursedDate = new Date(loan.disbursedAt);
+																																		const firstDueDate = new Date(repayment.dueDate);
+																																		const disbursedDay = disbursedDate.getDate();
+																																		const dueDay = firstDueDate.getDate();
+																																		
+																																		// Calculate actual days in first period
+																																		let actualDays;
+																																		if (disbursedDate.getMonth() === firstDueDate.getMonth()) {
+																																			// Same month disbursement
+																																			actualDays = dueDay - disbursedDay;
+																																		} else {
+																																			// Cross-month disbursement
+																																			const daysInDisbursedMonth = new Date(disbursedDate.getFullYear(), disbursedDate.getMonth() + 1, 0).getDate();
+																																			const remainingDaysInDisbursedMonth = daysInDisbursedMonth - disbursedDay + 1;
+																																			actualDays = remainingDaysInDisbursedMonth + dueDay;
+																																		}
+																																		
+																																		// Use actual days if reasonable, otherwise use estimated
+																																		const daysToShow = (actualDays > 0 && actualDays <= 45) ? actualDays : estimatedDays;
+																																		
+																																		return (repayment.amount || 0) > loan.monthlyPayment ? (
+																																			<>
+																																				This payment includes prorated interest
+																																				<br />
+																																				for {daysToShow} days ({formatCurrency((repayment.amount || 0) - loan.monthlyPayment)} extra)
+																																			</>
+																																		) : (
+																																			<>
+																																				This payment is prorated for {daysToShow} days
+																																				<br />
+																																				({formatCurrency(loan.monthlyPayment - (repayment.amount || 0))} less than regular)
+																																			</>
+																																		);
+																																	})()}
+																																	<div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800"></div>
+																																</div>
+																															</div>
+																														)}
+																													</div>
 																													{totalPaid > 0 && (
 																														<span className="text-xs text-green-600 font-medium">
 																															Paid: {formatCurrency(principalPaid)}
@@ -4357,22 +4434,8 @@ function LoansPageContent() {
 															Next Due:{" "}
 															<span className="text-gray-700 font-medium">
 																{(() => {
-																	// Check for overdue payments and get the correct due date
-																	const hasOverduePayments = loan.overdueInfo?.hasOverduePayments;
-																	const overdueRepayments = loan.overdueInfo?.overdueRepayments;
-																	let displayDueDate;
-																	
-																	if (hasOverduePayments && overdueRepayments && overdueRepayments.length > 0) {
-																		// Show the earliest overdue repayment due date
-																		const earliestOverdue = overdueRepayments
-																			.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
-																		displayDueDate = earliestOverdue.dueDate;
-																	} else {
-																		// Show regular next payment due date
-																		displayDueDate = loan.nextPaymentDue;
-																	}
-																	
-																	return formatDate(displayDueDate);
+																	const displayDueDate = getCorrectDueDate(loan);
+																	return displayDueDate ? formatDate(displayDueDate) : "N/A";
 																})()}
 															</span>
 														</p>
@@ -4528,22 +4591,8 @@ function LoansPageContent() {
 												</p>
 												<p className="font-semibold text-gray-700 font-heading">
 																												{(() => {
-																// Check for overdue payments and get the correct due date
-																const hasOverduePayments = selectedLoan.overdueInfo?.hasOverduePayments;
-																const overdueRepayments = selectedLoan.overdueInfo?.overdueRepayments;
-																let displayDueDate;
-																
-																if (hasOverduePayments && overdueRepayments && overdueRepayments.length > 0) {
-																	// Show the earliest overdue repayment due date
-																	const earliestOverdue = overdueRepayments
-																		.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
-																	displayDueDate = earliestOverdue.dueDate;
-																} else {
-																	// Show regular next payment due date
-																	displayDueDate = selectedLoan.nextPaymentDue;
-																}
-																
-																return formatDate(displayDueDate);
+																const displayDueDate = getCorrectDueDate(selectedLoan);
+																return displayDueDate ? formatDate(displayDueDate) : "N/A";
 															})()}
 												</p>
 											</div>
