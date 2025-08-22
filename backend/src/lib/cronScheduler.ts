@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { LateFeeProcessor } from "./lateFeeProcessor";
-import { UpcomingPaymentProcessor } from "./upcomingPaymentProcessor";
+import { PaymentNotificationProcessor, UpcomingPaymentProcessor } from "./upcomingPaymentProcessor";
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -27,8 +27,8 @@ export class CronScheduler {
 		// Schedule late fee processing at 1:00 AM daily
 		this.scheduleLateFeeProcessing();
 
-		// Schedule upcoming payment notifications
-		await this.scheduleUpcomingPaymentNotifications();
+		// Schedule payment notifications (both upcoming and late)
+		await this.schedulePaymentNotifications();
 
 		console.log(
 			`[${new Date().toISOString()}] Cron scheduler started with ${
@@ -112,8 +112,8 @@ export class CronScheduler {
 	/**
 	 * Schedule upcoming payment notifications job
 	 */
-	private async scheduleUpcomingPaymentNotifications(): Promise<void> {
-		const jobName = "upcoming-payment-notifications";
+	private async schedulePaymentNotifications(): Promise<void> {
+		const jobName = "payment-notifications";
 
 		try {
 			// Get the configured time from settings (default 10:00 AM UTC+8)
@@ -142,18 +142,18 @@ export class CronScheduler {
 				cronExpression,
 				async () => {
 					console.log(
-						`[${new Date().toISOString()}] Starting scheduled upcoming payment notification processing...`
+						`[${new Date().toISOString()}] Starting scheduled payment notification processing...`
 					);
 
 					try {
-						const result = await UpcomingPaymentProcessor.processUpcomingPayments();
+						const result = await PaymentNotificationProcessor.processAllPaymentNotifications();
 						console.log(
-							`[${new Date().toISOString()}] Upcoming payment notification processing completed successfully:`,
+							`[${new Date().toISOString()}] Payment notification processing completed successfully:`,
 							result
 						);
 					} catch (error) {
 						console.error(
-							`[${new Date().toISOString()}] Error in upcoming payment notification processing:`,
+							`[${new Date().toISOString()}] Error in payment notification processing:`,
 							error
 						);
 					}
@@ -173,7 +173,7 @@ export class CronScheduler {
 
 		} catch (error) {
 			console.error(
-				`[${new Date().toISOString()}] Error scheduling upcoming payment notifications:`,
+				`[${new Date().toISOString()}] Error scheduling payment notifications:`,
 				error
 			);
 		}
@@ -203,7 +203,31 @@ export class CronScheduler {
 	}
 
 	/**
-	 * Manually trigger upcoming payment notification processing (for testing)
+	 * Manually trigger payment notification processing (both upcoming and late)
+	 */
+	async triggerPaymentNotifications(): Promise<any> {
+		console.log(
+			`[${new Date().toISOString()}] Manually triggering payment notification processing...`
+		);
+
+		try {
+			const result = await PaymentNotificationProcessor.processAllPaymentNotifications();
+			console.log(
+				`[${new Date().toISOString()}] Manual payment notification processing completed successfully:`,
+				result
+			);
+			return result;
+		} catch (error) {
+			console.error(
+				`[${new Date().toISOString()}] Error in manual payment notification processing:`,
+				error
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Manually trigger upcoming payment notification processing only (for backwards compatibility)
 	 */
 	async triggerUpcomingPaymentNotifications(): Promise<any> {
 		console.log(

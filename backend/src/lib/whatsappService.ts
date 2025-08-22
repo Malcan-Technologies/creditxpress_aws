@@ -487,6 +487,37 @@ class WhatsAppService {
 			parameters: [fullName, paymentAmount, loanName, daysUntilDue, dueDate]
 		});
 	}
+
+	// Specific method for late payment notifications
+	async sendLatePaymentNotification({
+		to,
+		fullName,
+		paymentAmount,
+		loanName
+	}: {
+		to: string;
+		fullName: string;
+		paymentAmount: string;
+		loanName: string;
+	}): Promise<WhatsAppResponse> {
+		// Check if WhatsApp late payment notifications are enabled
+		const isGlobalEnabled = await this.isWhatsAppEnabled();
+		const isLatePaymentEnabled = await this.isNotificationEnabled('WHATSAPP_LATE_PAYMENT');
+		
+		if (!isGlobalEnabled || !isLatePaymentEnabled) {
+			console.log('WhatsApp late payment notifications are disabled');
+			return {
+				success: false,
+				error: 'WhatsApp late payment notifications are disabled'
+			};
+		}
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'late_payment',
+			parameters: [fullName, paymentAmount, loanName]
+		});
+	}
 }
 
 export default new WhatsAppService(); 

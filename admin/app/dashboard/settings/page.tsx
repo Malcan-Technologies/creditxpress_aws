@@ -313,15 +313,15 @@ function SettingsPageContent() {
 		loadSettings(); // Reload original settings
 	};
 
-	// Manual trigger for upcoming payment notifications
-	const triggerUpcomingPaymentNotifications = async () => {
+	// Manual trigger for payment notifications (both upcoming and late)
+	const triggerPaymentNotifications = async () => {
 		try {
 			setManualTriggerLoading(true);
 			setManualTriggerResult(null);
 			setError(null);
 
 			// fetchWithAdminTokenRefresh already returns parsed JSON, not Response object
-			const result = await fetchWithAdminTokenRefresh("/api/admin/trigger-upcoming-payment-notifications", {
+			const result = await fetchWithAdminTokenRefresh("/api/admin/trigger-payment-notifications", {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
@@ -431,9 +431,27 @@ function SettingsPageContent() {
 
 			case "JSON":
 				// Special handling for reminder days array
-				if (key === "UPCOMING_PAYMENT_REMINDER_DAYS") {
+				if (key === "UPCOMING_PAYMENT_REMINDER_DAYS" || key === "LATE_PAYMENT_REMINDER_DAYS") {
 					const reminderDays = Array.isArray(value) ? value : [];
 					const inputId = `reminder-days-input-${key}`;
+					const isLatePayment = key === "LATE_PAYMENT_REMINDER_DAYS";
+					const colorScheme = isLatePayment ? {
+						bg: "bg-red-800/30",
+						border: "border-red-700/50",
+						text: "text-red-300",
+						button: "text-red-400 hover:text-red-200",
+						input: "focus:ring-red-500 focus:border-red-500",
+						addButton: "bg-red-600 hover:bg-red-700",
+						instructions: "text-red-300 bg-red-900/20 border-red-700/30"
+					} : {
+						bg: "bg-orange-800/30",
+						border: "border-orange-700/50", 
+						text: "text-orange-300",
+						button: "text-orange-400 hover:text-orange-200",
+						input: "focus:ring-orange-500 focus:border-orange-500",
+						addButton: "bg-orange-600 hover:bg-orange-700",
+						instructions: "text-orange-300 bg-orange-900/20 border-orange-700/30"
+					};
 					
 					const addReminderDay = () => {
 						const input = document.getElementById(inputId) as HTMLInputElement;
@@ -451,15 +469,17 @@ function SettingsPageContent() {
 						<div className="space-y-3">
 							<div className="flex flex-wrap gap-2">
 								{reminderDays.map((day: number, index: number) => (
-									<div key={index} className="flex items-center bg-orange-800/30 border border-orange-700/50 rounded-md px-3 py-1">
-										<span className="text-orange-300 text-sm font-medium">{day} day{day !== 1 ? 's' : ''}</span>
+									<div key={index} className={`flex items-center ${colorScheme.bg} ${colorScheme.border} rounded-md px-3 py-1`}>
+										<span className={`${colorScheme.text} text-sm font-medium`}>
+											{day} day{day !== 1 ? 's' : ''} {isLatePayment ? 'after' : 'before'}
+										</span>
 										<button
 											type="button"
 											onClick={() => {
 												const newDays = reminderDays.filter((_: number, i: number) => i !== index);
 												handleSettingChange(key, newDays);
 											}}
-											className="ml-2 text-orange-400 hover:text-orange-200 transition-colors"
+											className={`ml-2 ${colorScheme.button} transition-colors`}
 										>
 											<TrashIcon className="w-4 h-4" />
 										</button>
@@ -470,10 +490,10 @@ function SettingsPageContent() {
 								<input
 									id={inputId}
 									type="number"
-									placeholder="Days (e.g., 7)"
+									placeholder={`Days (e.g., ${isLatePayment ? '3' : '7'})`}
 									min={1}
 									max={30}
-									className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+									className={`flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 ${colorScheme.input}`}
 									onKeyPress={(e) => {
 										if (e.key === 'Enter') {
 											addReminderDay();
@@ -483,13 +503,13 @@ function SettingsPageContent() {
 								<button
 									type="button"
 									onClick={addReminderDay}
-									className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors flex items-center"
+									className={`px-4 py-2 ${colorScheme.addButton} text-white rounded-md transition-colors flex items-center`}
 								>
 									<PlusIcon className="w-4 h-4" />
 								</button>
 							</div>
-							<div className="text-xs text-orange-300 bg-orange-900/20 p-2 rounded border border-orange-700/30">
-								<strong>Instructions:</strong> Enter number of days before payment due date to send reminder. Press Enter or click + to add. Example: 7, 3, 1 for reminders 7, 3, and 1 day before due date.
+							<div className={`text-xs ${colorScheme.instructions} p-2 rounded border`}>
+								<strong>Instructions:</strong> Enter number of days {isLatePayment ? 'after' : 'before'} payment due date to send reminder. Press Enter or click + to add. Example: {isLatePayment ? '3, 7, 14 for reminders 3, 7, and 14 days after due date' : '7, 3, 1 for reminders 7, 3, and 1 day before due date'}.
 							</div>
 						</div>
 					);
@@ -1113,6 +1133,17 @@ function SettingsPageContent() {
 			);
 		}
 
+		// Defensive check to ensure settings is properly initialized
+		if (!settings || typeof settings !== 'object') {
+			return (
+				<div className="bg-gradient-to-br from-red-800/70 to-red-900/70 backdrop-blur-md border border-red-700/30 rounded-xl p-8 text-center">
+					<BellIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
+					<h3 className="text-lg font-medium text-white mb-2">Settings Loading Error</h3>
+					<p className="text-red-400">Unable to load settings data. Please refresh the page.</p>
+				</div>
+			);
+		}
+
 		// Filter to show only NOTIFICATIONS category
 		const notificationSettings = Object.entries(settings).filter(([category]) => 
 			category === "NOTIFICATIONS"
@@ -1154,18 +1185,18 @@ function SettingsPageContent() {
 									<p className="text-sm text-green-300 mt-1">Configure WhatsApp Business API notifications for loan and payment events</p>
 								</div>
 							</div>
-						</div>
+							</div>
 
-						<div className="p-6 space-y-6">
+							<div className="p-6 space-y-6">
 							{/* Master toggle first */}
 							{whatsappSettings.filter(s => s.key === "ENABLE_WHATSAPP_NOTIFICATIONS").map((setting) => (
 								<div key={setting.key} className="border-b border-green-700/30 pb-6">
-									<div className="flex items-start justify-between">
-										<div className="flex-1 min-w-0 mr-6">
-											<div className="flex items-center space-x-2 mb-2">
-												<h3 className="text-base font-medium text-white">
+										<div className="flex items-start justify-between">
+											<div className="flex-1 min-w-0 mr-6">
+												<div className="flex items-center space-x-2 mb-2">
+													<h3 className="text-base font-medium text-white">
 													🔧 {setting.name}
-												</h3>
+													</h3>
 											</div>
 											<p className="text-sm text-gray-300 mb-3">
 												{setting.description}
@@ -1196,9 +1227,10 @@ function SettingsPageContent() {
 							{/* Individual notification types */}
 							<div className="grid md:grid-cols-2 gap-6">
 								{whatsappSettings.filter(s => 
-									s.key !== "ENABLE_WHATSAPP_NOTIFICATIONS" && 
-									s.key !== "UPCOMING_PAYMENT_REMINDER_DAYS" && 
-									s.key !== "UPCOMING_PAYMENT_CHECK_TIME"
+																	s.key !== "ENABLE_WHATSAPP_NOTIFICATIONS" && 
+								s.key !== "UPCOMING_PAYMENT_REMINDER_DAYS" && 
+								s.key !== "UPCOMING_PAYMENT_CHECK_TIME" &&
+								s.key !== "LATE_PAYMENT_REMINDER_DAYS"
 								).map((setting) => {
 									const isMandatory = setting.key === "WHATSAPP_OTP_VERIFICATION";
 									const getNotificationIcon = (key: string) => {
@@ -1212,6 +1244,7 @@ function SettingsPageContent() {
 											case "WHATSAPP_PAYMENT_APPROVED": return "💳";
 											case "WHATSAPP_PAYMENT_FAILED": return "⚠️";
 											case "WHATSAPP_UPCOMING_PAYMENT": return "⏰";
+											case "WHATSAPP_LATE_PAYMENT": return "🚨";
 											default: return "📱";
 										}
 									};
@@ -1227,6 +1260,7 @@ function SettingsPageContent() {
 											case "WHATSAPP_PAYMENT_APPROVED": return "bg-purple-800/20 border-purple-700/30";
 											case "WHATSAPP_PAYMENT_FAILED": return "bg-red-800/20 border-red-700/30";
 											case "WHATSAPP_UPCOMING_PAYMENT": return "bg-orange-800/20 border-orange-700/30";
+											case "WHATSAPP_LATE_PAYMENT": return "bg-red-800/20 border-red-700/30";
 											default: return "bg-gray-800/20 border-gray-700/30";
 										}
 									};
@@ -1244,8 +1278,8 @@ function SettingsPageContent() {
 															{isMandatory && (
 																<span className="ml-2 text-xs bg-orange-500/20 text-orange-300 px-2 py-0.5 rounded border border-orange-400/30">
 																	REQUIRED
-																</span>
-															)}
+														</span>
+													)}
 														</h4>
 													</div>
 													<p className="text-xs text-gray-400">
@@ -1274,7 +1308,7 @@ function SettingsPageContent() {
 															</div>
 															<span className="ml-3 text-sm font-medium text-gray-400">
 																Always Enabled
-															</span>
+														</span>
 														</label>
 														{/* Status indicator */}
 														<div className="flex items-center space-x-2 text-xs text-green-300">
@@ -1284,30 +1318,31 @@ function SettingsPageContent() {
 													</div>
 												) : (
 													renderSettingInput(setting)
-												)}
-											</div>
+													)}
+												</div>
 										</div>
 									);
 								})}
 							</div>
 
-							{/* Upcoming Payment Configuration */}
-							{whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") && (
-								<div className="bg-orange-900/20 border border-orange-700/30 rounded-xl p-6">
-									<div className="flex items-center mb-6">
-										<div className="w-12 h-12 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4">
-											<span className="text-2xl">⏰</span>
+														{/* Payment Reminder Configuration Cards */}
+							<div className="grid lg:grid-cols-2 gap-6">
+								{/* Upcoming Payment Configuration */}
+								{whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") && (
+									<div className="bg-orange-900/20 border border-orange-700/30 rounded-xl p-6">
+										<div className="flex items-center mb-6">
+											<div className="w-12 h-12 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4">
+												<span className="text-2xl">⏰</span>
+											</div>
+											<div>
+												<h3 className="text-lg font-semibold text-white">Upcoming Payment Reminders</h3>
+												<p className="text-sm text-orange-300 mt-1">Reminders before payment due date</p>
+											</div>
 										</div>
-										<div>
-											<h3 className="text-lg font-semibold text-white">Upcoming Payment Reminders</h3>
-											<p className="text-sm text-orange-300 mt-1">Configure when and how often to send payment reminders</p>
-										</div>
-									</div>
 
-									<div className="grid lg:grid-cols-3 gap-6">
 										{/* Main Toggle */}
 										{whatsappSettings.filter(s => s.key === "WHATSAPP_UPCOMING_PAYMENT").map((setting) => (
-											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
+											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4 mb-4">
 												<div className="flex items-center space-x-2 mb-3">
 													<span className="text-lg">⏰</span>
 													<h4 className="text-sm font-medium text-white">Enable Reminders</h4>
@@ -1321,12 +1356,33 @@ function SettingsPageContent() {
 											</div>
 										))}
 
-										{/* Reminder Days Configuration */}
-										{whatsappSettings.filter(s => s.key === "UPCOMING_PAYMENT_REMINDER_DAYS").map((setting) => (
-											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
+										{/* Example Configuration */}
+										<div className="text-xs text-orange-300 bg-orange-900/20 p-3 rounded border border-orange-700/30">
+											<strong>📋 Example:</strong><br/>
+											"Hi John, this is a reminder that your payment of RM 1000 for your PayAdvance loan is due in 3 days. Please ensure payment is made before 28/8/2025 to avoid late charges."
+										</div>
+									</div>
+								)}
+
+								{/* Late Payment Configuration */}
+								{whatsappSettings.some(s => s.key === "WHATSAPP_LATE_PAYMENT") && (
+									<div className="bg-red-900/20 border border-red-700/30 rounded-xl p-6">
+										<div className="flex items-center mb-6">
+											<div className="w-12 h-12 bg-red-600/20 rounded-xl flex items-center justify-center mr-4">
+												<span className="text-2xl">🚨</span>
+											</div>
+											<div>
+												<h3 className="text-lg font-semibold text-white">Late Payment Reminders</h3>
+												<p className="text-sm text-red-300 mt-1">Reminders after payment due date</p>
+											</div>
+										</div>
+
+										{/* Main Toggle */}
+										{whatsappSettings.filter(s => s.key === "WHATSAPP_LATE_PAYMENT").map((setting) => (
+											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4 mb-4">
 												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">📅</span>
-													<h4 className="text-sm font-medium text-white">Reminder Days</h4>
+													<span className="text-lg">🚨</span>
+													<h4 className="text-sm font-medium text-white">Enable Late Reminders</h4>
 												</div>
 												<p className="text-xs text-gray-400 mb-4">
 													{setting.description}
@@ -1337,44 +1393,49 @@ function SettingsPageContent() {
 											</div>
 										))}
 
-										{/* Check Time Configuration */}
-										{(() => {
-											// Find the time setting from all settings, not just WhatsApp settings
-											const timeSetting = Object.values(settings).flat().find(s => s.key === "UPCOMING_PAYMENT_CHECK_TIME");
-											if (!timeSetting) return null;
-											
-											return (
-												<div key={timeSetting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
-													<div className="flex items-center space-x-2 mb-3">
-														<span className="text-lg">🕙</span>
-														<h4 className="text-sm font-medium text-white">Daily Check Time</h4>
-														{timeSetting.requiresRestart && (
-															<span className="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded border border-red-400/30">
-																RESTART REQUIRED
-															</span>
-														)}
-													</div>
-													<p className="text-xs text-gray-400 mb-4">
-														{timeSetting.description}
-													</p>
-													<div className="w-full">
-														{renderSettingInput(timeSetting)}
-													</div>
-												</div>
-											);
-										})()}
+										{/* Example Configuration */}
+										<div className="text-xs text-red-300 bg-red-900/20 p-3 rounded border border-red-700/30">
+											<strong>📋 Example:</strong><br/>
+											"Hi John, your loan payment of RM 1050 for PayAdvance is past due."<br/>
+											<span className="text-xs text-gray-400">Amount includes late fees and outstanding balance</span>
+										</div>
+									</div>
+								)}
+							</div>
+
+							{/* Shared Payment Reminder Configuration */}
+							{(whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") || whatsappSettings.some(s => s.key === "WHATSAPP_LATE_PAYMENT")) && (
+								<div className="bg-gradient-to-r from-orange-900/20 to-red-900/20 border border-orange-700/30 rounded-xl p-6">
+									<div className="flex items-center mb-6">
+										<div className="w-12 h-12 bg-gradient-to-r from-orange-600/20 to-red-600/20 rounded-xl flex items-center justify-center mr-4">
+											<span className="text-2xl">⚙️</span>
+										</div>
+										<div>
+											<h3 className="text-lg font-semibold text-white">Payment Reminder Configuration</h3>
+											<p className="text-sm text-gray-400">Configure reminder timing and manual triggers</p>
+										</div>
 									</div>
 
-									{/* Example Configuration */}
-									<div className="mt-6 text-xs text-orange-300 bg-orange-900/20 p-3 rounded border border-orange-700/30">
-										<strong>📋 Example Configuration:</strong><br/>
-										• <strong>Reminder Days:</strong> [7, 3, 1] = Send reminders 7 days, 3 days, and 1 day before payment due<br/>
-										• <strong>Check Time:</strong> 10:00 = Process reminders daily at 10:00 AM Malaysian time<br/>
-										• <strong>Template:</strong> "Hi John, this is a reminder that your payment of RM 1000 for your PayAdvance loan is due in 3 days. Please ensure payment is made before 28/8/2025 to avoid late charges."
+									<div className="mb-6">
+										{/* Upcoming Payment Reminder Days */}
+										{whatsappSettings.filter(s => s.key === "UPCOMING_PAYMENT_REMINDER_DAYS").map((setting) => (
+											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">📅</span>
+													<h4 className="text-sm font-medium text-white">Upcoming Reminder Days</h4>
+												</div>
+												<p className="text-xs text-gray-400 mb-4">
+													Days before payment due date to send reminders
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
 									</div>
 
 									{/* Manual Trigger Section */}
-									<div className="mt-6 bg-gradient-to-r from-orange-800/10 to-red-800/10 border border-orange-600/30 rounded-lg p-4">
+									<div className="bg-gradient-to-r from-orange-800/10 to-red-800/10 border border-orange-600/30 rounded-lg p-4">
 										<div className="flex items-center justify-between mb-4">
 											<div>
 												<h4 className="text-sm font-semibold text-white flex items-center">
@@ -1382,13 +1443,13 @@ function SettingsPageContent() {
 													Manual Trigger
 												</h4>
 												<p className="text-xs text-gray-400 mt-1">
-													Run upcoming payment notifications immediately without waiting for the scheduled cron job
+													Run both upcoming and late payment notifications immediately without waiting for the scheduled cron job
 												</p>
 											</div>
 											<button
-												onClick={triggerUpcomingPaymentNotifications}
+												onClick={triggerPaymentNotifications}
 												disabled={manualTriggerLoading}
-												className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-2"
+												className="px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-2"
 											>
 												{manualTriggerLoading ? (
 													<>
@@ -1414,20 +1475,44 @@ function SettingsPageContent() {
 														{new Date(manualTriggerResult.processedAt).toLocaleString()}
 													</span>
 												</div>
-												<div className="grid grid-cols-3 gap-4 text-center">
+
+												{/* Overall Summary */}
+												<div className="grid grid-cols-3 gap-4 text-center mb-4">
 													<div>
 														<div className="text-lg font-bold text-white">{manualTriggerResult.totalChecked}</div>
-														<div className="text-gray-400">Checked</div>
+														<div className="text-gray-400">Total Checked</div>
 													</div>
 													<div>
 														<div className="text-lg font-bold text-green-400">{manualTriggerResult.notificationsSent}</div>
-														<div className="text-gray-400">Sent</div>
+														<div className="text-gray-400">Total Sent</div>
 													</div>
 													<div>
 														<div className="text-lg font-bold text-red-400">{manualTriggerResult.errors}</div>
-														<div className="text-gray-400">Errors</div>
+														<div className="text-gray-400">Total Errors</div>
 													</div>
 												</div>
+
+												{/* Breakdown by Type */}
+												{(manualTriggerResult.upcomingPayments || manualTriggerResult.latePayments) && (
+													<div className="grid grid-cols-2 gap-4 text-center border-t border-green-700/30 pt-3">
+														<div className="bg-orange-900/20 border border-orange-700/30 rounded p-2">
+															<div className="text-orange-300 font-semibold mb-1">⏰ Upcoming</div>
+															<div className="text-xs space-y-1">
+																<div>Checked: <span className="text-white">{manualTriggerResult.upcomingPayments?.checked || 0}</span></div>
+																<div>Sent: <span className="text-green-400">{manualTriggerResult.upcomingPayments?.sent || 0}</span></div>
+																<div>Errors: <span className="text-red-400">{manualTriggerResult.upcomingPayments?.errors || 0}</span></div>
+															</div>
+														</div>
+														<div className="bg-red-900/20 border border-red-700/30 rounded p-2">
+															<div className="text-red-300 font-semibold mb-1">🚨 Late</div>
+															<div className="text-xs space-y-1">
+																<div>Checked: <span className="text-white">{manualTriggerResult.latePayments?.checked || 0}</span></div>
+																<div>Sent: <span className="text-green-400">{manualTriggerResult.latePayments?.sent || 0}</span></div>
+																<div>Errors: <span className="text-red-400">{manualTriggerResult.latePayments?.errors || 0}</span></div>
+															</div>
+														</div>
+													</div>
+												)}
 												{manualTriggerResult.details && manualTriggerResult.details.length > 0 && (
 													<div className="mt-3 pt-3 border-t border-green-700/30">
 														<strong className="text-green-300 text-xs">Details:</strong>
@@ -1488,10 +1573,10 @@ function SettingsPageContent() {
 										<div className="flex-shrink-0 w-64">
 											{renderSettingInput(setting)}
 										</div>
-									</div>
-								</div>
-							))}
+							</div>
 						</div>
+					))}
+				</div>
 					</div>
 				)}
 

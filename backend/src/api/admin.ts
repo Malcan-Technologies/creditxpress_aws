@@ -10184,11 +10184,11 @@ router.post("/trigger-upcoming-payment-notifications", async (_req: any, res: an
 	try {
 		console.log(`[${new Date().toISOString()}] Manual trigger for upcoming payment notifications requested by admin`);
 
-		// Import the UpcomingPaymentProcessor
-		const { UpcomingPaymentProcessor } = await import("../lib/upcomingPaymentProcessor");
+		// Import the PaymentNotificationProcessor
+		const { PaymentNotificationProcessor } = await import("../lib/upcomingPaymentProcessor");
 
-		// Process upcoming payments
-		const result = await UpcomingPaymentProcessor.processUpcomingPayments();
+		// Process upcoming payments only
+		const result = await PaymentNotificationProcessor.processUpcomingPayments();
 
 		console.log(`[${new Date().toISOString()}] Manual upcoming payment processing completed:`, result);
 
@@ -10209,6 +10209,43 @@ router.post("/trigger-upcoming-payment-notifications", async (_req: any, res: an
 		return res.status(500).json({
 			success: false,
 			message: "Failed to process upcoming payment notifications",
+			error: error.message
+		});
+	}
+});
+
+// Manual trigger for payment notifications (both upcoming and late)
+router.post("/trigger-payment-notifications", async (_req: any, res: any) => {
+	try {
+		console.log(`[${new Date().toISOString()}] Manual trigger for payment notifications (upcoming & late) requested by admin`);
+
+		// Import the PaymentNotificationProcessor
+		const { PaymentNotificationProcessor } = await import("../lib/upcomingPaymentProcessor");
+
+		// Process both upcoming and late payments
+		const result = await PaymentNotificationProcessor.processAllPaymentNotifications();
+
+		console.log(`[${new Date().toISOString()}] Manual payment notification processing completed:`, result);
+
+		return res.json({
+			success: true,
+			message: "Payment notifications processed successfully",
+			data: {
+				totalChecked: result.totalChecked,
+				notificationsSent: result.notificationsSent,
+				errors: result.errors,
+				upcomingPayments: result.upcomingPayments,
+				latePayments: result.latePayments,
+				details: result.details,
+				processedAt: new Date().toISOString()
+			}
+		});
+
+	} catch (error: any) {
+		console.error("Error in manual payment notification trigger:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Failed to process payment notifications",
 			error: error.message
 		});
 	}
