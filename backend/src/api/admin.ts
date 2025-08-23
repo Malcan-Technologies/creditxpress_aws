@@ -6534,91 +6534,7 @@ router.post(
 				return { updatedTransaction, scheduleUpdate: null };
 			});
 
-			// Send WhatsApp notification for payment approval
-			if (transaction.user.phoneNumber && result.scheduleUpdate) {
-				try {
-					console.log("Sending WhatsApp payment approval notification");
-					
-					// Get the actual payment amount from the transaction result
-					const approvedAmount = (transaction.metadata as any)?.originalAmount || Math.abs(transaction.amount);
-					
-					// Get loan details with product information
-					const loanWithProduct = await prisma.loan.findUnique({
-						where: { id: transaction.loanId || '' },
-						include: {
-							application: {
-								include: {
-									product: true
-								}
-							}
-						}
-					});
 
-					// Get completed repayments count
-					const completedRepayments = await prisma.loanRepayment.count({
-						where: {
-							loanId: transaction.loanId || '',
-							status: 'COMPLETED'
-						}
-					});
-
-					if (loanWithProduct) {
-						// Calculate payment progress
-						const totalScheduledPayments = loanWithProduct.term; // Use term field instead of repaymentTermMonths
-						const completedPayments = completedRepayments;
-						
-						// Calculate next payment amount based on outstanding balance and late fees
-						let nextPaymentAmount = loanWithProduct.monthlyPayment; // Default scheduled payment
-						
-						// If there are partial payments or late fees, calculate the actual remaining balance
-						if (result.scheduleUpdate.nextPaymentDue) {
-							// Get the next pending repayment to see what's actually due
-							const nextRepayment = await prisma.loanRepayment.findFirst({
-								where: {
-									loanId: transaction.loanId || '',
-									status: { in: ['PENDING', 'PARTIAL'] }
-								},
-								orderBy: { dueDate: 'asc' }
-							});
-							
-							if (nextRepayment) {
-								// Calculate remaining amount for this repayment
-								const scheduledAmount = nextRepayment.scheduledAmount || nextRepayment.amount;
-								const paidAmount = nextRepayment.actualAmount || 0;
-								const lateFeeAmount = nextRepayment.lateFeeAmount || 0;
-								
-								// Next payment = (scheduled amount + late fees) - amount already paid
-								const remainingAmount = (scheduledAmount + lateFeeAmount) - paidAmount;
-								nextPaymentAmount = Math.max(remainingAmount, 0);
-							}
-						}
-						
-						// Format next due date
-						const nextDueDate = result.scheduleUpdate.nextPaymentDue 
-							? formatDateForWhatsApp(new Date(result.scheduleUpdate.nextPaymentDue))
-							: 'To be determined';
-
-						const whatsappResult = await whatsappService.sendPaymentApprovedNotification({
-							to: transaction.user.phoneNumber,
-							fullName: transaction.user.fullName || 'Valued Customer',
-							paymentAmount: approvedAmount.toFixed(2),
-							loanName: loanWithProduct.application.product.name,
-							nextPaymentAmount: nextPaymentAmount.toFixed(2),
-							nextDueDate: nextDueDate,
-							completedPayments: completedPayments.toString(),
-							totalPayments: totalScheduledPayments.toString()
-						});
-						
-						if (whatsappResult.success) {
-							console.log(`WhatsApp payment approval notification sent successfully to ${transaction.user.phoneNumber}. Message ID: ${whatsappResult.messageId}`);
-						} else {
-							console.error(`Failed to send WhatsApp payment approval notification: ${whatsappResult.error}`);
-						}
-					}
-				} catch (whatsappError) {
-					console.error("Error sending WhatsApp payment approval notification:", whatsappError);
-				}
-			}
 
 			// Generate receipt for this payment transaction
 			try {
@@ -6643,24 +6559,46 @@ router.post(
 						
 						console.log(`🧾 Receipt generation - All repayments for loan ${transaction.loanId}:`);
 						allRepayments.forEach((r, i) => {
-							console.log(`  ${i + 1}. Installment ${r.installmentNumber || 'N/A'}: ${r.status}, actualAmount: ${r.actualAmount || 0}, amount: ${r.amount}`);
+							console.log(`  ${i + 1}. Installment ${r.installmentNumber || 'N/A'}: ${r.status}, actualAmount: ${r.actualAmount || 0}, amount: ${r.amount}, paidAt: ${r.paidAt}`);
 						});
 
-						// Find the repayment that is currently being paid (not fully completed yet)
-						// This is either the first PARTIAL repayment or the first PENDING repayment
-						let affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+						// Find the repayment that was most recently affected by this payment
+						// Strategy: Look for the repayment with the most recent paidAt timestamp
+						// that matches when this transaction was processed, or the first appropriate status
 						
-						// If no PARTIAL found, look for the first PENDING (in case payment fully completed it)
+						let affectedRepayment = null;
+						
+						// First, try to find PARTIAL repayments (ongoing payments)
+						affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+						
+						// If no PARTIAL found, look for recently COMPLETED repayments
+						// (those completed within the last minute, indicating they were just paid)
+						if (!affectedRepayment) {
+							const recentlyCompleted = allRepayments.filter(r => 
+								r.status === 'COMPLETED' && 
+								r.paidAt && 
+								(new Date().getTime() - new Date(r.paidAt).getTime()) < 60000 // Within last 60 seconds
+							);
+							
+							// Pick the most recently completed one
+							if (recentlyCompleted.length > 0) {
+								affectedRepayment = recentlyCompleted.sort((a, b) => 
+									new Date(b.paidAt!).getTime() - new Date(a.paidAt!).getTime()
+								)[0];
+							}
+						}
+						
+						// If still no match, look for the first PENDING (fallback)
 						if (!affectedRepayment) {
 							affectedRepayment = allRepayments.find(r => r.status === 'PENDING');
 						}
 						
-						// If still no match, fallback to first COMPLETED (shouldn't happen but safety net)
+						// Final fallback: first COMPLETED repayment
 						if (!affectedRepayment) {
 							affectedRepayment = allRepayments.find(r => r.status === 'COMPLETED');
 						}
 						
-						console.log(`🧾 Selected repayment for receipt: Installment ${affectedRepayment?.installmentNumber || 'N/A'}, status: ${affectedRepayment?.status}`);
+						console.log(`🧾 Selected repayment for receipt: Installment ${affectedRepayment?.installmentNumber || 'N/A'}, status: ${affectedRepayment?.status}, paidAt: ${affectedRepayment?.paidAt}`);
 
 						if (affectedRepayment) {
 							const receiptResult = await ReceiptService.generateReceipt({
@@ -6680,6 +6618,109 @@ router.post(
 				}
 			} catch (receiptError) {
 				console.error("Error in receipt generation process:", receiptError);
+			}
+
+			// Send WhatsApp notification AFTER receipt generation
+			if (transaction.user.phoneNumber && result.scheduleUpdate) {
+				try {
+					// Get the actual payment amount from the transaction result
+					const approvedAmount = (transaction.metadata as any)?.originalAmount || Math.abs(transaction.amount);
+					
+					const loanWithProduct = await prisma.loan.findUnique({
+						where: { id: transaction.loanId! },
+						include: {
+							application: {
+								include: {
+									product: true
+								}
+							}
+						}
+					});
+
+					if (loanWithProduct) {
+						// Calculate completed payments
+						const completedPayments = await prisma.loanRepayment.count({
+							where: {
+								loanId: transaction.loanId!,
+								status: 'COMPLETED'
+							}
+						});
+
+						// Get total payments from loan term
+						const totalScheduledPayments = loanWithProduct.term || loanWithProduct.application.term || 12;
+
+						// Calculate next payment amount
+						let nextPaymentAmount = 0;
+						const nextPayment = await prisma.loanRepayment.findFirst({
+							where: {
+								loanId: transaction.loanId!,
+								status: { in: ['PENDING', 'PARTIAL'] }
+							},
+							orderBy: {
+								dueDate: 'asc'
+							}
+						});
+
+						if (nextPayment) {
+							const scheduledAmount = nextPayment.scheduledAmount || nextPayment.amount;
+							const lateFeeAmount = nextPayment.lateFeeAmount || 0;
+							const paidAmount = nextPayment.actualAmount || 0;
+
+							if (nextPayment.status === 'PARTIAL') {
+								// Next payment = (scheduled amount + late fees) - amount already paid
+								const remainingAmount = (scheduledAmount + lateFeeAmount) - paidAmount;
+								nextPaymentAmount = Math.max(remainingAmount, 0);
+							}
+						}
+						
+						// Format next due date
+						const nextDueDate = result.scheduleUpdate.nextPaymentDue 
+							? formatDateForWhatsApp(new Date(result.scheduleUpdate.nextPaymentDue))
+							: 'To be determined';
+
+						// Find the newly generated receipt for this transaction
+						let receiptUrl: string | undefined;
+						try {
+							const receipt = await prisma.paymentReceipt.findFirst({
+								where: {
+									metadata: {
+										path: ['transactionId'],
+										equals: transaction.id
+									}
+								}
+							});
+							
+							if (receipt) {
+								receiptUrl = receipt.id; // Just pass the receipt ID
+								console.log(`🔗 Found receipt for WhatsApp notification: ${receipt.id}`);
+							} else {
+								console.log(`🔗 No receipt found for transaction: ${transaction.id}`);
+							}
+						} catch (receiptError) {
+							console.error("Error getting receipt for WhatsApp notification:", receiptError);
+						}
+
+						const whatsappResult = await whatsappService.sendPaymentApprovedNotification({
+							to: transaction.user.phoneNumber,
+							fullName: transaction.user.fullName || 'Valued Customer',
+							paymentAmount: approvedAmount.toFixed(2),
+							loanName: loanWithProduct.application.product.name,
+							nextPaymentAmount: nextPaymentAmount.toFixed(2),
+							nextDueDate: nextDueDate,
+							completedPayments: completedPayments.toString(),
+							totalPayments: totalScheduledPayments.toString(),
+							receiptUrl: receiptUrl
+						});
+						
+						if (whatsappResult.success) {
+							console.log(`WhatsApp payment approval notification sent successfully to ${transaction.user.phoneNumber}. Message ID: ${whatsappResult.messageId}${receiptUrl ? ` with receipt: ${receiptUrl}` : ' (no receipt)'}`);
+						} else {
+							console.error(`Failed to send WhatsApp payment approval notification: ${whatsappResult.error}`);
+						}
+					}
+				} catch (whatsappError) {
+					console.error("Error sending WhatsApp payment approval notification:", whatsappError);
+				}
 			}
 
 			return res.json({
@@ -9708,7 +9749,8 @@ router.post(
 						nextPaymentAmount: "0.00", // Will be calculated separately if needed
 						nextDueDate: "TBD", // Will be calculated separately if needed  
 						completedPayments: "N/A", // Will be calculated separately if needed
-						totalPayments: "N/A" // Will be calculated separately if needed
+						totalPayments: "N/A", // Will be calculated separately if needed
+						receiptUrl: undefined // No receipt URL for manual payments
 					});
 					
 					if (whatsappResult.success) {
@@ -9744,19 +9786,48 @@ router.post(
 						orderBy: { dueDate: 'asc' }
 					});
 
-					// Find the repayment that is currently being paid (not fully completed yet)
-					// This is either the first PARTIAL repayment or the first PENDING repayment
-					let primaryRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+					console.log(`🧾 Manual payment receipt generation - All repayments for loan ${loanId}:`);
+					allRepayments.forEach((r, i) => {
+						console.log(`  ${i + 1}. Installment ${r.installmentNumber || 'N/A'}: ${r.status}, actualAmount: ${r.actualAmount || 0}, amount: ${r.amount}, paidAt: ${r.paidAt}`);
+					});
+
+					// Find the repayment that was most recently affected by this payment
+					// Strategy: Look for the repayment with the most recent paidAt timestamp
+					// that matches when this transaction was processed, or the first appropriate status
 					
-					// If no PARTIAL found, look for the first PENDING (in case payment fully completed it)
+					let primaryRepayment = null;
+					
+					// First, try to find PARTIAL repayments (ongoing payments)
+					primaryRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+					
+					// If no PARTIAL found, look for recently COMPLETED repayments
+					// (those completed within the last minute, indicating they were just paid)
+					if (!primaryRepayment) {
+						const recentlyCompleted = allRepayments.filter(r => 
+							r.status === 'COMPLETED' && 
+							r.paidAt && 
+							(new Date().getTime() - new Date(r.paidAt).getTime()) < 60000 // Within last 60 seconds
+						);
+						
+						// Pick the most recently completed one
+						if (recentlyCompleted.length > 0) {
+							primaryRepayment = recentlyCompleted.sort((a, b) => 
+								new Date(b.paidAt!).getTime() - new Date(a.paidAt!).getTime()
+							)[0];
+						}
+					}
+					
+					// If still no match, look for the first PENDING (fallback)
 					if (!primaryRepayment) {
 						primaryRepayment = allRepayments.find(r => r.status === 'PENDING');
 					}
 					
-					// If still no match, fallback to first COMPLETED (shouldn't happen but safety net)
+					// Final fallback: first COMPLETED repayment
 					if (!primaryRepayment) {
 						primaryRepayment = allRepayments.find(r => r.status === 'COMPLETED');
 					}
+					
+					console.log(`🧾 Selected repayment for manual payment receipt: Installment ${primaryRepayment?.installmentNumber || 'N/A'}, status: ${primaryRepayment?.status}, paidAt: ${primaryRepayment?.paidAt}`);
 
 					if (primaryRepayment) {
 						const ReceiptService = await import("../lib/receiptService");
@@ -10183,7 +10254,8 @@ router.post(
 									nextPaymentAmount: nextPayment?.amount?.toFixed(2) || "0.00",
 									nextDueDate: nextPayment ? formatDateForWhatsApp(nextPayment.dueDate) : "N/A",
 									completedPayments: completedPayments.toString(),
-									totalPayments: totalPayments.toString()
+									totalPayments: totalPayments.toString(),
+									receiptUrl: undefined // No receipt URL for wallet transactions
 								});
 
 								if (whatsappResult.success) {
