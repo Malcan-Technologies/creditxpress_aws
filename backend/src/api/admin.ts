@@ -6567,18 +6567,33 @@ router.post(
 						// that matches when this transaction was processed, or the first appropriate status
 						
 						let affectedRepayment = null;
+						const transactionTime = new Date(transaction.processedAt || transaction.createdAt);
+						
+						console.log(`🧾 Transaction processed at: ${transactionTime.toISOString()}`);
 						
 						// First, try to find PARTIAL repayments (ongoing payments)
 						affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+						console.log(`🧾 Found PARTIAL repayment: ${affectedRepayment ? 'Yes' : 'No'}`);
 						
 						// If no PARTIAL found, look for recently COMPLETED repayments
-						// (those completed within the last minute, indicating they were just paid)
+						// Use a more generous time window (5 minutes) and also check against transaction time
 						if (!affectedRepayment) {
-							const recentlyCompleted = allRepayments.filter(r => 
-								r.status === 'COMPLETED' && 
-								r.paidAt && 
-								(new Date().getTime() - new Date(r.paidAt).getTime()) < 60000 // Within last 60 seconds
-							);
+							const now = new Date();
+							const recentlyCompleted = allRepayments.filter(r => {
+								if (r.status !== 'COMPLETED' || !r.paidAt) return false;
+								
+								const paidTime = new Date(r.paidAt);
+								const timeSincePaid = now.getTime() - paidTime.getTime();
+								const timeSinceTransaction = Math.abs(paidTime.getTime() - transactionTime.getTime());
+								
+								// Recently completed (within 5 minutes) OR close to transaction time (within 2 minutes)
+								return timeSincePaid < 300000 || timeSinceTransaction < 120000;
+							});
+							
+							console.log(`🧾 Recently completed repayments found: ${recentlyCompleted.length}`);
+							recentlyCompleted.forEach((r, i) => {
+								console.log(`  ${i + 1}. Installment ${r.installmentNumber}: paidAt ${r.paidAt}`);
+							});
 							
 							// Pick the most recently completed one
 							if (recentlyCompleted.length > 0) {
@@ -6591,11 +6606,22 @@ router.post(
 						// If still no match, look for the first PENDING (fallback)
 						if (!affectedRepayment) {
 							affectedRepayment = allRepayments.find(r => r.status === 'PENDING');
+							console.log(`🧾 Using PENDING fallback: ${affectedRepayment ? 'Yes' : 'No'}`);
 						}
 						
-						// Final fallback: first COMPLETED repayment
+						// Final fallback: most recent COMPLETED repayment
 						if (!affectedRepayment) {
-							affectedRepayment = allRepayments.find(r => r.status === 'COMPLETED');
+							const completedRepayments = allRepayments.filter(r => r.status === 'COMPLETED');
+							if (completedRepayments.length > 0) {
+								// Sort by paidAt descending to get the most recent
+								affectedRepayment = completedRepayments.sort((a, b) => {
+									if (!a.paidAt && !b.paidAt) return 0;
+									if (!a.paidAt) return 1;
+									if (!b.paidAt) return -1;
+									return new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime();
+								})[0];
+							}
+							console.log(`🧾 Using most recent COMPLETED fallback: ${affectedRepayment ? 'Yes' : 'No'}`);
 						}
 						
 						console.log(`🧾 Selected repayment for receipt: Installment ${affectedRepayment?.installmentNumber || 'N/A'}, status: ${affectedRepayment?.status}, paidAt: ${affectedRepayment?.paidAt}`);
@@ -9796,18 +9822,33 @@ router.post(
 					// that matches when this transaction was processed, or the first appropriate status
 					
 					let primaryRepayment = null;
+					const transactionTime = new Date(result.walletTransaction.processedAt || result.walletTransaction.createdAt);
+					
+					console.log(`🧾 Manual payment transaction processed at: ${transactionTime.toISOString()}`);
 					
 					// First, try to find PARTIAL repayments (ongoing payments)
 					primaryRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+					console.log(`🧾 Found PARTIAL repayment: ${primaryRepayment ? 'Yes' : 'No'}`);
 					
 					// If no PARTIAL found, look for recently COMPLETED repayments
-					// (those completed within the last minute, indicating they were just paid)
+					// Use a more generous time window (5 minutes) and also check against transaction time
 					if (!primaryRepayment) {
-						const recentlyCompleted = allRepayments.filter(r => 
-							r.status === 'COMPLETED' && 
-							r.paidAt && 
-							(new Date().getTime() - new Date(r.paidAt).getTime()) < 60000 // Within last 60 seconds
-						);
+						const now = new Date();
+						const recentlyCompleted = allRepayments.filter(r => {
+							if (r.status !== 'COMPLETED' || !r.paidAt) return false;
+							
+							const paidTime = new Date(r.paidAt);
+							const timeSincePaid = now.getTime() - paidTime.getTime();
+							const timeSinceTransaction = Math.abs(paidTime.getTime() - transactionTime.getTime());
+							
+							// Recently completed (within 5 minutes) OR close to transaction time (within 2 minutes)
+							return timeSincePaid < 300000 || timeSinceTransaction < 120000;
+						});
+						
+						console.log(`🧾 Recently completed repayments found: ${recentlyCompleted.length}`);
+						recentlyCompleted.forEach((r, i) => {
+							console.log(`  ${i + 1}. Installment ${r.installmentNumber}: paidAt ${r.paidAt}`);
+						});
 						
 						// Pick the most recently completed one
 						if (recentlyCompleted.length > 0) {
@@ -9820,11 +9861,22 @@ router.post(
 					// If still no match, look for the first PENDING (fallback)
 					if (!primaryRepayment) {
 						primaryRepayment = allRepayments.find(r => r.status === 'PENDING');
+						console.log(`🧾 Using PENDING fallback: ${primaryRepayment ? 'Yes' : 'No'}`);
 					}
 					
-					// Final fallback: first COMPLETED repayment
+					// Final fallback: most recent COMPLETED repayment
 					if (!primaryRepayment) {
-						primaryRepayment = allRepayments.find(r => r.status === 'COMPLETED');
+						const completedRepayments = allRepayments.filter(r => r.status === 'COMPLETED');
+						if (completedRepayments.length > 0) {
+							// Sort by paidAt descending to get the most recent
+							primaryRepayment = completedRepayments.sort((a, b) => {
+								if (!a.paidAt && !b.paidAt) return 0;
+								if (!a.paidAt) return 1;
+								if (!b.paidAt) return -1;
+								return new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime();
+							})[0];
+						}
+						console.log(`🧾 Using most recent COMPLETED fallback: ${primaryRepayment ? 'Yes' : 'No'}`);
 					}
 					
 					console.log(`🧾 Selected repayment for manual payment receipt: Installment ${primaryRepayment?.installmentNumber || 'N/A'}, status: ${primaryRepayment?.status}, paidAt: ${primaryRepayment?.paidAt}`);

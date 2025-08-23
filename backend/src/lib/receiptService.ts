@@ -61,25 +61,39 @@ export class ReceiptService {
     const currentYear = new Date().getFullYear();
     const prefix = `RCP-${currentYear}-`;
     
-    // Find the highest receipt number for current year
-    const lastReceipt = await prisma.paymentReceipt.findFirst({
+    // Find all receipts for current year and get the highest numeric value
+    const receiptsThisYear = await prisma.paymentReceipt.findMany({
       where: {
         receiptNumber: {
           startsWith: prefix,
         },
       },
-      orderBy: {
-        receiptNumber: 'desc',
+      select: {
+        receiptNumber: true,
       },
     });
 
     let nextNumber = 1;
-    if (lastReceipt) {
-      const lastNumber = parseInt(lastReceipt.receiptNumber.replace(prefix, ''));
-      nextNumber = lastNumber + 1;
+    if (receiptsThisYear.length > 0) {
+      // Extract numeric parts and find the maximum
+      const numbers = receiptsThisYear
+        .map(receipt => {
+          const numericPart = receipt.receiptNumber.replace(prefix, '');
+          const parsed = parseInt(numericPart);
+          return isNaN(parsed) ? 0 : parsed;
+        })
+        .filter(num => num > 0);
+      
+      if (numbers.length > 0) {
+        nextNumber = Math.max(...numbers) + 1;
+      }
     }
 
-    return `${prefix}${nextNumber.toString().padStart(3, '0')}`;
+    // Dynamic padding: use at least 3 digits, but expand as needed
+    const minDigits = 3;
+    const requiredDigits = Math.max(minDigits, nextNumber.toString().length);
+    
+    return `${prefix}${nextNumber.toString().padStart(requiredDigits, '0')}`;
   }
 
   /**
