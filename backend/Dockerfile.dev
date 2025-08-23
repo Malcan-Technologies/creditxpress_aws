@@ -3,16 +3,19 @@ FROM node:20-bullseye-slim
 WORKDIR /app
 
 # Install dependencies (removed cron as we use node-cron)
+# Added fontconfig and fonts-dejavu for ReactPDF font support
 RUN apt-get update && apt-get install -y \
     openssl \
     python3 \
     make \
     g++ \
     curl \
+    fontconfig \
+    fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
-# Create uploads directory
-RUN mkdir -p uploads
+# Create uploads and receipts directories
+RUN mkdir -p uploads receipts
 
 # Copy package files
 COPY package.json ./

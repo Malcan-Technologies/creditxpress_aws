@@ -11,6 +11,7 @@ import {
 	TrashIcon,
 	PencilIcon,
 	StarIcon,
+	BuildingOfficeIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 
@@ -56,6 +57,21 @@ interface ApiResponse<T = any> {
 	message: string;
 }
 
+interface CompanySettings {
+	id?: string;
+	companyName: string;
+	companyAddress: string;
+	companyRegNo?: string;
+	contactPhone?: string;
+	contactEmail?: string;
+	footerNote?: string;
+	taxLabel: string;
+	companyLogo?: string;
+	isActive?: boolean;
+	createdAt?: string;
+	updatedAt?: string;
+}
+
 function SettingsPageContent() {
 	// Tab state
 	const [activeTab, setActiveTab] = useState("system");
@@ -85,12 +101,28 @@ function SettingsPageContent() {
 	const [manualTriggerLoading, setManualTriggerLoading] = useState(false);
 	const [manualTriggerResult, setManualTriggerResult] = useState<any>(null);
 
+	// Company settings state
+	const [companySettings, setCompanySettings] = useState<CompanySettings>({
+		companyName: "Kredit.my",
+		companyAddress: "Kuala Lumpur, Malaysia",
+		companyRegNo: "",
+		contactPhone: "",
+		contactEmail: "",
+		footerNote: "",
+		taxLabel: "SST 6%",
+		companyLogo: "",
+	});
+	const [companySettingsLoading, setCompanySettingsLoading] = useState(false);
+	const [companySettingsSaving, setCompanySettingsSaving] = useState(false);
+
 	// Load data on component mount and tab change
 	useEffect(() => {
 		if (activeTab === "system") {
 			loadSettings();
 		} else if (activeTab === "bank-accounts") {
 			loadBankAccounts();
+		} else if (activeTab === "company-settings") {
+			loadCompanySettings();
 		}
 	}, [activeTab]);
 
@@ -116,6 +148,63 @@ function SettingsPageContent() {
 			setBankAccounts([]); // Set empty array on error
 		} finally {
 			setBankAccountsLoading(false);
+		}
+	};
+
+	// Load company settings
+	const loadCompanySettings = async () => {
+		try {
+			setCompanySettingsLoading(true);
+			setError(null);
+
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/admin/company-settings`, {
+				method: "GET",
+			}) as ApiResponse<CompanySettings>;
+
+			if (response.success && response.data) {
+				setCompanySettings(response.data);
+			} else {
+				// If no settings exist, keep default values
+				console.log("No company settings found, using defaults");
+			}
+		} catch (err) {
+			console.error("Error loading company settings:", err);
+			setError(err instanceof Error ? err.message : "Failed to load company settings");
+		} finally {
+			setCompanySettingsLoading(false);
+		}
+	};
+
+	// Save company settings
+	const saveCompanySettings = async () => {
+		try {
+			setCompanySettingsSaving(true);
+			setError(null);
+
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+			const response = await fetchWithAdminTokenRefresh(`${backendUrl}/api/admin/company-settings`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(companySettings),
+			}) as ApiResponse<CompanySettings>;
+
+			if (response.success) {
+				if (response.data) {
+					setCompanySettings(response.data);
+				}
+				// Show success message (you might want to add a success state)
+				console.log("Company settings saved successfully");
+			} else {
+				throw new Error(response.message || "Failed to save company settings");
+			}
+		} catch (err) {
+			console.error("Error saving company settings:", err);
+			setError(err instanceof Error ? err.message : "Failed to save company settings");
+		} finally {
+			setCompanySettingsSaving(false);
 		}
 	};
 
@@ -628,6 +717,12 @@ function SettingsPageContent() {
 			description: "Manage company bank accounts for payments and transfers",
 		},
 		{
+			id: "company-settings",
+			label: "Company Settings",
+			icon: BuildingOfficeIcon,
+			description: "Configure company information for receipts and documents",
+		},
+		{
 			id: "notifications",
 			label: "Notifications",
 			icon: BellIcon,
@@ -635,12 +730,269 @@ function SettingsPageContent() {
 		},
 	];
 
+	// Render company settings
+	const renderCompanySettings = () => {
+		if (companySettingsLoading) {
+			return (
+				<div className="flex items-center justify-center min-h-[400px]">
+					<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+				</div>
+			);
+		}
+
+		return (
+			<div className="space-y-6">
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-6">
+					<div className="flex items-center justify-between mb-6">
+						<div>
+							<h3 className="text-lg font-medium text-white mb-2">Company Information</h3>
+							<p className="text-gray-400 text-sm">
+								Configure company details that will appear on payment receipts and documents.
+							</p>
+						</div>
+						<button
+							onClick={saveCompanySettings}
+							disabled={companySettingsSaving}
+							className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors"
+						>
+							{companySettingsSaving ? "Saving..." : "Save Settings"}
+						</button>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						{/* Company Name */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								Company Name *
+							</label>
+							<input
+								type="text"
+								value={companySettings.companyName}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, companyName: e.target.value }))}
+								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="Enter company name"
+							/>
+						</div>
+
+						{/* Company Address */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								Company Address *
+							</label>
+							<input
+								type="text"
+								value={companySettings.companyAddress}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, companyAddress: e.target.value }))}
+								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="Enter company address"
+							/>
+						</div>
+
+						{/* Registration Number */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								Registration Number
+							</label>
+							<input
+								type="text"
+								value={companySettings.companyRegNo || ""}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, companyRegNo: e.target.value }))}
+								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="Enter registration number"
+							/>
+						</div>
+
+						{/* Contact Phone */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								Contact Phone
+							</label>
+							<input
+								type="text"
+								value={companySettings.contactPhone || ""}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, contactPhone: e.target.value }))}
+								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="Enter contact phone"
+							/>
+						</div>
+
+						{/* Contact Email */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								Contact Email
+							</label>
+							<input
+								type="email"
+								value={companySettings.contactEmail || ""}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, contactEmail: e.target.value }))}
+								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="Enter contact email"
+							/>
+						</div>
+
+						{/* Tax Label */}
+						<div>
+							<label className="block text-sm font-medium text-gray-300 mb-2">
+								Tax Label *
+							</label>
+							<input
+								type="text"
+								value={companySettings.taxLabel}
+								onChange={(e) => setCompanySettings(prev => ({ ...prev, taxLabel: e.target.value }))}
+								className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+								placeholder="e.g., SST 6%, GST 6%"
+							/>
+						</div>
+					</div>
+
+					{/* Footer Note */}
+					<div className="mt-6">
+						<label className="block text-sm font-medium text-gray-300 mb-2">
+							Receipt Footer Note
+						</label>
+						<textarea
+							value={companySettings.footerNote || ""}
+							onChange={(e) => setCompanySettings(prev => ({ ...prev, footerNote: e.target.value }))}
+							rows={3}
+							className="w-full px-3 py-2 bg-gray-800/50 border border-gray-700/30 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none"
+							placeholder="Enter footer note that will appear on receipts (optional)"
+						/>
+					</div>
+
+
+				</div>
+
+				{/* Preview Section */}
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-6">
+					<h3 className="text-lg font-medium text-white mb-4">Receipt Preview</h3>
+					<div className="bg-white p-5 rounded-lg text-black max-w-md text-xs">
+						{/* Header */}
+						<div className="border-b border-purple-600 pb-2 mb-3 flex items-center">
+							<div className="flex-1">
+								<h2 className="text-lg font-bold text-purple-600">{companySettings.companyName}</h2>
+								<p className="text-xs text-gray-600">{companySettings.companyAddress}</p>
+								{companySettings.companyRegNo && (
+									<p className="text-xs text-gray-600">Registration No: {companySettings.companyRegNo}</p>
+								)}
+								{companySettings.contactPhone && (
+									<p className="text-xs text-gray-600">Phone: {companySettings.contactPhone}</p>
+								)}
+								{companySettings.contactEmail && (
+									<p className="text-xs text-gray-600">Email: {companySettings.contactEmail}</p>
+								)}
+							</div>
+						</div>
+
+						{/* Receipt Title */}
+						<h3 className="text-base font-bold text-center mb-3 text-gray-800">PAYMENT RECEIPT</h3>
+
+						{/* Receipt Information */}
+						<div className="bg-gray-50 p-2 rounded mb-3 flex justify-between">
+							<div className="flex-1">
+								<p className="text-xs text-gray-600 mb-1">Receipt Number</p>
+								<p className="text-xs font-bold text-gray-800 mb-2">RCP-2025-001</p>
+								<p className="text-xs text-gray-600 mb-1">Receipt Date</p>
+								<p className="text-xs font-bold text-gray-800">{new Date().toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+							</div>
+							<div className="flex-1">
+								<p className="text-xs text-gray-600 mb-1">Loan ID</p>
+								<p className="text-xs font-bold text-gray-800">cmemg7ph</p>
+							</div>
+						</div>
+
+						{/* Customer Information */}
+						<div className="mb-4">
+							<h4 className="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">Customer Information</h4>
+							<div className="bg-gray-50 p-3 rounded">
+								<div className="flex mb-1">
+									<span className="text-xs text-gray-600 w-16">Name:</span>
+									<span className="text-xs text-gray-800 flex-1">John Doe</span>
+								</div>
+								<div className="flex mb-1">
+									<span className="text-xs text-gray-600 w-16">Email:</span>
+									<span className="text-xs text-gray-800 flex-1">john@example.com</span>
+								</div>
+								<div className="flex">
+									<span className="text-xs text-gray-600 w-16">Phone:</span>
+									<span className="text-xs text-gray-800 flex-1">+60123456789</span>
+								</div>
+							</div>
+						</div>
+
+						{/* Payment Details */}
+						<div className="mb-4">
+							<h4 className="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">Payment Details</h4>
+							<div className="bg-gray-50 p-3 rounded">
+								<div className="flex justify-between mb-2">
+									<span className="text-xs text-gray-600">Installment 3 / 12</span>
+									<span className="text-xs font-bold text-gray-800">Due: 15 January 2025</span>
+								</div>
+								<div className="flex justify-between mb-2">
+									<span className="text-xs text-gray-600">Payment Method:</span>
+									<span className="text-xs font-bold text-gray-800">Online Payment</span>
+								</div>
+								<div className="flex justify-between mb-2">
+									<span className="text-xs text-gray-600">Reference:</span>
+									<span className="text-xs font-bold text-gray-800">TXN123456</span>
+								</div>
+
+								{/* Payment Breakdown */}
+								<div className="flex justify-between mb-2">
+									<span className="text-xs text-gray-600">Loan Payment:</span>
+									<span className="text-xs font-bold text-gray-800">RM 950.00</span>
+								</div>
+								<div className="flex justify-between mb-2">
+									<span className="text-xs text-gray-600">Late Fees:</span>
+									<span className="text-xs font-bold text-gray-800">RM 0.00</span>
+								</div>
+
+								<div className="flex justify-between font-bold border-t border-purple-600 pt-1 mt-2">
+									<span className="text-xs text-gray-700">Total Amount Paid</span>
+									<span className="text-xs text-gray-800">RM 950.00</span>
+								</div>
+
+								{/* Transaction Timestamps - More subtle with extra spacing */}
+								<div className="flex justify-between mb-1 mt-4">
+									<span className="text-xs text-gray-400">Payment Date:</span>
+									<span className="text-xs text-gray-500">{new Date().toLocaleString('en-MY', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' })}</span>
+								</div>
+								<div className="flex justify-between">
+									<span className="text-xs text-gray-400">Payment Processed:</span>
+									<span className="text-xs text-gray-500">{new Date().toLocaleString('en-MY', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kuala_Lumpur' })}</span>
+								</div>
+							</div>
+						</div>
+
+						{/* Footer */}
+						<div className="text-center pt-3 border-t border-gray-200">
+							<p className="text-xs font-bold text-purple-600 mb-2">Thank you for your payment!</p>
+							{companySettings.footerNote && (
+								<p className="text-xs text-gray-600 mb-2">{companySettings.footerNote}</p>
+							)}
+							<p className="text-xs text-gray-500">This is a computer-generated receipt and does not require a signature.</p>
+							{(companySettings.contactPhone || companySettings.contactEmail) && (
+								<p className="text-xs text-gray-500 mt-1">
+									For inquiries, please contact us at{' '}
+									{companySettings.contactPhone && `${companySettings.contactPhone}`}
+									{companySettings.contactPhone && companySettings.contactEmail && ' or '}
+									{companySettings.contactEmail && `${companySettings.contactEmail}`}
+								</p>
+							)}
+						</div>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
 	const renderTabContent = () => {
 		switch (activeTab) {
 			case "system":
 				return renderSystemSettings();
 			case "bank-accounts":
 				return renderBankAccounts();
+			case "company-settings":
+				return renderCompanySettings();
 			case "notifications":
 				return renderNotifications();
 			default:

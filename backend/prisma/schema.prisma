@@ -177,6 +177,7 @@ model LoanRepayment {
   loan              Loan            @relation(fields: [loanId], references: [id])
   parentRepayment   LoanRepayment?  @relation("PartialPayments", fields: [parentRepaymentId], references: [id])
   partialPayments   LoanRepayment[] @relation("PartialPayments")
+  receipts          PaymentReceipt[] // Changed from single receipt to multiple receipts
 
   @@index([installmentNumber])
   @@index([paymentType])
@@ -519,4 +520,43 @@ model NotificationLog {
   @@index([createdAt])
   @@index([notificationType])
   @@map("notification_logs")
+}
+
+/// Payment receipts generated for loan repayments
+model PaymentReceipt {
+  id            String        @id @default(cuid())
+  repaymentId   String        // Removed @unique to allow multiple receipts per repayment
+  receiptNumber String        @unique // Sequential receipt number (e.g., "RCP-2024-001")
+  filePath      String        // Path to the generated PDF file
+  fileUrl       String?       // Optional URL for accessing the receipt
+  generatedBy   String        // Admin user who approved the payment
+  generatedAt   DateTime      @default(now())
+  metadata      Json?         // Additional receipt data (company info at time of generation)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  repayment     LoanRepayment @relation(fields: [repaymentId], references: [id], onDelete: Cascade)
+
+  @@index([receiptNumber])
+  @@index([generatedAt])
+  @@index([repaymentId])
+  @@map("payment_receipts")
+}
+
+/// Company settings for receipt generation
+model CompanySettings {
+  id            String   @id @default(cuid())
+  companyName   String   @default("Kredit.my")
+  companyAddress String  @default("Kuala Lumpur, Malaysia")
+  companyRegNo  String?  // Company registration number
+  contactPhone  String?  // Contact phone number
+  contactEmail  String?  // Contact email
+  footerNote    String?  // Footer note for receipts
+  taxLabel      String   @default("SST 6%") // Tax label (e.g., "SST 6%", "GST 6%")
+  companyLogo   String?  // Path to company logo file
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?  // Admin user who created/updated settings
+  
+  @@map("company_settings")
 }

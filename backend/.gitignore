@@ -43,3 +43,5 @@ next-env.d.ts
 # uploads - ignore files but keep directory structure
 uploads/*
 !uploads/.gitkeep
+receipts/*
+!receipts/.gitkeep

@@ -111,6 +111,13 @@ interface Loan {
 		lateFeeAmount?: number | null;
 		lateFeesPaid?: number | null;
 		principalPaid?: number | null;
+		receipts?: {
+			id: string;
+			receiptNumber: string;
+			filePath: string;
+			generatedBy: string;
+			generatedAt: string;
+		}[];
 	}>;
 }
 
@@ -126,6 +133,14 @@ interface LoanRepayment {
 	actualAmount?: number | null;
 	paymentType?: string | null;
 	installmentNumber?: number | null;
+	// Receipt information - supports multiple receipts
+	receipts?: {
+		id: string;
+		receiptNumber: string;
+		filePath: string;
+		generatedBy: string;
+		generatedAt: string;
+	}[];
 }
 
 interface WalletTransaction {
@@ -745,6 +760,41 @@ function LoansPageContent() {
 			return `RM ${(amount / 1000).toFixed(0)}k`;
 		} else {
 			return `RM ${amount.toFixed(0)}`;
+		}
+	};
+
+	const downloadReceipt = async (loanId: string, receiptId: string, receiptNumber: string) => {
+		try {
+			// Use direct fetch to backend with proper token handling
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+			const response = await fetch(`${backendUrl}/api/loans/${loanId}/receipts/${receiptId}/download`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${TokenStorage.getAccessToken()}`,
+				},
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to download receipt');
+			}
+
+			// Create blob from response
+			const blob = await response.blob();
+			
+			// Create download link
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `${receiptNumber}.pdf`;
+			document.body.appendChild(link);
+			link.click();
+			
+			// Cleanup
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('Error downloading receipt:', error);
+			alert('Failed to download receipt. Please try again.');
 		}
 	};
 
@@ -2435,6 +2485,7 @@ function LoansPageContent() {
 																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
 																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
 																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cleared Date</th>
+																								<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt</th>
 																							</tr>
 																						</thead>
 																						<tbody className="bg-white divide-y divide-gray-200">
@@ -2616,6 +2667,28 @@ function LoansPageContent() {
 																													</div>
 																												) : (
 																													<span className="text-gray-400">-</span>
+																												)}
+																											</td>
+																											{/* Receipt Column */}
+																											<td className="px-4 py-3 text-sm text-gray-700">
+																												{(repayment.status === "COMPLETED" || repayment.status === "PARTIAL") && repayment.receipts && repayment.receipts.length > 0 ? (
+																													<div className="flex flex-wrap items-center gap-1">
+																														{repayment.receipts.map((receipt) => (
+																															<button
+																																key={receipt.id}
+																																onClick={() => downloadReceipt(loan.id, receipt.id, receipt.receiptNumber)}
+																																className="flex items-center px-2 py-1 bg-green-100 text-green-700 rounded border border-green-200 hover:bg-green-200 transition-colors text-xs font-medium"
+																																title={`Download receipt ${receipt.receiptNumber}`}
+																															>
+																																<svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																																</svg>
+																																{receipt.receiptNumber}
+																															</button>
+																														))}
+																													</div>
+																												) : (
+																													<span className="text-gray-500">-</span>
 																												)}
 																											</td>
 																										</tr>

@@ -7,6 +7,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "moduleResolution": "node",
+    "jsx": "react-jsx",
     "removeComments": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -27,5 +28,5 @@
     }
   },
   "exclude": ["node_modules", "dist", "**/*.missing.ts"],
-  "include": ["./src/**/*.ts", "./prisma/**/*.ts", "./lib/**/*.ts"]
+  "include": ["./src/**/*.ts", "./src/**/*.tsx", "./prisma/**/*.ts", "./lib/**/*.ts"]
 } 

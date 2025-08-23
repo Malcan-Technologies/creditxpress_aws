@@ -20,6 +20,7 @@ import {
 	CalendarDaysIcon,
 	CurrencyDollarIcon,
 	DocumentArrowDownIcon,
+	ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -54,6 +55,14 @@ interface LoanRepayment {
 	lateFeeAmount?: number; // Total late fees assessed for this repayment
 	lateFeesPaid?: number; // Total late fees paid for this repayment
 	principalPaid?: number; // Principal amount paid for this repayment
+	// Receipt information - now supports multiple receipts
+	receipts?: {
+		id: string;
+		receiptNumber: string;
+		filePath: string;
+		generatedBy: string;
+		generatedAt: string;
+	}[];
 }
 
 interface WalletTransaction {
@@ -788,6 +797,39 @@ function ActiveLoansContent() {
 			hour: "2-digit",
 			minute: "2-digit",
 		});
+	};
+
+	const downloadReceipt = async (receiptId: string, receiptNumber: string) => {
+		try {
+			// Use fetch directly for binary downloads instead of fetchWithAdminTokenRefresh
+			const token = localStorage.getItem("adminToken");
+			const response = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001"}/api/admin/receipts/${receiptId}/download`,
+				{
+					method: 'GET',
+					headers: {
+						"Authorization": `Bearer ${token}`,
+					},
+				}
+			);
+
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `${receiptNumber}.pdf`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('Error downloading receipt:', error);
+			alert('Failed to download receipt');
+		}
 	};
 
 	const getOrdinalSuffix = (num: number) => {
@@ -2918,6 +2960,9 @@ function ActiveLoansContent() {
 																		Cleared
 																		Date
 																	</th>
+																	<th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+																		Receipt
+																	</th>
 																</tr>
 															</thead>
 															<tbody className="divide-y divide-gray-700/30">
@@ -3266,6 +3311,26 @@ function ActiveLoansContent() {
 																								-
 																							</span>
 																						)}
+																					</td>
+																					{/* Receipt Column */}
+																					<td className="px-4 py-3 text-sm text-gray-300">
+																						{(repayment.status === "COMPLETED" || repayment.status === "PARTIAL") && repayment.receipts && repayment.receipts.length > 0 ? (
+																							<div className="flex flex-wrap items-center gap-1">
+																								{repayment.receipts.map((receipt, index) => (
+																									<button
+																										key={receipt.id}
+																										onClick={() => downloadReceipt(receipt.id, receipt.receiptNumber)}
+																										className="flex items-center px-2 py-1 bg-green-500/20 text-green-200 rounded border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+																										title={`Download receipt ${receipt.receiptNumber}`}
+																									>
+																										<ReceiptPercentIcon className="h-3 w-3 mr-1" />
+																										{receipt.receiptNumber}
+																									</button>
+																								))}
+																							</div>
+																						                            ) : (
+                                <span className="text-gray-500">-</span>
+                            )}
 																					</td>
 																				</tr>
 																			);

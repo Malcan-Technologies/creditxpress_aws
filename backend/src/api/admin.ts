@@ -11,8 +11,11 @@ import multer from "multer";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import lateFeeRoutes from "./admin/late-fees";
+import companySettingsRoutes from "./companySettings";
+import receiptsRoutes from "./receipts";
 import whatsappService from "../lib/whatsappService";
 import { processCSVFile } from "../lib/csvProcessor";
+import ReceiptService from "../lib/receiptService";
 
 import { CronScheduler } from "../lib/cronScheduler";
 import { TimeUtils } from "../lib/precisionUtils";
@@ -80,6 +83,8 @@ const prisma = new PrismaClient();
 
 // Register sub-routes
 router.use("/late-fees", lateFeeRoutes);
+router.use("/company-settings", companySettingsRoutes);
+router.use("/receipts", receiptsRoutes);
 
 // Helper function to create a loan disbursement record
 async function createLoanDisbursementRecord(
@@ -6081,6 +6086,9 @@ router.get(
 						},
 					},
 					repayments: {
+						include: {
+							receipts: true,
+						},
 						orderBy: {
 							dueDate: "asc",
 						},
@@ -6122,6 +6130,9 @@ router.get(
 							},
 						},
 						repayments: {
+							include: {
+								receipts: true,
+							},
 							orderBy: {
 								dueDate: "asc",
 							},
@@ -6607,6 +6618,68 @@ router.post(
 				} catch (whatsappError) {
 					console.error("Error sending WhatsApp payment approval notification:", whatsappError);
 				}
+			}
+
+			// Generate receipt for this payment transaction
+			try {
+				if (result.scheduleUpdate && transaction.loanId) {
+					// Check if receipt already exists for this specific transaction
+					const existingReceipt = await prisma.paymentReceipt.findFirst({
+						where: {
+							metadata: {
+								path: ['transactionId'],
+								equals: transaction.id
+							}
+						}
+					});
+
+					if (!existingReceipt) {
+						// Find the repayment that was just affected by this payment
+						// Get all repayments to debug which one should be used
+						const allRepayments = await prisma.loanRepayment.findMany({
+							where: { loanId: transaction.loanId },
+							orderBy: { dueDate: 'asc' }
+						});
+						
+						console.log(`🧾 Receipt generation - All repayments for loan ${transaction.loanId}:`);
+						allRepayments.forEach((r, i) => {
+							console.log(`  ${i + 1}. Installment ${r.installmentNumber || 'N/A'}: ${r.status}, actualAmount: ${r.actualAmount || 0}, amount: ${r.amount}`);
+						});
+
+						// Find the repayment that is currently being paid (not fully completed yet)
+						// This is either the first PARTIAL repayment or the first PENDING repayment
+						let affectedRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+						
+						// If no PARTIAL found, look for the first PENDING (in case payment fully completed it)
+						if (!affectedRepayment) {
+							affectedRepayment = allRepayments.find(r => r.status === 'PENDING');
+						}
+						
+						// If still no match, fallback to first COMPLETED (shouldn't happen but safety net)
+						if (!affectedRepayment) {
+							affectedRepayment = allRepayments.find(r => r.status === 'COMPLETED');
+						}
+						
+						console.log(`🧾 Selected repayment for receipt: Installment ${affectedRepayment?.installmentNumber || 'N/A'}, status: ${affectedRepayment?.status}`);
+
+						if (affectedRepayment) {
+							const receiptResult = await ReceiptService.generateReceipt({
+								repaymentId: affectedRepayment.id,
+								generatedBy: adminUserId || 'admin',
+								paymentMethod: (transaction.metadata as any)?.paymentMethod || 'Online Payment',
+								reference: transaction.reference || transaction.id,
+								actualPaymentAmount: transaction.amount,
+								transactionId: transaction.id // Add transaction ID to prevent duplicates
+							});
+							
+							console.log(`Receipt generated for transaction ${transaction.id}: ${receiptResult.receiptNumber}`);
+						}
+					} else {
+						console.log(`Receipt already exists for transaction ${transaction.id}`);
+					}
+				}
+			} catch (receiptError) {
+				console.error("Error in receipt generation process:", receiptError);
 			}
 
 			return res.json({
@@ -9647,6 +9720,61 @@ router.post(
 			} catch (whatsappError) {
 				console.error("Error sending WhatsApp payment notification:", whatsappError);
 				// Don't fail the entire operation if WhatsApp fails
+			}
+
+			// Generate receipt for manual payment
+			try {
+				// Check if receipt already exists for this transaction
+				const existingReceipt = await prisma.paymentReceipt.findFirst({
+					where: {
+						metadata: {
+							path: ['transactionId'],
+							equals: result.walletTransaction.id
+						}
+					}
+				});
+
+				if (!existingReceipt) {
+					// Find the repayment that corresponds to this specific transaction
+					// Get all repayments for this loan and find the one that should receive this payment
+					const allRepayments = await prisma.loanRepayment.findMany({
+						where: {
+							loanId: loanId
+						},
+						orderBy: { dueDate: 'asc' }
+					});
+
+					// Find the repayment that is currently being paid (not fully completed yet)
+					// This is either the first PARTIAL repayment or the first PENDING repayment
+					let primaryRepayment = allRepayments.find(r => r.status === 'PARTIAL');
+					
+					// If no PARTIAL found, look for the first PENDING (in case payment fully completed it)
+					if (!primaryRepayment) {
+						primaryRepayment = allRepayments.find(r => r.status === 'PENDING');
+					}
+					
+					// If still no match, fallback to first COMPLETED (shouldn't happen but safety net)
+					if (!primaryRepayment) {
+						primaryRepayment = allRepayments.find(r => r.status === 'COMPLETED');
+					}
+
+					if (primaryRepayment) {
+						const ReceiptService = await import("../lib/receiptService");
+						const receiptResult = await ReceiptService.default.generateReceipt({
+							repaymentId: primaryRepayment.id,
+							generatedBy: adminUserId || 'admin',
+							paymentMethod: paymentMethod,
+							reference: reference,
+							actualPaymentAmount: amount,
+							transactionId: result.walletTransaction.id
+						});
+						
+						console.log(`Receipt generated for manual payment ${result.walletTransaction.id}: ${receiptResult.receiptNumber}`);
+					}
+				}
+			} catch (receiptError) {
+				console.error("Error generating receipt for manual payment:", receiptError);
+				// Don't fail the payment if receipt generation fails
 			}
 
 			console.log(`Manual payment created successfully: ${result.walletTransaction.id} for loan ${loanId}, amount: RM ${amount}`);

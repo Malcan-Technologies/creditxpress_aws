@@ -1,7 +1,8 @@
 FROM node:20-alpine AS base
 
 # Install system dependencies (removed cron as we use node-cron)
-RUN apk add --no-cache openssl python3 make g++ jq wget
+# Added fontconfig and ttf-dejavu for ReactPDF font support
+RUN apk add --no-cache openssl python3 make g++ jq wget fontconfig ttf-dejavu
 
 WORKDIR /app
 
@@ -60,8 +61,9 @@ COPY --from=builder /app/dist ./dist
 COPY scripts ./scripts/
 RUN chmod +x ./scripts/*.sh ./scripts/*.js
 
-# Create uploads directory with proper permissions
+# Create uploads and receipts directories with proper permissions
 RUN mkdir -p uploads && chmod 777 uploads
+RUN mkdir -p receipts && chmod 777 receipts
 
 # Verify Prisma client in production container
 RUN node scripts/verify-prisma-client.js

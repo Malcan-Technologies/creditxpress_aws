@@ -501,6 +501,17 @@ router.get(
 				where: {
 					loanId: id,
 				},
+				include: {
+					receipts: {
+						select: {
+							id: true,
+							receiptNumber: true,
+							filePath: true,
+							generatedBy: true,
+							generatedAt: true,
+						},
+					},
+				},
 				orderBy: {
 					createdAt: "desc",
 				},
@@ -512,6 +523,88 @@ router.get(
 			console.error("Error fetching loan repayments:", error);
 			res.status(500).json({ error: "Internal server error" });
 			return;
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/loans/{loanId}/receipts/{receiptId}/download:
+ *   get:
+ *     summary: Download receipt PDF for a loan repayment
+ *     tags: [Loans]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: loanId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Loan ID
+ *       - in: path
+ *         name: receiptId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Receipt ID
+ *     responses:
+ *       200:
+ *         description: Receipt PDF file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Receipt not found or access denied
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/:loanId/receipts/:receiptId/download",
+	authenticateAndVerifyPhone,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user!.userId;
+			const { loanId, receiptId } = req.params;
+
+			// First verify the loan belongs to the user
+			const loan = await prisma.loan.findFirst({
+				where: {
+					id: loanId,
+					userId: userId,
+				},
+			});
+
+			if (!loan) {
+				return res.status(404).json({ error: "Loan not found" });
+			}
+
+			// Get the receipt and verify it belongs to this loan
+			const receipt = await prisma.paymentReceipt.findFirst({
+				where: {
+					id: receiptId,
+					repayment: {
+						loanId: loanId,
+					},
+				},
+			});
+
+			if (!receipt) {
+				return res.status(404).json({ error: "Receipt not found" });
+			}
+
+			// Import the receipt service dynamically
+			const ReceiptService = await import("../lib/receiptService");
+			const buffer = await ReceiptService.default.getReceiptBuffer(receiptId);
+
+			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="${receipt.receiptNumber}.pdf"`);
+			return res.send(buffer);
+		} catch (error) {
+			console.error("Error downloading receipt:", error);
+			return res.status(500).json({ error: "Internal server error" });
 		}
 	}
 );

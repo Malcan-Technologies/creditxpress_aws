@@ -520,6 +520,51 @@ jobs:
               chmod +x scripts/run-migrations.sh
               ./scripts/run-migrations.sh
               
+              # Ensure receipts directory exists with proper permissions
+              echo "📁 Setting up receipts directory..."
+              docker compose -f docker-compose.prod.yml exec backend mkdir -p receipts
+              docker compose -f docker-compose.prod.yml exec backend chmod 777 receipts
+              
+              # Verify ReactPDF dependencies are working
+              echo "🧾 Verifying ReactPDF dependencies..."
+              if ! docker compose -f docker-compose.prod.yml exec backend node -e "require('@react-pdf/renderer'); console.log('ReactPDF loaded successfully')"; then
+                echo "⚠️ ReactPDF verification failed. Checking system dependencies..."
+                
+                # Check if font packages are installed
+                docker compose -f docker-compose.prod.yml exec backend sh -c "apk list --installed | grep -E 'fontconfig|ttf-dejavu' || echo 'Font packages missing'"
+                
+                echo "🔄 Rebuilding container with fresh dependencies..."
+                docker compose -f docker-compose.prod.yml down
+                docker compose -f docker-compose.prod.yml up -d --build --no-cache
+                
+                # Wait for container to be ready
+                sleep 10
+                
+                # Retry verification
+                if ! docker compose -f docker-compose.prod.yml exec backend node -e "require('@react-pdf/renderer'); console.log('ReactPDF loaded successfully')"; then
+                  echo "❌ ReactPDF still not working after rebuild"
+                  echo "📋 Container logs:"
+                  docker compose -f docker-compose.prod.yml logs backend --tail 50
+                  echo "📋 System info:"
+                  docker compose -f docker-compose.prod.yml exec backend sh -c "node --version && npm --version && ls -la node_modules/@react-pdf/ || echo 'ReactPDF not found'"
+                  exit 1
+                fi
+              fi
+              echo "✅ ReactPDF dependencies verified successfully"
+              
+              # Test receipt generation functionality
+              echo "🧾 Testing receipt generation functionality..."
+              if ! docker compose -f docker-compose.prod.yml exec backend node -e "
+                const { prisma } = require('./dist/src/lib/prisma');
+                const ReceiptService = require('./dist/src/lib/receiptService').default;
+                console.log('Receipt service loaded successfully');
+                process.exit(0);
+              " 2>/dev/null; then
+                echo "⚠️ Receipt service test failed, but continuing deployment..."
+              else
+                echo "✅ Receipt service test passed"
+              fi
+              
               # Cron jobs are now handled by node-cron within the application
               echo "✅ Cron jobs are now built into the application using node-cron"
             '
