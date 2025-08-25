@@ -9754,34 +9754,7 @@ router.post(
 				};
 			});
 
-			// Send WhatsApp notification for payment approval if phone number available
-			try {
-				if (loan.user.phoneNumber && loan.user.fullName) {
-					const whatsappService = await import("../lib/whatsappService");
-					const whatsappResult = await whatsappService.default.sendPaymentApprovedNotification({
-						to: loan.user.phoneNumber,
-						fullName: loan.user.fullName,
-						paymentAmount: amount.toFixed(2),
-						loanName: loan.application.product.name,
-						nextPaymentAmount: "0.00", // Will be calculated separately if needed
-						nextDueDate: "TBD", // Will be calculated separately if needed  
-						completedPayments: "N/A", // Will be calculated separately if needed
-						totalPayments: "N/A", // Will be calculated separately if needed
-						receiptUrl: undefined // No receipt URL for manual payments
-					});
-					
-					if (whatsappResult.success) {
-						console.log(`WhatsApp payment notification sent to ${loan.user.phoneNumber}. Message ID: ${whatsappResult.messageId}`);
-					} else {
-						console.error(`Failed to send WhatsApp payment notification: ${whatsappResult.error}`);
-					}
-				}
-			} catch (whatsappError) {
-				console.error("Error sending WhatsApp payment notification:", whatsappError);
-				// Don't fail the entire operation if WhatsApp fails
-			}
-
-			// Generate receipt for manual payment
+			// Generate receipt for manual payment first
 			try {
 				// Check if receipt already exists for this transaction
 				const existingReceipt = await prisma.paymentReceipt.findFirst({
@@ -9882,6 +9855,100 @@ router.post(
 			}
 
 			console.log(`Manual payment created successfully: ${result.walletTransaction.id} for loan ${loanId}, amount: RM ${amount}`);
+
+			// Send WhatsApp notification for manual payment AFTER receipt generation
+			try {
+				if (loan.user.phoneNumber && loan.user.fullName) {
+					// Find the newly generated receipt for this transaction
+					let receiptUrl: string | undefined;
+					try {
+						const receipt = await prisma.paymentReceipt.findFirst({
+							where: {
+								metadata: {
+									path: ['transactionId'],
+									equals: result.walletTransaction.id
+								}
+							}
+						});
+						
+						if (receipt) {
+							receiptUrl = receipt.id;
+							console.log(`🔗 Found receipt for manual payment WhatsApp notification: ${receipt.id}`);
+						} else {
+							console.log(`🔗 No receipt found for manual payment: ${result.walletTransaction.id}`);
+						}
+					} catch (receiptError) {
+						console.error("Error getting receipt for manual payment WhatsApp notification:", receiptError);
+					}
+
+					// Get updated loan details for notification
+					const updatedLoan = await prisma.loan.findUnique({
+						where: { id: loanId },
+						include: {
+							repayments: {
+								where: { status: "COMPLETED" },
+								orderBy: { dueDate: 'asc' }
+							},
+							application: {
+								include: {
+									product: { select: { name: true } }
+								}
+							}
+						}
+					});
+
+					if (updatedLoan) {
+						// Get next payment info
+						const nextPayment = await prisma.loanRepayment.findFirst({
+							where: {
+								loanId: loanId,
+								status: { in: ['PENDING', 'PARTIAL'] }
+							},
+							orderBy: { dueDate: 'asc' }
+						});
+
+						const completedPayments = updatedLoan.repayments.length;
+						const totalPayments = updatedLoan.term || updatedLoan.application.term || 12;
+
+						// Calculate next payment amount properly
+						let nextPaymentAmount = 0;
+						if (nextPayment) {
+							const scheduledAmount = nextPayment.scheduledAmount || nextPayment.amount;
+							const lateFeeAmount = nextPayment.lateFeeAmount || 0;
+							const paidAmount = nextPayment.actualAmount || 0;
+
+							if (nextPayment.status === 'PARTIAL') {
+								const remainingAmount = (scheduledAmount + lateFeeAmount) - paidAmount;
+								nextPaymentAmount = Math.max(remainingAmount, 0);
+							} else {
+								nextPaymentAmount = scheduledAmount + lateFeeAmount;
+							}
+						}
+
+						const whatsappService = await import("../lib/whatsappService");
+						const whatsappResult = await whatsappService.default.sendPaymentApprovedNotification({
+							to: loan.user.phoneNumber,
+							fullName: loan.user.fullName,
+							paymentAmount: amount.toFixed(2),
+							loanName: updatedLoan.application.product.name,
+							nextPaymentAmount: nextPaymentAmount.toFixed(2),
+							nextDueDate: nextPayment ? formatDateForWhatsApp(nextPayment.dueDate) : "N/A",
+							completedPayments: completedPayments.toString(),
+							totalPayments: totalPayments.toString(),
+							receiptUrl: receiptUrl // Include receipt URL for manual payments
+						});
+						
+						if (whatsappResult.success) {
+							console.log(`WhatsApp manual payment notification sent: ${whatsappResult.messageId}${receiptUrl ? ` with receipt: ${receiptUrl}` : ' (no receipt)'}`);
+						} else {
+							console.error(`Failed to send WhatsApp manual payment notification: ${whatsappResult.error}`);
+						}
+					}
+				}
+			} catch (whatsappError) {
+				console.error("Error sending WhatsApp notification for manual payment:", whatsappError);
+				// Don't fail the entire operation if WhatsApp fails
+			}
 
 			return res.json({
 				success: true,
