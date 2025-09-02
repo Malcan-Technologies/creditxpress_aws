@@ -3540,7 +3540,7 @@ function ActiveLoansContent() {
 														{/* Download Loan Agreement Button */}
 														{selectedLoan?.docusealSignUrl && (
 															<a
-																href={`http://localhost:3001/s/${selectedLoan.docusealSignUrl}`}
+																href={`${process.env.NEXT_PUBLIC_DOCUSEAL_URL || 'http://localhost:3001'}/s/${selectedLoan.docusealSignUrl}`}
 																target="_blank"
 																rel="noopener noreferrer"
 																className="inline-flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
