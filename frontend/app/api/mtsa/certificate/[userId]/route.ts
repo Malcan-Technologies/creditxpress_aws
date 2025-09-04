@@ -22,7 +22,7 @@ export async function GET(
     console.log(`Using API key: ${SIGNING_ORCHESTRATOR_API_KEY ? 'Present' : 'Missing'}`);
 
     // Call the signing orchestrator API to check certificate
-    const url = `${SIGNING_ORCHESTRATOR_URL}/cert/${userId}`;
+    const url = `${SIGNING_ORCHESTRATOR_URL}/api/cert/${userId}`;
     console.log(`Making request to: ${url}`);
     
     const response = await fetch(url, {

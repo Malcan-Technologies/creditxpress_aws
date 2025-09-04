@@ -229,8 +229,8 @@ export default function ProfilePage() {
 	};
 
 	const fetchCertificateStatus = async () => {
-		// Only check certificate if user has IC number and KYC is verified
-		if (!profile?.icNumber || !profile?.kycStatus) {
+		// Only check certificate if user has IC number
+		if (!profile?.icNumber) {
 			return;
 		}
 
@@ -331,10 +331,10 @@ export default function ProfilePage() {
 
 	// Check certificate status when profile is loaded and has required data
 	useEffect(() => {
-		if (profile?.icNumber && profile?.kycStatus && !certificateStatus.loading) {
+		if (profile?.icNumber && !certificateStatus.loading) {
 			fetchCertificateStatus();
 		}
-	}, [profile?.icNumber, profile?.kycStatus]);
+	}, [profile?.icNumber]);
 
 	// Refetch profile data when the page becomes visible (e.g., after navigating back)
 	useEffect(() => {
@@ -344,7 +344,7 @@ export default function ProfilePage() {
 				fetchProfile();
 				fetchDocuments();
 				fetchKycImagesData();
-				if (profile.icNumber && profile.kycStatus) {
+				if (profile.icNumber) {
 					fetchCertificateStatus();
 				}
 			}
@@ -356,7 +356,7 @@ export default function ProfilePage() {
 				fetchProfile();
 				fetchDocuments();
 				fetchKycImagesData();
-				if (profile.icNumber && profile.kycStatus) {
+				if (profile.icNumber) {
 					fetchCertificateStatus();
 				}
 			}
@@ -369,7 +369,7 @@ export default function ProfilePage() {
 				fetchProfile();
 				fetchDocuments();
 				fetchKycImagesData();
-				if (profile?.icNumber && profile?.kycStatus) {
+				if (profile?.icNumber) {
 					fetchCertificateStatus();
 				}
 				// Clear the flag
@@ -747,7 +747,7 @@ export default function ProfilePage() {
 												</h1>
 												
 												{/* Certificate Status Badge */}
-												{profile?.kycStatus && profile?.icNumber && (
+												{profile?.icNumber && (
 													<div className="flex items-center space-x-2">
 														{certificateStatus.loading ? (
 															<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-primary"></div>
@@ -969,7 +969,7 @@ export default function ProfilePage() {
 														Digital Certificate
 													</label>
 													<div className="mt-1 space-y-1">
-														{profile?.kycStatus && profile?.icNumber && certificateStatus.hasValidCert && certificateStatus.certificateData ? (
+														{profile?.icNumber && certificateStatus.hasValidCert && certificateStatus.certificateData ? (
 															<>
 																<p className="text-base text-gray-700 font-body">
 																	{certificateStatus.certificateData.certSerialNo?.slice(-8) || 'Available'}
@@ -983,7 +983,7 @@ export default function ProfilePage() {
 																	</p>
 																)}
 															</>
-														) : profile?.kycStatus && profile?.icNumber ? (
+														) : profile?.icNumber ? (
 															certificateStatus.loading ? (
 																<p className="text-base text-gray-500 font-body italic">
 																	Checking certificate...
@@ -995,7 +995,7 @@ export default function ProfilePage() {
 															)
 														) : (
 															<p className="text-base text-gray-500 font-body italic">
-																KYC required
+																IC/Passport required
 															</p>
 														)}
 													</div>
