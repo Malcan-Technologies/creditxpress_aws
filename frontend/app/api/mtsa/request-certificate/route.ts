@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call the signing orchestrator API
-    const response = await fetch(`${SIGNING_ORCHESTRATOR_URL}/api/certificate`, {
+    const response = await fetch(`${SIGNING_ORCHESTRATOR_URL}/certificate`, {
       method: 'POST',
       headers: {
         'X-API-Key': SIGNING_ORCHESTRATOR_API_KEY,
