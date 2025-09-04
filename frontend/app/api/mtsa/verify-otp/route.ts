@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Call the signing orchestrator API for enrollment/verification
-    const response = await fetch(`${SIGNING_ORCHESTRATOR_URL}/api/enroll`, {
+    const response = await fetch(`${SIGNING_ORCHESTRATOR_URL}/enroll`, {
       method: 'POST',
       headers: {
         'X-API-Key': SIGNING_ORCHESTRATOR_API_KEY,
