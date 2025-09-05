@@ -47,23 +47,12 @@ function CaptureFrontContent() {
         const upData = await uploadRes.json().catch(() => ({}));
         throw new Error(upData?.message || "Upload failed");
       }
-      // Check if this is a retake from review page
-      const isRetake = searchParams.get('retake') === 'true';
+      // OCR validation disabled - proceed directly to next step
       const applicationId = searchParams.get('applicationId');
-      
-      if (isRetake) {
-        // Return to review page after individual retake
-        let reviewUrl = `/dashboard/kyc/review?kycId=${kycId}`;
-        if (kycToken) reviewUrl += `&t=${encodeURIComponent(kycToken)}`;
-        if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
-        router.replace(reviewUrl);
-      } else {
-        // OCR validation disabled - proceed directly to next step
-        let nextUrl = `/dashboard/kyc/capture/back?kycId=${kycId}`;
-        if (kycToken) nextUrl += `&t=${encodeURIComponent(kycToken)}`;
-        if (applicationId) nextUrl += `&applicationId=${applicationId}`;
-        router.replace(nextUrl);
-      }
+      let nextUrl = `/dashboard/kyc/capture/back?kycId=${kycId}`;
+      if (kycToken) nextUrl += `&t=${encodeURIComponent(kycToken)}`;
+      if (applicationId) nextUrl += `&applicationId=${applicationId}`;
+      router.replace(nextUrl);
     } catch (e: any) {
       // Handle unauthorized errors gracefully for QR code flow
       if (e.message === "Unauthorized" || e.message.includes("401") || e.message.includes("403")) {

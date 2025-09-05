@@ -113,19 +113,18 @@ function KycReviewContent() {
     }
   };
 
-  const onRetakeDocument = (documentType: "front" | "back" | "selfie") => {
-    if (!kycId) return;
-    router.replace(`/dashboard/kyc/capture/${documentType}?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}&retake=true`);
-  };
 
   const onRedoAll = () => {
     if (!kycId) return;
     
     // Check if this is a QR code flow (has kycToken but no regular auth token)
     const isQrCodeFlow = kycToken && !TokenStorage.getAccessToken();
+    // Check if user is on mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
-    if (isQrCodeFlow) {
-      // If QR code flow, redirect back to QR code page for redo
+    if (isQrCodeFlow || !isMobile) {
+      // If QR code flow OR desktop user, redirect back to QR code page for redo
+      // This gives desktop users the choice to use QR code flow again
       const params = new URLSearchParams(window.location.search);
       const applicationId = params.get('applicationId');
       let qrUrl = '/dashboard/kyc?redo=true';
@@ -134,7 +133,7 @@ function KycReviewContent() {
       }
       router.replace(qrUrl);
     } else {
-      // If authenticated user (mobile or desktop), can directly restart capture
+      // If authenticated mobile user, can directly restart capture on mobile
       router.replace(`/dashboard/kyc/capture/front?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
     }
   };
@@ -186,14 +185,8 @@ function KycReviewContent() {
                 
                 {/* MyKad Front */}
                 <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3">
                     <div className="text-sm font-medium text-gray-700">MyKad (Front)</div>
-                    <button 
-                      onClick={() => onRetakeDocument("front")}
-                      className="text-xs px-3 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
-                    >
-                      Retake
-                    </button>
                   </div>
                   {getDocument("front") ? 
                     renderDocumentImage(getDocument("front")!, "MyKad Front") : (
@@ -205,14 +198,8 @@ function KycReviewContent() {
 
                 {/* MyKad Back */}
                 <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3">
                     <div className="text-sm font-medium text-gray-700">MyKad (Back)</div>
-                    <button 
-                      onClick={() => onRetakeDocument("back")}
-                      className="text-xs px-3 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
-                    >
-                      Retake
-                    </button>
                   </div>
                   {getDocument("back") ? 
                     renderDocumentImage(getDocument("back")!, "MyKad Back") : (
@@ -224,14 +211,8 @@ function KycReviewContent() {
 
                 {/* Selfie */}
                 <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="mb-3">
                     <div className="text-sm font-medium text-gray-700">Selfie</div>
-                    <button 
-                      onClick={() => onRetakeDocument("selfie")}
-                      className="text-xs px-3 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
-                    >
-                      Retake
-                    </button>
                   </div>
                   {getDocument("selfie") ? 
                     renderDocumentImage(getDocument("selfie")!, "Selfie") : (

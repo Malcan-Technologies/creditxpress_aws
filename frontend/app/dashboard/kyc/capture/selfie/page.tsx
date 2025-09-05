@@ -68,22 +68,14 @@ function CaptureSelfieContent() {
         setServerHint({ nextStep: proc?.nextStep, message: msg });
         throw new Error(msg);
       }
-      // Check if this is a retake from review page or normal flow
-      const isRetake = params.get('retake') === 'true';
-      const applicationId = params.get('applicationId');
-      
       // Build the review URL with all necessary parameters
+      const applicationId = params.get('applicationId');
       let reviewUrl = `/dashboard/kyc/review?kycId=${kycId}`;
       if (kycToken) reviewUrl += `&t=${encodeURIComponent(kycToken)}`;
       if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
       
-      if (isRetake) {
-        // Return to review page after individual retake
-        router.replace(reviewUrl);
-      } else {
-        // Normal flow - first time completion, go to review
-        router.replace(reviewUrl);
-      }
+      // Go to review page after completion
+      router.replace(reviewUrl);
     } catch (e: any) {
       // Handle unauthorized errors gracefully for QR code flow
       if (e.message === "Unauthorized" || e.message.includes("401") || e.message.includes("403")) {
