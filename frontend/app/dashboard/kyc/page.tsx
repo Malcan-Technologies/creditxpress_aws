@@ -84,7 +84,8 @@ function KycPageContent() {
         // Desktop: show QR to open mobile capture url
         const tokenParam = data.kycToken ? `&t=${encodeURIComponent(data.kycToken)}` : "";
         const appParam = applicationId ? `&applicationId=${applicationId}` : "";
-        const mobileUrl = `${window.location.origin}/dashboard/kyc/capture/front?kycId=${data.kycId}${tokenParam}${appParam}`;
+        const qrParam = "&qr=1"; // Add QR parameter to indicate this came from QR code scan
+        const mobileUrl = `${window.location.origin}/dashboard/kyc/capture/front?kycId=${data.kycId}${tokenParam}${appParam}${qrParam}`;
         const url = await QRCode.toDataURL(mobileUrl);
         setQrDataUrl(url);
 
@@ -175,7 +176,8 @@ function KycPageContent() {
                   if (kycId) {
                     const tokenParam = kycToken ? `&t=${encodeURIComponent(kycToken)}` : "";
                     const appParam = applicationId ? `&applicationId=${applicationId}` : "";
-                    const url = `/dashboard/kyc/capture/front?kycId=${kycId}${tokenParam}${appParam}`;
+                    const qrParam = "&qr=1"; // Add QR parameter for direct browser access too
+                    const url = `/dashboard/kyc/capture/front?kycId=${kycId}${tokenParam}${appParam}${qrParam}`;
                     console.log("Opening KYC URL in new tab:", url);
                     console.log("KYC ID:", kycId);
                     console.log("KYC Token:", kycToken ? "PRESENT" : "MISSING");

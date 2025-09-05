@@ -49,9 +49,11 @@ function CaptureFrontContent() {
       }
       // OCR validation disabled - proceed directly to next step
       const applicationId = searchParams.get('applicationId');
+      const qrParam = searchParams.get('qr');
       let nextUrl = `/dashboard/kyc/capture/back?kycId=${kycId}`;
       if (kycToken) nextUrl += `&t=${encodeURIComponent(kycToken)}`;
       if (applicationId) nextUrl += `&applicationId=${applicationId}`;
+      if (qrParam) nextUrl += `&qr=${qrParam}`;
       router.replace(nextUrl);
     } catch (e: any) {
       // Handle unauthorized errors gracefully for QR code flow

@@ -70,9 +70,11 @@ function CaptureSelfieContent() {
       }
       // Build the review URL with all necessary parameters
       const applicationId = params.get('applicationId');
+      const qrParam = params.get('qr');
       let reviewUrl = `/dashboard/kyc/review?kycId=${kycId}`;
       if (kycToken) reviewUrl += `&t=${encodeURIComponent(kycToken)}`;
       if (applicationId) reviewUrl += `&applicationId=${applicationId}`;
+      if (qrParam) reviewUrl += `&qr=${qrParam}`;
       
       // Go to review page after completion
       router.replace(reviewUrl);

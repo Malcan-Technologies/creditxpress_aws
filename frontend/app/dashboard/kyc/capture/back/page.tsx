@@ -49,9 +49,11 @@ function CaptureBackContent() {
       }
       // OCR validation disabled - proceed directly to next step
       const applicationId = params.get('applicationId');
+      const qrParam = params.get('qr');
       let nextUrl = `/dashboard/kyc/capture/selfie?kycId=${kycId}`;
       if (kycToken) nextUrl += `&t=${encodeURIComponent(kycToken)}`;
       if (applicationId) nextUrl += `&applicationId=${applicationId}`;
+      if (qrParam) nextUrl += `&qr=${qrParam}`;
       router.replace(nextUrl);
     } catch (e: any) {
       // Handle unauthorized errors gracefully for QR code flow

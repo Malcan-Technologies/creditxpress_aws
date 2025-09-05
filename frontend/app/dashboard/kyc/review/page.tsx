@@ -22,6 +22,8 @@ function KycReviewContent() {
   const params = useSearchParams();
   const kycId = params.get("kycId");
   const kycToken = params.get("t");
+  const qrParam = params.get("qr"); // Detect if this came from QR code scan
+  const isQrCodeFlow = qrParam === "1"; // Check if this is a QR code flow
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<KycDetails | null>(null);
@@ -32,10 +34,24 @@ function KycReviewContent() {
       try {
         if (!kycId) throw new Error("Missing kycId");
         const token = TokenStorage.getAccessToken();
-        if (!token) throw new Error("Unauthorized");
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/details`, {
-          headers: { Authorization: `Bearer ${token}`, ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) }
+        
+        // For QR code flow, we don't need regular auth token
+        if (!token && !kycToken) {
+          throw new Error("Unauthorized");
+        }
+        
+        // Build URL with kycToken as query parameter for QR code flow
+        const detailsUrl = kycToken && !token
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/details?t=${encodeURIComponent(kycToken)}`
+          : `${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/details`;
+        
+        const res = await fetch(detailsUrl, {
+          headers: { 
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) 
+          }
         });
+        
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || "Failed to load KYC details");
         setDetails(data);
@@ -54,8 +70,6 @@ function KycReviewContent() {
       setAccepting(true);
       const token = TokenStorage.getAccessToken();
       
-      // Check if this is a QR code flow (has kycToken but no regular auth token)
-      const isQrCodeFlow = kycToken && !token;
       
       if (!token && !kycToken) {
         throw new Error("Unauthorized");
@@ -74,7 +88,9 @@ function KycReviewContent() {
           ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {})
         },
       });
+      
       const data = await res.json();
+      
       if (!res.ok) {
         // Handle specific unauthorized error from backend
         if (res.status === 401 || res.status === 403) {
@@ -106,7 +122,6 @@ function KycReviewContent() {
       // Additional check for unauthorized errors
       if (e.message === "Unauthorized" || e.message.includes("401") || e.message.includes("403")) {
         // If this is QR code flow, show message to complete on web browser
-        const isQrCodeFlow = kycToken && !TokenStorage.getAccessToken();
         if (isQrCodeFlow) {
           setError("Please complete this step on your web browser where you scanned the QR code.");
           return;
@@ -122,8 +137,6 @@ function KycReviewContent() {
   const onRedoAll = () => {
     if (!kycId) return;
     
-    // Check if this is a QR code flow (has kycToken but no regular auth token)
-    const isQrCodeFlow = kycToken && !TokenStorage.getAccessToken();
     // Check if user is on mobile device
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
@@ -139,7 +152,13 @@ function KycReviewContent() {
       router.replace(qrUrl);
     } else {
       // If authenticated mobile user, can directly restart capture on mobile
-      router.replace(`/dashboard/kyc/capture/front?kycId=${kycId}${kycToken ? `&t=${encodeURIComponent(kycToken)}` : ''}`);
+      const params = new URLSearchParams(window.location.search);
+      const applicationId = params.get('applicationId');
+      let captureUrl = `/dashboard/kyc/capture/front?kycId=${kycId}`;
+      if (kycToken) captureUrl += `&t=${encodeURIComponent(kycToken)}`;
+      if (applicationId) captureUrl += `&applicationId=${applicationId}`;
+      if (qrParam) captureUrl += `&qr=${qrParam}`;
+      router.replace(captureUrl);
     }
   };
 
