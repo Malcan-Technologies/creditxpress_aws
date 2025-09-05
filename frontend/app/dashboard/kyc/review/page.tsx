@@ -61,9 +61,18 @@ function KycReviewContent() {
         throw new Error("Unauthorized");
       }
       
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/accept`, {
+      // Build URL with kycToken as query parameter for QR code flow
+      const acceptUrl = kycToken && !token 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/accept?t=${encodeURIComponent(kycToken)}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/kyc/${kycId}/accept`;
+      
+      const res = await fetch(acceptUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {}) },
+        headers: { 
+          'Content-Type': 'application/json', 
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(kycToken ? { 'X-KYC-TOKEN': kycToken } : {})
+        },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -78,24 +87,20 @@ function KycReviewContent() {
         throw new Error(data?.message || 'Failed to accept');
       }
       
-      // Check if the backend updated an application (new multi-step flow)
-      if (data.applicationUpdated && data.applicationId) {
-        console.log(`KYC accepted for application ${data.applicationId} in new flow, redirecting to profile confirmation`);
-        router.replace(`/dashboard/applications/${data.applicationId}/profile-confirmation`);
-        return;
-      }
-      
-      // Check URL params as fallback for older flows
-      const params = new URLSearchParams(window.location.search);
-      const applicationId = params.get('applicationId');
+      // Get applicationId from backend response or URL params
+      const responseApplicationId = data.applicationId;
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlApplicationId = urlParams.get('applicationId');
+      const applicationId = responseApplicationId || urlApplicationId;
       
       if (applicationId) {
-        console.log(`KYC accepted with URL param applicationId ${applicationId}, redirecting to profile confirmation`);
+        console.log(`KYC accepted for application ${applicationId}, redirecting to profile confirmation`);
         router.replace(`/dashboard/applications/${applicationId}/profile-confirmation`);
         return;
       }
       
-      // Fallback to old flow behavior
+      // Fallback to profile page for standalone KYC (no application)
+      console.log("KYC accepted for standalone profile verification, redirecting to profile page");
       router.replace('/dashboard/profile');
     } catch (e: any) {
       // Additional check for unauthorized errors

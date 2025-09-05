@@ -83,7 +83,8 @@ function KycPageContent() {
 
         // Desktop: show QR to open mobile capture url
         const tokenParam = data.kycToken ? `&t=${encodeURIComponent(data.kycToken)}` : "";
-        const mobileUrl = `${window.location.origin}/dashboard/kyc/capture/front?kycId=${data.kycId}${tokenParam}`;
+        const appParam = applicationId ? `&applicationId=${applicationId}` : "";
+        const mobileUrl = `${window.location.origin}/dashboard/kyc/capture/front?kycId=${data.kycId}${tokenParam}${appParam}`;
         const url = await QRCode.toDataURL(mobileUrl);
         setQrDataUrl(url);
 
@@ -178,6 +179,7 @@ function KycPageContent() {
                     console.log("Opening KYC URL in new tab:", url);
                     console.log("KYC ID:", kycId);
                     console.log("KYC Token:", kycToken ? "PRESENT" : "MISSING");
+                    console.log("Application ID:", applicationId);
                     console.log("Full URL:", window.location.origin + url);
                     window.open(url, '_blank');
                   }
