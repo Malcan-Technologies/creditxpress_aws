@@ -70,6 +70,7 @@ function sha256(buffer: Buffer): string {
 
 // Start CTOS eKYC process
 router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  let kycSession: any = null;
   try {
     const { applicationId, documentName, documentNumber, platform = 'Web', responseUrl } = req.body;
     if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
@@ -87,7 +88,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
     }
 
     // Create KYC session
-    const kycSession = await db.kycSession.create({
+    kycSession = await db.kycSession.create({
       data: {
         userId: req.user.userId,
         status: 'IN_PROGRESS',
@@ -178,7 +179,24 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
 
   } catch (error) {
     console.error('Error starting CTOS eKYC:', error);
-    return res.status(500).json({ message: 'Failed to start CTOS eKYC process' });
+    
+    // Delete the KYC session if it was created but CTOS failed
+    if (kycSession?.id) {
+      try {
+        await db.kycSession.delete({ where: { id: kycSession.id } });
+        console.log(`Deleted failed KYC session ${kycSession.id}`);
+      } catch (deleteError) {
+        console.error('Error deleting failed KYC session:', deleteError);
+      }
+    }
+    
+    // Pass through specific CTOS error message
+    const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
+    return res.status(500).json({ 
+      message: 'Failed to create CTOS eKYC session',
+      error: errorMessage,
+      details: errorMessage.includes('CTOS API Error:') ? errorMessage : `CTOS Integration Error: ${errorMessage}`
+    });
   }
 });
 
@@ -821,9 +839,74 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         data: {
           ctosStatus: ctosStatus.status,
           ctosResult: ctosStatus.result,
-          ctosData: ctosStatus as any
+          ctosData: ctosStatus as any,
+          status: ctosStatus.status === 2 ? // Completed
+            (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
+            ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS',
+          completedAt: ctosStatus.status === 2 ? new Date() : null
         }
       });
+
+      // Store/update document images if available and session is completed
+      if (ctosStatus.status === 2 && ctosStatus.result === 1) { // Completed and approved
+        const ctosData = ctosStatus as any;
+        const documentsToUpsert = [];
+
+        // Check for images in the CTOS response
+        if (ctosData.front_document_image) {
+          documentsToUpsert.push({
+            kycId: kycSession.id,
+            type: 'front',
+            storageUrl: `data:image/jpeg;base64,${ctosData.front_document_image}`,
+            hashSha256: crypto.createHash('sha256').update(ctosData.front_document_image).digest('hex')
+          });
+        }
+
+        if (ctosData.back_document_image) {
+          documentsToUpsert.push({
+            kycId: kycSession.id,
+            type: 'back',
+            storageUrl: `data:image/jpeg;base64,${ctosData.back_document_image}`,
+            hashSha256: crypto.createHash('sha256').update(ctosData.back_document_image).digest('hex')
+          });
+        }
+
+        if (ctosData.face_image) {
+          documentsToUpsert.push({
+            kycId: kycSession.id,
+            type: 'selfie',
+            storageUrl: `data:image/jpeg;base64,${ctosData.face_image}`,
+            hashSha256: crypto.createHash('sha256').update(ctosData.face_image).digest('hex')
+          });
+        }
+
+        // Upsert documents (update if exists, create if not)
+        if (documentsToUpsert.length > 0) {
+          for (const doc of documentsToUpsert) {
+            await db.kycDocument.upsert({
+              where: {
+                kycId_type: {
+                  kycId: doc.kycId,
+                  type: doc.type
+                }
+              },
+              update: {
+                storageUrl: doc.storageUrl,
+                hashSha256: doc.hashSha256,
+                updatedAt: new Date()
+              },
+              create: doc
+            });
+          }
+          console.log(`Stored/updated ${documentsToUpsert.length} documents for KYC session ${kycSession.id}`);
+        }
+
+        // Update user KYC status if approved
+        await db.user.update({
+          where: { id: kycSession.userId },
+          data: { kycStatus: true }
+        });
+      }
 
       return res.json({
         success: true,
