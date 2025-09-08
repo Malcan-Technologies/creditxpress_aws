@@ -78,6 +78,13 @@ export default function KycVerificationPage() {
 	} | null>(null);
 	const [kycInProgress, setKycInProgress] = useState(false);
 	const [kycCompleted, setKycCompleted] = useState(false);
+	const [kycDocuments, setKycDocuments] = useState<{
+		id: string;
+		type: string;
+		storageUrl: string;
+		createdAt: string;
+	}[]>([]);
+	const [documentsLoading, setDocumentsLoading] = useState(false);
 
 	useEffect(() => {
 		const fetchData = async () => {
@@ -118,6 +125,9 @@ export default function KycVerificationPage() {
 						setKycCompleted(true);
 						setKycInProgress(false);
 						console.log('User has already completed KYC with approved status');
+						
+						// Fetch KYC documents for approved users
+						fetchKycDocuments();
 					}
 				} else {
 					setCtosStatus({
@@ -141,6 +151,31 @@ export default function KycVerificationPage() {
 			fetchData();
 		}
 	}, [params.id]);
+
+	const fetchKycDocuments = async () => {
+		try {
+			setDocumentsLoading(true);
+			const documentsData = await fetchWithTokenRefresh<{
+				success: boolean;
+				hasDocuments: boolean;
+				documents: {
+					id: string;
+					type: string;
+					storageUrl: string;
+					createdAt: string;
+				}[];
+			}>('/api/kyc/user-documents');
+			
+			if (documentsData.success && documentsData.hasDocuments) {
+				setKycDocuments(documentsData.documents);
+				console.log('Fetched KYC documents:', documentsData.documents);
+			}
+		} catch (err) {
+			console.error('Error fetching KYC documents:', err);
+		} finally {
+			setDocumentsLoading(false);
+		}
+	};
 
 	const handleStartKyc = async (forceRedo: boolean = false) => {
 		try {
@@ -512,6 +547,50 @@ export default function KycVerificationPage() {
 									</div>
 								</div>
 							</div>
+
+							{/* KYC Documents Display */}
+							{documentsLoading ? (
+								<div className="bg-gray-50 rounded-xl p-6">
+									<div className="flex items-center justify-center">
+										<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-primary"></div>
+										<span className="ml-3 text-gray-600 font-body">Loading your verified documents...</span>
+									</div>
+								</div>
+							) : kycDocuments.length > 0 ? (
+								<div className="bg-gray-50 rounded-xl p-6">
+									<h4 className="text-lg font-heading font-bold text-gray-700 mb-4">
+										Your Verified Documents
+									</h4>
+									<p className="text-gray-600 font-body mb-4">
+										These are the documents that were verified and approved by CTOS during your KYC process:
+									</p>
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+										{kycDocuments.map((doc) => (
+											<div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
+												<div className="aspect-[4/3] mb-3 bg-gray-100 rounded-lg overflow-hidden">
+													<img 
+														src={doc.storageUrl} 
+														alt={`${doc.type === 'front' ? 'IC Front' : doc.type === 'back' ? 'IC Back' : 'Selfie'}`}
+														className="w-full h-full object-cover"
+														onError={(e) => {
+															const target = e.target as HTMLImageElement;
+															target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDIwMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMDAgNzVMMTI1IDEwMEg3NUwxMDAgNzVaIiBmaWxsPSIjOUI5QkE0Ii8+CjwvdXNnPg==';
+														}}
+													/>
+												</div>
+												<div className="text-center">
+													<h5 className="text-sm font-semibold text-gray-700 mb-1">
+														{doc.type === 'front' ? 'IC Front' : doc.type === 'back' ? 'IC Back' : 'Selfie Photo'}
+													</h5>
+													<p className="text-xs text-gray-500">
+														Verified: {new Date(doc.createdAt).toLocaleDateString()}
+													</p>
+												</div>
+											</div>
+										))}
+									</div>
+								</div>
+							) : null}
 
 							{/* Status Information */}
 							<div className="bg-gray-50 rounded-xl p-6">
