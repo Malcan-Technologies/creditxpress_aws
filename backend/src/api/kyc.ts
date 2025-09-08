@@ -142,12 +142,16 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         callback_mode: 2
       });
 
+      // Build completion URL from BASE_URL environment variable  
+      const baseUrl = process.env.BASE_URL || 'https://kredit.my';
+      const completionUrl = `${baseUrl}/kyc-complete`;
+
       const ctosResponse = await ctosService.createTransaction({
         ref_id: req.user.userId, // Use user UUID as ref_id
         document_name: documentName,
         document_number: documentNumber,
         platform,
-        response_url: responseUrl,
+        response_url: completionUrl, // Use KYC completion page instead of frontend callback
         backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
         callback_mode: 2, // Detailed callback
         document_type: '1' // 1 = NRIC (default for Malaysian users)
