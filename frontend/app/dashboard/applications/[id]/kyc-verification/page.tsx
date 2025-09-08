@@ -584,23 +584,32 @@ export default function KycVerificationPage() {
 									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 										{kycDocuments.map((doc) => (
 											<div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
-												<div className="aspect-[4/3] mb-3 bg-gray-100 rounded-lg overflow-hidden">
+												<div className="mb-3 bg-gray-100 rounded-lg overflow-hidden">
 													{doc.storageUrl ? (
-														<img 
-															src={doc.storageUrl} 
-															alt={`${doc.type === 'front' ? 'IC Front' : doc.type === 'back' ? 'IC Back' : 'Selfie'}`}
-															className="w-full h-full object-cover"
-															onError={(e) => {
-																const target = e.target as HTMLImageElement;
-																target.style.display = 'none';
-																const parent = target.parentElement;
-																if (parent) {
-																	parent.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500 text-sm">Image not available</div>';
-																}
-															}}
-														/>
+														<div className="relative">
+															<img 
+																src={doc.storageUrl} 
+																alt={`${doc.type === 'front' ? 'IC Front' : doc.type === 'back' ? 'IC Back' : 'Selfie'}`}
+																className="w-full h-auto object-contain max-h-64"
+																onError={(e) => {
+																	const target = e.target as HTMLImageElement;
+																	target.style.display = 'none';
+																	const parent = target.parentElement;
+																	if (parent) {
+																		parent.innerHTML = '<div class="flex items-center justify-center h-32 text-gray-500 text-sm">Image not available</div>';
+																	}
+																}}
+															/>
+															<div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center">
+																<div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white rounded-full p-2">
+																	<svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+																	</svg>
+																</div>
+															</div>
+														</div>
 													) : (
-														<div className="flex items-center justify-center h-full text-gray-500 text-sm">
+														<div className="flex items-center justify-center h-32 text-gray-500 text-sm">
 															No image available
 														</div>
 													)}
