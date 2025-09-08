@@ -185,16 +185,53 @@ router.post('/webhook', async (req, res) => {
     });
 
     // Find KYC session by ref_id (user ID) and onboarding_id
-    const kycSession = await prisma.kycSession.findFirst({
+    // CTOS may add a prefix to ref_id, so we need to handle both cases
+    let kycSession = null;
+    let cleanUserId = webhookData.ref_id;
+    
+    // First, try with the original ref_id
+    kycSession = await prisma.kycSession.findFirst({
       where: {
         userId: webhookData.ref_id,
         ctosOnboardingId: webhookData.onboarding_id
       },
       include: { user: true }
     });
+    
+    // If not found and ref_id contains a hyphen, try removing potential prefix
+    if (!kycSession && webhookData.ref_id.includes('-')) {
+      // Extract the part after the last hyphen (assuming format: PREFIX-actualUserId)
+      const parts = webhookData.ref_id.split('-');
+      if (parts.length >= 2) {
+        cleanUserId = parts.slice(-1)[0]; // Get the last part
+        
+        kycSession = await prisma.kycSession.findFirst({
+          where: {
+            userId: cleanUserId,
+            ctosOnboardingId: webhookData.onboarding_id
+          },
+          include: { user: true }
+        });
+      }
+      
+      // If still not found, try removing everything before the first underscore (format: PREFIX_actualUserId)
+      if (!kycSession && webhookData.ref_id.includes('_')) {
+        cleanUserId = webhookData.ref_id.split('_').slice(-1)[0];
+        
+        kycSession = await prisma.kycSession.findFirst({
+          where: {
+            userId: cleanUserId,
+            ctosOnboardingId: webhookData.onboarding_id
+          },
+          include: { user: true }
+        });
+      }
+    }
+    
+    console.log(`Looking for KYC session: original ref_id=${webhookData.ref_id}, final userId=${cleanUserId}, found=${!!kycSession}, onboarding_id=${webhookData.onboarding_id}`);
 
     if (!kycSession) {
-      console.error(`KYC session not found for user ${webhookData.ref_id}, onboarding ID ${webhookData.onboarding_id}`);
+      console.error(`KYC session not found for original ref_id=${webhookData.ref_id}, cleaned userId=${cleanUserId}, onboarding ID=${webhookData.onboarding_id}`);
       return res.status(404).json({ error: 'KYC session not found' });
     }
 
