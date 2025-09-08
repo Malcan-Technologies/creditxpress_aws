@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
 import { fetchWithTokenRefresh } from '@/lib/authUtils';
@@ -21,7 +21,7 @@ interface PKISession {
   submissionStatus: 'in_progress' | 'completed' | 'failed';
 }
 
-export default function PKISigningPage() {
+function PKISigningContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const applicationId = searchParams.get('application');
@@ -618,5 +618,30 @@ export default function PKISigningPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// Loading component for Suspense fallback
+function PKISigningLoading() {
+  return (
+    <DashboardLayout>
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center space-y-4 py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-primary mx-auto"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+// Main export with Suspense wrapper
+export default function PKISigningPage() {
+  return (
+    <Suspense fallback={<PKISigningLoading />}>
+      <PKISigningContent />
+    </Suspense>
   );
 }

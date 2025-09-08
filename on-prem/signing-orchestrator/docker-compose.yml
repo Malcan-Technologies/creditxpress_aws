@@ -55,6 +55,9 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - LOG_FORMAT=${LOG_FORMAT:-json}
       
+      # Health Check
+      - HEALTH_CHECK_INTERVAL_MS=${HEALTH_CHECK_INTERVAL_MS:-30000}
+      
       # Template Coordinates
       - SIGNATURE_COORDINATES=${SIGNATURE_COORDINATES:-{}}
       
