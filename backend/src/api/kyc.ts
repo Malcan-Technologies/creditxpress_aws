@@ -7,6 +7,7 @@ import fs from "fs";
 import * as jwt from "jsonwebtoken";
 import { authenticateAndVerifyPhone, authenticateKycOrAuth, AuthRequest, FileAuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import { ctosService } from "../lib/ctosService";
 
 const router = Router();
 const db: any = prisma as any;
@@ -67,7 +68,121 @@ function sha256(buffer: Buffer): string {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-// Start or reuse a KYC session (optionally tied to an application)
+// Start CTOS eKYC process
+router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+  try {
+    const { applicationId, documentName, documentNumber, platform = 'Web', responseUrl } = req.body;
+    if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
+
+    if (!documentName || !documentNumber) {
+      return res.status(400).json({ message: "Document name and number are required" });
+    }
+
+    // Validate application if provided
+    if (applicationId) {
+      const application = await prisma.loanApplication.findUnique({ where: { id: applicationId } });
+      if (!application || application.userId !== req.user.userId) {
+        return res.status(404).json({ message: "Application not found" });
+      }
+    }
+
+    // Create KYC session
+    const kycSession = await db.kycSession.create({
+      data: {
+        userId: req.user.userId,
+        status: 'IN_PROGRESS',
+        ...(applicationId ? { applicationId } : {})
+      }
+    });
+
+    try {
+      // Create CTOS transaction
+      console.log('Starting CTOS transaction with params:', {
+        ref_id: req.user.userId,
+        document_name: documentName,
+        document_number: documentNumber,
+        platform,
+        callback_mode: 2
+      });
+
+      const ctosResponse = await ctosService.createTransaction({
+        ref_id: req.user.userId, // Use user UUID as ref_id
+        document_name: documentName,
+        document_number: documentNumber,
+        platform,
+        response_url: responseUrl,
+        backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
+        callback_mode: 2, // Detailed callback
+        document_type: '1' // 1 = NRIC (default for Malaysian users)
+      });
+
+      console.log('CTOS Response received:', ctosResponse);
+
+      // Update KYC session with CTOS data
+      // Parse expiry date safely
+      let ctosExpiredAt: Date | null = null;
+      try {
+        if (ctosResponse.expired_at) {
+          ctosExpiredAt = new Date(ctosResponse.expired_at);
+          // Check if date is valid
+          if (isNaN(ctosExpiredAt.getTime())) {
+            console.warn('Invalid CTOS expiry date:', ctosResponse.expired_at);
+            ctosExpiredAt = null;
+          }
+        }
+      } catch (dateError) {
+        console.warn('Error parsing CTOS expiry date:', ctosResponse.expired_at, dateError);
+        ctosExpiredAt = null;
+      }
+
+      await db.kycSession.update({
+        where: { id: kycSession.id },
+        data: {
+          ctosOnboardingId: ctosResponse.onboarding_id,
+          ctosOnboardingUrl: ctosResponse.onboarding_url,
+          ctosExpiredAt,
+          ctosStatus: 0, // Not opened yet
+          ctosData: ctosResponse as any
+        }
+      });
+
+      console.log(`Created CTOS transaction for user ${req.user.userId}, KYC session ${kycSession.id}, onboarding ID: ${ctosResponse.onboarding_id}`);
+
+      // Issue short-lived KYC token
+      const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
+      const kycToken = jwt.sign(
+        { userId: req.user.userId, kycId: kycSession.id },
+        process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
+        { expiresIn: `${ttlMinutes}m` }
+      );
+
+      return res.status(201).json({
+        success: true,
+        kycId: kycSession.id,
+        onboardingUrl: ctosResponse.onboarding_url,
+        onboardingId: ctosResponse.onboarding_id,
+        expiredAt: ctosResponse.expired_at,
+        kycToken,
+        ttlMinutes
+      });
+
+    } catch (ctosError) {
+      // If CTOS fails, clean up the KYC session
+      await db.kycSession.delete({ where: { id: kycSession.id } });
+      console.error('CTOS transaction failed:', ctosError);
+      return res.status(500).json({ 
+        message: 'Failed to create CTOS eKYC transaction',
+        error: ctosError instanceof Error ? ctosError.message : 'Unknown error'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error starting CTOS eKYC:', error);
+    return res.status(500).json({ message: 'Failed to start CTOS eKYC process' });
+  }
+});
+
+// Start or reuse a KYC session (optionally tied to an application) - Legacy endpoint
 router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
   try {
     let { applicationId, loanId } = (req.body || {}) as { applicationId?: string, loanId?: string };
@@ -317,6 +432,65 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
   }
 });
 
+// Poll CTOS status and update session
+router.get("/:kycId/ctos-status", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { kycId } = req.params as any;
+    const session = await db.kycSession.findUnique({ where: { id: kycId } });
+    if (!session) return res.status(404).json({ message: "KYC session not found" });
+    if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
+
+    if (!session.ctosOnboardingId) {
+      return res.status(400).json({ message: "Session not initialized with CTOS" });
+    }
+
+    try {
+      // Get status from CTOS
+      const ctosStatus = await ctosService.getStatus({
+        ref_id: session.userId,
+        onboarding_id: session.ctosOnboardingId,
+        platform: 'Web',
+        mode: 2 // Detailed mode
+      });
+
+      // Update KYC session with latest status
+      const updatedSession = await db.kycSession.update({
+        where: { id: kycId },
+        data: {
+          ctosStatus: ctosStatus.status,
+          ctosResult: ctosStatus.result,
+          ctosData: { ...session.ctosData, ...ctosStatus },
+          // Update KYC status based on CTOS result
+          status: ctosStatus.status === 2 ? // Completed
+            (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
+            ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS',
+          completedAt: ctosStatus.status === 2 ? new Date() : null
+        }
+      });
+
+      return res.json({
+        success: true,
+        kycId,
+        status: updatedSession.status,
+        ctosStatus: ctosStatus.status,
+        ctosResult: ctosStatus.result,
+        details: ctosStatus
+      });
+
+    } catch (ctosError) {
+      console.error('Error getting CTOS status:', ctosError);
+      return res.status(500).json({ 
+        message: 'Failed to get CTOS status',
+        error: ctosError instanceof Error ? ctosError.message : 'Unknown error'
+      });
+    }
+
+  } catch (err) {
+    console.error('Error checking CTOS status:', err);
+    return res.status(500).json({ message: "Failed to check status" });
+  }
+});
+
 // Poll status
 router.get("/:kycId/status", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -324,7 +498,15 @@ router.get("/:kycId/status", authenticateKycOrAuth, async (req: AuthRequest, res
     const session = await db.kycSession.findUnique({ where: { id: kycId } });
     if (!session) return res.status(404).json({ message: "Not found" });
     if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
-    return res.json({ status: session.status, faceMatchScore: session.faceMatchScore, livenessScore: session.livenessScore });
+    return res.json({ 
+      status: session.status, 
+      faceMatchScore: session.faceMatchScore, 
+      livenessScore: session.livenessScore,
+      ctosStatus: session.ctosStatus,
+      ctosResult: session.ctosResult,
+      ctosOnboardingUrl: session.ctosOnboardingUrl,
+      ctosExpiredAt: session.ctosExpiredAt
+    });
   } catch (err) {
     return res.status(500).json({ message: "Failed" });
   }

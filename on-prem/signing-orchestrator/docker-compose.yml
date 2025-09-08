@@ -18,6 +18,11 @@ services:
       - DOCUSEAL_WEBHOOK_HMAC_SECRET=${DOCUSEAL_WEBHOOK_HMAC_SECRET}
       - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
       
+      # PKI Integration Settings
+      - PKI_ENABLED=${PKI_ENABLED:-true}
+      - PKI_SESSION_EXPIRY_MINUTES=${PKI_SESSION_EXPIRY_MINUTES:-10}
+      - PKI_OTP_MAX_ATTEMPTS=${PKI_OTP_MAX_ATTEMPTS:-3}
+      
       # File Storage
       - SIGNED_FILES_DIR=/data/signed
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
@@ -37,6 +42,9 @@ services:
       - OUTBOUND_TIMEOUT_MS=${OUTBOUND_TIMEOUT_MS:-60000}
       - RETRY_BACKOFF_MS=${RETRY_BACKOFF_MS:-2000}
       - RETRY_MAX=${RETRY_MAX:-3}
+      
+      # API Authentication
+      - SIGNING_ORCHESTRATOR_API_KEY=${SIGNING_ORCHESTRATOR_API_KEY}
       
       # Security
       - CORS_ORIGINS=${CORS_ORIGINS:-https://sign.kredit.my,https://api.kredit.my}

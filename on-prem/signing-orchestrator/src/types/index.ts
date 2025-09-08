@@ -32,8 +32,17 @@ export interface SignatureCoordinates {
 export interface SignatureInfo {
   pdfInBase64: string;
   visibility: boolean;
-  coordinates?: SignatureCoordinates;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  pageNo?: number;
   sigImageInBase64?: string;
+}
+
+export interface PdfFieldNameValue {
+  pdfFieldName: string;
+  pdfFieldValue: string;
 }
 
 export interface FieldUpdate {
@@ -71,11 +80,11 @@ export interface MTSAGetCertInfoResponse {
   statusCode: string;
   message: string;
   certStatus?: string;
-  validFrom?: string;
-  validTo?: string;
+  certValidFrom?: string;
+  certValidTo?: string;
   userCert?: string;
-  issuer?: string;
-  subject?: string;
+  certIssuer?: string;
+  certSubjectDN?: string;
   certSerialNo?: string;
 }
 
@@ -84,7 +93,7 @@ export interface MTSASignPDFRequest {
   FullName: string;
   AuthFactor: string;
   SignatureInfo: SignatureInfo;
-  FieldListToUpdate?: FieldUpdate;
+  FieldListToUpdate?: PdfFieldNameValue[];
 }
 
 export interface MTSASignPDFResponse {

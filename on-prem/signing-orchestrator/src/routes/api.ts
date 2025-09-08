@@ -505,11 +505,11 @@ router.post('/test-getcert', verifyApiKey, async (req, res) => {
       data: {
         statusCode: result.statusCode,
         certStatus: result.certStatus,
-        validFrom: result.validFrom,
-        validTo: result.validTo,
+        validFrom: result.certValidFrom,
+        validTo: result.certValidTo,
         certSerialNo: result.certSerialNo,
-        issuer: result.issuer,
-        subject: result.subject,
+        issuer: result.certIssuer,
+        subject: result.certSubjectDN,
       },
       correlationId: req.correlationId,
     });
@@ -522,6 +522,313 @@ router.post('/test-getcert', verifyApiKey, async (req, res) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'GetCertInfo test failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * PKI Certificate Status Check
+ * GET /api/pki/cert-status/:userId
+ */
+router.get('/pki/cert-status/:userId', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing userId parameter',
+      });
+      return;
+    }
+    
+    log.info('Checking PKI certificate status', { userId });
+    
+    const certInfo = await signingService.checkCertificateStatus(userId, req.correlationId!);
+    
+    if (certInfo) {
+      res.status(200).json({
+        success: true,
+        message: 'Certificate status retrieved',
+        data: {
+          valid: certInfo.certStatus === 'Valid',
+          status: certInfo.certStatus,
+          validFrom: certInfo.certValidFrom,
+          validTo: certInfo.certValidTo,
+          serialNumber: certInfo.certSerialNo,
+          daysUntilExpiry: certInfo.certValidTo ? 
+            Math.ceil((new Date(certInfo.certValidTo).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
+        },
+        correlationId: req.correlationId,
+      });
+    } else {
+      res.status(200).json({
+        success: false,
+        message: 'Certificate not found or invalid',
+        data: {
+          valid: false,
+          status: 'not_found',
+          requiresEnrollment: true
+        },
+        correlationId: req.correlationId,
+      });
+    }
+    
+  } catch (error) {
+    log.error('PKI certificate status check failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Certificate status check failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * PKI OTP Request for Digital Signing
+ * POST /api/pki/request-otp
+ */
+router.post('/pki/request-otp', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { userId, email, submissionId } = req.body;
+    
+    if (!userId || !email) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required fields: userId, email',
+      });
+      return;
+    }
+    
+    log.info('Requesting PKI signing OTP', { userId, submissionId });
+    
+    const otpRequested = await signingService.requestSigningOTP(userId, email, req.correlationId!);
+    
+    if (otpRequested) {
+      res.status(200).json({
+        success: true,
+        message: 'OTP sent successfully to registered email',
+        data: {
+          otpSent: true,
+          expiryMinutes: 10,
+          submissionId
+        },
+        correlationId: req.correlationId,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Failed to send OTP',
+        error: {
+          code: 'OTP_REQUEST_FAILED',
+          details: 'Unable to send OTP to registered email'
+        },
+        correlationId: req.correlationId,
+      });
+    }
+    
+  } catch (error) {
+    log.error('PKI OTP request failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'OTP request failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * PKI Complete Signing with OTP
+ * POST /api/pki/complete-signing
+ */
+router.post('/pki/complete-signing', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { sessionId, otp } = req.body;
+    
+    if (!sessionId || !otp) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required fields: sessionId, otp',
+      });
+      return;
+    }
+    
+    // Validate OTP format (6 digits)
+    if (!/^\d{6}$/.test(otp)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid OTP format. Must be 6 digits.',
+      });
+      return;
+    }
+    
+    log.info('Completing PKI signing with OTP', { sessionId });
+    
+    const result = await signingService.completePKISigningWithOTP(sessionId, otp, req.correlationId!);
+    
+    if (result.success) {
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: {
+          nextAction: result.nextAction,
+          signingComplete: true
+        },
+        correlationId: req.correlationId,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.message,
+        error: {
+          code: 'PKI_SIGNING_FAILED',
+          details: result.message
+        },
+        correlationId: req.correlationId,
+      });
+    }
+    
+  } catch (error) {
+    log.error('PKI signing completion failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'PKI signing completion failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * PKI Session Status
+ * GET /api/pki/session/:sessionId
+ */
+router.get('/pki/session/:sessionId', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { sessionId } = req.params;
+    
+    if (!sessionId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing sessionId parameter',
+      });
+      return;
+    }
+    
+    log.info('Getting PKI session status', { sessionId });
+    
+    // TODO: Implement session retrieval from persistent storage
+    // For now, return mock data
+    const session = {
+      id: sessionId,
+      status: 'awaiting_otp',
+      submissionId: 'mock_submission',
+      currentSignatory: {
+        role: 'Borrower',
+        email: 'borrower@example.com'
+      },
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+    };
+    
+    res.status(200).json({
+      success: true,
+      message: 'Session status retrieved',
+      data: session,
+      correlationId: req.correlationId,
+    });
+    
+  } catch (error) {
+    log.error('PKI session status check failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Session status check failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * PKI Sign PDF with OTP
+ * POST /api/pki/sign-pdf
+ */
+router.post('/pki/sign-pdf', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { userId, otp, submissionId, applicationId, userFullName } = req.body;
+    
+    if (!userId || !otp || !submissionId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required parameters: userId, otp, submissionId',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Validate OTP format (6 digits)
+    if (!/^\d{6}$/.test(otp)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid OTP format. Must be 6 digits.',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    log.info('Starting PKI PDF signing process', { userId, submissionId, applicationId });
+    
+    // Call the signing service to complete PKI signing
+    const result = await signingService.signPDFWithPKI(userId, otp, submissionId, applicationId, req.correlationId!, userFullName);
+    
+    if (result.success) {
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result.data,
+        correlationId: req.correlationId,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.message,
+        error: {
+          code: 'PKI_PDF_SIGNING_FAILED',
+          details: result.message
+        },
+        correlationId: req.correlationId,
+      });
+    }
+    
+  } catch (error) {
+    log.error('PKI PDF signing failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'PKI PDF signing failed',
       correlationId: req.correlationId,
     });
   }

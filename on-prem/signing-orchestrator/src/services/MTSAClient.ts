@@ -75,7 +75,34 @@ export class MTSAClient {
         log.debug(`Executing SOAP method: ${methodName} (attempt ${attempt})`, { params: { ...params, AuthFactor: '[REDACTED]' } });
         
         // Execute SOAP method (HTTP headers are already set in initialize())
-        const [result] = await this.client[methodName + 'Async'](params);
+        // Try different method invocation patterns based on MTSA API
+        let result;
+        try {
+          // Try with Async suffix first (promise-based)
+          if (typeof this.client[methodName + 'Async'] === 'function') {
+            const [asyncResult] = await this.client[methodName + 'Async'](params);
+            result = asyncResult;
+          }
+          // Try standard method name with Promise wrapper
+          else if (typeof this.client[methodName] === 'function') {
+            result = await new Promise((resolve, reject) => {
+              this.client[methodName](params, (err: any, result: any) => {
+                if (err) reject(err);
+                else resolve(result);
+              });
+            });
+          }
+          // Try with different casing or patterns
+          else {
+            // List available methods for debugging
+            const methods = Object.getOwnPropertyNames(this.client).filter(prop => typeof this.client[prop] === 'function');
+            log.info(`Available SOAP methods`, { methods: methods.slice(0, 20) });
+            throw new Error(`Method ${methodName} not found. Available methods logged above.`);
+          }
+        } catch (methodError) {
+          log.error(`Method invocation failed`, { methodName, error: methodError.message });
+          throw methodError;
+        }
         
         // Try to log available client properties for debugging
         const clientProps = Object.getOwnPropertyNames(this.client);
@@ -148,13 +175,25 @@ export class MTSAClient {
       correlationId
     );
 
+    // Handle potential undefined result or different response structure
+    if (!result) {
+      log.warn('Email OTP request returned undefined result');
+      return { statusCode: '9999', message: 'No response received' };
+    }
+
+    // Handle different possible response structures
+    const responseData = (result as any)?.return || result;
+    const statusCode = responseData?.statusCode || '9999';
+    const statusMsg = responseData?.statusMsg || responseData?.message || 'Unknown response';
+
     log.info('Email OTP request completed', { 
-      statusCode: result.return?.statusCode || result.statusCode,
-      message: result.return?.statusMsg || result.message,
-      success: (result.return?.statusCode || result.statusCode) === '0000'
+      statusCode,
+      message: statusMsg,
+      success: statusCode === '000',
+      rawResult: result
     });
 
-    return result;
+    return responseData;
   }
 
   /**
@@ -180,7 +219,7 @@ export class MTSAClient {
 
     log.info('Certificate enrollment completed', { 
       statusCode: result.statusCode, 
-      success: result.statusCode === '0000',
+      success: result.statusCode === '000',
       hasCertSerialNo: !!result.certSerialNo 
     });
 
@@ -241,13 +280,22 @@ export class MTSAClient {
       correlationId
     );
 
+    // Handle response structure - data may be in result.return or at root level
+    const responseData = (result as any).return || result;
+    const parsedResult: MTSASignPDFResponse = {
+      statusCode: responseData.statusCode || result.statusCode || 'UNKNOWN',
+      message: responseData.statusMsg || responseData.message || result.message || 'Unknown error',
+      signedPdfInBase64: responseData.signedPdfInBase64 || result.signedPdfInBase64,
+      userCert: responseData.userCert || result.userCert
+    };
+
     log.info('PDF signing completed', { 
-      statusCode: result.statusCode, 
-      success: result.statusCode === '0000',
-      hasSignedPdf: !!result.signedPdfInBase64 
+      statusCode: parsedResult.statusCode, 
+      success: parsedResult.statusCode === '000',
+      hasSignedPdf: !!parsedResult.signedPdfInBase64 
     });
 
-    return result;
+    return parsedResult;
   }
 
   /**
@@ -269,7 +317,7 @@ export class MTSAClient {
 
     log.info('PDF signature verification completed', { 
       statusCode: result.statusCode, 
-      success: result.statusCode === '0000',
+      success: result.statusCode === '000',
       totalSignatures: result.totalSignatureInPdf 
     });
 
@@ -300,7 +348,7 @@ export class MTSAClient {
 
     log.info('Certificate revocation completed', { 
       statusCode: result.statusCode, 
-      success: result.statusCode === '0000',
+      success: result.statusCode === '000',
       revoked: result.revoked 
     });
 
@@ -329,7 +377,7 @@ export class MTSAClient {
 
     log.info('Certificate PIN verification completed', { 
       statusCode: result.statusCode, 
-      success: result.statusCode === '0000',
+      success: result.statusCode === '000',
       pinVerified: result.pinVerified 
     });
 

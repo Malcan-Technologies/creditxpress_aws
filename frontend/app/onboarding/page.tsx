@@ -64,7 +64,7 @@ function OnboardingPageContent() {
 			setCertificateStatus(prev => ({ ...prev, loading: true }));
 
 			const certResponse = await fetchWithTokenRefresh(
-				`/api/mtsa/certificate/${icNumber}?t=${Date.now()}`,
+				`/api/mtsa/cert-info/${icNumber}?t=${Date.now()}`,
 				{
 					method: "GET",
 					cache: "no-store",

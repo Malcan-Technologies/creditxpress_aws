@@ -37,11 +37,11 @@ services:
             - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID}
             - WHATSAPP_USE_OTP_TEMPLATE=true
             - KYC_JWT_SECRET=kapital_nextauth_secret_key_2024_03_secure_789!@#
-            # DocuSeal Configuration - On-Premises Server
-            - DOCUSEAL_BASE_URL=http://192.168.0.100:3001
-            - DOCUSEAL_API_URL=http://192.168.0.100:3001
-            - DOCUSEAL_API_TOKEN=NwPkizAUEfShnc4meN1m3N38DG8ZNEyRmWPMjq8BXv8
-            - DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID=2
+            # DocuSeal Configuration - From .env file
+            - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL}
+            - DOCUSEAL_API_URL=${DOCUSEAL_BASE_URL}
+            - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
+            - DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID=${DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID}
             - FRONTEND_URL=http://localhost:3000
             - COMPANY_SIGNING_EMAIL=admin@kredit.my
             - WITNESS_EMAIL=legal@kredit.my
@@ -52,6 +52,14 @@ services:
             - SIGNING_ORCHESTRATOR_URL=http://host.docker.internal:4010
             - SIGNING_ORCHESTRATOR_API_KEY=NwPkizAUEfShnc4meN1m3N38DG8ZNEyRmWPMjq8BXv8
             - KYC_TOKEN_TTL_MINUTES=15
+            # CTOS eKYC Configuration
+            - CTOS_API_KEY=${CTOS_API_KEY}
+            - CTOS_PACKAGE_NAME=${CTOS_PACKAGE_NAME}
+            - CTOS_SECURITY_KEY=${CTOS_SECURITY_KEY}
+            - CTOS_BASE_URL=${CTOS_BASE_URL}
+            - CTOS_WEBHOOK_URL=${CTOS_WEBHOOK_URL}
+            - CTOS_CIPHERTEXT=${CTOS_CIPHERTEXT}
+            - CTOS_CIPHER=${CTOS_CIPHER}
         depends_on:
             postgres:
                 condition: service_healthy

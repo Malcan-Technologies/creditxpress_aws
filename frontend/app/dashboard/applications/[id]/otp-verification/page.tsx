@@ -101,7 +101,7 @@ export default function OTPVerificationPage() {
 
 					// Step 1: Check if user has a valid certificate using GetCertInfo
 		const certCheckData = await fetchWithTokenRefresh(
-			`/api/mtsa/certificate/${userId}`,
+			`/api/mtsa/cert-info/${userId}`,
 			{
 				method: "GET",
 			}

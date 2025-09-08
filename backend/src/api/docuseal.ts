@@ -299,7 +299,7 @@ router.get('/admin/templates', authenticateToken, async (_req: AuthRequest, res)
 
 /**
  * POST /api/docuseal/webhook
- * Handle DocuSeal webhook events
+ * Handle DocuSeal webhook events with PKI interception
  */
 router.post('/webhook', async (req, res) => {
   try {
@@ -328,8 +328,22 @@ router.post('/webhook', async (req, res) => {
       }
     }
 
-    // Handle the webhook
-    await docusealService.handleWebhook(req.body);
+    // 🔐 PKI INTEGRATION: Check if this is a signing attempt that should be intercepted
+    if (req.body.event_type === 'form.completed') {
+      console.log('🔐 Intercepting form.completed event for PKI workflow');
+      
+      // Forward to signing orchestrator for PKI processing
+      await forwardToSigningOrchestrator(req.body);
+      
+      // Return success but don't process through standard DocuSeal flow
+      return res.json({
+        success: true,
+        message: 'Signing intercepted for PKI processing'
+      });
+    } else {
+      // Handle other webhook events through standard DocuSeal service
+      await docusealService.handleWebhook(req.body);
+    }
     
     return res.json({
       success: true,
@@ -345,6 +359,38 @@ router.post('/webhook', async (req, res) => {
     });
   }
 });
+
+/**
+ * Forward webhook to signing orchestrator for PKI processing
+ */
+async function forwardToSigningOrchestrator(payload: any): Promise<void> {
+  try {
+    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'http://192.168.0.100:4010';
+    const webhookUrl = `${orchestratorUrl}/webhooks/docuseal`;
+    
+    console.log('Forwarding to signing orchestrator:', webhookUrl);
+    
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Orchestrator responded with ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    console.log('Orchestrator response:', result);
+    
+  } catch (error) {
+    console.error('Failed to forward to signing orchestrator:', error);
+    // Don't throw - we want to continue processing even if orchestrator fails
+  }
+}
 
 /**
  * GET /api/docuseal/download/:submissionId

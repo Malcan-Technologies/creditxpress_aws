@@ -118,7 +118,7 @@ export default function ProfileConfirmationPage() {
 			console.log("Checking certificate status for user:", userId);
 			
 			const certCheckResponse = await fetchWithTokenRefresh(
-				`/api/mtsa/certificate/${userId}`,
+				`/api/mtsa/cert-info/${userId}`,
 				{
 					method: "GET",
 				}
@@ -146,8 +146,8 @@ export default function ProfileConfirmationPage() {
 
 				router.push(`/dashboard/applications/${params.id}/signing`);
 			} else {
-				// User needs new certificate - proceed to OTP verification
-				console.log("User needs new certificate, proceeding to OTP verification");
+				// User needs new certificate - proceed to KYC verification first
+				console.log("User needs new certificate, proceeding to KYC verification");
 				
 				await fetchWithTokenRefresh(
 					`/api/loan-applications/${params.id}`,
@@ -157,12 +157,12 @@ export default function ProfileConfirmationPage() {
 							"Content-Type": "application/json",
 						},
 						body: JSON.stringify({
-							status: "PENDING_CERTIFICATE_OTP",
+							status: "PENDING_KYC",
 						}),
 					}
 				);
 
-				router.push(`/dashboard/applications/${params.id}/otp-verification`);
+				router.push(`/dashboard/applications/${params.id}/kyc-verification`);
 			}
 		} catch (err) {
 			console.error("Profile confirmation error:", err);
@@ -419,11 +419,11 @@ export default function ProfileConfirmationPage() {
 				{/* Back Button */}
 				<div className="mb-6">
 					<button
-						onClick={handleBackToKyc}
+						onClick={() => router.push("/dashboard/loans")}
 						className="inline-flex items-center px-6 py-3 border border-gray-300 rounded-xl text-gray-700 bg-white hover:bg-gray-50 transition-colors font-body"
 					>
 						<ArrowLeftIcon className="h-4 w-4 mr-2" />
-						Back to KYC Verification
+						Back to Applications
 					</button>
 				</div>
 
@@ -445,17 +445,17 @@ export default function ProfileConfirmationPage() {
 					<div className="mb-8">
 						<div className="flex items-center justify-between text-sm">
 							<div className="flex items-center">
-								<div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center">
-									<CheckCircleIcon className="w-4 h-4" />
+								<div className="w-8 h-8 bg-purple-primary text-white rounded-full flex items-center justify-center">
+									<span className="text-xs font-bold">1</span>
 								</div>
-								<span className="ml-2 text-green-600 font-medium">KYC Verified</span>
+								<span className="ml-2 text-purple-primary font-medium">Profile Confirmation</span>
 							</div>
 							<div className="flex-1 h-px bg-gray-300 mx-4"></div>
 							<div className="flex items-center">
-								<div className="w-8 h-8 bg-purple-primary text-white rounded-full flex items-center justify-center">
+								<div className="w-8 h-8 bg-gray-300 text-gray-500 rounded-full flex items-center justify-center">
 									<span className="text-xs font-bold">2</span>
 								</div>
-								<span className="ml-2 text-purple-primary font-medium">Profile Confirmation</span>
+								<span className="ml-2 text-gray-500 font-medium">KYC Verification</span>
 							</div>
 							<div className="flex-1 h-px bg-gray-300 mx-4"></div>
 							<div className="flex items-center">

@@ -282,8 +282,11 @@ async function checkDocuSealReachability(correlationId: string): Promise<boolean
   const log = createCorrelatedLogger(correlationId);
   
   try {
-    const response = await axios.get(`${config.docuseal.baseUrl}/health`, {
+    const response = await axios.get(`${config.docuseal.baseUrl}/api/templates`, {
       timeout: 5000,
+      headers: {
+        'X-Auth-Token': config.docuseal.apiToken
+      },
       validateStatus: (status) => status < 500, // Accept any status < 500 as reachable
     });
     

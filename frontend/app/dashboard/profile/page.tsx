@@ -218,7 +218,7 @@ export default function ProfilePage() {
 			setCertificateStatus(prev => ({ ...prev, loading: true }));
 
 			const certResponse = await fetchWithTokenRefresh(
-				`/api/mtsa/certificate/${profile.icNumber}?t=${Date.now()}`,
+				`/api/mtsa/cert-info/${profile.icNumber}?t=${Date.now()}`,
 				{
 					method: "GET",
 					cache: "no-store",

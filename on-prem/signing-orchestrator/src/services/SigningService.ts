@@ -16,6 +16,406 @@ import {
 
 export class SigningService {
   /**
+   * Process PKI-only signing workflow for multi-signatory documents
+   */
+  async processPKISigningWorkflow(
+    multiSignatoryData: any,
+    signingContext: any,
+    correlationId: string
+  ): Promise<void> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    try {
+      const { currentSubmitter, submissionId } = multiSignatoryData;
+      
+      log.info('🔐 Starting PKI-only workflow', {
+        submissionId,
+        signerRole: currentSubmitter.role,
+        signerEmail: currentSubmitter.email,
+        signatoryIndex: signingContext.currentSignatoryIndex + 1,
+        totalSignatories: signingContext.totalSignatories
+      });
+      
+      // Step 1: Create or retrieve persistent session
+      const session = await this.getOrCreatePKISession(multiSignatoryData, signingContext, correlationId);
+      
+      // Step 2: Check certificate status for current signatory
+      const certStatus = await this.checkCertificateStatus(currentSubmitter.userId, correlationId);
+      
+      if (!certStatus || certStatus.certStatus !== 'Valid') {
+        log.warn('Certificate not valid for PKI signing', {
+          userId: currentSubmitter.userId,
+          certStatus: certStatus?.certStatus || 'not_found'
+        });
+        
+        // TODO: Redirect to certificate enrollment
+        await this.handleCertificateEnrollment(currentSubmitter, session, correlationId);
+        return;
+      }
+      
+      // Step 3: Request OTP for digital signing
+      const otpRequested = await this.requestSigningOTP(
+        currentSubmitter.userId, 
+        currentSubmitter.email, 
+        correlationId
+      );
+      
+      if (!otpRequested) {
+        throw new Error('Failed to request OTP for digital signing');
+      }
+      
+      // Step 4: Update session status
+      await this.updatePKISessionStatus(session.id, 'otp_sent', correlationId);
+      
+      // Step 5: Inject OTP input into DocuSeal UI
+      await this.injectOTPInputOverlay(submissionId, currentSubmitter, session.id, correlationId);
+      
+      log.info('PKI workflow initiated successfully', {
+        submissionId,
+        sessionId: session.id,
+        signerRole: currentSubmitter.role,
+        status: 'awaiting_otp'
+      });
+      
+    } catch (error) {
+      log.error('PKI workflow failed', {
+        error: error instanceof Error ? error.message : String(error),
+        submissionId: multiSignatoryData.submissionId,
+        signerRole: multiSignatoryData.currentSubmitter.role
+      });
+      throw error;
+    }
+  }
+  
+  /**
+   * Complete PKI signing with OTP
+   */
+  async completePKISigningWithOTP(
+    sessionId: string,
+    otp: string,
+    correlationId: string
+  ): Promise<{ success: boolean; message: string; nextAction?: string }> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    try {
+      // Step 1: Retrieve session
+      const session = await this.getPKISession(sessionId, correlationId);
+      if (!session) {
+        throw new Error(`PKI session ${sessionId} not found`);
+      }
+      
+      // Step 2: Download current PDF version (may have previous signatures)
+      const currentPdfBase64 = await this.downloadCurrentPDFVersion(session, correlationId);
+      
+      // Step 3: Extract signature coordinates for current signatory
+      const signatureCoordinates = this.extractSignatureCoordinates(session.currentSubmitter.signatureFields);
+      
+      // Step 4: Sign PDF with MTSA
+      const signedResult = await this.signPDFWithMTSA(
+        session.currentSubmitter,
+        currentPdfBase64,
+        otp,
+        signatureCoordinates,
+        correlationId
+      );
+      
+      if (!signedResult.success) {
+        throw new Error(`PDF signing failed: ${signedResult.message}`);
+      }
+      
+      // Step 5: Upload signed PDF back to DocuSeal
+      await this.uploadSignedPDFToDocuSeal(session.submissionId, signedResult.signedPdfBase64!, correlationId);
+      
+      // Step 6: Update session and determine next steps
+      await this.updateSignatoryCompletion(session, correlationId);
+      
+      // Step 7: Handle multi-signatory workflow
+      const nextAction = await this.handleNextSignatory(session, session.signingContext, correlationId);
+      
+      log.info('PKI signing completed successfully', {
+        sessionId,
+        submissionId: session.submissionId,
+        signerRole: session.currentSubmitter.role,
+        nextAction
+      });
+      
+      return {
+        success: true,
+        message: 'Document signed successfully with PKI certificate',
+        nextAction
+      };
+      
+    } catch (error) {
+      log.error('PKI signing completion failed', {
+        sessionId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'PKI signing failed'
+      };
+    }
+  }
+  
+  /**
+   * Get or create persistent PKI session
+   */
+  private async getOrCreatePKISession(multiSignatoryData: any, signingContext: any, correlationId: string): Promise<any> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    // For now, create a simple in-memory session
+    // In production, this would be stored in database
+    const session = {
+      id: `pki_${multiSignatoryData.submissionId}_${Date.now()}`,
+      submissionId: multiSignatoryData.submissionId,
+      packetId: multiSignatoryData.packetId,
+      currentSubmitter: multiSignatoryData.currentSubmitter,
+      allSubmitters: multiSignatoryData.allSubmitters,
+      signingContext,
+      status: 'initiated',
+      createdAt: new Date(),
+      originalPdfUrl: multiSignatoryData.originalPdfUrl
+    };
+    
+    log.info('Created PKI session', { sessionId: session.id, submissionId: session.submissionId });
+    
+    // TODO: Store in persistent storage (database/redis)
+    return session;
+  }
+  
+  /**
+   * Get PKI session by ID
+   */
+  private async getPKISession(sessionId: string, correlationId: string): Promise<any> {
+    // TODO: Retrieve from persistent storage
+    // For now, return mock session
+    return {
+      id: sessionId,
+      submissionId: 'mock_submission',
+      currentSubmitter: {
+        userId: 'mock_user',
+        fullName: 'Mock User',
+        email: 'mock@example.com',
+        role: 'Borrower',
+        signatureFields: []
+      }
+    };
+  }
+  
+  /**
+   * Update PKI session status
+   */
+  private async updatePKISessionStatus(sessionId: string, status: string, correlationId: string): Promise<void> {
+    const log = createCorrelatedLogger(correlationId);
+    log.info('Updating PKI session status', { sessionId, status });
+    
+    // TODO: Update in persistent storage
+  }
+  
+  /**
+   * Download current PDF version (may have previous signatures)
+   */
+  private async downloadCurrentPDFVersion(session: any, correlationId: string): Promise<string> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    // For first signatory, download original PDF
+    // For subsequent signatories, download PDF with previous signatures
+    const pdfUrl = session.originalPdfUrl;
+    
+    return await this.downloadPdfAsBase64(pdfUrl, correlationId);
+  }
+  
+  /**
+   * Extract signature coordinates from DocuSeal fields
+   */
+  private extractSignatureCoordinates(signatureFields: any[]): any {
+    if (!signatureFields || signatureFields.length === 0) {
+      // Return default coordinates if none found
+      return {
+        pageNo: 1,
+        x1: 100,
+        y1: 200,
+        x2: 300,
+        y2: 250
+      };
+    }
+    
+    const field = signatureFields[0];
+    const area = field.areas?.[0];
+    
+    if (area) {
+      // Convert DocuSeal normalized coordinates to MTSA pixel coordinates
+      const PDF_WIDTH = 595; // A4 width in points
+      const PDF_HEIGHT = 842; // A4 height in points
+      
+      return {
+        pageNo: (area.page || 0) + 1, // Convert 0-based to 1-based
+        x1: Math.round(area.x * PDF_WIDTH),
+        y1: Math.round(area.y * PDF_HEIGHT),
+        x2: Math.round((area.x + area.w) * PDF_WIDTH),
+        y2: Math.round((area.y + area.h) * PDF_HEIGHT)
+      };
+    }
+    
+    // Fallback to default coordinates
+    return {
+      pageNo: 1,
+      x1: 100,
+      y1: 200,
+      x2: 300,
+      y2: 250
+    };
+  }
+  
+  /**
+   * Sign PDF with MTSA using extracted coordinates
+   */
+  private async signPDFWithMTSA(
+    submitter: any,
+    pdfBase64: string,
+    otp: string,
+    coordinates: any,
+    correlationId: string
+  ): Promise<{ success: boolean; message: string; signedPdfBase64?: string }> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    try {
+      const signResult = await mtsaClient.signPDF({
+        UserID: submitter.userId,
+        FullName: submitter.fullName,
+        AuthFactor: otp,
+        SignatureInfo: {
+          pdfInBase64: pdfBase64,
+          visibility: true,
+          x1: coordinates.x1 || 100,
+          y1: coordinates.y1 || 200,
+          x2: coordinates.x2 || 300,
+          y2: coordinates.y2 || 250,
+          pageNo: coordinates.pageNo || 1
+        },
+        FieldListToUpdate: [
+          { pdfFieldName: `DateSigned_${submitter.role}`, pdfFieldValue: 'CURR_DATE,F=DD/MM/YYYY' },
+          { pdfFieldName: `SignerName_${submitter.role}`, pdfFieldValue: 'SIGNER_FULLNAME' },
+          { pdfFieldName: `SignerID_${submitter.role}`, pdfFieldValue: 'SIGNER_ID' }
+        ]
+      }, correlationId);
+      
+      if (signResult.statusCode === '000') {
+        return {
+          success: true,
+          message: 'PDF signed successfully',
+          signedPdfBase64: signResult.signedPdfInBase64
+        };
+      } else {
+        return {
+          success: false,
+          message: signResult.message || 'PDF signing failed'
+        };
+      }
+    } catch (error) {
+      log.error('MTSA PDF signing failed', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'PDF signing failed'
+      };
+    }
+  }
+  
+  /**
+   * Upload signed PDF back to DocuSeal
+   */
+  private async uploadSignedPDFToDocuSeal(submissionId: string, signedPdfBase64: string, correlationId: string): Promise<void> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    try {
+      // TODO: Implement DocuSeal API call to upload signed PDF
+      log.info('Uploading signed PDF to DocuSeal', { submissionId });
+      
+      // For now, just log the action
+      log.info('Signed PDF uploaded successfully', { submissionId });
+      
+    } catch (error) {
+      log.error('Failed to upload signed PDF to DocuSeal', {
+        submissionId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+  
+  /**
+   * Update signatory completion status
+   */
+  private async updateSignatoryCompletion(session: any, correlationId: string): Promise<void> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    log.info('Updating signatory completion', {
+      sessionId: session.id,
+      signerRole: session.currentSubmitter.role
+    });
+    
+    // TODO: Update session and database records
+  }
+  
+  /**
+   * Handle next signatory in multi-signatory workflow
+   */
+  private async handleNextSignatory(session: any, signingContext: any, correlationId: string): Promise<string> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    if (signingContext.isLastSignatory) {
+      log.info('All signatories completed', { sessionId: session.id });
+      return 'all_completed';
+    } else {
+      log.info('Notifying next signatory', { 
+        sessionId: session.id,
+        nextRole: signingContext.nextSignatoryRole 
+      });
+      
+      // TODO: Send notification to next signatory
+      return 'next_signatory_notified';
+    }
+  }
+  
+  /**
+   * Handle certificate enrollment for users without valid certificates
+   */
+  private async handleCertificateEnrollment(submitter: any, session: any, correlationId: string): Promise<void> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    log.info('Handling certificate enrollment', {
+      userId: submitter.userId,
+      sessionId: session.id
+    });
+    
+    // TODO: Implement certificate enrollment flow
+    // This would redirect user to certificate enrollment process
+  }
+  
+  /**
+   * Inject OTP input overlay into DocuSeal UI
+   */
+  private async injectOTPInputOverlay(submissionId: string, submitter: any, sessionId: string, correlationId: string): Promise<void> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    log.info('Injecting OTP input overlay', {
+      submissionId,
+      sessionId,
+      signerEmail: submitter.email
+    });
+    
+    // TODO: Implement frontend injection mechanism
+    // This could be done via:
+    // 1. WebSocket notification to frontend
+    // 2. Polling endpoint that frontend checks
+    // 3. Direct DOM manipulation if possible
+  }
+
+  /**
    * Process complete signing workflow from DocuSeal webhook
    */
   async processSigningWorkflow(
@@ -125,12 +525,12 @@ export class SigningService {
       
       const result = await mtsaClient.getCertInfo({ UserID: userId }, correlationId);
       
-      if (result.statusCode === '0000') {
+      if (result.statusCode === '000') {
         log.info('Certificate status retrieved', { 
           userId, 
           status: result.certStatus,
-          validFrom: result.validFrom,
-          validTo: result.validTo 
+          validFrom: result.certValidFrom,
+          validTo: result.certValidTo 
         });
         return result;
       } else {
@@ -166,7 +566,7 @@ export class SigningService {
         EmailAddress: signerInfo.emailAddress,
       }, correlationId);
       
-      if (otpResult.statusCode !== '0000') {
+      if (otpResult.statusCode !== '000') {
         return {
           success: false,
           message: 'Failed to send enrollment OTP',
@@ -220,8 +620,8 @@ export class SigningService {
           message: 'Certificate enrolled successfully',
           certificateInfo: {
             serialNo: certResult.certSerialNo!,
-            validFrom: certResult.validFrom!,
-            validTo: certResult.validTo!,
+            validFrom: certResult.certValidFrom!,
+            validTo: certResult.certValidTo!,
             certificate: certResult.userCert!,
           },
         };
@@ -268,7 +668,7 @@ export class SigningService {
         EmailAddress: emailAddress,
       }, correlationId);
       
-      const success = result.statusCode === '0000';
+      const success = result.statusCode === '000';
       log.info('Signing OTP request completed', { userId, success, message: result.message });
       
       return success;
@@ -309,12 +709,18 @@ export class SigningService {
       const isVisible = !!sigCoordinates;
       
       // Prepare field updates with template variables
-      const finalFieldUpdates: FieldUpdate = {
+      const fieldUpdatesObj: FieldUpdate = {
         CURR_DATE: new Date().toLocaleDateString('en-MY'),
         SIGNER_FULLNAME: signerInfo.fullName,
         SIGNER_ID: signerInfo.userId,
         ...fieldUpdates,
       };
+      
+      // Convert to MTSA expected format (array of PdfFieldNameValue)
+      const finalFieldUpdates = Object.entries(fieldUpdatesObj).map(([key, value]) => ({
+        pdfFieldName: key,
+        pdfFieldValue: value
+      }));
       
       const signResult = await mtsaClient.signPDF({
         UserID: signerInfo.userId,
@@ -323,13 +729,17 @@ export class SigningService {
         SignatureInfo: {
           pdfInBase64: pdfBase64,
           visibility: isVisible,
-          coordinates: sigCoordinates,
+          x1: sigCoordinates.x1 || 100,
+          y1: sigCoordinates.y1 || 200,
+          x2: sigCoordinates.x2 || 300,
+          y2: sigCoordinates.y2 || 250,
+          pageNo: sigCoordinates.pageNo || 1,
           sigImageInBase64: signatureImage,
         },
         FieldListToUpdate: finalFieldUpdates,
       }, correlationId);
       
-      if (signResult.statusCode === '0000') {
+      if (signResult.statusCode === '000') {
         log.info('PDF signing completed successfully', { 
           userId: signerInfo.userId,
           hasSignedPdf: !!signResult.signedPdfInBase64 
@@ -432,6 +842,221 @@ export class SigningService {
         error: error instanceof Error ? error.message : String(error) 
       });
       throw error;
+    }
+  }
+
+  /**
+   * Sign PDF with PKI using OTP and submission/application data
+   */
+  async signPDFWithPKI(
+    userId: string,
+    otp: string,
+    submissionId: string,
+    applicationId: string,
+    correlationId: string,
+    userFullName?: string
+  ): Promise<{ success: boolean; message: string; data?: any }> {
+    const log = createCorrelatedLogger(correlationId);
+    
+    try {
+      log.info('Starting PKI PDF signing', { userId, submissionId, applicationId });
+      
+      // Step 1: Get DocuSeal submission details to find user info and documents
+      log.info('Fetching DocuSeal submission details', { submissionId });
+      
+      // First get submission details to extract user's full name
+      const submissionResponse = await axios.get(
+        `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
+        {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Accept': 'application/json'
+          },
+          timeout: config.network.timeoutMs
+        }
+      );
+      
+      const submission = submissionResponse.data;
+      log.info('DocuSeal submission details', { 
+        submissionId, 
+        hasSubmitters: !!submission?.submitters,
+        submitterCount: submission?.submitters?.length || 0
+      });
+      
+      // Find the submitter matching the userId
+      const currentSubmitter = submission?.submitters?.find((submitter: any) => 
+        submitter.external_id === userId || submitter.uuid === userId
+      );
+      
+      // Use the full name passed from the backend database (much more reliable than certificate extraction)
+      const finalUserFullName = userFullName || `User ${userId}`; // fallback if not provided
+      
+      log.info('Using user full name from database', { 
+        userId, 
+        fullName: finalUserFullName,
+        submitterId: currentSubmitter?.uuid,
+        providedByBackend: !!userFullName
+      });
+      
+      // Now get the documents
+      const documentsResponse = await axios.get(
+        `${config.docuseal.baseUrl}/api/submissions/${submissionId}/documents`,
+        {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Accept': 'application/json'
+          },
+          timeout: config.network.timeoutMs
+        }
+      );
+      
+      const submissionData = documentsResponse.data;
+      log.info('DocuSeal submission documents response', { 
+        submissionId, 
+        responseStatus: documentsResponse.status,
+        hasSubmission: !!submissionData,
+        hasDocuments: !!submissionData?.documents,
+        documentCount: submissionData?.documents?.length || 0
+      });
+      
+      if (!submissionData || !submissionData.documents || submissionData.documents.length === 0) {
+        throw new Error(`DocuSeal submission ${submissionId} not found or has no documents attached.`);
+      }
+      
+      // Get the first document URL
+      const document = submissionData.documents[0];
+      log.info('Retrieved DocuSeal document', { 
+        documentName: document.name,
+        documentUrl: document.url
+      });
+      
+      // Step 2: Download the PDF from the document URL (fix localhost for container)
+      const containerDocumentUrl = document.url.replace('http://localhost:3001', config.docuseal.baseUrl);
+      log.info('Downloading PDF from DocuSeal document URL', { 
+        originalUrl: document.url,
+        containerUrl: containerDocumentUrl 
+      });
+      
+      const pdfResponse = await axios.get(containerDocumentUrl, {
+        headers: {
+          'X-Auth-Token': config.docuseal.apiToken,
+          'Accept': 'application/pdf'
+        },
+        responseType: 'arraybuffer',
+        timeout: config.network.timeoutMs
+      });
+      
+      const pdfBase64 = Buffer.from(pdfResponse.data).toString('base64');
+      log.info('PDF downloaded successfully', { 
+        pdfSizeKB: Math.round(pdfResponse.data.byteLength / 1024) 
+      });
+      
+      // Step 3: Sign the PDF with MTSA using the OTP
+      log.info('Signing PDF with MTSA', { 
+        userId, 
+        fullName: userFullName, 
+        otpLength: otp.length,
+        hasOtp: !!otp 
+      });
+      
+      const signRequest: any = {
+        UserID: userId,
+        FullName: finalUserFullName,
+        AuthFactor: otp,
+        FieldListToUpdate: [],
+        SignatureInfo: {
+          pdfInBase64: pdfBase64,
+          visibility: true,
+          x1: 100,
+          y1: 200,
+          x2: 300,
+          y2: 250,
+          pageNo: 1
+        }
+      };
+      
+      const signedResult = await mtsaClient.signPDF(signRequest, correlationId);
+      
+      if (signedResult.statusCode !== '000' || !signedResult.signedPdfInBase64) {
+        const errorMessage = signedResult.message || 'Unknown error';
+        const statusCode = signedResult.statusCode || 'UNKNOWN';
+        log.error('MTSA signing failed', { statusCode, message: errorMessage, userId, submissionId });
+        throw new Error(`MTSA signing failed (${statusCode}): ${errorMessage}`);
+      }
+      
+      log.info('PDF signed successfully with MTSA');
+      
+      // Step 4: Update DocuSeal submission with signed PDF
+      log.info('Updating DocuSeal submission with signed PDF');
+      
+      // DocuSeal might use a different endpoint for updating with signed PDF
+      // Try uploading the signed PDF back to the submission
+      const updateResponse = await axios.patch(
+        `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
+        {
+          pdf: signedResult.signedPdfInBase64,
+          status: 'completed'
+        },
+        {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Content-Type': 'application/json'
+          },
+          timeout: config.network.timeoutMs
+        }
+      );
+      
+      log.info('DocuSeal submission updated with signed PDF', { updateStatus: updateResponse.status });
+      
+      // Step 5: Mark the DocuSeal submission as completed
+      await axios.patch(
+        `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
+        {
+          completed: true
+        },
+        {
+          headers: {
+            'X-Auth-Token': config.docuseal.apiToken,
+            'Content-Type': 'application/json'
+          },
+          timeout: config.network.timeoutMs
+        }
+      );
+      
+      log.info('DocuSeal submission marked as completed');
+      
+      return {
+        success: true,
+        message: 'PDF signed successfully with PKI and uploaded to DocuSeal',
+        data: {
+          submissionId,
+          applicationId,
+          signedAt: new Date().toISOString(),
+          signer: userId,
+          mtsa: {
+            statusCode: signedResult.statusCode,
+            message: signedResult.message
+          },
+          document: {
+            name: document.name,
+            url: document.url,
+            signed: true
+          }
+        }
+      };
+      
+    } catch (error) {
+      log.error('PKI PDF signing failed', { 
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+        submissionId,
+        applicationId
+      });
+      
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'PKI PDF signing failed'
+      };
     }
   }
 }

@@ -22,6 +22,7 @@ interface SubmitterData {
   role: string;
   fields?: SubmitterField[];
   completed?: boolean;
+  external_id?: string;
 }
 
 interface CreateSubmissionRequest {
@@ -439,6 +440,7 @@ class DocuSealService {
             name: applicationData.user.fullName || 'Borrower',
             email: applicationData.user.email,
             role: 'Borrower',
+            external_id: applicationData.user.icNumber || applicationData.user.idNumber, // Include IC number for PKI identification
             fields: [
               {
                 name: 'borrower_name',
@@ -459,7 +461,7 @@ class DocuSealService {
             // No fields array - witness signs but doesn't need pre-filled data
           }
         ],
-        completed_redirect_url: `${process.env.FRONTEND_URL}/dashboard/loans?tab=applications&signed=success`,
+        completed_redirect_url: `${process.env.FRONTEND_URL}/pki-signing?application=${applicationId}&status=processing`,
         expired_redirect_url: `${process.env.FRONTEND_URL}/dashboard/loans?tab=applications&signed=expired`
       });
 

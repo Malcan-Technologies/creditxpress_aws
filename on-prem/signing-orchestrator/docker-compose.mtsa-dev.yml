@@ -11,6 +11,11 @@ services:
       - "4010:4010"
     environment:
       - NODE_ENV=development
+      - MTSA_WSDL_PILOT=http://mtsa-pilot:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl
+      # PKI Integration Settings
+      - PKI_ENABLED=true
+      - PKI_SESSION_EXPIRY_MINUTES=10
+      - PKI_OTP_MAX_ATTEMPTS=3
     env_file:
       - env.development
     volumes:

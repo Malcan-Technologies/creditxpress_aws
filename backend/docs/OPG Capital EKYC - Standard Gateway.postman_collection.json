@@ -1,0 +1,367 @@
+{
+	"info": {
+		"_postman_id": "ced6de3c-7ae0-4475-823b-ace14ae450ba",
+		"name": "OPG Capital EKYC - Standard Gateway",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "34617825"
+	},
+	"item": [
+		{
+			"name": "Create Transaction",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"//change here\r",
+							"var url = \"https://uat-eonboarding.ctos.com.my\"; // api url\r",
+							"var api_key = \"2ufqbSmHpuuYtxB3CDZCLa5S4kSPQ_V3\"; // api key\r",
+							"var package_name = \"com.OPG.uat\"; // package name\r",
+							"var ref_id = \"OPG_Test002\"; // Unique value, need to change for every transaction\r",
+							"var document_name= \"Test2\"; // Applicant name\r",
+							"var document_number= \"911231-14-5387\"; // Applicant NRIC/document numbers\r",
+							"var platform= \"Web\"; // Gateway = Web\r",
+							"var response_url= \"https://ekyc.ctos.com.my/\"; // URL Redirection\r",
+							"var backend_url= \"https://uat-eonboardingb.ctos.com.my/\"; // Webhook URL\r",
+							"var callback_mode= \"2\"; //0-no callback 1-summary 2-detail\r",
+							"var document_type= \"1\";\r",
+							"/* document_type= \"1\" = NRIC\r",
+							"document_type= \"3\" = Passport\r",
+							"*/\r",
+							"var request_time= \"2025-08-09 14:56:00\";\r",
+							"\r",
+							"var md5 = \"m4X12dM8GeYGYl1gLXO8PaZTERGG9bVt\"; // No need to change\r",
+							"var set_iv = \"MTIzNDU2Nzg5MDEy\"; // No need to change\r",
+							"\r",
+							"// V2 Gateway API\r",
+							"var api = \"v2\"\r",
+							"var signature_body = api_key + md5 + package_name + ref_id + md5 + request_time; \r",
+							"var rawStr = CryptoJS.enc.Utf8.parse(signature_body);\r",
+							"var rawStr1 = CryptoJS.SHA256(rawStr).toString();\r",
+							"var signature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(rawStr1));\r",
+							"\r",
+							"pm.collectionVariables.set(\"signature\", signature);\r",
+							"\r",
+							"// From Here to end no need to change\r",
+							"var set_key = set_iv + api_key;\r",
+							"pm.collectionVariables.set(\"md5\", md5);\r",
+							"pm.collectionVariables.set(\"url\", url);\r",
+							"pm.collectionVariables.set(\"api\", api);\r",
+							"pm.collectionVariables.set(\"api_key\", api_key);\r",
+							"pm.collectionVariables.set(\"package_name\", package_name);\r",
+							"pm.collectionVariables.set(\"iv\", set_iv);\r",
+							"pm.collectionVariables.set(\"key\", set_key.substring(0,32));\r",
+							"\r",
+							"pm.collectionVariables.set(\"ref_id\", ref_id);\r",
+							"pm.collectionVariables.set(\"document_name\", document_name);\r",
+							"pm.collectionVariables.set(\"document_number\", document_number);\r",
+							"pm.collectionVariables.set(\"platform\", platform);\r",
+							"pm.collectionVariables.set(\"response_url\", response_url);\r",
+							"pm.collectionVariables.set(\"backend_url\", backend_url);\r",
+							"pm.collectionVariables.set(\"callback_mode\", callback_mode);\r",
+							"pm.collectionVariables.set(\"document_type\", document_type);\r",
+							"pm.collectionVariables.set(\"request_time\", request_time);\r",
+							"\r",
+							"\r",
+							"var iv = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"iv\"));\r",
+							"var key = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"key\"));\r",
+							"\r",
+							"var requestBody = {\r",
+							"    \"ref_id\":ref_id,\r",
+							"    \"document_name\":document_name,\r",
+							"    \"document_number\":document_number,\r",
+							"    \"platform\":platform,\r",
+							"    \"response_url\":response_url,\r",
+							"    \"backend_url\":backend_url,\r",
+							"    \"callback_mode\":callback_mode,\r",
+							"    \"document_type\":document_type,\r",
+							"    \"signature\":signature,\r",
+							"    \"request_time\":request_time,\r",
+							"    \"api_key\":api_key,\r",
+							"    \"package_name\": package_name\r",
+							"};\r",
+							"\r",
+							"\r",
+							"var encrypted = CryptoJS.AES.encrypt(\r",
+							"    JSON.stringify(requestBody),\r",
+							"    key,\r",
+							"    { \r",
+							"        iv: iv\r",
+							"    }\r",
+							").toString();\r",
+							"\r",
+							"console.log(\"jsonrequest\" + JSON.stringify(requestBody));\r",
+							"\r",
+							"postman.setEnvironmentVariable('request_body', encrypted);\r",
+							"\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"//console.log(pm.response.json()['data']);\r",
+							"var responseData = pm.response.json()['data'];\r",
+							"var api_key = pm.collectionVariables.get(\"api_key\");\r",
+							"var key = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"key\"));\r",
+							"var iv = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"iv\"));\r",
+							"var decrypted = CryptoJS.AES.decrypt(responseData, key, {iv : iv});\r",
+							"\r",
+							"console.log(decrypted.toString(CryptoJS.enc.Utf8));\r",
+							"\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"data\": \"{{request_body}}\",\r\n    \"api_key\": \"{{api_key}}\"\r\n}"
+				},
+				"url": "{{url}}/{{api}}/gateway/create-transaction"
+			},
+			"response": []
+		},
+		{
+			"name": "Get Status",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"//change here\r",
+							"var url = \"https://uat-eonboarding.ctos.com.my\";\r",
+							"var api_key = \"2ufqbSmHpuuYtxB3CDZCLa5S4kSPQ_V3\";\r",
+							"var package_name = \"com.OPG.uat\";\r",
+							"var ref_id = \"OPG-CapitalNF_Test001\";\r",
+							"var onboarding_id = \"NGFlM2E0N2IxYzkyZmRjNGE3ODNmYWZjZTcxYWM0MWJlOA==\";\r",
+							"var platform = \"Web\";\r",
+							"var request_time = \"2025-07-08 11:25:00\";\r",
+							"var mode = \"2\";\r",
+							"\r",
+							"\r",
+							"var md5 = \"m4X12dM8GeYGYl1gLXO8PaZTERGG9bVt\"; // No need to change\r",
+							"var set_iv = \"MTIzNDU2Nzg5MDEy\"; // No need to change\r",
+							"\r",
+							"\r",
+							"//V1 Gateway API\r",
+							"//var api = \"v1\"\r",
+							"//var signature_body = CryptoJS.MD5(api_key + md5 + package_name + ref_id + md5 + request_time).toString();\r",
+							"//var rawStr = CryptoJS.enc.Utf8.parse(signature_body);\r",
+							"//var signature = CryptoJS.enc.Base64.stringify(rawStr);\r",
+							"\r",
+							"//V2 Gateway API\r",
+							"var api = \"v2\"\r",
+							"var signature_body = api_key + md5 + package_name + ref_id + md5 + request_time;\r",
+							"var rawStr = CryptoJS.enc.Utf8.parse(signature_body);\r",
+							"var rawStr1 = CryptoJS.SHA256(rawStr).toString();\r",
+							"var signature = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(rawStr1));\r",
+							"\r",
+							"pm.collectionVariables.set(\"signature\", signature);\r",
+							"\r",
+							"// From Here to end no need to change\r",
+							"var set_key = set_iv + api_key;\r",
+							"pm.collectionVariables.set(\"md5\", md5);\r",
+							"pm.collectionVariables.set(\"url\", url);\r",
+							"pm.collectionVariables.set(\"api\", api);\r",
+							"pm.collectionVariables.set(\"api_key\", api_key);\r",
+							"pm.collectionVariables.set(\"package_name\", package_name);\r",
+							"pm.collectionVariables.set(\"iv\", set_iv);\r",
+							"pm.collectionVariables.set(\"key\", set_key.substring(0, 32));\r",
+							"\r",
+							"pm.collectionVariables.set(\"ref_id\", ref_id);\r",
+							"pm.collectionVariables.set(\"onboarding_id\", onboarding_id);\r",
+							"pm.collectionVariables.set(\"platform\", platform);\r",
+							"pm.collectionVariables.set(\"request_time\", request_time);\r",
+							"pm.collectionVariables.set(\"mode\", mode);\r",
+							"\r",
+							"\r",
+							"var iv = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"iv\"));\r",
+							"var key = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"key\"));\r",
+							"\r",
+							"var requestBody = {\r",
+							"    \"ref_id\": ref_id,\r",
+							"    \"onboarding_id\": onboarding_id,\r",
+							"    \"platform\": platform,\r",
+							"    \"signature\": signature,\r",
+							"    \"request_time\": request_time,\r",
+							"    \"mode\": mode,\r",
+							"    \"api_key\": api_key,\r",
+							"    \"package_name\": package_name\r",
+							"};\r",
+							"\r",
+							"\r",
+							"var encrypted = CryptoJS.AES.encrypt(\r",
+							"    JSON.stringify(requestBody),\r",
+							"    key,\r",
+							"    {\r",
+							"        iv: iv\r",
+							"    }\r",
+							").toString();\r",
+							"\r",
+							"console.log(\"jsonrequest\" + JSON.stringify(requestBody));\r",
+							"\r",
+							"postman.setEnvironmentVariable('request_body', encrypted);\r",
+							"\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"//console.log(pm.response.json()['data']);\r",
+							"var responseData = pm.response.json()['data'];\r",
+							"var api_key = pm.collectionVariables.get(\"api_key\");\r",
+							"var key = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"key\"));\r",
+							"var iv = CryptoJS.enc.Utf8.parse(pm.collectionVariables.get(\"iv\"));\r",
+							"var decrypted = CryptoJS.AES.decrypt(responseData, key, {iv : iv});\r",
+							"\r",
+							"console.log(decrypted.toString(CryptoJS.enc.Utf8));\r",
+							"\r",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"data\": \"{{request_body}}\",\r\n    \"api_key\": \"{{api_key}}\"\r\n}"
+				},
+				"url": "{{url}}/{{api}}/gateway/get-status"
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "md5",
+			"value": ""
+		},
+		{
+			"key": "url",
+			"value": ""
+		},
+		{
+			"key": "api_key",
+			"value": ""
+		},
+		{
+			"key": "package_name",
+			"value": ""
+		},
+		{
+			"key": "iv",
+			"value": ""
+		},
+		{
+			"key": "key",
+			"value": ""
+		},
+		{
+			"key": "device_model",
+			"value": ""
+		},
+		{
+			"key": "device_brand",
+			"value": ""
+		},
+		{
+			"key": "device_imei",
+			"value": ""
+		},
+		{
+			"key": "device_mac",
+			"value": ""
+		},
+		{
+			"key": "signature",
+			"value": ""
+		},
+		{
+			"key": "ref_id",
+			"value": ""
+		},
+		{
+			"key": "document_name",
+			"value": ""
+		},
+		{
+			"key": "document_number",
+			"value": ""
+		},
+		{
+			"key": "platform",
+			"value": ""
+		},
+		{
+			"key": "response_url",
+			"value": ""
+		},
+		{
+			"key": "backend_url",
+			"value": ""
+		},
+		{
+			"key": "callback_mode",
+			"value": ""
+		},
+		{
+			"key": "document_type",
+			"value": ""
+		},
+		{
+			"key": "request_time",
+			"value": ""
+		},
+		{
+			"key": "api",
+			"value": ""
+		},
+		{
+			"key": "onboarding_id",
+			"value": ""
+		},
+		{
+			"key": "mode",
+			"value": ""
+		},
+		{
+			"key": "response_filename",
+			"value": ""
+		},
+		{
+			"key": "response_data",
+			"value": ""
+		}
+	]
+}

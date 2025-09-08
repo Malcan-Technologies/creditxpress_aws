@@ -7,27 +7,30 @@ services:
     restart: unless-stopped
     ports:
       - "4010:4010"
+    env_file:
+      - ./env.development
     environment:
       # Application Settings
       - APP_PORT=4010
       - APP_BASE_URL=http://192.168.0.100:3001
       - NODE_ENV=development
       
-      # DocuSeal Integration
-      - DOCUSEAL_BASE_URL=http://192.168.0.100:3001
-      - DOCUSEAL_WEBHOOK_HMAC_SECRET=${DOCUSEAL_WEBHOOK_HMAC_SECRET:-dev-secret-key}
-      - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
+      # DocuSeal Integration (will be overridden by env.development file)
+      # - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL:-http://host.docker.internal:3001}
+      # - DOCUSEAL_WEBHOOK_HMAC_SECRET=${DOCUSEAL_WEBHOOK_HMAC_SECRET:-dev-secret-key}
+      # - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
+      
+      # PKI Integration Settings
+      - PKI_ENABLED=${PKI_ENABLED:-true}
+      - PKI_SESSION_EXPIRY_MINUTES=${PKI_SESSION_EXPIRY_MINUTES:-10}
+      - PKI_OTP_MAX_ATTEMPTS=${PKI_OTP_MAX_ATTEMPTS:-3}
       
       # File Storage
       - SIGNED_FILES_DIR=/data/signed
       - MAX_UPLOAD_MB=50
       
-      # MyTrustSigner Agent Configuration (Development)
-      - MTSA_ENV=pilot
-      - MTSA_WSDL_PILOT=http://mtsa-pilot:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl
-      - MTSA_WSDL_PROD=http://mtsa-prod:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl
-      - MTSA_SOAP_USERNAME=${MTSA_SOAP_USERNAME:-dev-username}
-      - MTSA_SOAP_PASSWORD=${MTSA_SOAP_PASSWORD:-dev-password}
+      # MyTrustSigner Agent Configuration (loaded from env.development)
+      # - MTSA_ENV, MTSA_WSDL_PILOT, MTSA_WSDL_PROD, MTSA_SOAP_USERNAME, MTSA_SOAP_PASSWORD
       
       # Timezone & Localization
       - KUALA_LUMPUR_TZ=Asia/Kuala_Lumpur

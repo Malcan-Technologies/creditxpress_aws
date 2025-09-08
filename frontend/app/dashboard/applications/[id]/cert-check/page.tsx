@@ -95,7 +95,7 @@ export default function CertCheckPage() {
 
 			// Check if user has a valid certificate
 			const certResponse = await fetchWithTokenRefresh(
-				`/api/mtsa/certificate/${userId}?t=${Date.now()}`,
+				`/api/mtsa/cert-info/${userId}?t=${Date.now()}`,
 				{
 					method: "GET",
 					cache: "no-store",
@@ -136,14 +136,14 @@ export default function CertCheckPage() {
 				// }, 3000);
 
 			} else {
-				// User needs to get a new certificate - proceed with current flow
+				// User needs to get a new certificate - proceed with profile confirmation first
 				setCheckResult({
 					hasValidCert: false,
-					message: "No valid digital certificate found. You'll need to complete identity verification and obtain a new certificate.",
-					nextStep: "PENDING_KYC"
+					message: "No valid digital certificate found. You'll need to complete profile confirmation and identity verification to obtain a new certificate.",
+					nextStep: "PENDING_PROFILE_CONFIRMATION"
 				});
 
-				// Update application status to PENDING_KYC
+				// Update application status to PENDING_PROFILE_CONFIRMATION
 				await fetchWithTokenRefresh(
 					`/api/loan-applications/${params.id}`,
 					{
@@ -152,14 +152,14 @@ export default function CertCheckPage() {
 							"Content-Type": "application/json",
 						},
 						body: JSON.stringify({
-							status: "PENDING_KYC",
+							status: "PENDING_PROFILE_CONFIRMATION",
 						}),
 					}
 				);
 
 				// Auto-redirect disabled for debugging
 				// setTimeout(() => {
-				// 	router.push(`/dashboard/applications/${params.id}/kyc-verification`);
+				// 	router.push(`/dashboard/applications/${params.id}/profile-confirmation`);
 				// }, 3000);
 			}
 
@@ -361,11 +361,11 @@ export default function CertCheckPage() {
 										</button>
 									) : (
 										<button
-											onClick={() => router.push(`/dashboard/applications/${params.id}/kyc-verification`)}
+											onClick={() => router.push(`/dashboard/applications/${params.id}/profile-confirmation`)}
 											className="w-full inline-flex items-center justify-center px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors font-semibold"
 										>
 											<ClockIcon className="h-4 w-4 mr-2" />
-											Continue to KYC Verification
+											Continue to Profile Confirmation
 										</button>
 									)}
 									

@@ -66,6 +66,14 @@ services:
             # MTSA/Signing Orchestrator Configuration
             - SIGNING_ORCHESTRATOR_URL=${SIGNING_ORCHESTRATOR_URL:-https://sign.kredit.my}
             - SIGNING_ORCHESTRATOR_API_KEY=${SIGNING_ORCHESTRATOR_API_KEY}
+            # CTOS eKYC Configuration
+            - CTOS_API_KEY=${CTOS_API_KEY}
+            - CTOS_PACKAGE_NAME=${CTOS_PACKAGE_NAME}
+            - CTOS_SECURITY_KEY=${CTOS_SECURITY_KEY}
+            - CTOS_BASE_URL=${CTOS_BASE_URL}
+            - CTOS_WEBHOOK_URL=${CTOS_WEBHOOK_URL}
+            - CTOS_CIPHERTEXT=${CTOS_CIPHERTEXT}
+            - CTOS_CIPHER=${CTOS_CIPHER}
         depends_on:
             postgres:
                 condition: service_healthy

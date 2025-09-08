@@ -36,6 +36,19 @@ export async function POST(request: NextRequest) {
     // Helper function to convert image URL to base64
     const urlToBase64 = async (url: string): Promise<string> => {
       try {
+        // Check if URL is already a base64 data URL (from CTOS)
+        if (url.startsWith('data:image/')) {
+          // Extract base64 part from data URL: "data:image/jpeg;base64,actualBase64Data"
+          const base64Part = url.split(',')[1];
+          if (!base64Part) {
+            throw new Error('Invalid base64 data URL format');
+          }
+          console.log('Using existing base64 data from CTOS');
+          return base64Part;
+        }
+        
+        // Legacy flow: Convert file URL to base64
+        console.log('Converting file URL to base64 (legacy flow)');
         // Remove leading slash and construct full path
         const imagePath = url.startsWith('/') ? url.substring(1) : url;
         // Use direct backend URL for server-side image fetching (bypasses nginx)

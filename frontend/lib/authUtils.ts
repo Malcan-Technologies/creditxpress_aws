@@ -163,6 +163,10 @@ export const fetchWithTokenRefresh = async <T>(
 		throw new Error("No access token available");
 	}
 
+	// Ensure URL is absolute - use backend URL for API calls
+	const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+	const absoluteUrl = url.startsWith('/') ? `${baseUrl}${url}` : url;
+
 	// Set up headers with authorization
 	const headers = {
 		...options.headers,
@@ -171,7 +175,7 @@ export const fetchWithTokenRefresh = async <T>(
 	};
 
 	// Make the initial request
-	let response = await fetch(url, { ...options, headers });
+	let response = await fetch(absoluteUrl, { ...options, headers });
 
 	// If unauthorized, try to refresh the token and retry the request
 	if (response.status === 401 || response.status === 403) {
@@ -185,7 +189,7 @@ export const fetchWithTokenRefresh = async <T>(
 		headers["Authorization"] = `Bearer ${newAccessToken}`;
 
 		// Retry the request
-		response = await fetch(url, { ...options, headers });
+		response = await fetch(absoluteUrl, { ...options, headers });
 	}
 
 	if (!response.ok) {
@@ -195,7 +199,10 @@ export const fetchWithTokenRefresh = async <T>(
 		try {
 			const errorData = await response.json();
 			console.log("fetchWithTokenRefresh - Error data received:", errorData);
-			errorMessage = errorData.error || errorData.message || errorMessage;
+			// Prioritize message over error object, and handle error object properly
+			errorMessage = errorData.message || 
+						  (typeof errorData.error === 'string' ? errorData.error : errorData.error?.details) || 
+						  errorMessage;
 			console.log("fetchWithTokenRefresh - Final error message:", errorMessage);
 		} catch (parseError) {
 			console.log("fetchWithTokenRefresh - Failed to parse error response:", parseError);

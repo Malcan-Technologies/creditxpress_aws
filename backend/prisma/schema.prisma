@@ -477,12 +477,20 @@ model KycSession {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   completedAt   DateTime?
+  // CTOS Integration Fields
+  ctosOnboardingId String?        // CTOS onboarding ID for tracking
+  ctosOnboardingUrl String?       // CTOS onboarding URL for user
+  ctosStatus    Int?             // CTOS status: 0=Not Opened, 1=Processing, 2=Completed, 3=Expired
+  ctosResult    Int?             // CTOS result: 0=Rejected, 1=Approved, 2=Not Available
+  ctosExpiredAt DateTime?        // When CTOS session expires
+  ctosData      Json?            // Raw CTOS response data
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   application   LoanApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   documents     KycDocument[]
 
   @@index([userId])
   @@index([applicationId])
+  @@index([ctosOnboardingId])
   @@map("kyc_sessions")
 }
 
