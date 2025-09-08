@@ -180,7 +180,7 @@ router.post('/webhook', async (req, res) => {
       hasImages: {
         front: !!(webhookData.front_document_image || webhookData.step1?.front_document_image),
         back: !!(webhookData.back_document_image || webhookData.step1?.back_document_image),
-        selfie: !!(webhookData.face_image || webhookData.step1?.face_image)
+        selfie: !!(webhookData.face_image || webhookData.step2?.best_frame)
       }
     });
 
@@ -258,12 +258,12 @@ router.post('/webhook', async (req, res) => {
     });
 
     // Store document images if available
-    // Images can be at the top level or nested in step1 object
+    // Images can be at the top level, step1 (front/back), or step2 (selfie)
     const documentsToCreate = [];
     
     const frontImage = webhookData.front_document_image || webhookData.step1?.front_document_image;
     const backImage = webhookData.back_document_image || webhookData.step1?.back_document_image;
-    const faceImage = webhookData.face_image || webhookData.step1?.face_image;
+    const faceImage = webhookData.face_image || webhookData.step2?.best_frame;
 
     if (frontImage) {
       documentsToCreate.push({

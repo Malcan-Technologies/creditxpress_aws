@@ -69,10 +69,12 @@ interface WebhookData {
   step1?: {
     front_document_image?: string;
     back_document_image?: string;
-    face_image?: string;
     [key: string]: any;
   };
-  step2?: any;
+  step2?: {
+    best_frame?: string;
+    [key: string]: any;
+  };
   front_document_image?: string;
   back_document_image?: string;
   face_image?: string;
