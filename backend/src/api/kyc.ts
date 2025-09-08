@@ -874,10 +874,13 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
       });
     }
 
-    // Update database with latest CTOS data first
-    if (approvedSession.ctosOnboardingId) {
+    // Check if we have stored images, if not fetch from CTOS
+    const hasStoredImages = approvedSession.documents && approvedSession.documents.length >= 3;
+    console.log(`Approved session ${approvedSession.id} has ${approvedSession.documents?.length || 0} stored images`);
+    
+    if (!hasStoredImages) {
+      console.log(`Fetching images from CTOS for approved session ${approvedSession.id} - no stored images found`);
       try {
-        console.log(`Fetching latest CTOS data for approved session ${approvedSession.id}`);
         // Try with OPG-Capital prefix first, fallback to original userId
         let ctosStatus;
         try {
@@ -897,38 +900,23 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
           });
         }
 
-        // Update session with latest CTOS data
-        await db.kycSession.update({
-          where: { id: approvedSession.id },
-          data: {
-            ctosStatus: ctosStatus.status,
-            ctosResult: ctosStatus.result,
-            ctosData: ctosStatus as any
-          }
-        });
-
-        // Store/update document images if available from CTOS response
+        // Store document images from CTOS response
         const ctosData = ctosStatus as any;
         const documentsToUpsert = [];
 
-        // Extract images from step1 and step2 (based on actual CTOS response structure)
+        // Extract images from step1 and step2
         const frontImage = ctosData.step1?.front_document_image;
         const backImage = ctosData.step1?.back_document_image;
         const faceImage = ctosData.step2?.best_frame;
 
-      console.log('CTOS response structure check for documents endpoint:', {
-        ctosStatus: ctosStatus.status,
-        ctosResult: ctosStatus.result,
-        hasStep1: !!ctosData.step1,
-        hasStep2: !!ctosData.step2,
-        frontImage: !!frontImage,
-        backImage: !!backImage,
-        faceImage: !!faceImage,
-        hasAnyImage: !!(frontImage || backImage || faceImage),
-        fullResponse: JSON.stringify(ctosData, null, 2)
-      });
+        console.log('CTOS response for missing images:', {
+          hasStep1: !!ctosData.step1,
+          hasStep2: !!ctosData.step2,
+          frontImage: !!frontImage,
+          backImage: !!backImage,
+          faceImage: !!faceImage
+        });
 
-        // Store images if available (regardless of current CTOS status since user is already approved)
         if (frontImage) {
           documentsToUpsert.push({
             kycId: approvedSession.id,
@@ -956,7 +944,7 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
           });
         }
 
-        // Upsert documents (create if not exists, update if exists)
+        // Store documents if any found
         if (documentsToUpsert.length > 0) {
           for (const doc of documentsToUpsert) {
             // Check if document exists
@@ -983,14 +971,16 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
               });
             }
           }
-          console.log(`Stored/updated ${documentsToUpsert.length} documents from CTOS response`);
+          console.log(`Stored ${documentsToUpsert.length} images from CTOS for approved session`);
         } else {
           console.log('No images found in CTOS response for approved session');
         }
       } catch (ctosError) {
-        console.error('Error updating CTOS data for documents endpoint:', ctosError);
-        // Continue with existing documents if CTOS update fails
+        console.error('Error fetching images from CTOS for approved session:', ctosError);
+        // Continue with existing documents if CTOS fetch fails
       }
+    } else {
+      console.log(`Skipping CTOS API call for approved session ${approvedSession.id} - already has stored images`);
     }
 
     // Re-fetch the session with updated documents
@@ -1125,7 +1115,33 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       });
     }
 
-    // Always get latest status from CTOS (to update images even for approved sessions)
+    // Check if session is already approved and has images stored
+    if (kycSession.ctosResult === 1) {
+      // Check if we have stored images for this approved session
+      const storedImages = await db.kycDocument.findMany({
+        where: { kycId: kycSession.id }
+      });
+      
+      if (storedImages.length >= 3) {
+        console.log(`User ${userId} - Session already approved with ${storedImages.length} stored images, returning without CTOS API call`);
+        return res.json({
+          success: true,
+          hasKycSession: true,
+          status: 'approved',
+          kycStatus: 'APPROVED',
+          isAlreadyApproved: true,
+          ctosStatus: kycSession.ctosStatus,
+          ctosResult: kycSession.ctosResult,
+          kycId: kycSession.id,
+          completedAt: kycSession.completedAt
+        });
+      } else {
+        console.log(`User ${userId} - Session approved but only ${storedImages.length} images stored, fetching from CTOS`);
+        // Continue to CTOS API call to fetch missing images
+      }
+    }
+
+    // Only call CTOS API for non-approved sessions
     try {
       // Try with OPG-Capital prefix first, fallback to original userId
       let ctosStatus;
