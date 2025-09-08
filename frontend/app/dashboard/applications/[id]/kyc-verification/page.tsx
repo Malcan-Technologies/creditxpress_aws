@@ -74,6 +74,7 @@ export default function KycVerificationPage() {
 		rejectMessage?: string;
 		canRetry?: boolean;
 		hasKycSession?: boolean;
+		isAlreadyApproved?: boolean;
 	} | null>(null);
 	const [kycInProgress, setKycInProgress] = useState(false);
 	const [kycCompleted, setKycCompleted] = useState(false);
@@ -97,6 +98,7 @@ export default function KycVerificationPage() {
 					canRetry: boolean;
 					rejectMessage?: string;
 					kycSessionId?: string;
+					isAlreadyApproved?: boolean;
 				}>('/api/kyc/user-ctos-status');
 				
 				console.log('CTOS Status Data:', ctosData);
@@ -107,11 +109,12 @@ export default function KycVerificationPage() {
 						result: ctosData.ctosResult,
 						rejectMessage: ctosData.rejectMessage,
 						canRetry: ctosData.canRetry,
-						hasKycSession: true
+						hasKycSession: true,
+						isAlreadyApproved: ctosData.isAlreadyApproved
 					});
 					
 					// Set completed state if approved
-					if (ctosData.ctosResult === 1) {
+					if (ctosData.ctosResult === 1 || ctosData.isAlreadyApproved) {
 						setKycCompleted(true);
 						setKycInProgress(false);
 						console.log('User has already completed KYC with approved status');
@@ -121,7 +124,8 @@ export default function KycVerificationPage() {
 						status: 0,
 						result: 2,
 						hasKycSession: false,
-						canRetry: true
+						canRetry: true,
+						isAlreadyApproved: false
 					});
 				}
 			} catch (err) {
@@ -143,7 +147,7 @@ export default function KycVerificationPage() {
 			setKycError(null); // Clear previous KYC errors
 			
 			// Prevent starting new KYC if user already has approved KYC
-			if (ctosStatus?.hasKycSession && ctosStatus?.result === 1 && !forceRedo) {
+			if ((ctosStatus?.hasKycSession && ctosStatus?.result === 1) || ctosStatus?.isAlreadyApproved) {
 				setKycError("You have already completed KYC verification successfully. No further verification is needed.");
 				return;
 			}

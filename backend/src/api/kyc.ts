@@ -815,6 +815,14 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       orderBy: { createdAt: 'desc' }
     });
 
+    console.log(`User ${userId} - Found approved KYC session:`, {
+      found: !!kycSession,
+      sessionId: kycSession?.id,
+      ctosOnboardingId: kycSession?.ctosOnboardingId,
+      ctosResult: kycSession?.ctosResult,
+      status: kycSession?.status
+    });
+
     // If no approved session found, get the most recent session with CTOS data
     if (!kycSession) {
       kycSession = await db.kycSession.findFirst({
@@ -823,6 +831,14 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
           ctosOnboardingId: { not: null }
         },
         orderBy: { createdAt: 'desc' }
+      });
+
+      console.log(`User ${userId} - Found most recent KYC session:`, {
+        found: !!kycSession,
+        sessionId: kycSession?.id,
+        ctosOnboardingId: kycSession?.ctosOnboardingId,
+        ctosResult: kycSession?.ctosResult,
+        status: kycSession?.status
       });
     }
 
@@ -864,31 +880,43 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         const ctosData = ctosStatus as any;
         const documentsToUpsert = [];
 
-        // Check for images in the CTOS response
-        if (ctosData.front_document_image) {
+        // Extract images from step1/step2 or top level
+        const frontImage = ctosData.front_document_image || ctosData.step1?.front_document_image;
+        const backImage = ctosData.back_document_image || ctosData.step1?.back_document_image;
+        const faceImage = ctosData.face_image || ctosData.step2?.best_frame;
+
+        console.log('CTOS response structure check:', {
+          hasStep1: !!ctosData.step1,
+          hasStep2: !!ctosData.step2,
+          frontImage: !!frontImage,
+          backImage: !!backImage,
+          faceImage: !!faceImage
+        });
+
+        if (frontImage) {
           documentsToUpsert.push({
             kycId: kycSession.id,
             type: 'front',
-            storageUrl: `data:image/jpeg;base64,${ctosData.front_document_image}`,
-            hashSha256: crypto.createHash('sha256').update(ctosData.front_document_image).digest('hex')
+            storageUrl: `data:image/jpeg;base64,${frontImage}`,
+            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
           });
         }
 
-        if (ctosData.back_document_image) {
+        if (backImage) {
           documentsToUpsert.push({
             kycId: kycSession.id,
             type: 'back',
-            storageUrl: `data:image/jpeg;base64,${ctosData.back_document_image}`,
-            hashSha256: crypto.createHash('sha256').update(ctosData.back_document_image).digest('hex')
+            storageUrl: `data:image/jpeg;base64,${backImage}`,
+            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
           });
         }
 
-        if (ctosData.face_image) {
+        if (faceImage) {
           documentsToUpsert.push({
             kycId: kycSession.id,
             type: 'selfie',
-            storageUrl: `data:image/jpeg;base64,${ctosData.face_image}`,
-            hashSha256: crypto.createHash('sha256').update(ctosData.face_image).digest('hex')
+            storageUrl: `data:image/jpeg;base64,${faceImage}`,
+            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
           });
         }
 
@@ -929,7 +957,8 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         ctosResult: ctosStatus.result,
         ctosData: ctosStatus,
         canRetry: ctosStatus.result === 0 || ctosStatus.result === 2, // Can retry if rejected or not available
-        rejectMessage: ctosStatus.result === 0 ? (ctosStatus as any).reject_message : null
+        rejectMessage: ctosStatus.result === 0 ? (ctosStatus as any).reject_message : null,
+        isAlreadyApproved: ctosStatus.result === 1
       });
     } catch (ctosError) {
       console.error('Error fetching CTOS status:', ctosError);
@@ -945,6 +974,7 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         ctosData: kycSession.ctosData,
         canRetry: kycSession.ctosResult === 0 || kycSession.ctosResult === 2,
         rejectMessage: kycSession.ctosResult === 0 ? (kycSession.ctosData as any)?.reject_message : null,
+        isAlreadyApproved: kycSession.ctosResult === 1,
         error: 'Could not fetch latest status from CTOS, showing cached data'
       });
     }
