@@ -805,14 +805,26 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Find the most recent KYC session for this user
-    const kycSession = await db.kycSession.findFirst({
+    // Find the best KYC session for this user (prioritize approved, then most recent)
+    let kycSession = await db.kycSession.findFirst({
       where: {
         userId,
-        ctosOnboardingId: { not: null }
+        ctosOnboardingId: { not: null },
+        ctosResult: 1 // Approved
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    // If no approved session found, get the most recent session with CTOS data
+    if (!kycSession) {
+      kycSession = await db.kycSession.findFirst({
+        where: {
+          userId,
+          ctosOnboardingId: { not: null }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
 
     if (!kycSession || !kycSession.ctosOnboardingId) {
       return res.json({

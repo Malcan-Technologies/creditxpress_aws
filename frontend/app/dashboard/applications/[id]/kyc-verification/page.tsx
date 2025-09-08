@@ -114,6 +114,7 @@ export default function KycVerificationPage() {
 					if (ctosData.ctosResult === 1) {
 						setKycCompleted(true);
 						setKycInProgress(false);
+						console.log('User has already completed KYC with approved status');
 					}
 				} else {
 					setCtosStatus({
@@ -140,6 +141,12 @@ export default function KycVerificationPage() {
 	const handleStartKyc = async (forceRedo: boolean = false) => {
 		try {
 			setKycError(null); // Clear previous KYC errors
+			
+			// Prevent starting new KYC if user already has approved KYC
+			if (ctosStatus?.hasKycSession && ctosStatus?.result === 1 && !forceRedo) {
+				setKycError("You have already completed KYC verification successfully. No further verification is needed.");
+				return;
+			}
 			
 			// Get user data for document information
 			if (!application?.user?.icNumber || !application?.user?.fullName) {
@@ -190,7 +197,16 @@ export default function KycVerificationPage() {
 			}
 		} catch (err) {
 			console.error("CTOS KYC start error:", err);
-			setKycError(err instanceof Error ? err.message : "Failed to start KYC verification");
+			const errorMessage = err instanceof Error ? err.message : "Failed to start KYC verification";
+			
+			// Handle duplicate transaction error specifically
+			if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
+				setKycError("You already have a KYC verification session. Please refresh the page to see your current status.");
+				// Refresh the page data to get the latest status
+				setTimeout(() => window.location.reload(), 2000);
+			} else {
+				setKycError(errorMessage);
+			}
 			setKycInProgress(false);
 			setKycCompleted(false);
 		}

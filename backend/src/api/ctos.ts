@@ -178,9 +178,9 @@ router.post('/webhook', async (req, res) => {
       status: webhookData.status,
       result: webhookData.result,
       hasImages: {
-        front: !!webhookData.front_document_image,
-        back: !!webhookData.back_document_image,
-        selfie: !!webhookData.face_image
+        front: !!(webhookData.front_document_image || webhookData.step1?.front_document_image),
+        back: !!(webhookData.back_document_image || webhookData.step1?.back_document_image),
+        selfie: !!(webhookData.face_image || webhookData.step1?.face_image)
       }
     });
 
@@ -189,13 +189,14 @@ router.post('/webhook', async (req, res) => {
       let kycSession = null;
       let cleanUserId = webhookData.ref_id;
 
-      // First, try with the original ref_id
+      // First, try with the original ref_id and onboarding_id
       kycSession = await prisma.kycSession.findFirst({
         where: {
           userId: webhookData.ref_id,
           ctosOnboardingId: webhookData.onboarding_id
         },
-        include: { user: true }
+        include: { user: true },
+        orderBy: { createdAt: 'desc' } // Get the most recent if multiple exist
       });
 
       // If not found and ref_id contains a hyphen, try removing potential prefix
@@ -216,7 +217,8 @@ router.post('/webhook', async (req, res) => {
             userId: cleanUserId,
             ctosOnboardingId: webhookData.onboarding_id
           },
-          include: { user: true }
+          include: { user: true },
+          orderBy: { createdAt: 'desc' }
         });
 
         // If still not found, try removing everything before the first underscore (format: PREFIX_actualUserId)
@@ -228,7 +230,8 @@ router.post('/webhook', async (req, res) => {
               userId: cleanUserId,
               ctosOnboardingId: webhookData.onboarding_id
             },
-            include: { user: true }
+            include: { user: true },
+            orderBy: { createdAt: 'desc' }
           });
         }
       }
@@ -255,32 +258,37 @@ router.post('/webhook', async (req, res) => {
     });
 
     // Store document images if available
+    // Images can be at the top level or nested in step1 object
     const documentsToCreate = [];
+    
+    const frontImage = webhookData.front_document_image || webhookData.step1?.front_document_image;
+    const backImage = webhookData.back_document_image || webhookData.step1?.back_document_image;
+    const faceImage = webhookData.face_image || webhookData.step1?.face_image;
 
-    if (webhookData.front_document_image) {
+    if (frontImage) {
       documentsToCreate.push({
         kycId: kycSession.id,
         type: 'front',
-        storageUrl: `data:image/jpeg;base64,${webhookData.front_document_image}`,
-        hashSha256: crypto.createHash('sha256').update(webhookData.front_document_image).digest('hex')
+        storageUrl: `data:image/jpeg;base64,${frontImage}`,
+        hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex')
       });
     }
 
-    if (webhookData.back_document_image) {
+    if (backImage) {
       documentsToCreate.push({
         kycId: kycSession.id,
         type: 'back',
-        storageUrl: `data:image/jpeg;base64,${webhookData.back_document_image}`,
-        hashSha256: crypto.createHash('sha256').update(webhookData.back_document_image).digest('hex')
+        storageUrl: `data:image/jpeg;base64,${backImage}`,
+        hashSha256: crypto.createHash('sha256').update(backImage).digest('hex')
       });
     }
 
-    if (webhookData.face_image) {
+    if (faceImage) {
       documentsToCreate.push({
         kycId: kycSession.id,
         type: 'selfie',
-        storageUrl: `data:image/jpeg;base64,${webhookData.face_image}`,
-        hashSha256: crypto.createHash('sha256').update(webhookData.face_image).digest('hex')
+        storageUrl: `data:image/jpeg;base64,${faceImage}`,
+        hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex')
       });
     }
 

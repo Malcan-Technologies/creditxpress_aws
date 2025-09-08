@@ -66,7 +66,12 @@ interface WebhookData {
   onboarding_id: string;
   status: number;
   result: number;
-  step1?: any;
+  step1?: {
+    front_document_image?: string;
+    back_document_image?: string;
+    face_image?: string;
+    [key: string]: any;
+  };
   step2?: any;
   front_document_image?: string;
   back_document_image?: string;
