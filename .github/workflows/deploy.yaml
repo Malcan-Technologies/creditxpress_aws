@@ -1,5 +1,14 @@
 name: Deploy to Production
 
+# Required GitHub Secrets:
+# - SSH_KEYS: Private SSH key for server access
+# - SSH_HOST: Server hostname/IP
+# - SSH_USER: Server username
+# - FRONTEND_ENV: Frontend environment variables (.env)
+# - ADMIN_ENV: Admin environment variables (.env.local)
+#   Must include: PORT, NODE_ENV, NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SITE_URL
+# - BACKEND_ENV: Backend environment variables (.env)
+
 on:
   push:
     branches:
@@ -384,6 +393,14 @@ jobs:
                 fi
                 cp package.json package.json.deployed
               fi
+              
+              # Verify admin environment setup
+              echo "🔍 Verifying admin environment setup..."
+              if [ ! -f ".env.local" ]; then
+                echo "❌ .env.local file not found for admin"
+                exit 1
+              fi
+              echo "✅ Admin environment verified"
               
               # Build admin with optimizations
               echo "🔨 Building admin..."

@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    const token = request.headers.get('authorization');
     
     if (!token) {
       return NextResponse.json(
@@ -15,36 +11,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    
-    if (!decoded.userId) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid token' },
-        { status: 401 }
-      );
-    }
-
-    // Get admin user details
-    const adminUser = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        phoneNumber: true,
-        icNumber: true,
-        role: true,
-      }
+    // Forward request to backend API
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+    const response = await fetch(`${backendUrl}/api/admin/me`, {
+      method: 'GET',
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+      },
     });
 
-    if (!adminUser) {
-      return NextResponse.json(
-        { success: false, message: 'Admin user not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(adminUser);
+    const data = await response.json();
+    
+    return NextResponse.json(data, { status: response.status });
 
   } catch (error) {
     console.error('Error fetching admin user:', error);
@@ -57,7 +36,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const token = request.headers.get('authorization')?.replace('Bearer ', '');
+    const token = request.headers.get('authorization');
     
     if (!token) {
       return NextResponse.json(
@@ -66,37 +45,22 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as any;
-    
-    if (!decoded.userId) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid token' },
-        { status: 401 }
-      );
-    }
-
     const body = await request.json();
-    const { icNumber, fullName, phoneNumber } = body;
 
-    // Update admin user
-    const updatedUser = await prisma.user.update({
-      where: { id: decoded.userId },
-      data: {
-        ...(icNumber && { icNumber }),
-        ...(fullName && { fullName }),
-        ...(phoneNumber && { phoneNumber }),
+    // Forward request to backend API
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+    const response = await fetch(`${backendUrl}/api/admin/me`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json',
       },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        phoneNumber: true,
-        icNumber: true,
-        role: true,
-      }
+      body: JSON.stringify(body),
     });
 
-    return NextResponse.json(updatedUser);
+    const data = await response.json();
+    
+    return NextResponse.json(data, { status: response.status });
 
   } catch (error) {
     console.error('Error updating admin user:', error);
@@ -104,7 +68,5 @@ export async function PUT(request: NextRequest) {
       { success: false, message: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
