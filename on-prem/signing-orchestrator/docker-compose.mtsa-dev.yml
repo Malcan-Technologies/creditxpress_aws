@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Signing Orchestrator Service
+  # Signing Orchestrator Service with Database
   signing-orchestrator:
     build:
       context: .
@@ -11,21 +11,32 @@ services:
       - "4010:4010"
     environment:
       - NODE_ENV=development
+      - DATABASE_URL=postgresql://agreements_user:agreements_password@agreements-postgres:5432/agreements_db
       - MTSA_WSDL_PILOT=http://mtsa-pilot:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl
       # PKI Integration Settings
       - PKI_ENABLED=true
       - PKI_SESSION_EXPIRY_MINUTES=10
       - PKI_OTP_MAX_ATTEMPTS=3
+      # File Storage
+      - SIGNED_FILES_DIR=/data/signed
+      - ORIGINAL_FILES_DIR=/data/original
+      - STAMPED_FILES_DIR=/data/stamped
+      - MAX_UPLOAD_MB=50
     env_file:
       - env.development
     volumes:
       - ./signed-files:/data/signed
+      - ./original-files:/data/original  
+      - ./stamped-files:/data/stamped
       - ./logs:/app/logs
       - ./src:/app/src  # Mount source code for live development
     networks:
       - signing-network
     depends_on:
-      - mtsa-pilot
+      agreements-postgres:
+        condition: service_healthy
+      mtsa-pilot:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
@@ -53,12 +64,41 @@ services:
       retries: 3
       start_period: 60s
 
+  # PostgreSQL Database for Agreements
+  agreements-postgres:
+    image: postgres:15-alpine
+    container_name: agreements-postgres-dev
+    environment:
+      - POSTGRES_USER=agreements_user
+      - POSTGRES_PASSWORD=agreements_password
+      - POSTGRES_DB=agreements_db
+      - TZ=Asia/Kuala_Lumpur
+    volumes:
+      - agreements-postgres-data:/var/lib/postgresql/data
+      - ./logs/postgres:/var/log/postgresql
+    networks:
+      - signing-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agreements_user -d agreements_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5434:5432"  # Avoid conflict with main DB
+
 networks:
   signing-network:
     driver: bridge
 
 volumes:
+  agreements-postgres-data:
+    driver: local
   signed-files:
+    driver: local
+  original-files:
+    driver: local
+  stamped-files:
     driver: local
   logs:
     driver: local

@@ -412,6 +412,21 @@ router.post('/certificate', verifyApiKey, async (req, res) => {
       return;
     }
     
+    // Validate verificationData structure
+    const missingFields = [];
+    if (!verificationData.verifyStatus) missingFields.push('verifyStatus');
+    if (!verificationData.verifyDatetime) missingFields.push('verifyDatetime');
+    if (!verificationData.verifyMethod) missingFields.push('verifyMethod');
+    if (!verificationData.verifyVerifier) missingFields.push('verifyVerifier');
+    
+    if (missingFields.length > 0) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: `Missing required VerificationData fields: ${missingFields.join(', ')}`,
+      });
+      return;
+    }
+    
     log.info('Requesting certificate', { userId, userType, nationality });
     
     const result = await mtsaClient.requestCertificate({

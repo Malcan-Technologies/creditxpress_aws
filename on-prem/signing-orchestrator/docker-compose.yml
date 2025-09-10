@@ -13,6 +13,9 @@ services:
       - APP_BASE_URL=${APP_BASE_URL:-https://sign.kredit.my}
       - NODE_ENV=${NODE_ENV:-production}
       
+      # Database Configuration
+      - DATABASE_URL=postgresql://agreements_user:${AGREEMENTS_DB_PASSWORD}@agreements-postgres:5432/agreements_db
+      
       # DocuSeal Integration
       - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL:-https://sign.kredit.my:3001}
       - DOCUSEAL_WEBHOOK_HMAC_SECRET=${DOCUSEAL_WEBHOOK_HMAC_SECRET}
@@ -25,6 +28,8 @@ services:
       
       # File Storage
       - SIGNED_FILES_DIR=/data/signed
+      - ORIGINAL_FILES_DIR=/data/original
+      - STAMPED_FILES_DIR=/data/stamped
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
       
       # MyTrustSigner Agent Configuration
@@ -66,8 +71,10 @@ services:
       - NOTIFICATION_WEBHOOK_SECRET=${NOTIFICATION_WEBHOOK_SECRET}
     
     volumes:
-      # Persistent storage for signed PDFs
+      # Persistent storage for files
       - signed-pdfs:/data/signed
+      - original-pdfs:/data/original
+      - stamped-pdfs:/data/stamped
       # Log directory
       - orchestrator-logs:/var/log/signing-orchestrator
     
@@ -75,8 +82,9 @@ services:
       - docuseal-network
       - mtsa-network
     
-    # depends_on:
-    #   - mtsa-pilot
+    depends_on:
+      agreements-postgres:
+        condition: service_healthy
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
@@ -91,6 +99,35 @@ services:
       - "traefik.http.routers.orchestrator.tls=true"
       - "traefik.http.services.orchestrator.loadbalancer.server.port=4010"
 
+  # PostgreSQL Database for Agreements (Production)
+  agreements-postgres:
+    image: postgres:15-alpine
+    container_name: agreements-postgres-prod
+    environment:
+      - POSTGRES_USER=agreements_user
+      - POSTGRES_PASSWORD=${AGREEMENTS_DB_PASSWORD}
+      - POSTGRES_DB=agreements_db
+      - TZ=Asia/Kuala_Lumpur
+    volumes:
+      # Persistent database storage
+      - agreements-postgres-data:/var/lib/postgresql/data
+      - agreements-postgres-logs:/var/log/postgresql
+    networks:
+      - mtsa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agreements_user -d agreements_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:5434:5432"  # Only accessible from localhost
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   # MyTrustSigner Agent services will be deployed manually
   # MTSA Pilot expected on: localhost:8081
   # MTSA Prod expected on: localhost:8082
@@ -103,12 +140,40 @@ volumes:
       o: bind
       device: ${SIGNED_FILES_HOST_DIR:-./data/signed}
   
+  original-pdfs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ORIGINAL_FILES_HOST_DIR:-./data/original}
+  
+  stamped-pdfs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${STAMPED_FILES_HOST_DIR:-./data/stamped}
+  
   orchestrator-logs:
     driver: local
     driver_opts:
       type: none
       o: bind
       device: ${LOGS_HOST_DIR:-./logs}
+  
+  agreements-postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${AGREEMENTS_DB_HOST_DIR:-./data/postgres}
+  
+  agreements-postgres-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${AGREEMENTS_LOGS_HOST_DIR:-./logs/postgres}
   
   # MTSA volumes managed separately
 

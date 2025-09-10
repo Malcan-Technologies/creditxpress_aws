@@ -446,8 +446,10 @@ export default function AdminSigningSettingsPage() {
           selfieImageUrl: selfie.url,
           organisationInfo, // Add organisation info for internal users
           verificationData: {
-            source: 'admin_dashboard',
-            timestamp: new Date().toISOString(),
+            verifyStatus: 'Approved',
+            verifyDatetime: new Date().toISOString().replace('T', ' ').substring(0, 19), // Format: yyyy-MM-dd HH:mm:ss
+            verifyVerifier: 'CTOS',
+            verifyMethod: 'e-KYC'
           },
         }),
       });

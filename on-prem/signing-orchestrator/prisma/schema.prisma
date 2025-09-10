@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Signed agreements from MTSA with file tracking
+model SignedAgreement {
+  id                    String                @id @default(cuid())
+  loanId                String                @unique // References loan ID from main VPS database
+  userId                String                // References user ID from main VPS database
+  agreementType         String                @default("LOAN_AGREEMENT") // LOAN_AGREEMENT, AMENDMENT, etc.
+  
+  // MTSA Integration Fields
+  mtsaTransactionId     String?               // MTSA transaction reference
+  mtsaStatus            String                @default("PENDING") // PENDING, SIGNED, FAILED, EXPIRED
+  mtsaSignedAt          DateTime?             // When MTSA completed signing
+  mtsaSignedBy          String?               // Signer certificate info
+  mtsaCertificateInfo   Json?                 // MTSA certificate details
+  
+  // File Management
+  originalFilePath      String                // Path to original unsigned PDF
+  signedFilePath        String?               // Path to MTSA signed PDF
+  stampedFilePath       String?               // Path to final stamped PDF (admin uploaded)
+  originalFileHash      String                // SHA256 hash of original file
+  signedFileHash        String?               // SHA256 hash of signed file
+  stampedFileHash       String?               // SHA256 hash of stamped file
+  
+  // Metadata
+  originalFileName      String                // Original file name
+  signedFileName        String?               // Signed file name
+  stampedFileName       String?               // Stamped file name (company seal)
+  fileSizeBytes         Int                   // Original file size
+  signedFileSizeBytes   Int?                  // Signed file size
+  stampedFileSizeBytes  Int?                  // Stamped file size
+  
+  // Admin Operations
+  downloadedBy          String?               // Admin who downloaded from MTSA
+  downloadedAt          DateTime?             // When admin downloaded signed file
+  stampedUploadedBy     String?               // Admin who uploaded stamped version
+  stampedUploadedAt     DateTime?             // When stamped version was uploaded
+  
+  // Status Tracking
+  status                String                @default("INITIATED") // INITIATED, MTSA_SIGNED, DOWNLOADED, STAMPED, COMPLETED
+  notes                 String?               // Admin notes
+  errorMessage          String?               // Error details if failed
+  retryCount            Int                   @default(0)
+  
+  // Timestamps
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  completedAt           DateTime?             // When fully processed (stamped and uploaded)
+  
+  // Relations
+  downloads             AgreementDownload[]   // Track admin downloads
+  uploads               AgreementUpload[]     // Track admin uploads
+  auditLogs             AgreementAuditLog[]   // Audit trail
+  
+  @@index([loanId])
+  @@index([userId])
+  @@index([status])
+  @@index([mtsaStatus])
+  @@index([createdAt])
+  @@map("signed_agreements")
+}
+
+/// Track admin downloads of signed agreements
+model AgreementDownload {
+  id                String          @id @default(cuid())
+  agreementId       String
+  downloadedBy      String          // Admin user ID/name
+  downloadType      String          // SIGNED, STAMPED, ORIGINAL
+  downloadedAt      DateTime        @default(now())
+  ipAddress         String?
+  userAgent         String?
+  agreement         SignedAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  
+  @@index([agreementId])
+  @@index([downloadedBy])
+  @@index([downloadedAt])
+  @@map("agreement_downloads")
+}
+
+/// Track admin uploads of stamped agreements
+model AgreementUpload {
+  id                String          @id @default(cuid())
+  agreementId       String
+  uploadedBy        String          // Admin user ID/name
+  uploadType        String          // STAMPED, REPLACEMENT
+  originalFileName  String
+  fileSize          Int
+  fileHash          String          // SHA256 hash
+  uploadedAt        DateTime        @default(now())
+  ipAddress         String?
+  notes             String?
+  agreement         SignedAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  
+  @@index([agreementId])
+  @@index([uploadedBy])
+  @@index([uploadedAt])
+  @@map("agreement_uploads")
+}
+
+/// Comprehensive audit log for all agreement operations
+model AgreementAuditLog {
+  id                String          @id @default(cuid())
+  agreementId       String
+  action            String          // CREATED, MTSA_SENT, MTSA_SIGNED, DOWNLOADED, UPLOADED, STATUS_CHANGED
+  performedBy       String          // User/system that performed action
+  oldValue          Json?           // Previous state (for changes)
+  newValue          Json?           // New state (for changes)
+  details           String?         // Human readable description
+  metadata          Json?           // Additional context data
+  ipAddress         String?
+  userAgent         String?
+  timestamp         DateTime        @default(now())
+  agreement         SignedAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  
+  @@index([agreementId])
+  @@index([action])
+  @@index([timestamp])
+  @@index([performedBy])
+  @@map("agreement_audit_logs")
+}
+
+/// System configuration for agreement processing
+model AgreementSettings {
+  id                    String   @id @default(cuid())
+  key                   String   @unique
+  value                 String   // JSON serialized value
+  description           String
+  category              String   // FILE_STORAGE, MTSA_CONFIG, ADMIN_ACCESS
+  isActive              Boolean  @default(true)
+  updatedBy             String?  // Admin who last updated
+  updatedAt             DateTime @updatedAt
+  createdAt             DateTime @default(now())
+  
+  @@map("agreement_settings")
+}
+
+/// Template for different agreement types
+model AgreementTemplate {
+  id                    String   @id @default(cuid())
+  name                  String   // Loan Agreement v1.0, Amendment Template
+  agreementType         String   // LOAN_AGREEMENT, AMENDMENT, GUARANTOR
+  templatePath          String   // Path to template file
+  isActive              Boolean  @default(true)
+  version               String   @default("1.0")
+  description           String?
+  createdBy             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@unique([agreementType, version])
+  @@index([agreementType])
+  @@index([isActive])
+  @@map("agreement_templates")
+}

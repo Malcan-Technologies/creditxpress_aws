@@ -4,11 +4,14 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including OpenSSL
 RUN apk add --no-cache \
     dumb-init \
     curl \
-    tzdata
+    tzdata \
+    openssl \
+    openssl-dev \
+    ca-certificates
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -21,14 +24,23 @@ COPY tsconfig.json ./
 # Install dependencies
 RUN npm ci && npm cache clean --force
 
-# Copy source code
+# Copy Prisma schema and source code
+COPY prisma/ ./prisma/
 COPY src/ ./src/
+
+# Set Prisma environment variables for Alpine
+ENV PRISMA_CLI_BINARY_TARGETS="linux-musl-openssl-3.0.x"
+ENV PRISMA_ENGINE_TYPE="binary"
+ENV OPENSSL_ROOT_DIR="/usr"
+
+# Generate Prisma client
+RUN npx prisma generate
 
 # Build TypeScript (disabled for now - will be enabled when MTSA is ready)
 # RUN npm run build
 
 # Create necessary directories
-RUN mkdir -p /data/signed /var/log/signing-orchestrator && \
+RUN mkdir -p /data/signed /data/original /data/stamped /var/log/signing-orchestrator && \
     chown -R orchestrator:nodejs /data /var/log/signing-orchestrator /app
 
 # Switch to non-root user

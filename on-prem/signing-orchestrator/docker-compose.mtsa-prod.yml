@@ -1,73 +1,190 @@
-version: '3.8'
-
 services:
-  # Signing Orchestrator Service (Production)
   signing-orchestrator:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: signing-orchestrator-prod
-    ports:
-      - "4010:4010"
-    environment:
-      - NODE_ENV=production
-    env_file:
-      - env.production
-    volumes:
-      - /opt/kapital/signed-files:/data/signed
-      - /opt/kapital/logs/signing-orchestrator:/app/logs
-    networks:
-      - signing-network
-    depends_on:
-      - mtsa-pilot
+    container_name: signing-orchestrator
     restart: unless-stopped
+    ports:
+      - "${APP_PORT:-4010}:4010"
+    environment:
+      # Application Settings
+      - APP_PORT=4010
+      - APP_BASE_URL=${APP_BASE_URL:-https://sign.kredit.my}
+      - NODE_ENV=${NODE_ENV:-production}
+      
+      # Database Configuration
+      - DATABASE_URL=postgresql://agreements_user:${AGREEMENTS_DB_PASSWORD}@agreements-postgres:5432/agreements_db
+      
+      # DocuSeal Integration
+      - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL:-https://sign.kredit.my:3001}
+      - DOCUSEAL_WEBHOOK_HMAC_SECRET=${DOCUSEAL_WEBHOOK_HMAC_SECRET}
+      - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
+      
+      # PKI Integration Settings
+      - PKI_ENABLED=${PKI_ENABLED:-true}
+      - PKI_SESSION_EXPIRY_MINUTES=${PKI_SESSION_EXPIRY_MINUTES:-10}
+      - PKI_OTP_MAX_ATTEMPTS=${PKI_OTP_MAX_ATTEMPTS:-3}
+      
+      # File Storage
+      - SIGNED_FILES_DIR=/data/signed
+      - ORIGINAL_FILES_DIR=/data/original
+      - STAMPED_FILES_DIR=/data/stamped
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
+      
+      # MyTrustSigner Agent Configuration
+      - MTSA_ENV=${MTSA_ENV:-pilot}
+      - MTSA_WSDL_PILOT=${MTSA_WSDL_PILOT:-http://mtsa-pilot:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl}
+      - MTSA_WSDL_PROD=${MTSA_WSDL_PROD:-http://mtsa-prod:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl}
+      - MTSA_SOAP_USERNAME=${MTSA_SOAP_USERNAME}
+      - MTSA_SOAP_PASSWORD=${MTSA_SOAP_PASSWORD}
+      
+      # Timezone & Localization
+      - KUALA_LUMPUR_TZ=${KUALA_LUMPUR_TZ:-Asia/Kuala_Lumpur}
+      - TZ=Asia/Kuala_Lumpur
+      
+      # Network & Performance
+      - OUTBOUND_TIMEOUT_MS=${OUTBOUND_TIMEOUT_MS:-60000}
+      - RETRY_BACKOFF_MS=${RETRY_BACKOFF_MS:-2000}
+      - RETRY_MAX=${RETRY_MAX:-3}
+      
+      # API Authentication
+      - SIGNING_ORCHESTRATOR_API_KEY=${SIGNING_ORCHESTRATOR_API_KEY}
+      
+      # Security
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://sign.kredit.my,https://api.kredit.my}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      
+      # Health Check
+      - HEALTH_CHECK_INTERVAL_MS=${HEALTH_CHECK_INTERVAL_MS:-30000}
+      
+      # Template Coordinates
+      - SIGNATURE_COORDINATES=${SIGNATURE_COORDINATES:-{}}
+      
+      # Notification Settings (optional)
+      - NOTIFICATION_WEBHOOK_URL=${NOTIFICATION_WEBHOOK_URL}
+      - NOTIFICATION_WEBHOOK_SECRET=${NOTIFICATION_WEBHOOK_SECRET}
+    
+    volumes:
+      # Persistent storage for files
+      - signed-pdfs:/data/signed
+      - original-pdfs:/data/original
+      - stamped-pdfs:/data/stamped
+      # Log directory
+      - orchestrator-logs:/var/log/signing-orchestrator
+    
+    networks:
+      - docuseal-network
+      - mtsa-network
+    
+    depends_on:
+      agreements-postgres:
+        condition: service_healthy
+    
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4010/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "5"
+      start_period: 60s
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.orchestrator.rule=Host(`sign.kredit.my`) && PathPrefix(`/api/signing`)"
+      - "traefik.http.routers.orchestrator.tls=true"
+      - "traefik.http.services.orchestrator.loadbalancer.server.port=4010"
 
-  # MTSA Pilot Service (Production)
-  mtsa-pilot:
-    build:
-      context: ../mtsa
-      dockerfile: Dockerfile
-    container_name: mtsa-pilot-prod
-    ports:
-      - "8080:8080"
+  # PostgreSQL Database for Agreements (Production)
+  agreements-postgres:
+    image: postgres:15-alpine
+    container_name: agreements-postgres-prod
     environment:
+      - POSTGRES_USER=agreements_user
+      - POSTGRES_PASSWORD=${AGREEMENTS_DB_PASSWORD}
+      - POSTGRES_DB=agreements_db
       - TZ=Asia/Kuala_Lumpur
     volumes:
-      - /opt/kapital/mtsa/config:/opt/mtsa
-      - /opt/kapital/logs/mtsa:/usr/local/tomcat/logs
+      # Persistent database storage
+      - agreements-postgres-data:/var/lib/postgresql/data
+      - agreements-postgres-logs:/var/log/postgresql
     networks:
-      - signing-network
+      - mtsa-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      test: ["CMD-SHELL", "pg_isready -U agreements_user -d agreements_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:5434:5432"  # Only accessible from localhost
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "5"
 
-networks:
-  signing-network:
-    driver: bridge
+  # MyTrustSigner Agent services will be deployed manually
+  # MTSA Pilot expected on: localhost:8081
+  # MTSA Prod expected on: localhost:8082
 
 volumes:
-  signed-files:
+  signed-pdfs:
     driver: local
-  mtsa-config:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${SIGNED_FILES_HOST_DIR:-./data/signed}
+  
+  original-pdfs:
     driver: local
-  logs:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ORIGINAL_FILES_HOST_DIR:-./data/original}
+  
+  stamped-pdfs:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${STAMPED_FILES_HOST_DIR:-./data/stamped}
+  
+  orchestrator-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${LOGS_HOST_DIR:-./logs}
+  
+  agreements-postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${AGREEMENTS_DB_HOST_DIR:-./data/postgres}
+  
+  agreements-postgres-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${AGREEMENTS_LOGS_HOST_DIR:-./logs/postgres}
+  
+  # MTSA volumes managed separately
+
+networks:
+  docuseal-network:
+    external: true
+    name: docuseal-onprem_docuseal-network
+  
+  mtsa-network:
+    driver: bridge
+    internal: false  # Allow outbound connections for CRL/OCSP
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
