@@ -506,9 +506,14 @@ jobs:
               export DOCKER_BUILDKIT=1
               export COMPOSE_DOCKER_CLI_BUILD=1
               
-              # Stop existing containers to avoid name conflicts
+              # Stop and remove existing containers to avoid name conflicts
               echo "🛑 Stopping existing backend containers..."
               docker compose -f docker-compose.prod.yml down || true
+              
+              # Ensure containers are fully removed if compose down fails
+              echo "🧹 Ensuring clean container state..."
+              docker stop backend-backend-1 backend-postgres-1 2>/dev/null || true
+              docker rm backend-backend-1 backend-postgres-1 2>/dev/null || true
               
               if ! docker compose -f docker-compose.prod.yml up -d --build; then
                 echo "❌ Backend build failed. Checking for Prisma client issues..."
@@ -520,6 +525,8 @@ jobs:
                 echo "🔄 Retrying backend build..."
                 # Stop containers again before retry
                 docker compose -f docker-compose.prod.yml down || true
+                docker stop backend-backend-1 backend-postgres-1 2>/dev/null || true
+                docker rm backend-backend-1 backend-postgres-1 2>/dev/null || true
                 if ! docker compose -f docker-compose.prod.yml up -d --build; then
                   echo "❌ Backend build failed again. Showing logs:"
                   docker compose -f docker-compose.prod.yml logs backend
