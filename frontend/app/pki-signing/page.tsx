@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import DashboardLayout from '@/components/DashboardLayout';
-import { fetchWithTokenRefresh } from '@/lib/authUtils';
+import { fetchWithTokenRefresh, TokenStorage } from '@/lib/authUtils';
 import { ArrowLeftIcon, CheckCircleIcon, ShieldCheckIcon, KeyIcon, ClockIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 interface PKISession {
@@ -35,6 +35,7 @@ function PKISigningContent() {
   const [successMessage, setSuccessMessage] = useState('');
   const hasInitialized = useRef(false);
   const [step, setStep] = useState<'checking' | 'ready_to_request' | 'otp_input' | 'signing' | 'complete' | 'error'>('checking');
+  const [loadingPdf, setLoadingPdf] = useState(false);
   const [resendingOtp, setResendingOtp] = useState(false);
   const [lastOtpRequest, setLastOtpRequest] = useState<number>(0);
   const [countdown, setCountdown] = useState<number>(0);
@@ -382,7 +383,12 @@ function PKISigningContent() {
       setStep('complete');
       setSubmitting(false);
       
-      console.log('✅ PKI signing completed successfully');
+      console.log('✅ PKI signing completed successfully', { data: signPdfResponse.data });
+      
+      // Store signed document data in session for display
+      if (typeof window !== 'undefined' && signPdfResponse.data) {
+        sessionStorage.setItem('pki_signed_data', JSON.stringify(signPdfResponse.data));
+      }
       
       // Clear session storage when signing is complete
       if (typeof window !== 'undefined' && applicationId) {
@@ -390,10 +396,10 @@ function PKISigningContent() {
         sessionStorage.removeItem(sessionKey);
       }
       
-      // Redirect to success page after a delay
+      // Redirect to success page after a delay (increased to allow user to see PDF option)
       setTimeout(() => {
         router.push('/dashboard/loans?tab=applications&signed=success&pki=true');
-      }, 3000);
+      }, 5000);
       
     } catch (error) {
       console.error('❌ PKI signing failed:', error);
@@ -645,19 +651,113 @@ function PKISigningContent() {
 
       case 'complete':
         return (
-          <div className="text-center space-y-4">
+          <div className="text-center space-y-6">
             <div className="flex items-center justify-center">
-              <CheckCircleIcon className="h-8 w-8 text-green-600" />
+              <CheckCircleIcon className="h-12 w-12 text-green-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-green-700">PKI Signing Complete!</h3>
+              <h3 className="text-xl font-semibold text-green-700">PKI Signing Complete!</h3>
               <p className="text-gray-600 mt-2">
                 Your document has been signed successfully with PKI digital certificate.
               </p>
-              <p className="text-sm text-gray-500 mt-2">
-                Redirecting you back to your dashboard...
-              </p>
             </div>
+            
+            {/* View PDF Button */}
+            <div className="space-y-3">
+              <button
+                disabled={loadingPdf}
+                onClick={async () => {
+                  try {
+                    if (!applicationId) return;
+                    
+                    setLoadingPdf(true);
+                    setError('');
+                    
+                    // Get the loan ID from the application
+                    const loanResponse = await fetchWithTokenRefresh(`/api/loan-applications/${applicationId}`) as any;
+                    if (loanResponse?.data?.loanId) {
+                      // Get access token for authenticated request
+                      const accessToken = TokenStorage.getAccessToken();
+                      if (!accessToken) {
+                        setError('Authentication required. Please log in again.');
+                        return;
+                      }
+
+                      // Fetch the PDF with authentication headers (raw fetch for binary data)
+                      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+                      const pdfUrl = `${baseUrl}/api/loan-applications/${loanResponse.data.loanId}/pki-pdf`;
+                      
+                      console.log('Fetching PDF from:', pdfUrl);
+                      console.log('Using token:', accessToken ? 'Token present' : 'No token');
+                      
+                      const response = await fetch(pdfUrl, {
+                        method: 'GET',
+                        headers: {
+                          'Authorization': `Bearer ${accessToken}`
+                        }
+                      });
+                      
+                      console.log('PDF response status:', response.status);
+                      console.log('PDF response headers:', Object.fromEntries(response.headers.entries()));
+                      
+                      if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('PDF fetch error:', errorText);
+                        throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+                      }
+                      
+                      // Create blob URL and open in new tab
+                      const blob = await response.blob();
+                      console.log('PDF blob size:', blob.size, 'bytes');
+                      console.log('PDF blob type:', blob.type);
+                      
+                      const url = window.URL.createObjectURL(blob);
+                      console.log('Opening PDF URL:', url);
+                      
+                      const newWindow = window.open(url, '_blank');
+                      if (!newWindow) {
+                        console.error('Failed to open new window - popup blocked?');
+                        setError('Popup blocked. Please allow popups and try again.');
+                        return;
+                      }
+                      
+                      // Clean up the blob URL after a delay
+                      setTimeout(() => {
+                        window.URL.revokeObjectURL(url);
+                      }, 5000);
+                    }
+                  } catch (error) {
+                    console.error('Failed to open signed PDF:', error);
+                    setError('Failed to retrieve signed PDF. Please try again later.');
+                  } finally {
+                    setLoadingPdf(false);
+                  }
+                }}
+                className="w-full px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
+              >
+                {loadingPdf ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                )}
+                <span>{loadingPdf ? 'Loading PDF...' : 'View Signed PDF'}</span>
+              </button>
+              
+              <button
+                onClick={() => {
+                  router.push('/dashboard/loans?tab=applications&signed=success&pki=true');
+                }}
+                className="w-full px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Continue to Dashboard
+              </button>
+            </div>
+            
+            <p className="text-xs text-gray-500">
+              Auto-redirecting in a few seconds...
+            </p>
           </div>
         );
 

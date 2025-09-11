@@ -6,6 +6,7 @@ import { signingService } from '../services/SigningService';
 import { mtsaClient } from '../services/MTSAClient';
 import { storageManager } from '../utils/storage';
 import { isValidBase64 } from '../utils/crypto';
+import { prisma } from '../utils/database';
 import config from '../config';
 import {
   SigningRequest,
@@ -1074,6 +1075,83 @@ router.get('/signed/:packetId', verifyApiKey, async (req, res) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to list signed PDFs',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * Download signed PDF directly
+ * GET /api/signed/:applicationId/download
+ */
+router.get('/signed/:applicationId/download', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { applicationId } = req.params;
+    
+    if (!applicationId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing applicationId parameter',
+      });
+      return;
+    }
+    
+    log.info('Downloading signed PDF', { applicationId });
+    
+    // Query database to find the signed agreement
+    const signedAgreement = await prisma.signedAgreement.findFirst({
+      where: { loanId: applicationId }
+    });
+    
+    if (!signedAgreement || !signedAgreement.signedFilePath) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Signed PDF not found for this application',
+      });
+      return;
+    }
+    
+    // Check if file exists
+    const fileExists = await storageManager.fileExists(signedAgreement.signedFilePath);
+    if (!fileExists) {
+      log.error('Signed PDF file not found on disk', { 
+        filePath: signedAgreement.signedFilePath,
+        applicationId 
+      });
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'Signed PDF file not found on disk',
+      });
+      return;
+    }
+    
+    // Read the file and serve it
+    const fileBuffer = await storageManager.readFile(signedAgreement.signedFilePath);
+    
+    // Set appropriate headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${signedAgreement.signedFileName || 'signed-agreement.pdf'}"`);
+    res.setHeader('Content-Length', fileBuffer.length);
+    
+    log.info('Serving signed PDF', { 
+      applicationId,
+      fileName: signedAgreement.signedFileName,
+      fileSize: fileBuffer.length 
+    });
+    
+    res.send(fileBuffer);
+    
+  } catch (error) {
+    log.error('Failed to download signed PDF', { 
+      error: error instanceof Error ? error.message : String(error),
+      applicationId: req.params.applicationId
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to download signed PDF',
       correlationId: req.correlationId,
     });
   }

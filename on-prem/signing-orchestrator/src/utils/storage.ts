@@ -115,6 +115,13 @@ export class StorageManager {
   }
 
   /**
+   * Read file as buffer
+   */
+  async readFile(filePath: string): Promise<Buffer> {
+    return await fs.readFile(filePath);
+  }
+
+  /**
    * Get file stats
    */
   async getFileStats(filePath: string): Promise<fs.Stats | null> {

@@ -12,13 +12,15 @@ REMOTE_USER=""         # User handled by SSH config
 REMOTE_BASE_DIR="/home/admin-kapital"
 LOCAL_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Remote directories
+# Remote directories (matching your actual on-prem structure)
 REMOTE_DOCUSEAL_DIR="$REMOTE_BASE_DIR/docuseal-onprem"
-REMOTE_ORCHESTRATOR_DIR="$REMOTE_BASE_DIR/signing-orchestrator"
+REMOTE_ORCHESTRATOR_DIR="$REMOTE_BASE_DIR/signing-orchestrator" 
+REMOTE_MTSA_DIR="$REMOTE_BASE_DIR/mtsa-pilot-docker"
 
 # Local directories
-LOCAL_DOCUSEAL_DIR="$LOCAL_BASE_DIR/docuseal"
+LOCAL_DOCUSEAL_DIR="$LOCAL_BASE_DIR/../docuseal-onprem"
 LOCAL_ORCHESTRATOR_DIR="$LOCAL_BASE_DIR/signing-orchestrator"
+LOCAL_MTSA_DIR="$LOCAL_BASE_DIR/mtsa"
 
 # Colors for output
 RED='\033[0;31m'
@@ -92,6 +94,14 @@ backup_deployments() {
             docker exec docuseal-postgres pg_dump -U docuseal -d docuseal > "backups/${BACKUP_NAME}-docuseal-db.sql" 2>/dev/null && echo "   ✅ Database backed up" || echo "   ⚠️  Database backup failed"
         else
             echo "   ℹ️  DocuSeal database not running - skipping DB backup"
+        fi
+        
+        # 2.5. Backup Signing Orchestrator database (if running) - CRITICAL FOR AGREEMENTS DATA
+        if docker ps --format "table {{.Names}}" | grep -q "agreements-postgres"; then
+            echo "🗄️  Backing up Signing Orchestrator database (agreements, certificates)..."
+            docker exec agreements-postgres-prod pg_dump -U agreements_user -d agreements_db > "backups/${BACKUP_NAME}-agreements-db.sql" 2>/dev/null && echo "   ✅ Agreements database backed up" || echo "   ⚠️  Agreements database backup failed"
+        else
+            echo "   ℹ️  Signing Orchestrator database not running - skipping agreements DB backup"
         fi
         
         # 3. Backup Docker volumes (if they exist) - PRESERVES ALL PERSISTENT DATA
@@ -287,6 +297,33 @@ sync_orchestrator() {
     print_success "Signing Orchestrator files synced successfully"
 }
 
+# Function to sync MTSA files (careful not to overwrite sensitive configs)
+sync_mtsa() {
+    print_section "Syncing MTSA files"
+    
+    if [ ! -d "$LOCAL_MTSA_DIR" ]; then
+        print_warning "Local MTSA directory not found: $LOCAL_MTSA_DIR - skipping MTSA sync"
+        return 0
+    fi
+    
+    print_status "Syncing MTSA files to remote server (preserving existing configs)..."
+    
+    # Create remote directory if it doesn't exist
+    ssh $REMOTE_HOST "mkdir -p $REMOTE_MTSA_DIR"
+    
+    # Sync MTSA files (but preserve existing configurations)
+    rsync -avz \
+        --exclude '*.properties' \
+        --exclude '*.log' \
+        --exclude 'logs/' \
+        --exclude '.DS_Store' \
+        --exclude 'data/' \
+        -e "ssh" \
+        "$LOCAL_MTSA_DIR/" "$REMOTE_HOST:$REMOTE_MTSA_DIR/"
+    
+    print_success "MTSA files synced successfully (configs preserved)"
+}
+
 # Function to setup environments
 setup_environments() {
     print_section "Setting up environments"
@@ -323,24 +360,48 @@ setup_environments() {
             # Use production environment if available, otherwise development
             if [ -f env.production ]; then
                 echo "Using production environment for Signing Orchestrator"
-                cp env.production .env
+                # Don't overwrite existing .env, just ensure env.production is properly configured
+                if [ ! -f .env ]; then
+                    cp env.production .env
+                fi
             elif [ -f env.development ]; then
                 echo "Using development environment for Signing Orchestrator"
-                cp env.development .env
+                if [ ! -f .env ]; then
+                    cp env.development .env
+                fi
             elif [ -f env.example ]; then
                 echo "Using example environment for Signing Orchestrator"
-                cp env.example .env
+                if [ ! -f .env ]; then
+                    cp env.example .env
+                fi
             elif [ ! -f .env ]; then
                 echo "⚠️  No .env file found for Signing Orchestrator - please configure manually"
             fi
             
-            # Create necessary directories
+            # Create necessary directories (preserve existing data)
+            mkdir -p ~/kapital/agreements/{signed,original,stamped,postgres}
+            mkdir -p ~/kapital/logs/{signing-orchestrator,postgres}
             mkdir -p data/signed logs
             
             # Set proper permissions
-            chmod +x deploy.sh deploy-quick.sh scripts/*.sh 2>/dev/null || true
+            chmod +x deploy*.sh scripts/*.sh 2>/dev/null || true
             
             echo "✅ Signing Orchestrator environment setup completed"
+            cd ..
+        fi
+        
+        # Setup MTSA environment (preserve existing configs)
+        if [ -d mtsa-pilot-docker ]; then
+            cd mtsa-pilot-docker
+            echo "🔧 Checking MTSA environment..."
+            
+            # Just ensure directories exist, don't modify configs
+            mkdir -p logs
+            
+            # Set proper permissions
+            chmod +x *.sh 2>/dev/null || true
+            
+            echo "✅ MTSA environment checked (existing configs preserved)"
             cd ..
         fi
 EOF
@@ -400,14 +461,23 @@ deploy_orchestrator() {
             echo "🛑 Stopping existing Signing Orchestrator containers..."
             docker-compose down 2>/dev/null || true
             
-            echo "🏗️  Building Signing Orchestrator images..."
-            docker-compose build --no-cache
-            
-            echo "🚀 Starting Signing Orchestrator containers..."
-            docker-compose up -d
+            # Use the automated deployment script if available
+            if [ -f deploy-auto.sh ]; then
+                echo "🚀 Using automated deployment script..."
+                chmod +x deploy-auto.sh
+                # Run a simplified version that doesn't do file copying
+                echo "🏗️  Building and starting Signing Orchestrator..."
+                docker-compose --env-file env.production up -d --build
+            else
+                echo "🏗️  Building Signing Orchestrator images..."
+                docker-compose build --no-cache
+                
+                echo "🚀 Starting Signing Orchestrator containers..."
+                docker-compose up -d
+            fi
             
             echo "⏳ Waiting for Signing Orchestrator to start..."
-            sleep 10
+            sleep 15
             
             echo "📊 Signing Orchestrator container status:"
             docker-compose ps
@@ -428,6 +498,56 @@ deploy_orchestrator() {
 EOF
     
     print_success "Signing Orchestrator deployment completed"
+}
+
+# Function to deploy MTSA (check if running, restart if needed)
+deploy_mtsa() {
+    print_section "Checking MTSA Deployment"
+    
+    ssh $REMOTE_HOST << 'EOF'
+        if [ -d mtsa-pilot-docker ]; then
+            cd mtsa-pilot-docker
+            
+            echo "🔍 Checking MTSA container status..."
+            if docker ps | grep -q "mtsapilot-container"; then
+                echo "✅ MTSA container is already running"
+                echo "📊 MTSA container details:"
+                docker ps | grep mtsa
+                
+                # Test MTSA health
+                echo "🧪 Testing MTSA WSDL endpoint..."
+                if curl -f http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl >/dev/null 2>&1; then
+                    echo "✅ MTSA WSDL endpoint is accessible"
+                else
+                    echo "❌ MTSA WSDL endpoint not accessible, restarting..."
+                    docker restart mtsapilot-container 2>/dev/null || echo "⚠️  Failed to restart MTSA container"
+                fi
+            else
+                echo "⚠️  MTSA container not running"
+                echo "🔍 Looking for available MTSA images..."
+                docker images | grep mtsa
+                
+                # Try to start MTSA if image exists
+                if docker images | grep -q "mtsa-pilot"; then
+                    echo "🚀 Starting MTSA container..."
+                    # Use existing startup command or docker-compose if available
+                    if [ -f docker-compose.yml ]; then
+                        docker-compose up -d
+                    else
+                        echo "ℹ️  Manual MTSA container start may be required"
+                    fi
+                else
+                    echo "⚠️  MTSA image not found - manual setup may be required"
+                fi
+            fi
+            
+            cd ..
+        else
+            echo "⚠️  MTSA directory not found, skipping MTSA deployment"
+        fi
+EOF
+    
+    print_success "MTSA deployment check completed"
 }
 
 # Function to show overall status
@@ -461,6 +581,14 @@ show_deployment_status() {
             echo "❌ Unhealthy"
         fi
         
+        # MTSA health
+        echo -n "MTSA Pilot: "
+        if curl -f -s http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl >/dev/null 2>&1; then
+            echo "✅ Healthy"
+        else
+            echo "❌ Unhealthy"
+        fi
+        
         echo ""
         echo "📈 Resource Usage:"
         docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" 2>/dev/null || echo "Resource stats unavailable"
@@ -471,6 +599,7 @@ show_deployment_status() {
         echo "   DocuSeal Direct: http://sign.kredit.my:3001"
         echo "   Orchestrator API: http://sign.kredit.my:4010"
         echo "   Orchestrator Health: http://sign.kredit.my:4010/health"
+        echo "   MTSA Pilot WSDL: http://sign.kredit.my:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"
 EOF
     
     print_success "Status overview completed"
@@ -597,6 +726,7 @@ deploy_all() {
     # Sync files
     sync_docuseal
     sync_orchestrator
+    sync_mtsa
     
     # Setup environments
     setup_environments
@@ -604,6 +734,7 @@ deploy_all() {
     # Deploy services
     deploy_docuseal
     deploy_orchestrator
+    deploy_mtsa
     
     # Show status
     show_deployment_status
@@ -614,13 +745,15 @@ deploy_all() {
     echo "📋 Next steps:"
     echo "   1. Configure .env files if needed"
     echo "   2. Set up DocuSeal webhook URL: http://sign.kredit.my:4010/webhooks/docuseal"
-    echo "   3. Test the complete signing workflow"
+    echo "   3. Test certificate enrollment and revocation in admin panel"
+    echo "   4. Test the complete signing workflow"
     echo ""
     echo "🔧 Useful commands:"
     echo "   $0 status                    - Check deployment status"
     echo "   $0 logs [docuseal|orchestrator] - View logs"
     echo "   $0 restart [docuseal|orchestrator] - Restart services"
     echo "   $0 cleanup                   - Clean up Docker resources"
+    echo "   $0 backup                    - Create comprehensive backup"
 }
 
 # Parse command line arguments
@@ -647,7 +780,7 @@ case "${1:-deploy}" in
         check_remote_connection && restore_from_backup "$2"
         ;;
     "sync")
-        check_remote_connection && sync_docuseal && sync_orchestrator
+        check_remote_connection && sync_docuseal && sync_orchestrator && sync_mtsa
         ;;
     *)
         echo "Usage: $0 [deploy|status|logs|restart|cleanup|backup|restore|sync]"

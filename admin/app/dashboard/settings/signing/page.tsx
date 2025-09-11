@@ -946,10 +946,25 @@ export default function AdminSigningSettingsPage() {
                         <input
                           type="text"
                           value={organisationInfo.orgRegistationNo}
-                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgRegistationNo: e.target.value})}
+                          onChange={(e) => {
+                            // Limit ROC number to 20 characters to prevent database errors
+                            // Extract numerical part if full ROC format is entered
+                            let value = e.target.value;
+                            if (value.includes('(') && value.includes(')')) {
+                              // Extract just the number before the parentheses
+                              value = value.split('(')[0];
+                            }
+                            // Limit to 20 characters maximum
+                            value = value.slice(0, 20);
+                            setOrganisationInfo({...organisationInfo, orgRegistationNo: value});
+                          }}
                           className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                          placeholder="Company registration number"
+                          placeholder="Company registration number (e.g., 202101043135)"
+                          maxLength={20}
                         />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Enter just the numerical part without parentheses (max 20 characters)
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-400 mb-2">Registration Type *</label>

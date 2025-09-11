@@ -231,3 +231,5 @@ signed-pdfs/
 
 # Docker
 .dockerignore
+
+signed-files/

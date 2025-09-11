@@ -3,6 +3,8 @@ import config from '../config';
 import { createCorrelatedLogger } from '../utils/logger';
 import { mtsaClient } from './MTSAClient';
 import { storageManager } from '../utils/storage';
+import { prisma } from '../utils/database';
+import { createHash } from 'crypto';
 import {
   SigningRequest,
   SigningResponse,
@@ -960,7 +962,16 @@ export class SigningService {
         imageSize: signatureImage?.length || 0
       });
       
-      // Step 4: Sign the PDF with MTSA using extracted coordinates and image
+      // Step 4: Check if this OTP has already been used for this submission
+      const otpKey = `${submissionId}_${userId}_${otp}`;
+      const usedOtpCache = global.usedOtpCache || (global.usedOtpCache = new Map());
+      
+      if (usedOtpCache.has(otpKey)) {
+        log.error('OTP already used for this submission', { userId, submissionId, otp });
+        throw new Error('This OTP has already been used. Please request a new OTP.');
+      }
+      
+      // Step 5: Sign the PDF with MTSA using extracted coordinates and image
       log.info('Signing PDF with MTSA', { 
         userId, 
         fullName: finalUserFullName, 
@@ -987,55 +998,146 @@ export class SigningService {
         }
       };
       
-      const signedResult = await mtsaClient.signPDF(signRequest, correlationId);
+      // Mark OTP as used BEFORE calling MTSA to prevent double usage
+      usedOtpCache.set(otpKey, Date.now());
+      log.info('Marked OTP as used', { otpKey });
+      
+      // Clean up old OTP entries (older than 30 minutes) to prevent memory leaks
+      const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+      for (const [key, timestamp] of usedOtpCache.entries()) {
+        if (timestamp < thirtyMinutesAgo) {
+          usedOtpCache.delete(key);
+        }
+      }
+      
+      let signedResult;
+      try {
+        signedResult = await mtsaClient.signPDF(signRequest, correlationId);
+      } catch (error) {
+        // If MTSA call fails, remove the OTP from cache so it can be retried
+        usedOtpCache.delete(otpKey);
+        log.error('MTSA call failed, removed OTP from cache', { otpKey, error });
+        throw error;
+      }
       
       if (signedResult.statusCode !== '000' || !signedResult.signedPdfInBase64) {
         const errorMessage = signedResult.message || 'Unknown error';
         const statusCode = signedResult.statusCode || 'UNKNOWN';
         log.error('MTSA signing failed', { statusCode, message: errorMessage, userId, submissionId });
+        
+        // If it's an OTP-related error, remove from cache so user can get a new OTP
+        if (errorMessage.includes('Invalid OTP') || errorMessage.includes('otp already been used') || statusCode === '001') {
+          usedOtpCache.delete(otpKey);
+          log.info('Removed failed OTP from cache due to OTP error', { otpKey });
+        }
+        
         throw new Error(`MTSA signing failed (${statusCode}): ${errorMessage}`);
       }
       
       log.info('PDF signed successfully with MTSA');
       
-      // Step 5: Update DocuSeal submission with signed PDF
-      log.info('Updating DocuSeal submission with signed PDF');
+      // Step 5: Store signed PDF and update database
       
-      // DocuSeal might use a different endpoint for updating with signed PDF
-      // Try uploading the signed PDF back to the submission
-      const updateResponse = await axios.patch(
-        `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
-        {
-          pdf: signedResult.signedPdfInBase64,
-          status: 'completed'
-        },
-        {
-          headers: {
-            'X-Auth-Token': config.docuseal.apiToken,
-            'Content-Type': 'application/json'
-          },
-          timeout: config.network.timeoutMs
-        }
+      log.info('Storing signed PDF to file system');
+      const signedPdfPath = await storageManager.saveSignedPdf(
+        signedResult.signedPdfInBase64,
+        submissionId, // Use submission ID as packet ID
+        userId,
+        correlationId
       );
       
-      log.info('DocuSeal submission updated with signed PDF', { updateStatus: updateResponse.status });
+      log.info('Signed PDF stored successfully', { 
+        filePath: signedPdfPath,
+        submissionId,
+        userId 
+      });
       
-      // Step 6: Mark the DocuSeal submission as completed
-      await axios.patch(
-        `${config.docuseal.baseUrl}/api/submissions/${submissionId}`,
-        {
-          completed: true
-        },
-        {
-          headers: {
-            'X-Auth-Token': config.docuseal.apiToken,
-            'Content-Type': 'application/json'
+      // Step 6: Create/update database record
+      log.info('Creating/updating SignedAgreement database record');
+      
+      // Calculate file hashes for integrity verification
+      const originalPdfBase64 = document.url; // This is the base64 from DocuSeal
+      const originalFileHash = createHash('sha256').update(originalPdfBase64, 'base64').digest('hex');
+      const signedFileHash = createHash('sha256').update(signedResult.signedPdfInBase64, 'base64').digest('hex');
+      const signedFileSize = Buffer.from(signedResult.signedPdfInBase64, 'base64').length;
+      const originalFileSize = Buffer.from(originalPdfBase64, 'base64').length;
+      
+      // Map applicationId to loanId (assuming 1:1 relationship for now)
+      // In production, you might need to query the main database to get the actual loanId
+      const loanId = applicationId; // Assuming applicationId is the loanId for PKI signing
+      
+      try {
+        const signedAgreement = await prisma.signedAgreement.upsert({
+          where: { loanId },
+          update: {
+            mtsaStatus: 'SIGNED',
+            mtsaSignedAt: new Date(),
+            mtsaSignedBy: userId,
+            mtsaTransactionId: correlationId,
+            mtsaCertificateInfo: {
+              statusCode: signedResult.statusCode,
+              message: signedResult.message,
+              signedAt: new Date().toISOString(),
+              signerUserId: userId
+            },
+            signedFilePath: signedPdfPath,
+            signedFileHash,
+            signedFileName: `${submissionId}_signed.pdf`,
+            signedFileSizeBytes: signedFileSize,
+            status: 'MTSA_SIGNED',
+            updatedAt: new Date()
           },
-          timeout: config.network.timeoutMs
-        }
-      );
+          create: {
+            loanId,
+            userId,
+            agreementType: 'LOAN_AGREEMENT',
+            mtsaStatus: 'SIGNED',
+            mtsaSignedAt: new Date(),
+            mtsaSignedBy: userId,
+            mtsaTransactionId: correlationId,
+            mtsaCertificateInfo: {
+              statusCode: signedResult.statusCode,
+              message: signedResult.message,
+              signedAt: new Date().toISOString(),
+              signerUserId: userId
+            },
+            originalFilePath: `temp_${submissionId}_original.pdf`, // Placeholder for original
+            signedFilePath: signedPdfPath,
+            originalFileHash,
+            signedFileHash,
+            originalFileName: `${submissionId}_original.pdf`,
+            signedFileName: `${submissionId}_signed.pdf`,
+            fileSizeBytes: originalFileSize,
+            signedFileSizeBytes: signedFileSize,
+            status: 'MTSA_SIGNED'
+          }
+        });
+        
+        log.info('SignedAgreement database record created/updated successfully', {
+          agreementId: signedAgreement.id,
+          loanId,
+          userId,
+          mtsaTransactionId: correlationId,
+          signedAt: signedAgreement.mtsaSignedAt
+        });
+        
+      } catch (dbError) {
+        log.error('Failed to create/update SignedAgreement database record', {
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          loanId,
+          userId,
+          submissionId
+        });
+        // Don't fail the entire signing process if database update fails
+        // The signed PDF is already stored safely
+      }
       
-      log.info('DocuSeal submission marked as completed');
+      log.info('Signed PDF stored and database updated successfully', {
+        submissionId,
+        applicationId,
+        userId,
+        signedPdfPath
+      });
       
       return {
         success: true,

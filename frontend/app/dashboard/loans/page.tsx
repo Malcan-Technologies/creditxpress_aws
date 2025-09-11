@@ -359,6 +359,8 @@ function LoansPageContent() {
 	useEffect(() => {
 		const success = searchParams.get("success");
 		const warning = searchParams.get("warning");
+		const signed = searchParams.get("signed");
+		const pki = searchParams.get("pki");
 		
 		if (success === "attestation_completed_signing_initiated") {
 			setSuccessMessage("✅ Attestation completed successfully! Document signing has been opened in a new tab. Please complete the signing process to finalize your loan.");
@@ -366,6 +368,12 @@ function LoansPageContent() {
 			setTimeout(() => setSuccessMessage(""), 8000);
 		} else if (success === "attestation_completed") {
 			setSuccessMessage("✅ Attestation completed successfully! You can now proceed to sign your loan documents.");
+			setTimeout(() => setSuccessMessage(""), 6000);
+		} else if (signed === "success" && pki === "true") {
+			setSuccessMessage("🔐 PKI Digital Signing completed successfully! Your document has been signed with your digital certificate and is now legally binding.");
+			setTimeout(() => setSuccessMessage(""), 8000);
+		} else if (signed === "success") {
+			setSuccessMessage("✅ Document signing completed successfully! Your agreement is now active.");
 			setTimeout(() => setSuccessMessage(""), 6000);
 		}
 		

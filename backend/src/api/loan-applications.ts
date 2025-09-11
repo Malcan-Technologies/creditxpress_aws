@@ -2407,4 +2407,75 @@ router.get("/:loanId/agreement-download", authenticateAndVerifyPhone, async (req
     }
 });
 
+/**
+ * GET /api/loan-applications/:loanId/pki-pdf
+ * Download PKI signed PDF directly (for PKI signing flow)
+ */
+router.get("/:loanId/pki-pdf", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const { loanId } = req.params;
+        const userId = req.user!.userId;
+
+        // Verify the loan belongs to the authenticated user
+        const loan = await prisma.loan.findFirst({
+            where: { 
+                id: loanId,
+                userId: userId
+            },
+            select: {
+                id: true,
+                applicationId: true
+            }
+        });
+
+        if (!loan) {
+            res.status(404).json({
+                success: false,
+                message: 'Loan not found'
+            });
+            return;
+        }
+
+        // Proxy request to signing orchestrator
+        const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+        const signedPdfUrl = `${orchestratorUrl}/api/signed/${loan.applicationId}/download`;
+        
+        console.log('Proxying PKI PDF request to:', signedPdfUrl);
+        
+        const response = await fetch(signedPdfUrl, {
+            method: 'GET',
+            headers: {
+                'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Signing orchestrator responded with error:', response.status, response.statusText);
+            res.status(response.status).json({
+                success: false,
+                message: 'Signed PDF not available'
+            });
+            return;
+        }
+
+        // Get the PDF buffer from the orchestrator
+        const pdfBuffer = await response.arrayBuffer();
+        
+        // Set headers for PDF response
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="loan-agreement-${loanId}.pdf"`);
+        res.setHeader('Content-Length', pdfBuffer.byteLength);
+        
+        // Send the PDF buffer
+        res.send(Buffer.from(pdfBuffer));
+
+    } catch (error: any) {
+        console.error('Error downloading PKI signed PDF:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to download signed PDF'
+        });
+    }
+});
+
 export default router;

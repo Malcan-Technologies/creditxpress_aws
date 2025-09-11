@@ -1,18 +1,12 @@
 #!/bin/bash
 
 # =============================================================================
-# Deploy MTSA Integration for Production On-Premises
+# Deploy MTSA Integration for Production On-Premises (Kapital.my)
 # =============================================================================
 
 set -e
 
 echo "🚀 Starting MTSA Integration Production Deployment..."
-
-# Check if running as root or with sudo
-if [ "$EUID" -ne 0 ]; then
-    echo "❌ Please run this script as root or with sudo"
-    exit 1
-fi
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
@@ -20,37 +14,29 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
-# Check if MTSA directory exists
-if [ ! -d "../mtsa" ]; then
-    echo "❌ MTSA directory not found at ../mtsa"
-    echo "Please ensure the MTSA application is placed in the correct directory."
-    exit 1
-fi
+# Define production directories in user home
+KAPITAL_HOME="$HOME/kapital"
+BACKUP_DIR="$HOME/kapital-backups"
 
 # Create production directories
 echo "📁 Creating production directories..."
-mkdir -p /opt/kapital/signed-files
-mkdir -p /opt/kapital/logs/signing-orchestrator
-mkdir -p /opt/kapital/logs/mtsa
-mkdir -p /opt/kapital/mtsa/config
+mkdir -p "$KAPITAL_HOME/agreements/signed"
+mkdir -p "$KAPITAL_HOME/agreements/original"  
+mkdir -p "$KAPITAL_HOME/agreements/stamped"
+mkdir -p "$KAPITAL_HOME/agreements/postgres"
+mkdir -p "$KAPITAL_HOME/logs/signing-orchestrator"
+mkdir -p "$KAPITAL_HOME/logs/postgres"
+mkdir -p "$BACKUP_DIR"
 
-# Copy MTSA configuration files if they don't exist
-if [ ! -f "/opt/kapital/mtsa/config/opg-capital-mtsa.pilot.properties" ]; then
-    echo "📋 Copying MTSA configuration files..."
-    cp -r ../mtsa/mtsa/* /opt/kapital/mtsa/config/
-fi
+echo "✅ Created directories:"
+echo "   - $KAPITAL_HOME/agreements/"
+echo "   - $KAPITAL_HOME/logs/"
+echo "   - $BACKUP_DIR/"
 
-# Set proper permissions
-echo "🔒 Setting proper permissions..."
-chown -R 1000:1000 /opt/kapital/signed-files
-chown -R 1000:1000 /opt/kapital/logs
-chmod -R 755 /opt/kapital
-
-# Copy environment file if it doesn't exist
+# Check if environment file exists
 if [ ! -f "env.production" ]; then
-    echo "📋 Creating production environment file..."
-    cp env.example env.production
-    echo "⚠️  Please edit env.production with your production settings before continuing."
+    echo "❌ env.production file not found!"
+    echo "Please ensure env.production exists with proper configuration."
     exit 1
 fi
 
@@ -65,27 +51,29 @@ if grep -q "your-mtsa-prod-username" env.production; then
 fi
 
 # Backup existing deployment
-if docker-compose -f docker-compose.mtsa-prod.yml ps | grep -q "Up"; then
+if docker-compose ps | grep -q "Up"; then
     echo "💾 Creating backup of current deployment..."
     timestamp=$(date +%Y%m%d_%H%M%S)
-    mkdir -p /opt/kapital/backups/$timestamp
-    cp -r /opt/kapital/signed-files /opt/kapital/backups/$timestamp/
-    echo "Backup created at /opt/kapital/backups/$timestamp/"
+    mkdir -p "$BACKUP_DIR/$timestamp"
+    if [ -d "$KAPITAL_HOME/agreements/signed" ]; then
+        cp -r "$KAPITAL_HOME/agreements/signed" "$BACKUP_DIR/$timestamp/"
+    fi
+    echo "Backup created at $BACKUP_DIR/$timestamp/"
 fi
 
 # Stop existing containers
 echo "🛑 Stopping existing containers..."
-docker-compose -f docker-compose.mtsa-prod.yml down
+docker-compose down
 
 # Pull latest images and build
 echo "🏗️  Building and starting production services..."
-docker-compose -f docker-compose.mtsa-prod.yml up -d --build
+docker-compose --env-file env.production up -d --build
 
 # Wait for services to be healthy
 echo "⏳ Waiting for services to become healthy..."
 timeout 180 bash -c '
     while true; do
-        if docker-compose -f docker-compose.mtsa-prod.yml ps | grep -q "Up (healthy)"; then
+        if docker-compose ps | grep -q "Up (healthy)"; then
             echo "Services are healthy!"
             break
         fi
@@ -96,16 +84,7 @@ timeout 180 bash -c '
 
 # Check service status
 echo "📊 Service Status:"
-docker-compose -f docker-compose.mtsa-prod.yml ps
-
-# Test MTSA WSDL endpoint
-echo "🧪 Testing MTSA WSDL endpoint..."
-if curl -f -s "http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl" > /dev/null; then
-    echo "✅ MTSA WSDL endpoint is accessible"
-else
-    echo "❌ MTSA WSDL endpoint is not accessible"
-    echo "Please check the logs: docker-compose -f docker-compose.mtsa-prod.yml logs mtsa-pilot"
-fi
+docker-compose ps
 
 # Test Signing Orchestrator health endpoint
 echo "🧪 Testing Signing Orchestrator health endpoint..."
@@ -113,38 +92,20 @@ if curl -f -s "http://localhost:4010/health" > /dev/null; then
     echo "✅ Signing Orchestrator is healthy"
 else
     echo "❌ Signing Orchestrator is not healthy"
-    echo "Please check the logs: docker-compose -f docker-compose.mtsa-prod.yml logs signing-orchestrator"
+    echo "Please check the logs: docker-compose logs signing-orchestrator"
 fi
 
-# Configure firewall (if ufw is available)
-if command -v ufw &> /dev/null; then
-    echo "🔥 Configuring firewall..."
-    ufw allow 4010/tcp comment "Signing Orchestrator"
-    ufw allow from 192.168.0.0/24 to any port 8080 comment "MTSA internal access"
+# Test revoke endpoint (with invalid API key - should return auth error)
+echo "🧪 Testing certificate revocation endpoint..."
+if curl -f -s -X POST "http://localhost:4010/api/revoke" \
+    -H "Content-Type: application/json" \
+    -H "X-API-Key: test" \
+    -d '{}' 2>/dev/null | grep -q "Unauthorized"; then
+    echo "✅ Revoke endpoint is accessible and secured"
+else
+    echo "❌ Revoke endpoint test failed"
+    echo "Please check the logs: docker-compose logs signing-orchestrator"
 fi
-
-# Create systemd service for auto-restart
-echo "⚙️  Creating systemd service..."
-cat > /etc/systemd/system/mtsa-signing.service << EOF
-[Unit]
-Description=MTSA Signing Integration
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=$(pwd)
-ExecStart=/usr/bin/docker-compose -f docker-compose.mtsa-prod.yml up -d
-ExecStop=/usr/bin/docker-compose -f docker-compose.mtsa-prod.yml down
-TimeoutStartSec=0
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl enable mtsa-signing.service
 
 echo ""
 echo "🎉 MTSA Integration Production Deployment Complete!"
@@ -152,26 +113,28 @@ echo ""
 echo "📋 Production Setup Summary:"
 echo "✅ Services running on:"
 echo "   - Signing Orchestrator: http://localhost:4010"
-echo "   - MTSA Agent: http://localhost:8080"
+echo "   - PostgreSQL Database: localhost:5434"
 echo ""
 echo "✅ Data directories:"
-echo "   - Signed files: /opt/kapital/signed-files"
-echo "   - Logs: /opt/kapital/logs/"
-echo "   - MTSA config: /opt/kapital/mtsa/config"
+echo "   - Agreements: $KAPITAL_HOME/agreements/"
+echo "   - Logs: $KAPITAL_HOME/logs/"
+echo "   - Backups: $BACKUP_DIR/"
 echo ""
-echo "✅ Systemd service: mtsa-signing.service"
-echo "   - Start: systemctl start mtsa-signing"
-echo "   - Stop: systemctl stop mtsa-signing"
-echo "   - Status: systemctl status mtsa-signing"
+echo "✅ Available endpoints:"
+echo "   - Health check: /health"
+echo "   - Certificate request: /api/request"
+echo "   - Certificate revocation: /api/revoke"
+echo "   - PDF signing: /api/sign"
 echo ""
 echo "📋 Next Steps:"
-echo "1. Verify nginx reverse proxy configuration"
-echo "2. Test DocuSeal webhook integration"
-echo "3. Configure SSL certificates for production"
-echo "4. Set up monitoring and log rotation"
+echo "1. Test certificate enrollment from admin panel"
+echo "2. Test certificate revocation functionality"
+echo "3. Verify backend API integration"
 echo ""
 echo "🔍 Useful Commands:"
-echo "   View logs: docker-compose -f docker-compose.mtsa-prod.yml logs -f"
-echo "   Restart: systemctl restart mtsa-signing"
+echo "   View logs: docker-compose logs -f"
+echo "   Restart services: docker-compose restart"
+echo "   Stop services: docker-compose down"
 echo "   Health check: curl http://localhost:4010/health"
+echo "   Test revoke endpoint: curl -X POST http://localhost:4010/api/revoke -H 'X-API-Key: test'"
 echo ""
