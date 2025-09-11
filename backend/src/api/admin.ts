@@ -1,7 +1,6 @@
 import express, {
 	Request,
 	Response,
-	NextFunction,
 	RequestHandler,
 } from "express";
 import { PrismaClient } from "@prisma/client";
@@ -179,27 +178,12 @@ export async function trackApplicationStatusChange(
 	}
 }
 
-// Middleware to check if user is admin
+// Import permissions system
+import { requireAdmin } from '../lib/permissions';
+
+// Middleware to check if user is admin (legacy compatibility)
 // @ts-ignore
-const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
-	try {
-		const authReq = req as AuthRequest;
-		const user = await prisma.user.findUnique({
-			where: { id: authReq.user?.userId },
-		});
-
-		if (!user || user.role !== "ADMIN") {
-			return res
-				.status(403)
-				.json({ message: "Access denied. Admin only." });
-		}
-
-		next();
-	} catch (error) {
-		console.error("Error checking admin status:", error);
-		return res.status(500).json({ message: "Internal server error" });
-	}
-};
+const isAdmin = requireAdmin;
 
 // Routes
 
@@ -229,7 +213,7 @@ const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
  *                   type: string
  *                 role:
  *                   type: string
- *                   enum: [ADMIN]
+ *                   enum: [ADMIN, ATTESTOR]
  *                 user:
  *                   type: object
  *                   properties:
@@ -244,7 +228,7 @@ const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
  *       401:
  *         description: Invalid credentials
  *       403:
- *         description: Access denied, admin privileges required
+ *         description: Access denied, admin or attestor privileges required
  *       500:
  *         description: Server error
  */
@@ -304,12 +288,12 @@ router.post("/login", async (req: Request, res: Response) => {
 			return res.status(401).json({ error: "Invalid credentials" });
 		}
 
-		// Check if user is an admin
-		if (user.role !== "ADMIN") {
-			console.log("Non-admin login attempt:", phoneNumber);
+		// Check if user has admin panel access (ADMIN or ATTESTOR)
+		if (user.role !== "ADMIN" && user.role !== "ATTESTOR") {
+			console.log("Non-admin login attempt:", phoneNumber, "role:", user.role);
 			return res
 				.status(403)
-				.json({ error: "Access denied. Admin privileges required." });
+				.json({ error: "Access denied. Admin or Attestor privileges required." });
 		}
 
 		// Verify password
@@ -2321,11 +2305,11 @@ router.post("/refresh", async (req: Request, res: Response) => {
 			return res.status(401).json({ error: "Invalid refresh token" });
 		}
 
-		// Check if user is admin
-		if (user.role !== "ADMIN") {
+		// Check if user has admin panel access (ADMIN or ATTESTOR)
+		if (user.role !== "ADMIN" && user.role !== "ATTESTOR") {
 			return res
 				.status(403)
-				.json({ error: "Access denied. Admin privileges required." });
+				.json({ error: "Access denied. Admin or Attestor privileges required." });
 		}
 
 		// Generate new tokens
@@ -2444,11 +2428,11 @@ router.post(
  *                   type: string
  *                 role:
  *                   type: string
- *                   enum: [ADMIN]
+ *                   enum: [ADMIN, ATTESTOR]
  *       401:
  *         description: Unauthorized
  *       403:
- *         description: Forbidden - Not an admin
+ *         description: Forbidden - Not an admin or attestor
  *       500:
  *         description: Server error
  */
@@ -2478,10 +2462,10 @@ router.get(
 				return res.status(404).json({ error: "User not found" });
 			}
 
-			// Ensure the user is an admin
-			if (user.role !== "ADMIN") {
+			// Ensure the user has admin panel access (ADMIN or ATTESTOR)
+			if (user.role !== "ADMIN" && user.role !== "ATTESTOR") {
 				return res.status(403).json({
-					error: "Access denied. Admin privileges required.",
+					error: "Access denied. Admin or Attestor privileges required.",
 				});
 			}
 
@@ -2558,9 +2542,9 @@ router.put(
 				select: { role: true }
 			});
 
-			if (!currentUser || currentUser.role !== "ADMIN") {
+			if (!currentUser || (currentUser.role !== "ADMIN" && currentUser.role !== "ATTESTOR")) {
 				return res.status(403).json({
-					error: "Access denied. Admin privileges required.",
+					error: "Access denied. Admin or Attestor privileges required.",
 				});
 			}
 

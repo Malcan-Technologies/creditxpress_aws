@@ -72,6 +72,7 @@ export default function AdminUsersPage() {
 	const [users, setUsers] = useState<User[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
+	const [roleFilter, setRoleFilter] = useState<string>("all");
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
 	const router = useRouter();
@@ -144,12 +145,16 @@ export default function AdminUsersPage() {
 
 	const filteredUsers = users.filter((user) => {
 		const searchTerm = search.toLowerCase();
-		return (
+		const matchesSearch = (
 			(user.fullName?.toLowerCase() || "").includes(searchTerm) ||
 			(user.email?.toLowerCase() || "").includes(searchTerm) ||
 			(user.phoneNumber?.toLowerCase() || "").includes(searchTerm) ||
 			(user.role?.toLowerCase() || "").includes(searchTerm)
 		);
+		
+		const matchesRole = roleFilter === "all" || user.role === roleFilter;
+		
+		return matchesSearch && matchesRole;
 	});
 
 	// Handle edit user
@@ -485,18 +490,40 @@ export default function AdminUsersPage() {
 						</button>
 					</div>
 
-					{/* Search Bar */}
-					<div className="mt-4 relative max-w-md">
-						<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-							<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+					{/* Search and Filter Bar */}
+					<div className="mt-4 flex flex-col md:flex-row gap-4">
+						{/* Search Bar */}
+						<div className="relative flex-1 max-w-md">
+							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+								<MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+							</div>
+							<input
+								type="text"
+								placeholder="Search users..."
+								value={search}
+								onChange={(e) => setSearch(e.target.value)}
+								className="block w-full pl-10 pr-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+							/>
 						</div>
-						<input
-							type="text"
-							placeholder="Search users..."
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-							className="block w-full pl-10 pr-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-						/>
+						
+						{/* Role Filter */}
+						<div className="relative">
+							<select
+								value={roleFilter}
+								onChange={(e) => setRoleFilter(e.target.value)}
+								className="block w-full md:w-48 px-3 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none"
+							>
+								<option value="all">All Roles</option>
+								<option value="USER">User</option>
+								<option value="ADMIN">Admin</option>
+								<option value="ATTESTOR">Attestor</option>
+							</select>
+							<div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+								<svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+								</svg>
+							</div>
+						</div>
 					</div>
 				</div>
 
@@ -571,6 +598,8 @@ export default function AdminUsersPage() {
 												className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
 													user.role === "ADMIN"
 														? "bg-purple-500/20 text-purple-200 border-purple-400/20"
+														: user.role === "ATTESTOR"
+														? "bg-blue-500/20 text-blue-200 border-blue-400/20"
 														: "bg-green-500/20 text-green-200 border-green-400/20"
 												}`}
 											>
@@ -739,6 +768,7 @@ export default function AdminUsersPage() {
 									>
 										<option value="USER">User</option>
 										<option value="ADMIN">Admin</option>
+										<option value="ATTESTOR">Attestor</option>
 									</select>
 								</div>
 
@@ -860,6 +890,7 @@ export default function AdminUsersPage() {
 									>
 										<option value="USER">User</option>
 										<option value="ADMIN">Admin</option>
+										<option value="ATTESTOR">Attestor</option>
 									</select>
 								</div>
 
@@ -1007,9 +1038,10 @@ export default function AdminUsersPage() {
 													</p>
 													<span
 														className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
-															selectedUser.role ===
-															"ADMIN"
+															selectedUser.role === "ADMIN"
 																? "bg-purple-500/20 text-purple-200 border-purple-400/20"
+																: selectedUser.role === "ATTESTOR"
+																? "bg-blue-500/20 text-blue-200 border-blue-400/20"
 																: "bg-green-500/20 text-green-200 border-green-400/20"
 														}`}
 													>

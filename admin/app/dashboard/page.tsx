@@ -30,7 +30,7 @@ import {
 	UserCircleIcon,
 	ArrowPathIcon,
 } from "@heroicons/react/24/outline";
-import { fetchWithAdminTokenRefresh } from "../../lib/authUtils";
+import { fetchWithAdminTokenRefresh, checkAdminAuth } from "../../lib/authUtils";
 import Link from "next/link";
 import {
 	LineChart,
@@ -210,6 +210,7 @@ export default function AdminDashboardPage() {
 	});
 	const [loading, setLoading] = useState(true);
 	const [userName, setUserName] = useState("Admin");
+	const [userRole, setUserRole] = useState<string>("");
 	const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly');
 	const [workflowCounts, setWorkflowCounts] = useState({
 		PENDING_DECISION: 0,
@@ -223,13 +224,16 @@ export default function AdminDashboardPage() {
 
 	const fetchDashboardData = async () => {
 		try {
-			// Fetch user data with token refresh
+			// Fetch admin user data with token refresh
 			try {
 				const userData = await fetchWithAdminTokenRefresh<any>(
-					"/api/users/me"
+					"/api/admin/me"
 				);
 				if (userData.fullName) {
 					setUserName(userData.fullName);
+				}
+				if (userData.role) {
+					setUserRole(userData.role);
 				}
 			} catch (error) {
 				console.error("Error fetching user data:", error);
@@ -881,7 +885,8 @@ export default function AdminDashboardPage() {
 					</button>
 				</div>
 				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-					{/* Pending Decisions */}
+					{/* Pending Decisions - ADMIN only */}
+					{userRole === "ADMIN" && (
 					<Link
 						href="/dashboard/applications/pending-decision"
 						className="group bg-gradient-to-br from-amber-600/20 to-amber-800/20 backdrop-blur-md border border-amber-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-amber-400/50"
@@ -913,8 +918,9 @@ export default function AdminDashboardPage() {
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</Link>
+					)}
 
-					{/* Pending Signatures */}
+					{/* Pending Signatures - Available to both ADMIN and ATTESTOR */}
 					<Link
 						href="/dashboard/applications?tab=signatures&filter=pending_signature"
 						className="group bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 backdrop-blur-md border border-cyan-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-cyan-400/50"
@@ -947,7 +953,8 @@ export default function AdminDashboardPage() {
 						</div>
 					</Link>
 
-					{/* Pending Disbursements */}
+					{/* Pending Disbursements - ADMIN only */}
+					{userRole === "ADMIN" && (
 					<Link
 						href="/dashboard/applications/pending-disbursement"
 						className="group bg-gradient-to-br from-green-600/20 to-green-800/20 backdrop-blur-md border border-green-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-green-400/50"
@@ -979,8 +986,10 @@ export default function AdminDashboardPage() {
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</Link>
+					)}
 
-					{/* Pending Discharge */}
+					{/* Pending Discharge - ADMIN only */}
+					{userRole === "ADMIN" && (
 					<Link
 						href="/dashboard/loans?filter=pending_discharge"
 						className="group bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-md border border-orange-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-orange-400/50"
@@ -1012,8 +1021,10 @@ export default function AdminDashboardPage() {
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</Link>
+					)}
 
-					{/* Review Payments */}
+					{/* Review Payments - ADMIN only */}
+					{userRole === "ADMIN" && (
 					<Link
 						href="/dashboard/payments"
 						className="group bg-gradient-to-br from-purple-600/20 to-purple-800/20 backdrop-blur-md border border-purple-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-purple-400/50"
@@ -1045,8 +1056,9 @@ export default function AdminDashboardPage() {
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</Link>
+					)}
 
-					{/* Live Attestations */}
+					{/* Live Attestations - Available to both ADMIN and ATTESTOR */}
 					<Link
 						href="/dashboard/live-attestations"
 						className="group bg-gradient-to-br from-indigo-600/20 to-indigo-800/20 backdrop-blur-md border border-indigo-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-indigo-400/50"
@@ -1082,7 +1094,8 @@ export default function AdminDashboardPage() {
 				</div>
 			</div>
 
-			{/* Application Status Summary - Moved here from below */}
+			{/* Application Status Summary - ADMIN only */}
+			{userRole === "ADMIN" && (
 			<div className="mb-8">
 				<div className="flex items-center justify-between mb-6">
 					<div>
@@ -1364,7 +1377,10 @@ export default function AdminDashboardPage() {
 				</div>
 			</div>
 
-			{/* Global View Toggle */}
+			)}
+
+			{/* Global View Toggle - ADMIN only */}
+			{userRole === "ADMIN" && (
 			<div className="mb-8">
 				<div className="flex items-center justify-between">
 					<h2 className="text-lg font-medium text-white flex items-center">
@@ -1395,8 +1411,10 @@ export default function AdminDashboardPage() {
 							</div>
 						</div>
 					</div>
+			)}
 
-			{/* Main Dashboard - 2 columns on ultrawide (3xl+) */}
+			{/* Main Dashboard - ADMIN only */}
+			{userRole === "ADMIN" && (
 			<div className="grid grid-cols-1 3xl:grid-cols-2 gap-8 3xl:gap-12">
 				
 				{/* Left Column */}
@@ -2598,6 +2616,7 @@ export default function AdminDashboardPage() {
 					</div>
 				</div>
 			</div>
+			)}
 
 
 

@@ -24,8 +24,12 @@ const getStatusSchema = z.object({
  * POST /api/ctos/create-transaction
  */
 router.post('/create-transaction', async (req, res) => {
+  let kycSession: any = null;
+  let userId: string = '';
   try {
-    const { userId, documentName, documentNumber, platform, responseUrl } = createTransactionSchema.parse(req.body);
+    const parsedData = createTransactionSchema.parse(req.body);
+    userId = parsedData.userId;
+    const { documentName, documentNumber, platform, responseUrl } = parsedData;
 
     // Check if user exists
     const user = await prisma.user.findUnique({
@@ -37,7 +41,7 @@ router.post('/create-transaction', async (req, res) => {
     }
 
     // Create KYC session
-    const kycSession = await prisma.kycSession.create({
+    kycSession = await prisma.kycSession.create({
       data: {
         userId,
         status: 'IN_PROGRESS'
@@ -45,23 +49,92 @@ router.post('/create-transaction', async (req, res) => {
     });
 
     // Create CTOS transaction
-    const ctosResponse = await ctosService.createTransaction({
-      ref_id: userId, // Use user UUID as ref_id
-      document_name: documentName,
-      document_number: documentNumber,
-      platform,
-      response_url: responseUrl,
-      backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
-      callback_mode: 2 // Detailed callback
-    });
-
-    // Check if CTOS transaction was successful
-    if (!ctosResponse.onboarding_id || !ctosResponse.onboarding_url) {
-      // Clean up the KYC session if CTOS failed
-      await prisma.kycSession.delete({ where: { id: kycSession.id } });
+    let ctosResponse;
+    try {
+      ctosResponse = await ctosService.createTransaction({
+        ref_id: userId, // Use user UUID as ref_id
+        document_name: documentName,
+        document_number: documentNumber,
+        platform,
+        response_url: responseUrl,
+        backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
+        callback_mode: 2 // Detailed callback
+      });
+    } catch (ctosError) {
+      // CTOS service threw an error (no onboarding_id or other CTOS API error)
+      console.error('CTOS service threw error:', ctosError);
+      const errorMessage = ctosError instanceof Error ? ctosError.message : 'CTOS transaction failed';
       
+      // Extract error details from CTOS error message
+      let errorCode = "500";
+      let description = errorMessage;
+      
+      if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
+        errorCode = "103";
+        description = "Duplicate transaction found";
+      } else if (errorMessage.includes("CTOS API Error:")) {
+        description = errorMessage.replace("CTOS API Error: ", "");
+      }
+      
+      const ctosFailureData = {
+        rawResponse: {
+          message: "Failed", 
+          error_code: errorCode,
+          description: description
+        },
+        requestedBy: userId,
+        adminRequest: false,
+        errorDetails: {
+          timestamp: new Date().toISOString(),
+          originalError: errorMessage
+        }
+      };
+
+      await prisma.kycSession.update({ 
+        where: { id: kycSession.id },
+        data: {
+          status: 'FAILED',
+          ctosData: ctosFailureData,
+          completedAt: new Date()
+        }
+      });
+      
+      console.log(`Marked KYC session ${kycSession.id} as FAILED due to CTOS service error`);
+      return res.status(400).json({ 
+        error: `CTOS eKYC Error: ${description}`,
+        kycSessionId: kycSession.id,
+        errorCode: errorCode
+      });
+    }
+
+    // Check if CTOS transaction was successful  
+    if (!ctosResponse.onboarding_id || !ctosResponse.onboarding_url) {
+      // Mark the KYC session as FAILED and store error details instead of deleting
       const errorMsg = ctosResponse.data?.message || ctosResponse.data?.name || 'CTOS transaction failed';
-      console.error('CTOS transaction failed:', ctosResponse);
+      const ctosFailureData = {
+        rawResponse: {
+          message: "Failed", 
+          error_code: ctosResponse.data?.code?.toString() || "400",
+          description: errorMsg
+        },
+        requestedBy: userId,
+        adminRequest: false,
+        errorDetails: {
+          timestamp: new Date().toISOString(),
+          originalResponse: JSON.parse(JSON.stringify(ctosResponse))
+        }
+      };
+
+      await prisma.kycSession.update({ 
+        where: { id: kycSession.id },
+        data: {
+          status: 'FAILED',
+          ctosData: ctosFailureData,
+          completedAt: new Date()
+        }
+      });
+      
+      console.error('CTOS transaction failed, marked session as FAILED:', ctosResponse);
       return res.status(400).json({ 
         error: `CTOS eKYC Error: ${errorMsg}`,
         ctosResponse,
@@ -93,9 +166,43 @@ router.post('/create-transaction', async (req, res) => {
 
   } catch (error) {
     console.error('Error creating CTOS transaction:', error);
+    
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid input', details: error.issues });
     }
+    
+    // If there's a KYC session created, mark it as FAILED
+    if (kycSession?.id) {
+      try {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to create CTOS transaction';
+        const ctosFailureData = {
+          rawResponse: {
+            message: "Failed", 
+            error_code: "500",
+            description: errorMessage
+          },
+          requestedBy: userId,
+          adminRequest: false,
+          errorDetails: {
+            timestamp: new Date().toISOString(),
+            originalError: errorMessage
+          }
+        };
+
+        await prisma.kycSession.update({ 
+          where: { id: kycSession.id },
+          data: {
+            status: 'FAILED',
+            ctosData: ctosFailureData,
+            completedAt: new Date()
+          }
+        });
+        console.log(`Marked KYC session ${kycSession.id} as FAILED due to CTOS error`);
+      } catch (updateError) {
+        console.error('Error updating failed KYC session:', updateError);
+      }
+    }
+    
     return res.status(500).json({ error: 'Failed to create CTOS transaction' });
   }
 });

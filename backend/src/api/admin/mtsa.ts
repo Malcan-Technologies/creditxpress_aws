@@ -1,41 +1,13 @@
 import { Router, Response } from 'express';
 import { authenticateToken, AuthRequest } from '../../middleware/auth';
-import { prisma } from '../../lib/prisma';
 
 const router = Router();
 
-// Admin-only middleware
-const adminOnlyMiddleware = async (req: AuthRequest, res: any, next: any) => {
-  try {
-    if (!req.user?.userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized"
-      });
-    }
+// Import permissions system
+import { requireAdminOrAttestor } from '../../lib/permissions';
 
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { role: true }
-    });
-
-    if (!user || user.role !== "ADMIN") {
-      return res.status(403).json({
-        success: false,
-        message: "Admin access required"
-      });
-    }
-
-    next();
-  } catch (error) {
-    console.error("Admin check error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-};
+// Admin or Attestor middleware for MTSA operations
+const adminOrAttestorMiddleware = requireAdminOrAttestor;
 
 /**
  * @swagger
@@ -62,7 +34,7 @@ const adminOnlyMiddleware = async (req: AuthRequest, res: any, next: any) => {
  *       500:
  *         description: Failed to get certificate information
  */
-router.get('/cert-info/:userId', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/cert-info/:userId', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
     
@@ -145,7 +117,7 @@ router.get('/cert-info/:userId', authenticateToken, adminOnlyMiddleware, async (
  *       500:
  *         description: Failed to request OTP
  */
-router.post('/request-otp', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/request-otp', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { userId, usage, emailAddress } = req.body;
     
@@ -272,7 +244,7 @@ router.post('/request-otp', authenticateToken, adminOnlyMiddleware, async (req: 
  *       500:
  *         description: Failed to request certificate
  */
-router.post('/request-certificate', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { 
       userId, 

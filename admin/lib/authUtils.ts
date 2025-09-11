@@ -271,15 +271,15 @@ export const checkAdminAuth = async (): Promise<boolean> => {
 			);
 			console.log("checkAdminAuth - User data:", userData);
 
-			// Verify that the user has ADMIN role
-			const isAdmin = userData.role === "ADMIN";
+			// Verify that the user has ADMIN or ATTESTOR role
+			const hasAdminAccess = userData.role === "ADMIN" || userData.role === "ATTESTOR";
 			console.log(
-				"checkAdminAuth - Is admin:",
-				isAdmin,
+				"checkAdminAuth - Has admin access:",
+				hasAdminAccess,
 				"role:",
 				userData.role
 			);
-			return isAdmin;
+			return hasAdminAccess;
 		} catch (error) {
 			console.error("checkAdminAuth - User data fetch error:", error);
 			// Token is invalid, try to refresh

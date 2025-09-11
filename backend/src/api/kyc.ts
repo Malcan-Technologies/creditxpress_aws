@@ -160,6 +160,47 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
 
       console.log('CTOS Response received:', ctosResponse);
 
+      // Check if CTOS response contains error information (after decryption, errors are at top level)
+      const response = ctosResponse as any;
+      if (response.message === "Failed" || 
+          response.error_code === "103" || 
+          response.description?.includes("Duplicate transaction") ||
+          response.message?.toLowerCase().includes("error")) {
+        
+        console.error('CTOS returned error in response:', ctosResponse);
+        
+        const ctosFailureData = {
+          rawResponse: {
+            message: "Failed", 
+            error_code: response.error_code || "103",
+            description: response.description || response.message || "CTOS transaction failed"
+          },
+          requestedBy: req.user?.userId,
+          adminRequest: false,
+          errorDetails: {
+            timestamp: new Date().toISOString(),
+            originalResponse: JSON.parse(JSON.stringify(ctosResponse))
+          }
+        };
+
+        await db.kycSession.update({ 
+          where: { id: kycSession.id },
+          data: {
+            status: 'FAILED',
+            ctosData: ctosFailureData,
+            completedAt: new Date()
+          }
+        });
+        
+        const description = response.description || response.message || "CTOS transaction failed";
+        return res.status(400).json({ 
+          message: `CTOS eKYC Error: ${description}`,
+          error: `CTOS API Error: ${description}`,
+          kycSessionId: kycSession.id,
+          errorCode: response.error_code || "103"
+        });
+      }
+
       // Update KYC session with CTOS data
       // Parse expiry date safely
       let ctosExpiredAt: Date | null = null;
@@ -209,25 +250,92 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       });
 
     } catch (ctosError) {
-      // If CTOS fails, clean up the KYC session
-      await db.kycSession.delete({ where: { id: kycSession.id } });
+      // Mark the KYC session as FAILED and store CTOS error details instead of deleting
       console.error('CTOS transaction failed:', ctosError);
-      return res.status(500).json({ 
-        message: 'Failed to create CTOS eKYC transaction',
-        error: ctosError instanceof Error ? ctosError.message : 'Unknown error'
+      const errorMessage = ctosError instanceof Error ? ctosError.message : 'Failed to create CTOS eKYC transaction';
+      
+      // Extract error details from CTOS error message
+      let errorCode = "500";
+      let description = errorMessage;
+      
+      // Parse specific CTOS error codes if available
+      if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
+        errorCode = "103";
+        description = "Duplicate transaction found";
+      } else if (errorMessage.includes("CTOS API Error:")) {
+        description = errorMessage.replace("CTOS API Error: ", "");
+      }
+      
+      const ctosFailureData = {
+        rawResponse: {
+          message: "Failed", 
+          error_code: errorCode,
+          description: description
+        },
+        requestedBy: req.user?.userId,
+        adminRequest: false,
+        errorDetails: {
+          timestamp: new Date().toISOString(),
+          originalError: errorMessage
+        }
+      };
+
+      await db.kycSession.update({ 
+        where: { id: kycSession.id },
+        data: {
+          status: 'FAILED',
+          ctosData: ctosFailureData,
+          completedAt: new Date()
+        }
+      });
+      
+      return res.status(400).json({ 
+        message: `CTOS eKYC Error: ${description}`,
+        error: errorMessage,
+        kycSessionId: kycSession.id,
+        errorCode: errorCode
       });
     }
 
   } catch (error) {
     console.error('Error starting CTOS eKYC:', error);
     
-    // Delete the KYC session if it was created but CTOS failed
+    // Mark the KYC session as FAILED and store error details instead of deleting
     if (kycSession?.id) {
       try {
-        await db.kycSession.delete({ where: { id: kycSession.id } });
-        console.log(`Deleted failed KYC session ${kycSession.id}`);
-      } catch (deleteError) {
-        console.error('Error deleting failed KYC session:', deleteError);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
+        const ctosFailureData = {
+          rawResponse: {
+            message: "Failed", 
+            error_code: "500",
+            description: errorMessage
+          },
+          requestedBy: req.user?.userId,
+          adminRequest: false,
+          errorDetails: {
+            timestamp: new Date().toISOString(),
+            originalError: errorMessage
+          }
+        };
+
+        await db.kycSession.update({ 
+          where: { id: kycSession.id },
+          data: {
+            status: 'FAILED',
+            ctosData: ctosFailureData,
+            completedAt: new Date()
+          }
+        });
+        console.log(`Marked KYC session ${kycSession.id} as FAILED due to CTOS error`);
+      } catch (updateError) {
+        console.error('Error updating failed KYC session:', updateError);
+        // If update fails, try to delete as fallback
+        try {
+          await db.kycSession.delete({ where: { id: kycSession.id } });
+          console.log(`Deleted failed KYC session ${kycSession.id} after update failure`);
+        } catch (deleteError) {
+          console.error('Error deleting failed KYC session:', deleteError);
+        }
       }
     }
     

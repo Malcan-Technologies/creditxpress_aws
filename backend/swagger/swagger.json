@@ -437,7 +437,8 @@
                     "role": {
                       "type": "string",
                       "enum": [
-                        "ADMIN"
+                        "ADMIN",
+                        "ATTESTOR"
                       ]
                     },
                     "user": {
@@ -466,7 +467,7 @@
             "description": "Invalid credentials"
           },
           "403": {
-            "description": "Access denied, admin privileges required"
+            "description": "Access denied, admin or attestor privileges required"
           },
           "500": {
             "description": "Server error"
@@ -1048,7 +1049,8 @@
                     "role": {
                       "type": "string",
                       "enum": [
-                        "ADMIN"
+                        "ADMIN",
+                        "ATTESTOR"
                       ]
                     }
                   }
@@ -1060,7 +1062,7 @@
             "description": "Unauthorized"
           },
           "403": {
-            "description": "Forbidden - Not an admin"
+            "description": "Forbidden - Not an admin or attestor"
           },
           "500": {
             "description": "Server error"
@@ -5548,6 +5550,100 @@
           },
           "500": {
             "description": "Failed to verify OTP"
+          }
+        }
+      }
+    },
+    "/api/mtsa/request-certificate": {
+      "post": {
+        "summary": "Request digital certificate enrollment with KYC images",
+        "tags": [
+          "MTSA"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "userId",
+                  "fullName",
+                  "emailAddress",
+                  "mobileNo",
+                  "authFactor",
+                  "nricFrontUrl",
+                  "nricBackUrl",
+                  "selfieImageUrl"
+                ],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "User ID (IC number)"
+                  },
+                  "fullName": {
+                    "type": "string",
+                    "description": "Full name"
+                  },
+                  "emailAddress": {
+                    "type": "string",
+                    "description": "Email address"
+                  },
+                  "mobileNo": {
+                    "type": "string",
+                    "description": "Mobile number"
+                  },
+                  "nationality": {
+                    "type": "string",
+                    "description": "Nationality code (default: MY)"
+                  },
+                  "userType": {
+                    "type": "string",
+                    "description": "User type (default: 1)"
+                  },
+                  "idType": {
+                    "type": "string",
+                    "description": "ID type (N for NRIC, P for Passport)"
+                  },
+                  "authFactor": {
+                    "type": "string",
+                    "description": "OTP code for authentication"
+                  },
+                  "nricFrontUrl": {
+                    "type": "string",
+                    "description": "Base64 data URL of NRIC front image"
+                  },
+                  "nricBackUrl": {
+                    "type": "string",
+                    "description": "Base64 data URL of NRIC back image"
+                  },
+                  "selfieImageUrl": {
+                    "type": "string",
+                    "description": "Base64 data URL of selfie image"
+                  },
+                  "verificationData": {
+                    "type": "object",
+                    "description": "Verification metadata"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Certificate request processed successfully"
+          },
+          "400": {
+            "description": "Invalid request parameters or missing KYC images"
+          },
+          "500": {
+            "description": "Failed to request certificate"
           }
         }
       }

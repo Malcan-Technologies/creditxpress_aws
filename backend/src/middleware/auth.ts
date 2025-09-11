@@ -15,6 +15,8 @@ export interface JwtPayload {
 export interface AuthRequest extends Request {
 	user?: {
 		userId: string;
+		role?: string;
+		fullName?: string;
 	};
 	files?: any;
 }

@@ -5,38 +5,11 @@ import { ctosService } from '../../lib/ctosService';
 
 const router = Router();
 
-// Admin-only middleware
-const adminOnlyMiddleware = async (req: AuthRequest, res: any, next: any) => {
-  try {
-    if (!req.user?.userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized"
-      });
-    }
+// Import permissions system
+import { requireAdminOrAttestor } from '../../lib/permissions';
 
-    // Check if user is admin
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.userId },
-      select: { role: true }
-    });
-
-    if (!user || user.role !== "ADMIN") {
-      return res.status(403).json({
-        success: false,
-        message: "Admin access required"
-      });
-    }
-
-    next();
-  } catch (error) {
-    console.error("Admin check error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
-};
+// Admin or Attestor middleware for KYC operations
+const adminOrAttestorMiddleware = requireAdminOrAttestor;
 
 /**
  * @swagger
@@ -56,7 +29,7 @@ const adminOnlyMiddleware = async (req: AuthRequest, res: any, next: any) => {
  *       500:
  *         description: Failed to get KYC status
  */
-router.get('/status', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/status', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
 
@@ -193,7 +166,7 @@ router.get('/status', authenticateToken, adminOnlyMiddleware, async (req: AuthRe
  *       500:
  *         description: Failed to start KYC
  */
-router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   let kycSession: any = null;
   
   try {
@@ -280,6 +253,47 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
 
       console.log('CTOS Response received for admin:', ctosResponse);
 
+      // Check if CTOS response contains error information (after decryption, errors are at top level)
+      const response = ctosResponse as any;
+      if (response.message === "Failed" || 
+          response.error_code === "103" || 
+          response.description?.includes("Duplicate transaction") ||
+          response.message?.toLowerCase().includes("error")) {
+        
+        console.error('CTOS returned error in response:', ctosResponse);
+        
+        const ctosFailureData = {
+          rawResponse: {
+            message: "Failed", 
+            error_code: response.error_code || "103",
+            description: response.description || response.message || "CTOS transaction failed"
+          },
+          requestedBy: req.user?.userId,
+          adminRequest: true,
+          errorDetails: {
+            timestamp: new Date().toISOString(),
+            originalResponse: JSON.parse(JSON.stringify(ctosResponse))
+          }
+        };
+
+        await prisma.kycSession.update({ 
+          where: { id: kycSession.id },
+          data: {
+            status: 'FAILED',
+            ctosData: ctosFailureData,
+            completedAt: new Date()
+          }
+        });
+        
+        const description = response.description || response.message || "CTOS transaction failed";
+        return res.status(400).json({ 
+          message: `CTOS eKYC Error: ${description}`,
+          error: `CTOS API Error: ${description}`,
+          kycSessionId: kycSession.id,
+          errorCode: response.error_code || "103"
+        });
+      }
+
       // Update KYC session with CTOS data
       // Parse expiry date safely
       let ctosExpiredAt: Date | null = null;
@@ -327,26 +341,93 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
       });
 
     } catch (ctosError: any) {
-      // If CTOS fails, clean up the KYC session
-      if (kycSession) {
-        await prisma.kycSession.delete({ where: { id: kycSession.id } });
-      }
+      // Mark the KYC session as FAILED and store CTOS error details instead of deleting
       console.error('CTOS Integration Error for admin:', ctosError);
-      return res.status(500).json({ 
-        message: 'Failed to create CTOS eKYC transaction',
-        error: ctosError instanceof Error ? ctosError.message : 'Unknown error'
+      const errorMessage = ctosError instanceof Error ? ctosError.message : 'Failed to create CTOS eKYC transaction';
+      
+      // Extract error details from CTOS error message
+      let errorCode = "500";
+      let description = errorMessage;
+      
+      // Parse specific CTOS error codes if available
+      if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
+        errorCode = "103";
+        description = "Duplicate transaction found";
+      } else if (errorMessage.includes("CTOS API Error:")) {
+        description = errorMessage.replace("CTOS API Error: ", "");
+      }
+      
+      const ctosFailureData = {
+        rawResponse: {
+          message: "Failed", 
+          error_code: errorCode,
+          description: description
+        },
+        requestedBy: req.user?.userId,
+        adminRequest: true,
+        errorDetails: {
+          timestamp: new Date().toISOString(),
+          originalError: errorMessage
+        }
+      };
+
+      if (kycSession) {
+        await prisma.kycSession.update({ 
+          where: { id: kycSession.id },
+          data: {
+            status: 'FAILED',
+            ctosData: ctosFailureData,
+            completedAt: new Date()
+          }
+        });
+      }
+      
+      return res.status(400).json({ 
+        message: `CTOS eKYC Error: ${description}`,
+        error: errorMessage,
+        kycSessionId: kycSession?.id,
+        errorCode: errorCode
       });
     }
   } catch (error) {
     console.error('Admin KYC start error:', error);
     
-    // Delete the KYC session if it was created but CTOS failed
+    // Mark the KYC session as FAILED and store error details instead of deleting
     if (kycSession?.id) {
       try {
-        await prisma.kycSession.delete({ where: { id: kycSession.id } });
-        console.log(`Deleted failed admin KYC session ${kycSession.id}`);
-      } catch (deleteError) {
-        console.error('Error deleting failed admin KYC session:', deleteError);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
+        const ctosFailureData = {
+          rawResponse: {
+            message: "Failed", 
+            error_code: "500",
+            description: errorMessage
+          },
+          requestedBy: req.user?.userId,
+          adminRequest: true,
+          errorDetails: {
+            timestamp: new Date().toISOString(),
+            originalError: errorMessage
+          }
+        };
+
+        await prisma.kycSession.update({ 
+          where: { id: kycSession.id },
+          data: {
+            status: 'FAILED',
+            ctosData: ctosFailureData,
+            completedAt: new Date()
+          }
+        });
+        console.log(`Marked admin KYC session ${kycSession.id} as FAILED due to CTOS error`);
+      } catch (updateError) {
+        console.error('Error updating failed admin KYC session:', updateError);
+        // If update fails, try to delete as fallback
+        try {
+          await prisma.kycSession.delete({ where: { id: kycSession.id } });
+          console.log(`Deleted failed admin KYC session ${kycSession.id} after update failure`);
+        } catch (deleteError) {
+          console.error('Error deleting failed admin KYC session:', deleteError);
+        }
       }
     }
     
@@ -378,7 +459,7 @@ router.post('/start-ctos', authenticateToken, adminOnlyMiddleware, async (req: A
  *       500:
  *         description: Failed to get KYC status
  */
-router.get('/admin-ctos-status', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/admin-ctos-status', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
 
@@ -638,7 +719,7 @@ router.get('/admin-ctos-status', authenticateToken, adminOnlyMiddleware, async (
  *       500:
  *         description: Failed to get KYC status
  */
-router.get('/:kycId/status', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:kycId/status', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { kycId } = req.params;
 
@@ -719,7 +800,7 @@ router.get('/:kycId/status', authenticateToken, adminOnlyMiddleware, async (req:
  *       500:
  *         description: Failed to get KYC images
  */
-router.get('/images', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/images', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     console.log('Admin getting KYC images for user:', req.user?.userId);
 

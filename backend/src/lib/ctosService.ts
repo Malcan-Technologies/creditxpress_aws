@@ -259,6 +259,17 @@ export class CTOSService {
         throw new Error(`CTOS API Error: ${response.data.message || response.data.data?.message || 'Unknown error from CTOS'}`);
       }
       
+      // Also check for errors even when onboarding_id exists
+      if (response.data && response.data.data) {
+        const errorMsg = response.data.data.message;
+        const errorCode = response.data.data.error_code;
+        
+        if (errorMsg === "Failed" || errorCode === "103" || errorMsg?.toLowerCase().includes("duplicate") || errorMsg?.toLowerCase().includes("error")) {
+          console.error('CTOS API returned error with onboarding_id:', response.data);
+          throw new Error(`CTOS API Error: ${response.data.data.description || response.data.data.message || 'CTOS transaction failed'}`);
+        }
+      }
+      
       return response.data;
     } catch (error) {
       console.error('CTOS Create Transaction Error:', error);

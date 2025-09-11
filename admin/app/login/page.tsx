@@ -80,9 +80,9 @@ export default function AdminLoginPage() {
 				throw new Error(data.error || "Invalid credentials");
 			}
 
-			// Check if user is an admin
-			if (data.role !== "ADMIN") {
-				throw new Error("Access denied. Admin privileges required.");
+			// Check if user has admin panel access (ADMIN or ATTESTOR)
+			if (data.role !== "ADMIN" && data.role !== "ATTESTOR") {
+				throw new Error("Access denied. Admin or Attestor privileges required.");
 			}
 
 			console.log("Admin Login - Storing tokens");
@@ -99,11 +99,12 @@ export default function AdminLoginPage() {
 				refreshToken: !!storedRefreshToken,
 			});
 
-			console.log("Admin Login - Successful, redirecting to dashboard");
+			console.log("Admin Login - Successful, redirecting based on role:", data.role);
 
 			// Add a small delay to ensure token storage is complete before navigation
 			setTimeout(() => {
-				// Redirect to admin dashboard
+				// Both ADMIN and ATTESTOR users go to main dashboard
+				// Role-based filtering will handle what they can see
 				router.push("/dashboard");
 			}, 100);
 		} catch (error) {

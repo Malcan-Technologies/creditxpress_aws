@@ -250,14 +250,25 @@ export default function KycVerificationPage() {
 			console.error("CTOS KYC start error:", err);
 			const errorMessage = err instanceof Error ? err.message : "Failed to start KYC verification";
 			
-			// Handle duplicate transaction error specifically
+			// Enhanced error handling for CTOS errors
+			let displayMessage = errorMessage;
+			
 			if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
-				setKycError("You already have a KYC verification session. Please refresh the page to see your current status.");
+				displayMessage = "You already have a KYC verification session in progress. Please refresh the page to see your current status.";
 				// Refresh the page data to get the latest status
 				setTimeout(() => window.location.reload(), 2000);
-			} else {
-				setKycError(errorMessage);
+			} else if (errorMessage.includes("CTOS eKYC Error:")) {
+				// Extract the specific CTOS error message
+				displayMessage = errorMessage.replace("CTOS eKYC Error: ", "");
+			} else if (errorMessage.includes("CTOS API Error:")) {
+				displayMessage = errorMessage.replace("CTOS API Error: ", "");
+			} else if (errorMessage.includes("Invalid document")) {
+				displayMessage = "Invalid document information. Please check your IC number and full name.";
+			} else if (errorMessage.includes("network") || errorMessage.includes("timeout")) {
+				displayMessage = "Network connection issue. Please check your internet connection and try again.";
 			}
+			
+			setKycError(displayMessage);
 			setKycInProgress(false);
 			setKycCompleted(false);
 		}

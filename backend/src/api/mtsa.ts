@@ -299,10 +299,10 @@ router.post('/verify-otp', authenticateAndVerifyPhone, async (req: AuthRequest, 
  *                 description: Mobile number
  *               nationality:
  *                 type: string
- *                 description: Nationality code (default: MY)
+ *                 description: "Nationality code (default: MY)"
  *               userType:
  *                 type: string
- *                 description: User type (default: 1)
+ *                 description: "User type (default: 1)"
  *               idType:
  *                 type: string
  *                 description: ID type (N for NRIC, P for Passport)

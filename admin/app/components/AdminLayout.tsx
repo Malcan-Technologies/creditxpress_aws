@@ -31,6 +31,7 @@ import {
 	fetchWithAdminTokenRefresh,
 	checkAdminAuth,
 } from "../../lib/authUtils";
+import { getFilteredNavigation } from "../../lib/permissions";
 import Logo from "./Logo";
 
 interface AdminLayoutProps {
@@ -49,6 +50,7 @@ export default function AdminLayout({
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [adminName, setAdminName] = useState(userName);
+	const [userRole, setUserRole] = useState<string>("");
 	const [loanWorkflowOpen, setLoanWorkflowOpen] = useState(false);
 	const [managementOpen, setManagementOpen] = useState(false);
 	const [paymentsOpen, setPaymentsOpen] = useState(false);
@@ -126,6 +128,9 @@ export default function AdminLayout({
 					if (userData.fullName) {
 						setAdminName(userData.fullName);
 					}
+					if (userData.role) {
+						setUserRole(userData.role);
+					}
 				} catch (error) {
 					console.error(
 						"AdminLayout - Error fetching admin info:",
@@ -174,6 +179,12 @@ export default function AdminLayout({
 
 	const navigation = [
 		{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
+	];
+
+	// ATTESTOR-specific navigation items
+	const attestorNavigationItems = [
+		{ name: "Live Attestations", href: "/dashboard/live-attestations", icon: VideoCameraIcon },
+		{ name: "Digital Signing", href: "/dashboard/settings/signing", icon: ShieldCheckIcon },
 	];
 
 	const paymentItems = [
@@ -283,6 +294,57 @@ export default function AdminLayout({
 		});
 	};
 
+	// Get filtered navigation based on user role
+	const filteredNavigation = userRole ? getFilteredNavigation(userRole) : [];
+
+	// Helper function to check if user can access a route based on role
+	const canUserAccessRoute = (href: string) => {
+		if (!userRole) return false;
+		
+		// For ATTESTOR role, only allow specific routes
+		if (userRole === "ATTESTOR") {
+			const allowedRoutes = [
+				"/dashboard", // Allow main dashboard with filtered content
+				"/dashboard/settings/signing", // Digital signing
+				"/dashboard/live-attestations", // Live attestations
+				"/dashboard/applications" // Allow limited applications access for attestation
+			];
+			
+			// Explicitly deny payment and loan management routes
+			const deniedRoutes = [
+				"/dashboard/payments",
+				"/dashboard/disbursements", 
+				"/dashboard/late-fees",
+				"/dashboard/loans",
+				"/dashboard/users",
+				"/dashboard/products",
+				"/dashboard/notifications",
+				"/dashboard/reports"
+			];
+			
+			// Special handling for settings - deny general settings but allow signing
+			if (href.startsWith("/dashboard/settings") && href !== "/dashboard/settings/signing") {
+				return false;
+			}
+			
+			// Check if route is denied first
+			if (deniedRoutes.some(route => href.startsWith(route))) {
+				return false;
+			}
+			
+			// Then check if route is allowed
+			return allowedRoutes.some(route => href.startsWith(route));
+		}
+		
+		// ADMIN has access to everything
+		return userRole === "ADMIN";
+	};
+
+	// Helper function to check if a section should be shown (has accessible items)
+	const shouldShowSection = (items: any[]) => {
+		return items.some(item => canUserAccessRoute(item.href));
+	};
+
 	// Auto-expand dropdowns based on current path (only when explicitly enabled)
 	useEffect(() => {
 		// Only auto-expand if explicitly allowed (e.g., when navigating through menu items)
@@ -346,7 +408,24 @@ export default function AdminLayout({
 
 		return (
 			<div className="hidden lg:flex lg:items-center lg:space-x-4">
-				{navigation.map((item) => {
+				{/* Dashboard navigation item */}
+				{navigation.filter(item => canUserAccessRoute(item.href)).map((item) => {
+					const active = isActive(item.href);
+					return (
+						<Link
+							key={item.name}
+							href={item.href}
+							className={getBaseClasses(active)}
+							onClick={() => setAllowAutoExpand(true)}
+						>
+							<item.icon className={getIconClasses(active)} />
+							{item.name}
+						</Link>
+					);
+				})}
+				
+				{/* ATTESTOR-specific navigation items */}
+				{userRole === "ATTESTOR" && attestorNavigationItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
 					const active = isActive(item.href);
 					return (
 						<Link
@@ -361,7 +440,8 @@ export default function AdminLayout({
 					);
 				})}
 
-				{/* Payments Dropdown */}
+				{/* Payments Dropdown - only show if user has access to payment items */}
+				{shouldShowSection(paymentItems) && (
 				<div className="relative">
 					<button
 						onClick={() => {
@@ -378,7 +458,7 @@ export default function AdminLayout({
 					{paymentsOpen && (
 						<div className="absolute left-0 z-10 mt-2 w-48 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
 							<div className="py-1">
-								{paymentItems.map((item) => {
+								{paymentItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
 									const active = isActive(item.href);
 									return (
 										<Link
@@ -396,8 +476,10 @@ export default function AdminLayout({
 						</div>
 					)}
 				</div>
+				)}
 
-				{/* Loans Dropdown */}
+				{/* Loans Dropdown - only show for ADMIN users */}
+				{userRole === "ADMIN" && shouldShowSection(loanWorkflowItems) && (
 				<div className="relative">
 					<button
 						onClick={() => {
@@ -414,7 +496,7 @@ export default function AdminLayout({
 					{loanWorkflowOpen && (
 						<div className="absolute left-0 z-10 mt-2 w-64 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
 							<div className="py-1">
-								{loanWorkflowItems.map((item) => {
+								{loanWorkflowItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
 									const active = isActive(item.href);
 									const hasSubItems = item.subItems && item.subItems.length > 0;
 									const isExpanded = (item.name === "All Applications" && applicationsOpen) ||
@@ -475,8 +557,10 @@ export default function AdminLayout({
 						</div>
 					)}
 				</div>
+				)}
 
-				{/* Management Dropdown */}
+				{/* Management Dropdown - only show for ADMIN users */}
+				{userRole === "ADMIN" && shouldShowSection(managementItems) && (
 				<div className="relative">
 					<button
 						onClick={() => {
@@ -493,7 +577,7 @@ export default function AdminLayout({
 					{managementOpen && (
 						<div className="absolute left-0 z-10 mt-2 w-48 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
 							<div className="py-1">
-								{managementItems.map((item) => {
+								{managementItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
 									const active = isActive(item.href);
 									return (
 										<Link
@@ -511,6 +595,7 @@ export default function AdminLayout({
 						</div>
 					)}
 				</div>
+				)}
 			</div>
 		);
 	};
@@ -556,7 +641,27 @@ export default function AdminLayout({
 		return (
 			<div className="lg:hidden">
 				<div className="space-y-1 px-2 pb-3 pt-2">
-					{navigation.map((item) => {
+					{/* Dashboard navigation item */}
+					{navigation.filter(item => canUserAccessRoute(item.href)).map((item) => {
+						const active = isActive(item.href);
+						return (
+							<Link
+								key={item.name}
+								href={item.href}
+								className={getBaseClasses(active)}
+								onClick={() => {
+									setMobileMenuOpen(false);
+									setAllowAutoExpand(true);
+								}}
+							>
+								<item.icon className={getIconClasses(active)} />
+								{item.name}
+							</Link>
+						);
+					})}
+					
+					{/* ATTESTOR-specific navigation items */}
+					{userRole === "ATTESTOR" && attestorNavigationItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
 						const active = isActive(item.href);
 						return (
 							<Link
@@ -574,7 +679,8 @@ export default function AdminLayout({
 						);
 					})}
 
-					{/* Payments Section */}
+					{/* Payments Section - only show if user has access */}
+					{shouldShowSection(paymentItems) && (
 					<div>
 						<button
 							onClick={() => {
@@ -614,8 +720,10 @@ export default function AdminLayout({
 							</div>
 						)}
 					</div>
+					)}
 
-					{/* Loans Section */}
+					{/* Loans Section - only show for ADMIN users */}
+					{userRole === "ADMIN" && shouldShowSection(loanWorkflowItems) && (
 				<div>
 					<button
 						onClick={() => {
@@ -701,8 +809,10 @@ export default function AdminLayout({
 						</div>
 					)}
 				</div>
+				)}
 
-					{/* Management Section */}
+					{/* Management Section - only show for ADMIN users */}
+					{userRole === "ADMIN" && shouldShowSection(managementItems) && (
 				<div>
 					<button
 						onClick={() => {
@@ -742,6 +852,7 @@ export default function AdminLayout({
 						</div>
 					)}
 				</div>
+				)}
 				</div>
 			</div>
 		);
@@ -787,6 +898,11 @@ export default function AdminLayout({
 								<p className="text-sm font-medium text-gray-200">
 									{adminName}
 								</p>
+								{userRole && (
+									<p className="text-xs text-gray-400 uppercase tracking-wide">
+										{userRole}
+									</p>
+								)}
 								</div>
 							</div>
 
