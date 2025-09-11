@@ -371,4 +371,214 @@ router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware
   }
 });
 
+/**
+ * @swagger
+ * /api/admin/mtsa/revoke-certificate:
+ *   post:
+ *     summary: Revoke digital certificate (admin only)
+ *     tags: [Admin, MTSA]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - certSerialNo
+ *               - revokeReason
+ *               - revokeBy
+ *               - authFactor
+ *               - idType
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: User ID (IC number)
+ *               certSerialNo:
+ *                 type: string
+ *                 description: Certificate serial number
+ *               revokeReason:
+ *                 type: string
+ *                 enum: [keyCompromise, CACompromise, affiliationChanged, superseded, cessationOfOperation]
+ *                 description: Reason for certificate revocation
+ *               revokeBy:
+ *                 type: string
+ *                 enum: [Admin, Self]
+ *                 description: Who requested the revocation
+ *               authFactor:
+ *                 type: string
+ *                 description: Email OTP code for authentication
+ *               idType:
+ *                 type: string
+ *                 enum: [N, P]
+ *                 description: Identity type (N for NRIC, P for Passport)
+ *               nricFrontUrl:
+ *                 type: string
+ *                 description: Base64 data URL of NRIC front image (required if idType = N)
+ *               nricBackUrl:
+ *                 type: string
+ *                 description: Base64 data URL of NRIC back image (required if idType = N)
+ *               passportImageUrl:
+ *                 type: string
+ *                 description: Base64 data URL of passport image (required if idType = P)
+ *     responses:
+ *       200:
+ *         description: Certificate revocation processed successfully
+ *       400:
+ *         description: Invalid request parameters or missing required images
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to revoke certificate
+ */
+router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { 
+      userId, 
+      certSerialNo, 
+      revokeReason, 
+      revokeBy = 'Self', 
+      authFactor, 
+      idType = 'N', 
+      nricFrontUrl, 
+      nricBackUrl, 
+      passportImageUrl 
+    } = req.body;
+
+    // Validate required fields
+    if (!userId || !certSerialNo || !revokeReason || !authFactor) {
+      return res.status(400).json({
+        success: false,
+        message: 'Required fields missing: userId, certSerialNo, revokeReason, authFactor'
+      });
+    }
+
+    // Validate revoke reason
+    const validRevokeReasons = ['keyCompromise', 'CACompromise', 'affiliationChanged', 'superseded', 'cessationOfOperation'];
+    if (!validRevokeReasons.includes(revokeReason)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid revoke reason. Valid values: ' + validRevokeReasons.join(', ')
+      });
+    }
+
+    // Validate revokeBy
+    if (!['Admin', 'Self'].includes(revokeBy)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid revokeBy value. Valid values: Admin, Self'
+      });
+    }
+
+    // Validate idType and required images
+    if (idType === 'N' && (!nricFrontUrl || !nricBackUrl)) {
+      return res.status(400).json({
+        success: false,
+        message: 'NRIC front and back images are required when idType is N'
+      });
+    }
+
+    if (idType === 'P' && !passportImageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passport image is required when idType is P'
+      });
+    }
+
+    console.log('Admin revoking certificate for user:', { 
+      userId, 
+      certSerialNo, 
+      revokeReason, 
+      revokeBy, 
+      idType,
+      adminUserId: req.user?.userId 
+    });
+
+    // Helper function to extract base64 data from data URL
+    const extractBase64Data = (dataUrl: string): string => {
+      if (dataUrl.startsWith('data:')) {
+        const commaIndex = dataUrl.indexOf(',');
+        if (commaIndex !== -1) {
+          return dataUrl.substring(commaIndex + 1);
+        }
+      }
+      // If not a data URL, assume it's already base64 data
+      return dataUrl;
+    };
+
+    // Prepare revocation data
+    const revocationData: any = {
+      userId,
+      certSerialNo,
+      revokeReason,
+      revokeBy,
+      authFactor,
+      idType,
+      verificationData: {
+        verifyStatus: 'Approved',
+        verifyDatetime: new Date().toISOString().replace('T', ' ').substring(0, 19), // Format: yyyy-MM-dd HH:mm:ss
+        verifyVerifier: 'CTOS',
+        verifyMethod: 'e-KYC'
+      },
+      requestedBy: 'admin',
+      adminUserId: req.user?.userId
+    };
+
+    // Add appropriate images based on idType
+    if (idType === 'N') {
+      revocationData.nricFront = extractBase64Data(nricFrontUrl);
+      revocationData.nricBack = extractBase64Data(nricBackUrl);
+    } else if (idType === 'P') {
+      revocationData.passportImage = extractBase64Data(passportImageUrl);
+    }
+
+    console.log('Revocation data prepared:', {
+      userId,
+      certSerialNo,
+      revokeReason,
+      revokeBy,
+      idType,
+      hasNricFront: idType === 'N' && !!revocationData.nricFront,
+      hasNricBack: idType === 'N' && !!revocationData.nricBack,
+      hasPassport: idType === 'P' && !!revocationData.passportImage,
+      adminUserId: req.user?.userId
+    });
+
+    // Make request to signing orchestrator
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/revoke`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(revocationData),
+    });
+
+    const data = await response.json();
+    
+    console.log('Certificate revocation response:', { 
+      userId, 
+      certSerialNo,
+      statusCode: data.data?.statusCode,
+      success: data.success,
+      message: data.message 
+    });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error revoking certificate:', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.body.userId,
+      certSerialNo: req.body.certSerialNo 
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to revoke certificate'
+    });
+  }
+});
+
 export default router;

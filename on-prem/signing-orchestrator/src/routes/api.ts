@@ -12,6 +12,7 @@ import {
   EnrollmentRequest,
   SignerInfo,
   VerificationData,
+  MTSARequestRevokeCertRequest,
 } from '../types';
 
 const router = express.Router();
@@ -485,6 +486,175 @@ router.post('/certificate', verifyApiKey, async (req, res) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Certificate request failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * Revoke Certificate endpoint
+ * POST /api/revoke
+ */
+router.post('/revoke', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { 
+      userId, 
+      certSerialNo, 
+      revokeReason, 
+      revokeBy = 'Self', 
+      authFactor,
+      idType = 'N',
+      nricFront,
+      nricBack,
+      passportImage,
+      verificationData
+    } = req.body;
+    
+    if (!userId || !certSerialNo || !revokeReason || !authFactor || !verificationData) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required fields: userId, certSerialNo, revokeReason, authFactor, verificationData',
+      });
+      return;
+    }
+    
+    // Validate revoke reason
+    const validRevokeReasons = ['keyCompromise', 'CACompromise', 'affiliationChanged', 'superseded', 'cessationOfOperation'];
+    if (!validRevokeReasons.includes(revokeReason)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: `Invalid revokeReason. Valid values: ${validRevokeReasons.join(', ')}`,
+      });
+      return;
+    }
+    
+    // Validate revokeBy
+    if (!['Admin', 'Self'].includes(revokeBy)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid revokeBy value. Valid values: Admin, Self',
+      });
+      return;
+    }
+    
+    // Validate idType and required images
+    if (idType === 'N' && (!nricFront || !nricBack)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'NRIC front and back images are required when idType is N',
+      });
+      return;
+    }
+    
+    if (idType === 'P' && !passportImage) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Passport image is required when idType is P',
+      });
+      return;
+    }
+    
+    // Validate verificationData structure
+    const missingFields = [];
+    if (!verificationData.verifyStatus) missingFields.push('verifyStatus');
+    if (!verificationData.verifyDatetime) missingFields.push('verifyDatetime');
+    if (!verificationData.verifyMethod) missingFields.push('verifyMethod');
+    if (!verificationData.verifyVerifier) missingFields.push('verifyVerifier');
+    
+    if (missingFields.length > 0) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: `Missing required VerificationData fields: ${missingFields.join(', ')}`,
+      });
+      return;
+    }
+    
+    log.info('Revoking certificate', { 
+      userId, 
+      certSerialNo, 
+      revokeReason, 
+      revokeBy, 
+      idType,
+      hasNricFront: idType === 'N' && !!nricFront,
+      hasNricBack: idType === 'N' && !!nricBack,
+      hasPassport: idType === 'P' && !!passportImage,
+      nricFrontLength: nricFront?.length || 0,
+      nricBackLength: nricBack?.length || 0
+    });
+    
+    // Prepare request for MTSA
+    const revokeRequest: MTSARequestRevokeCertRequest = {
+      UserID: userId,
+      CertSerialNo: certSerialNo,
+      RevokeReason: revokeReason,
+      RevokeBy: revokeBy,
+      AuthFactor: authFactor,
+      IDType: idType,
+      VerificationData: {
+        verifyStatus: verificationData.verifyStatus,
+        verifyDatetime: verificationData.verifyDatetime,
+        verifyVerifier: verificationData.verifyVerifier,
+        verifyMethod: verificationData.verifyMethod,
+      },
+    };
+    
+    // Add appropriate images based on idType
+    if (idType === 'N') {
+      revokeRequest.NRICFront = nricFront;
+      revokeRequest.NRICBack = nricBack;
+    } else if (idType === 'P') {
+      revokeRequest.PassportImage = passportImage;
+    }
+    
+    const result = await mtsaClient.requestRevokeCert(revokeRequest, req.correlationId!);
+    
+    // Handle response structure
+    const responseData = (result as any).return || result;
+    const statusCode = responseData.statusCode || result.statusCode;
+    const statusMsg = responseData.statusMsg || (result as any).statusMsg || (result as any).message;
+    
+    log.info('Certificate revocation completed', { 
+      userId, 
+      certSerialNo, 
+      statusCode,
+      success: statusCode === '000' 
+    });
+    
+    if (statusCode === '000') {
+      res.status(200).json({
+        success: true,
+        message: statusMsg || 'Certificate revoked successfully',
+        data: {
+          statusCode: statusCode,
+          revoked: true,
+          revokeReason,
+          revokeBy,
+          revokedAt: new Date().toISOString(),
+        },
+        correlationId: req.correlationId,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: statusMsg || 'Certificate revocation failed',
+        data: {
+          statusCode: statusCode,
+          revoked: false,
+        },
+        correlationId: req.correlationId,
+      });
+    }
+    
+  } catch (error) {
+    log.error('Certificate revocation request failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Certificate revocation request failed',
       correlationId: req.correlationId,
     });
   }

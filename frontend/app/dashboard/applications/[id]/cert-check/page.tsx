@@ -234,8 +234,8 @@ export default function CertCheckPage() {
 	};
 
 	const handleBack = () => {
-		// Go back to KYC verification (previous step in the flow)
-		router.push(`/dashboard/applications/${params.id}/kyc-verification`);
+		// Go back to loans dashboard applications tab (after attestation completion)
+		router.push("/dashboard/loans?tab=applications");
 	};
 
 	console.log("Render states:", { loading, checking, showIcInput, error, application: !!application });
@@ -504,7 +504,7 @@ export default function CertCheckPage() {
 								<div className="space-y-3">
 									{checkResult.hasValidCert ? (
 										<button
-											onClick={() => router.push("/dashboard/loans")}
+											onClick={() => router.push("/dashboard/loans?tab=applications")}
 											className="w-full inline-flex items-center justify-center px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors font-semibold"
 										>
 											<CheckCircleIcon className="h-4 w-4 mr-2" />

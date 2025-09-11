@@ -213,7 +213,13 @@ export interface MTSARequestRevokeCertRequest {
   RevokeReason: 'keyCompromise' | 'CACompromise' | 'affiliationChanged' | 'superseded' | 'cessationOfOperation';
   RevokeBy: 'Admin' | 'Self';
   AuthFactor: string;
-  VerificationData: VerificationData;
+  IDType: 'N' | 'P';
+  VerificationData: {
+    verifyDatetime: string;
+    verifyMethod: string;
+    verifyStatus: string;
+    verifyVerifier: string;
+  };
   NRICFront?: string;
   NRICBack?: string;
   PassportImage?: string;

@@ -100,6 +100,15 @@ export default function AdminSigningSettingsPage() {
   });
   const [submittingCertificate, setSubmittingCertificate] = useState(false);
 
+  // Revoke certificate state
+  const [showRevokeForm, setShowRevokeForm] = useState(false);
+  const [revokeReason, setRevokeReason] = useState('keyCompromise');
+  const [revokeBy, setRevokeBy] = useState('Self');
+  const [revokeOtp, setRevokeOtp] = useState('');
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [requestingOtp, setRequestingOtp] = useState(false);
+  const [revokingCertificate, setRevokingCertificate] = useState(false);
+
   useEffect(() => {
     fetchCurrentUser();
   }, []);
@@ -470,6 +479,114 @@ export default function AdminSigningSettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to enroll certificate');
     } finally {
       setSubmittingCertificate(false);
+    }
+  };
+
+  const handleRequestOtpForRevoke = async () => {
+    if (!currentUser?.email) {
+      setError('Email address is required for OTP');
+      return;
+    }
+
+    try {
+      setRequestingOtp(true);
+      setError(null);
+
+      console.log('Requesting OTP for certificate revocation...');
+
+      const response = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/request-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUser.icNumber,
+          usage: 'DS', // Digital Signing usage
+          emailAddress: currentUser.email,
+        }),
+      });
+
+      if (response.success) {
+        setOtpRequested(true);
+        // Show success message or notification
+        console.log('OTP sent successfully for certificate revocation');
+      } else {
+        throw new Error(response.message || 'Failed to request OTP');
+      }
+    } catch (err) {
+      console.error('OTP request error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to request OTP');
+    } finally {
+      setRequestingOtp(false);
+    }
+  };
+
+  const handleRevokeCertificate = async () => {
+    if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
+      setError('User IC number and certificate serial number are required');
+      return;
+    }
+
+    if (!revokeOtp || revokeOtp.length !== 6) {
+      setError('Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    try {
+      setRevokingCertificate(true);
+      setError(null);
+
+      console.log('Revoking certificate for admin user:', currentUser.icNumber);
+
+      // Get KYC images for revocation request
+      const kycResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/kyc/images');
+
+      if (!kycResponse.images) {
+        throw new Error('KYC documents not found. Cannot proceed with certificate revocation.');
+      }
+
+      const { front, back } = kycResponse.images;
+      
+      if (!front?.url || !back?.url) {
+        throw new Error('Required KYC documents not found. Cannot proceed with certificate revocation.');
+      }
+
+      // Submit revocation request
+      const revokeResponse = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/revoke-certificate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUser.icNumber,
+          certSerialNo: certificateStatus.certificateData.certSerialNo,
+          revokeReason,
+          revokeBy,
+          authFactor: revokeOtp,
+          idType: 'N', // Always NRIC for admin users
+          nricFrontUrl: front.url,
+          nricBackUrl: back.url,
+        }),
+      });
+
+      console.log('Certificate revocation response:', revokeResponse);
+
+      if (revokeResponse.success) {
+        // Success - refresh certificate status
+        await checkCertificate(currentUser.icNumber);
+        setShowRevokeForm(false);
+        setRevokeOtp('');
+        setOtpRequested(false);
+        setRevokeReason('keyCompromise');
+        setRevokeBy('Self');
+      } else {
+        throw new Error(revokeResponse.message || 'Certificate revocation failed');
+      }
+    } catch (err) {
+      console.error('Certificate revocation error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to revoke certificate');
+    } finally {
+      setRevokingCertificate(false);
     }
   };
 
@@ -941,6 +1058,143 @@ export default function AdminSigningSettingsPage() {
                   >
                     {checkingCertificate ? 'Refreshing...' : 'Refresh Status'}
                   </button>
+                  
+                  <button
+                    onClick={() => setShowRevokeForm(true)}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    Revoke Certificate
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Revoke Certificate Form */}
+            {showRevokeForm && certificateStatus?.nextStep === 'complete' && (
+              <div className="bg-gray-800 rounded-lg border border-red-700 p-6 mt-4">
+                <div className="flex items-center mb-4">
+                  <ExclamationTriangleIcon className="h-6 w-6 text-red-400 mr-3" />
+                  <h3 className="text-lg font-semibold text-white">Revoke Certificate</h3>
+                </div>
+                
+                <div className="bg-red-900/20 border border-red-700 rounded-lg p-4 mb-6">
+                  <div className="flex items-center">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2" />
+                    <span className="text-red-400">
+                      <strong>Warning:</strong> Certificate revocation is permanent and cannot be undone. 
+                      You will need to complete the enrollment process again to get a new certificate.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Revoke Reason */}
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Revocation Reason *</label>
+                    <select
+                      value={revokeReason}
+                      onChange={(e) => setRevokeReason(e.target.value)}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    >
+                      <option value="keyCompromise">Key Compromise</option>
+                      <option value="CACompromise">CA Compromise</option>
+                      <option value="affiliationChanged">Affiliation Changed</option>
+                      <option value="superseded">Superseded</option>
+                      <option value="cessationOfOperation">Cessation of Operation</option>
+                    </select>
+                  </div>
+
+                  {/* Revoke By */}
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Requested By *</label>
+                    <select
+                      value={revokeBy}
+                      onChange={(e) => setRevokeBy(e.target.value)}
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    >
+                      <option value="Self">Self</option>
+                      <option value="Admin">Admin</option>
+                    </select>
+                  </div>
+
+                  {/* OTP Section */}
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Email OTP Verification *</label>
+                    
+                    {!otpRequested ? (
+                      <div className="space-y-4">
+                        <p className="text-sm text-gray-400">
+                          An OTP will be sent to your email address: <span className="text-white">{currentUser?.email}</span>
+                        </p>
+                        <button
+                          onClick={handleRequestOtpForRevoke}
+                          disabled={requestingOtp}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {requestingOtp ? 'Sending OTP...' : 'Send OTP'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg">
+                          <div className="flex items-center">
+                            <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+                            <span className="text-green-400">OTP sent to {currentUser?.email}</span>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <input
+                            type="text"
+                            value={revokeOtp}
+                            onChange={(e) => setRevokeOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            placeholder="Enter 6-digit OTP"
+                            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent text-center text-lg tracking-widest"
+                            maxLength={6}
+                          />
+                        </div>
+                        
+                        <button
+                          onClick={handleRequestOtpForRevoke}
+                          disabled={requestingOtp}
+                          className="text-sm text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                        >
+                          {requestingOtp ? 'Sending...' : 'Resend OTP'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      onClick={() => {
+                        setShowRevokeForm(false);
+                        setRevokeOtp('');
+                        setOtpRequested(false);
+                        setRevokeReason('keyCompromise');
+                        setRevokeBy('Self');
+                      }}
+                      className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    
+                    <button
+                      onClick={handleRevokeCertificate}
+                      disabled={revokingCertificate || !otpRequested || revokeOtp.length !== 6}
+                      className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    >
+                      {revokingCertificate ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                          Revoking Certificate...
+                        </>
+                      ) : (
+                        'Revoke Certificate'
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

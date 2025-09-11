@@ -3092,7 +3092,7 @@ router.post(
 
 			// Process the status change in a transaction to ensure loan creation
 			const updatedApplication = await prisma.$transaction(async (tx) => {
-			// Update the application to complete the live attestation
+				// Update the application to complete the live attestation
 				const updated = await tx.loanApplication.update({
 				where: { id },
 				data: {
@@ -3103,7 +3103,7 @@ router.post(
 					meetingCompletedAt: meetingCompletedAt
 						? new Date(meetingCompletedAt)
 						: new Date(),
-					status: "PENDING_SIGNATURE", // Move to next step
+					status: "CERT_CHECK", // Move to cert-check page (same as instant attestation)
 				},
 				include: {
 					user: {
@@ -3124,15 +3124,8 @@ router.post(
 				},
 				});
 
-				// Create loan and repayment schedule when moving to PENDING_SIGNATURE
-				try {
-					await createLoanOnPendingSignature(id, tx);
-					console.log(`Loan and repayment schedule created for application ${id} during live attestation completion`);
-				} catch (error) {
-					console.error(`Failed to create loan for application ${id}:`, error);
-					// Don't fail the transaction, just log the error
-					// The loan can still be created later if needed
-				}
+				// Note: Loan creation will happen later when moving from CERT_CHECK to PENDING_SIGNATURE
+				// This matches the flow for instant attestation completion
 
 				return updated;
 			});
@@ -3142,10 +3135,10 @@ router.post(
 				prisma,
 				id,
 				"PENDING_ATTESTATION",
-				"PENDING_SIGNATURE",
+				"CERT_CHECK",
 				adminUserId,
 				"Live video call attestation completed by admin",
-				notes || "Live video call attestation completed by admin",
+				notes || "Live video call attestation completed by admin - proceeding to certificate check",
 				{
 					attestationType: "MEETING",
 					completedBy: adminUserId,
