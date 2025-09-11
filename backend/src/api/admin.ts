@@ -9,6 +9,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
+import { requireAdminOrAttestor } from "../lib/permissions";
 import lateFeeRoutes from "./admin/late-fees";
 import mtsaAdminRoutes from "./admin/mtsa";
 import kycAdminRoutes from "./admin/kyc";
@@ -358,15 +359,63 @@ router.post("/login", async (req: Request, res: Response) => {
  *       500:
  *         description: Server error
  */
-// Get dashboard stats (admin only)
+// Get dashboard stats (admin and attestor)
 // @ts-ignore
 router.get(
 	"/dashboard",
 	authenticateToken,
-	isAdmin as unknown as RequestHandler,
+	requireAdminOrAttestor as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
+			const userRole = req.user?.role;
+
+			// ATTESTOR users only need limited data for live attestations and signatures
+			if (userRole === "ATTESTOR") {
+				// Get pending signature count (applications waiting for signature)
+				const pendingSignatureCount = await prisma.loanApplication.count({
+					where: {
+						status: "PENDING_SIGNATURE",
+					},
+				});
+
+				// Get live attestation requests count
+				const liveAttestationsCount = await prisma.loanApplication.count({
+					where: {
+						status: "PENDING_ATTESTATION",
+						attestationType: "MEETING",
+						attestationCompleted: false,
+					},
+				});
+
+				// Return minimal data for ATTESTOR users
+				return res.json({
+					// Only data needed for Quick Actions
+					PENDING_SIGNATURE: pendingSignatureCount,
+					LIVE_ATTESTATIONS: liveAttestationsCount,
+					// Keep legacy fields that might be expected by frontend
+					totalUsers: 0,
+					totalApplications: 0,
+					pendingReviewApplications: 0,
+					approvedLoans: 0,
+					pendingDisbursementCount: 0,
+					disbursedLoans: 0,
+					totalDisbursedAmount: 0,
+					totalLoanValue: 0,
+					currentLoanValue: 0,
+					totalFeesCollected: 0,
+					totalLateFeesCollected: 0,
+					totalRepayments: 0,
+					recentApplications: [],
+					portfolioOverview: {},
+					repaymentPerformance: {},
+					revenueMetrics: {},
+					userInsights: {},
+					operationalKPIs: {}
+				});
+			}
+
+			// ADMIN users get full dashboard data
 			// Get all users count
 			const totalUsers = await prisma.user.count();
 
@@ -1092,15 +1141,25 @@ router.get(
  *       500:
  *         description: Server error
  */
-// Get monthly statistics (admin only)
+// Get monthly statistics (admin and attestor)
 // @ts-ignore
 router.get(
 	"/monthly-stats",
 	authenticateToken,
-	isAdmin as unknown as RequestHandler,
+	requireAdminOrAttestor as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
+			const userRole = req.user?.role;
+
+			// ATTESTOR users get minimal empty data since they don't need charts
+			if (userRole === "ATTESTOR") {
+				return res.json({
+					monthlyStats: []
+				});
+			}
+
+			// ADMIN users get full monthly statistics
 			// Get the last 6 months of data
 			const sixMonthsAgo = new Date();
 			sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -1546,15 +1605,25 @@ router.get(
  *       500:
  *         description: Server error
  */
-// Get daily statistics (admin only)
+// Get daily statistics (admin and attestor)
 // @ts-ignore
 router.get(
 	"/daily-stats",
 	authenticateToken,
-	isAdmin as unknown as RequestHandler,
+	requireAdminOrAttestor as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
+			const userRole = req.user?.role;
+
+			// ATTESTOR users get minimal empty data since they don't need charts
+			if (userRole === "ATTESTOR") {
+				return res.json({
+					dailyStats: []
+				});
+			}
+
+			// ADMIN users get full daily statistics
 			// Get the last 30 days of data (including today)
 			const thirtyDaysAgo = new Date();
 			thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29); // Include current day in 30-day period
@@ -2660,17 +2729,56 @@ router.put(
  *       500:
  *         description: Server error
  */
-// Get counts of loan applications by status (admin only)
+// Get counts of loan applications by status (admin and attestor)
 // @ts-ignore
 router.get(
 	"/applications/counts",
 	authenticateToken,
-	isAdmin as unknown as RequestHandler,
+	requireAdminOrAttestor as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
-			console.log("Fetching application counts for admin");
+			const userRole = req.user?.role;
+			console.log(`Fetching application counts for ${userRole}`);
 
+			// ATTESTOR users only need specific counts for their work
+			if (userRole === "ATTESTOR") {
+				// Get pending signature count
+				const pendingSignatureCount = await prisma.loanApplication.count({
+					where: { status: "PENDING_SIGNATURE" },
+				});
+
+				// Get live attestation count
+				const liveAttestationCount = await prisma.loanApplication.count({
+					where: {
+						status: "PENDING_ATTESTATION",
+						attestationType: "MEETING",
+						attestationCompleted: false,
+					},
+				});
+
+				// Return minimal counts for ATTESTOR
+				return res.json({
+					PENDING_SIGNATURE: pendingSignatureCount,
+					PENDING_ATTESTATION: liveAttestationCount,
+					LIVE_ATTESTATIONS: liveAttestationCount, // Alias for compatibility
+					// Set all other counts to 0
+					INCOMPLETE: 0,
+					PENDING_APP_FEE: 0,
+					PENDING_KYC: 0,
+					PENDING_APPROVAL: 0,
+					APPROVED: 0,
+					PENDING_FRESH_OFFER: 0,
+					PENDING_DISBURSEMENT: 0,
+					COLLATERAL_REVIEW: 0,
+					ACTIVE: 0,
+					WITHDRAWN: 0,
+					REJECTED: 0,
+					total: pendingSignatureCount + liveAttestationCount,
+				});
+			}
+
+			// ADMIN users get full application counts
 			// Define all possible statuses
 			const statusList = [
 				"INCOMPLETE",
@@ -2839,6 +2947,7 @@ router.get(
 router.get(
 	"/applications/live-attestations",
 	authenticateToken,
+	requireAdminOrAttestor,
 	async (_req: AuthRequest, res: Response) => {
 		try {
 			console.log("Admin fetching live attestation requests");
@@ -2935,6 +3044,7 @@ router.get(
 router.post(
 	"/applications/:id/complete-live-attestation",
 	authenticateToken,
+	requireAdminOrAttestor,
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
