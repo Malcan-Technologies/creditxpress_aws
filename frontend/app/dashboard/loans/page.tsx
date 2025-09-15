@@ -1193,6 +1193,8 @@ function LoansPageContent() {
 			return "bg-purple-100 text-purple-800";
 		case "PENDING_SIGNATURE":
 				return "bg-indigo-100 text-indigo-800";
+		case "PENDING_SIGNING_COMPANY_WITNESS":
+				return "bg-teal-100 text-teal-800";
 			case "PENDING_DISBURSEMENT":
 				return "bg-orange-100 text-orange-800";
 			case "APPROVED":
@@ -1239,6 +1241,8 @@ function LoansPageContent() {
 			return "Pending Certificate OTP";
 		case "PENDING_SIGNATURE":
 				return "Pending Signature";
+		case "PENDING_SIGNING_COMPANY_WITNESS":
+				return "Awaiting Company Signature";
 			case "PENDING_DISBURSEMENT":
 				return "Pending Disbursement";
 			case "APPROVED":
@@ -3968,24 +3972,14 @@ function LoansPageContent() {
 												)}
 
 																{app.status === "PENDING_PKI_SIGNING" && (
-													<div className="space-y-2">
-														<div className="bg-violet-50 border border-violet-200 rounded-lg p-3">
-															<div className="flex items-center">
-																<ShieldCheckIcon className="h-4 w-4 text-violet-600 mr-2" />
-																<span className="text-sm font-medium text-violet-700">
-																	Document signed. Ready for PKI digital signature.
-																</span>
-															</div>
-														</div>
-														<button
-															onClick={() => router.push(`/pki-signing?application=${app.id}`)}
-															className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-violet-600 hover:bg-violet-700 transition-colors"
-														>
-															<KeyIcon className="h-4 w-4 mr-2" />
-															Complete Signing
-															<ArrowRightIcon className="ml-2 h-4 w-4" />
-														</button>
-													</div>
+													<button
+														onClick={() => router.push(`/pki-signing?application=${app.id}`)}
+														className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-violet-600 hover:bg-violet-700 transition-colors"
+													>
+														<KeyIcon className="h-4 w-4 mr-2" />
+														Complete Signing
+														<ArrowRightIcon className="ml-2 h-4 w-4" />
+													</button>
 												)}
 
                                                                                 {["PENDING_APP_FEE","PENDING_APPROVAL"].includes(app.status) && (

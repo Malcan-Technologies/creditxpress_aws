@@ -219,10 +219,13 @@ export default function AdminDashboardPage() {
 		PENDING_PAYMENTS: 0,
 		LIVE_ATTESTATIONS: 0,
 		PENDING_SIGNATURE: 0,
+		PENDING_COMPANY_SIGNATURE: 0,
+		PENDING_WITNESS_SIGNATURE: 0,
 	});
 	const [refreshing, setRefreshing] = useState(false);
 
 	const fetchDashboardData = async () => {
+		console.log('🔍 fetchDashboardData - Starting with userRole:', userRole);
 		try {
 			// Fetch admin user data with token refresh
 			try {
@@ -573,9 +576,11 @@ export default function AdminDashboardPage() {
 
 			// Try to fetch application counts for workflow
 			try {
+				console.log('🔍 Attempting to fetch counts for userRole:', userRole);
 				const countsData = await fetchWithAdminTokenRefresh<any>(
 					"/api/admin/applications/counts"
 				);
+				console.log('🔍 Successfully fetched counts:', countsData);
 
 				// Fetch pending discharge loans count
 				let pendingDischargeCount = 0;
@@ -637,8 +642,10 @@ export default function AdminDashboardPage() {
 					);
 				}
 
-				// Get pending signature count from the counts data we already fetched
-				const pendingSignatureCount = countsData.PENDING_SIGNATURE || 0;
+				// Get signature counts based on user role
+				const pendingCompanySignatureCount = countsData.PENDING_COMPANY_SIGNATURE || 0;
+				const pendingWitnessSignatureCount = countsData.PENDING_WITNESS_SIGNATURE || 0;
+				
 
 				setWorkflowCounts({
 					PENDING_DECISION:
@@ -651,7 +658,9 @@ export default function AdminDashboardPage() {
 					PENDING_DISCHARGE: pendingDischargeCount,
 					PENDING_PAYMENTS: pendingPaymentsCount,
 					LIVE_ATTESTATIONS: liveAttestationsCount,
-					PENDING_SIGNATURE: pendingSignatureCount,
+					PENDING_SIGNATURE: pendingCompanySignatureCount, // Legacy field
+					PENDING_COMPANY_SIGNATURE: pendingCompanySignatureCount,
+					PENDING_WITNESS_SIGNATURE: pendingWitnessSignatureCount,
 				});
 
 				// Update the status breakdown with workflow counts
@@ -659,7 +668,7 @@ export default function AdminDashboardPage() {
 					...prevStats,
 					statusBreakdown: prevStats.statusBreakdown?.map(item => {
 						if (item.status === "Pending Signature") {
-							return { ...item, count: pendingSignatureCount };
+							return { ...item, count: pendingCompanySignatureCount };
 						} else if (item.status === "Pending Attestation") {
 							return { ...item, count: countsData.PENDING_ATTESTATION || 0 };
 						} else if (item.status === "Pending KYC") {
@@ -674,7 +683,7 @@ export default function AdminDashboardPage() {
 				}));
 			} catch (countsError) {
 				console.error(
-					"Error fetching application counts, using dashboard stats:",
+					"🔍 Error fetching application counts, using dashboard stats:",
 					countsError
 				);
 
@@ -686,6 +695,8 @@ export default function AdminDashboardPage() {
 					PENDING_PAYMENTS: 0,
 					LIVE_ATTESTATIONS: 0, // Will be fetched separately
 					PENDING_SIGNATURE: 0,
+					PENDING_COMPANY_SIGNATURE: 0,
+					PENDING_WITNESS_SIGNATURE: 0,
 				});
 			}
 		} catch (error) {
@@ -920,34 +931,69 @@ export default function AdminDashboardPage() {
 					</Link>
 					)}
 
-					{/* Pending Signatures - Available to both ADMIN and ATTESTOR */}
+					{/* Company Signatures - ADMIN only */}
+					{userRole === "ADMIN" && (
 					<Link
-						href="/dashboard/applications?tab=signatures&filter=pending_signature"
+						href="/dashboard/applications?tab=signatures&filter=pending_company_signature"
 						className="group bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 backdrop-blur-md border border-cyan-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-cyan-400/50"
 					>
 						<div className="flex items-center justify-between mb-3">
 							<div className="p-2 bg-cyan-500/30 rounded-lg">
 								<DocumentTextIcon className="h-6 w-6 text-cyan-300" />
 							</div>
-							{workflowCounts.PENDING_SIGNATURE > 0 && (
+							{workflowCounts.PENDING_COMPANY_SIGNATURE > 0 && (
 								<span className="bg-cyan-500 text-white text-xs font-bold px-2 py-1 rounded-full">
 									{formatNumber(
-										workflowCounts.PENDING_SIGNATURE
+										workflowCounts.PENDING_COMPANY_SIGNATURE
 									)}
 								</span>
 							)}
 						</div>
 						<h3 className="text-white font-medium mb-1">
-							Document Signing
+							Company Signing
 						</h3>
 						<p className="text-sm text-cyan-200 mb-3">
-							{workflowCounts.PENDING_SIGNATURE > 0
+							{workflowCounts.PENDING_COMPANY_SIGNATURE > 0
 								? `${formatNumber(
-										workflowCounts.PENDING_SIGNATURE
-								  )} applications need signatures`
-								: "No pending signatures"}
+										workflowCounts.PENDING_COMPANY_SIGNATURE
+								  )} applications need company signatures`
+								: "No pending company signatures"}
 						</p>
 						<div className="flex items-center text-cyan-300 text-sm font-medium group-hover:text-cyan-200">
+							Review now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+					)}
+
+					{/* Witness Signatures - Available to both ADMIN and ATTESTOR */}
+					<Link
+						href="/dashboard/applications?tab=signatures&filter=pending_witness_signature"
+						className="group bg-gradient-to-br from-orange-600/20 to-orange-800/20 backdrop-blur-md border border-orange-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-orange-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-orange-500/30 rounded-lg">
+								<UserCircleIcon className="h-6 w-6 text-orange-300" />
+							</div>
+							{workflowCounts.PENDING_WITNESS_SIGNATURE > 0 && (
+								<span className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.PENDING_WITNESS_SIGNATURE
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Witness Signing
+						</h3>
+						<p className="text-sm text-orange-200 mb-3">
+							{workflowCounts.PENDING_WITNESS_SIGNATURE > 0
+								? `${formatNumber(
+										workflowCounts.PENDING_WITNESS_SIGNATURE
+								  )} applications need witness signatures`
+								: "No pending witness signatures"}
+						</p>
+						<div className="flex items-center text-orange-300 text-sm font-medium group-hover:text-orange-200">
 							Review now
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>

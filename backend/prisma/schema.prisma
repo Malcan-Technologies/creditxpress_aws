@@ -589,7 +589,7 @@ model LoanSignatory {
   name                String
   email               String
   role                String    // DocuSeal role (e.g., 'Borrower', 'Company', 'Witness')
-  status              String    @default("PENDING") // 'PENDING', 'SIGNED', 'DECLINED', 'EXPIRED'
+  status              String    @default("PENDING") // 'PENDING', 'PENDING_PKI_SIGNING', 'SIGNED', 'DECLINED', 'EXPIRED'
   signedAt            DateTime?
   docusealSubmitterId String?   // DocuSeal submitter ID
   docusealUuid        String?   // DocuSeal submitter UUID

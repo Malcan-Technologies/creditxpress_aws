@@ -3602,7 +3602,12 @@ function ActiveLoansContent() {
 																				) : signature.status === 'PENDING' ? (
 																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-800/20 text-yellow-400 border border-yellow-800/30">
 																						<ClockIcon className="h-3 w-3 mr-1" />
-																						Pending
+																						Pending DocuSeal
+																					</span>
+																				) : signature.status === 'PENDING_PKI_SIGNING' ? (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-800/20 text-blue-400 border border-blue-800/30">
+																						<ClockIcon className="h-3 w-3 mr-1" />
+																						Pending PKI
 																					</span>
 																				) : (
 																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-800/20 text-red-400 border border-red-800/30">
@@ -3631,26 +3636,10 @@ function ActiveLoansContent() {
 																				</span>
 																			)
 																		) : (
-																			/* Show signing actions for non-active loans */
-																			signature.canSign && signature.signingUrl ? (
-																				<a
-																					href={signature.signingUrl}
-																					target="_blank"
-																					rel="noopener noreferrer"
-																					className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-																				>
-																					<PencilIcon className="h-3 w-3 mr-1" />
-																					Sign Document
-																				</a>
-																			) : signature.status === 'SIGNED' ? (
-																				<span className="text-gray-500 text-xs">
-																					{/* Status already shown above */}
-																				</span>
-																			) : (
-																				<span className="text-gray-500 text-xs">
-																					No action available
-																				</span>
-																			)
+																			/* Loans page only shows status - no signing actions */
+																			<span className="text-gray-400 text-xs">
+																				Use Applications page to sign
+																			</span>
 																		)}
 																	</div>
 																</div>

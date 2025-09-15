@@ -266,7 +266,8 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
         'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
       },
       body: JSON.stringify({ 
-        userId, 
+        userId, // IC number for MTSA
+        vpsUserId: requestUserId, // Actual VPS user ID for database
         otp, 
         submissionId: loan.docusealSubmissionId, // Use actual DocuSeal submission ID (192)
         applicationId,
@@ -284,6 +285,64 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
         message: result.message || 'PKI signing failed',
         error: result.error || 'Unknown error from orchestrator'
       });
+    }
+
+    // Update VPS database after successful PKI signing
+    if (result.success) {
+      try {
+        // Update loan signatory status to SIGNED
+        await prisma.loanSignatory.updateMany({
+          where: {
+            loanId: loan.id,
+            signatoryType: 'USER'
+          },
+          data: {
+            status: 'SIGNED',
+            signedAt: new Date()
+          }
+        });
+
+        // Update loan application status to PENDING_SIGNING_COMPANY_WITNESS
+        await prisma.loanApplication.updateMany({
+          where: {
+            id: applicationId
+          },
+          data: {
+            status: 'PENDING_SIGNING_COMPANY_WITNESS'
+          }
+        });
+
+        // Add audit trail entry for PKI signing completion
+        try {
+          await prisma.loanApplicationHistory.create({
+            data: {
+              applicationId: applicationId,
+              previousStatus: 'PENDING_PKI_SIGNING',
+              newStatus: 'PENDING_SIGNING_COMPANY_WITNESS',
+              changedBy: 'USER_PKI_SIGNING',
+              changeReason: 'Borrower completed PKI signing',
+              notes: `Borrower completed PKI digital signing for loan agreement. Status updated to await company and witness signatures.`,
+              metadata: {
+                loanId: loan.id,
+                userId: requestUserId,
+                signedAt: new Date().toISOString(),
+                signatoryType: 'USER',
+                pkiSigningMethod: 'user_certificate_otp',
+                docusealSubmissionId: loan.docusealSubmissionId
+              }
+            }
+          });
+          console.log('✅ Audit trail entry created for USER PKI signing completion');
+        } catch (auditError) {
+          console.error('❌ Failed to create audit trail entry for PKI signing:', auditError);
+          // Don't fail the main operation for audit trail issues
+        }
+
+        console.log(`VPS database updated after PKI signing: loan ${loan.id}, application ${applicationId}`);
+      } catch (dbError) {
+        console.error('Failed to update VPS database after PKI signing:', dbError);
+        // Don't fail the signing process if VPS database update fails
+      }
     }
 
     return res.json({

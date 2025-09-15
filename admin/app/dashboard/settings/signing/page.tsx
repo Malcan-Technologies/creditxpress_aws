@@ -100,6 +100,15 @@ export default function AdminSigningSettingsPage() {
   });
   const [submittingCertificate, setSubmittingCertificate] = useState(false);
 
+  // PIN verification state
+  const [showPinVerification, setShowPinVerification] = useState(false);
+  const [verificationPin, setVerificationPin] = useState('');
+  const [verifyingPin, setVerifyingPin] = useState(false);
+  const [pinVerificationResult, setPinVerificationResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
   // Revoke certificate state
   const [showRevokeForm, setShowRevokeForm] = useState(false);
   const [revokeReason, setRevokeReason] = useState('keyCompromise');
@@ -521,6 +530,59 @@ export default function AdminSigningSettingsPage() {
     }
   };
 
+  const handleVerifyPin = async () => {
+    if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
+      setError('User IC number and certificate serial number are required');
+      return;
+    }
+
+    if (!verificationPin || verificationPin.length !== 8) {
+      setError('Please enter a valid 8-digit PIN');
+      return;
+    }
+
+    try {
+      setVerifyingPin(true);
+      setError(null);
+      setPinVerificationResult(null);
+
+      console.log('Verifying certificate PIN for admin user:', currentUser.icNumber);
+
+      const response = await fetchWithAdminTokenRefresh<any>('/api/admin/mtsa/verify-cert-pin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUser.icNumber,
+          certSerialNo: certificateStatus.certificateData.certSerialNo,
+          certPin: verificationPin,
+        }),
+      });
+
+      console.log('PIN verification response:', response);
+
+      setPinVerificationResult({
+        success: response.success,
+        message: response.message || (response.success ? 'PIN verified successfully' : 'PIN verification failed')
+      });
+
+      if (response.success) {
+        // Clear PIN after successful verification
+        setVerificationPin('');
+      }
+    } catch (err) {
+      console.error('PIN verification error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to verify PIN');
+      setPinVerificationResult({
+        success: false,
+        message: 'Failed to verify PIN'
+      });
+    } finally {
+      setVerifyingPin(false);
+    }
+  };
+
   const handleRevokeCertificate = async () => {
     if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
       setError('User IC number and certificate serial number are required');
@@ -719,6 +781,14 @@ export default function AdminSigningSettingsPage() {
                   <div>
                     <span className="text-gray-400">Serial Number:</span>
                     <span className="text-white ml-2">{certificateStatus.certificateData.certSerialNo}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Valid From:</span>
+                    <span className="text-white ml-2">{certificateStatus.certificateData.validFrom}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Valid To:</span>
+                    <span className="text-white ml-2">{certificateStatus.certificateData.validTo}</span>
                   </div>
                 </div>
               </div>
@@ -1075,11 +1145,112 @@ export default function AdminSigningSettingsPage() {
                   </button>
                   
                   <button
+                    onClick={() => setShowPinVerification(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                  >
+                    Verify PIN
+                  </button>
+                  
+                  <button
                     onClick={() => setShowRevokeForm(true)}
                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                   >
                     Revoke Certificate
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* PIN Verification Form */}
+            {showPinVerification && certificateStatus?.nextStep === 'complete' && (
+              <div className="bg-gray-800 rounded-lg border border-purple-700 p-6 mt-4">
+                <div className="flex items-center mb-4">
+                  <ShieldCheckIcon className="h-6 w-6 text-purple-400 mr-3" />
+                  <h3 className="text-lg font-semibold text-white">Verify Certificate PIN</h3>
+                </div>
+                
+                <p className="text-gray-400 mb-6">
+                  Verify your 8-digit certificate PIN to confirm access to your digital certificate.
+                </p>
+
+                <div className="space-y-6">
+                  {/* Certificate Information */}
+                  <div className="p-4 bg-gray-700 rounded-lg">
+                    <h4 className="text-sm font-medium text-white mb-2">Certificate Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-gray-400">User ID:</span>
+                        <span className="text-white ml-2">{currentUser?.icNumber}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Serial Number:</span>
+                        <span className="text-white ml-2">{certificateStatus?.certificateData?.certSerialNo}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PIN Input */}
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">Certificate PIN *</label>
+                    <input
+                      type="password"
+                      value={verificationPin}
+                      onChange={(e) => setVerificationPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      placeholder="Enter 8-digit PIN"
+                      className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg tracking-widest"
+                      maxLength={8}
+                      disabled={verifyingPin}
+                    />
+                  </div>
+
+                  {/* Verification Result */}
+                  {pinVerificationResult && (
+                    <div className={`p-4 rounded-lg border ${
+                      pinVerificationResult.success 
+                        ? 'bg-green-900/20 border-green-700' 
+                        : 'bg-red-900/20 border-red-700'
+                    }`}>
+                      <div className="flex items-center">
+                        {pinVerificationResult.success ? (
+                          <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+                        ) : (
+                          <XCircleIcon className="h-5 w-5 text-red-400 mr-2" />
+                        )}
+                        <span className={pinVerificationResult.success ? 'text-green-400' : 'text-red-400'}>
+                          {pinVerificationResult.message}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      onClick={() => {
+                        setShowPinVerification(false);
+                        setVerificationPin('');
+                        setPinVerificationResult(null);
+                      }}
+                      className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    
+                    <button
+                      onClick={handleVerifyPin}
+                      disabled={verifyingPin || verificationPin.length !== 8}
+                      className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    >
+                      {verifyingPin ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                          Verifying PIN...
+                        </>
+                      ) : (
+                        'Verify PIN'
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

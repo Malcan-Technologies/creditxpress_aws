@@ -80,6 +80,105 @@ router.get('/cert-info/:userId', authenticateToken, adminOrAttestorMiddleware, a
 
 /**
  * @swagger
+ * /api/admin/mtsa/verify-cert-pin:
+ *   post:
+ *     summary: Verify certificate PIN (admin only)
+ *     tags: [Admin, MTSA]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *               - certSerialNo
+ *               - certPin
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: User ID (IC number)
+ *               certSerialNo:
+ *                 type: string
+ *                 description: Certificate serial number
+ *               certPin:
+ *                 type: string
+ *                 description: 8-digit certificate PIN
+ *     responses:
+ *       200:
+ *         description: PIN verification processed successfully
+ *       400:
+ *         description: Invalid request parameters
+ *       403:
+ *         description: Admin access required
+ *       500:
+ *         description: Failed to verify PIN
+ */
+router.post('/verify-cert-pin', authenticateToken, adminOrAttestorMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { userId, certSerialNo, certPin } = req.body;
+    
+    if (!userId || !certSerialNo || !certPin) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID, certificate serial number, and PIN are required'
+      });
+    }
+
+    if (!/^\d{8}$/.test(certPin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'PIN must be exactly 8 digits'
+      });
+    }
+
+    console.log('Admin verifying certificate PIN for user:', { 
+      userId, 
+      certSerialNo: certSerialNo.slice(0, 8) + '...', // Partial log for security
+      adminUserId: req.user?.userId 
+    });
+
+    // Make request to signing orchestrator
+    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my'}/api/verify-cert-pin`, {
+      method: 'POST',
+      headers: {
+        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        certSerialNo,
+        pin: certPin
+      }),
+    });
+
+    const data = await response.json();
+    
+    console.log('PIN verification response:', { 
+      userId, 
+      success: data.success,
+      statusCode: data.data?.statusCode,
+      pinVerified: data.data?.pinVerified
+    });
+
+    return res.json(data);
+  } catch (error) {
+    console.error('Error verifying certificate PIN:', { 
+      error: error instanceof Error ? error.message : String(error),
+      userId: req.body.userId 
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to verify certificate PIN'
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/admin/mtsa/request-otp:
  *   post:
  *     summary: Request OTP for certificate enrollment (admin only)

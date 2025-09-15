@@ -35,7 +35,6 @@ function PKISigningContent() {
   const [successMessage, setSuccessMessage] = useState('');
   const hasInitialized = useRef(false);
   const [step, setStep] = useState<'checking' | 'ready_to_request' | 'otp_input' | 'signing' | 'complete' | 'error'>('checking');
-  const [loadingPdf, setLoadingPdf] = useState(false);
   const [resendingOtp, setResendingOtp] = useState(false);
   const [lastOtpRequest, setLastOtpRequest] = useState<number>(0);
   const [countdown, setCountdown] = useState<number>(0);
@@ -642,7 +641,8 @@ function PKISigningContent() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-700">Signing Document</h3>
                 <p className="text-gray-600 mt-2">
-                  Applying your digital signature with PKI certificate...
+                  Applying your digital signature with PKI certificate... <br />
+                  Please do not close this window
                 </p>
               </div>
             </div>
@@ -662,94 +662,13 @@ function PKISigningContent() {
               </p>
             </div>
             
-            {/* View PDF Button */}
+            {/* Success Actions */}
             <div className="space-y-3">
-              <button
-                disabled={loadingPdf}
-                onClick={async () => {
-                  try {
-                    if (!applicationId) return;
-                    
-                    setLoadingPdf(true);
-                    setError('');
-                    
-                    // Get the loan ID from the application
-                    const loanResponse = await fetchWithTokenRefresh(`/api/loan-applications/${applicationId}`) as any;
-                    if (loanResponse?.data?.loanId) {
-                      // Get access token for authenticated request
-                      const accessToken = TokenStorage.getAccessToken();
-                      if (!accessToken) {
-                        setError('Authentication required. Please log in again.');
-                        return;
-                      }
-
-                      // Fetch the PDF with authentication headers (raw fetch for binary data)
-                      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
-                      const pdfUrl = `${baseUrl}/api/loan-applications/${loanResponse.data.loanId}/pki-pdf`;
-                      
-                      console.log('Fetching PDF from:', pdfUrl);
-                      console.log('Using token:', accessToken ? 'Token present' : 'No token');
-                      
-                      const response = await fetch(pdfUrl, {
-                        method: 'GET',
-                        headers: {
-                          'Authorization': `Bearer ${accessToken}`
-                        }
-                      });
-                      
-                      console.log('PDF response status:', response.status);
-                      console.log('PDF response headers:', Object.fromEntries(response.headers.entries()));
-                      
-                      if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error('PDF fetch error:', errorText);
-                        throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
-                      }
-                      
-                      // Create blob URL and open in new tab
-                      const blob = await response.blob();
-                      console.log('PDF blob size:', blob.size, 'bytes');
-                      console.log('PDF blob type:', blob.type);
-                      
-                      const url = window.URL.createObjectURL(blob);
-                      console.log('Opening PDF URL:', url);
-                      
-                      const newWindow = window.open(url, '_blank');
-                      if (!newWindow) {
-                        console.error('Failed to open new window - popup blocked?');
-                        setError('Popup blocked. Please allow popups and try again.');
-                        return;
-                      }
-                      
-                      // Clean up the blob URL after a delay
-                      setTimeout(() => {
-                        window.URL.revokeObjectURL(url);
-                      }, 5000);
-                    }
-                  } catch (error) {
-                    console.error('Failed to open signed PDF:', error);
-                    setError('Failed to retrieve signed PDF. Please try again later.');
-                  } finally {
-                    setLoadingPdf(false);
-                  }
-                }}
-                className="w-full px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
-              >
-                {loadingPdf ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                )}
-                <span>{loadingPdf ? 'Loading PDF...' : 'View Signed PDF'}</span>
-              </button>
-              
               <button
                 onClick={() => {
                   router.push('/dashboard/loans?tab=applications&signed=success&pki=true');
                 }}
-                className="w-full px-6 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                className="w-full px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
               >
                 Continue to Dashboard
               </button>

@@ -364,7 +364,9 @@ router.post('/webhook', async (req, res) => {
 });
 
 /**
- * Handle form.completed event to update application status for PKI signing
+ * Handle form.completed event to update application and signatory status for PKI signing
+ * - Updates application status to PENDING_PKI_SIGNING (borrower only)
+ * - Updates loan_signatories status to PENDING_PKI_SIGNING (all signatory types: USER, COMPANY, WITNESS)
  */
 async function handleFormCompletedForPKI(payload: any): Promise<void> {
   try {
@@ -395,13 +397,14 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
 
     const submitter = await submissionResponse.json();
     const submissionId = submitter.submission_id;
+    const submitterRole = submitter.role;
 
     if (!submissionId) {
       console.warn('No submission ID found in submitter data');
       return;
     }
 
-    console.log('📋 Found submission ID from submitter', { submitterId, submissionId });
+    console.log('📋 Found submission ID from submitter', { submitterId, submissionId, role: submitterRole });
 
     // Find the loan by DocuSeal submission ID
     const { PrismaClient } = await import('@prisma/client');
@@ -421,15 +424,49 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
       return;
     }
     
-    console.log(`Found loan ${loan.id} for submission ${submissionId}, updating application ${loan.application.id} status to PENDING_PKI_SIGNING`);
+    console.log(`Found loan ${loan.id} for submission ${submissionId}, processing ${submitterRole} DocuSeal completion`);
     
-    // Update the application status
-    await prisma.loanApplication.update({
-      where: { id: loan.application.id },
-      data: { status: 'PENDING_PKI_SIGNING' }
-    });
+    // Update the application status (only for borrower)
+    if (submitterRole === 'Borrower') {
+      await prisma.loanApplication.update({
+        where: { id: loan.application.id },
+        data: { status: 'PENDING_PKI_SIGNING' }
+      });
+      
+      console.log(`✅ Application ${loan.application.id} status updated to PENDING_PKI_SIGNING (borrower completed DocuSeal)`);
+    } else {
+      console.log(`⏭️ Skipping application status update for ${submitterRole} - only borrower signing triggers application PENDING_PKI_SIGNING`);
+    }
     
-    console.log(`✅ Application ${loan.application.id} status updated to PENDING_PKI_SIGNING`);
+    // Update loan signatory status to PENDING_PKI_SIGNING for the specific signatory type
+    const signatoryTypeMap: { [key: string]: string } = {
+      'Borrower': 'USER',
+      'Company': 'COMPANY', 
+      'Witness': 'WITNESS'
+    };
+    
+    const signatoryType = signatoryTypeMap[submitterRole];
+    if (signatoryType) {
+      try {
+        const updatedSignatory = await prisma.loanSignatory.updateMany({
+          where: {
+            loanId: loan.id,
+            signatoryType: signatoryType
+          },
+          data: {
+            status: 'PENDING_PKI_SIGNING',
+            updatedAt: new Date()
+          }
+        });
+        
+        console.log(`✅ Updated ${updatedSignatory.count} signatory record(s) to PENDING_PKI_SIGNING for ${signatoryType} (${submitterRole} completed DocuSeal)`);
+      } catch (signatoryError) {
+        console.error(`❌ Failed to update signatory status for ${signatoryType} (${submitterRole}):`, signatoryError);
+        // Don't throw - continue with other processing
+      }
+    } else {
+      console.warn(`Unknown submitter role for signatory mapping: ${submitterRole}`);
+    }
     
   } catch (error) {
     console.error('Failed to update application status for PKI:', error);

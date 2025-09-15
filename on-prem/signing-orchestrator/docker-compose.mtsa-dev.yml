@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Signing Orchestrator Service with Database
   signing-orchestrator:
@@ -29,7 +27,6 @@ services:
       - ./original-files:/data/original  
       - ./stamped-files:/data/stamped
       - ./logs:/app/logs
-      - ./src:/app/src  # Mount source code for live development
     networks:
       - signing-network
     depends_on:

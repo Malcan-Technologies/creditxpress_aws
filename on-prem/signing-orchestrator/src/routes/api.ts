@@ -382,6 +382,68 @@ router.post('/otp', verifyApiKey, async (req, res) => {
 });
 
 /**
+ * Verify Certificate PIN endpoint
+ * POST /api/verify-cert-pin
+ */
+router.post('/verify-cert-pin', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { userId, certSerialNo, pin } = req.body;
+    
+    if (!userId || !certSerialNo || !pin) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required fields: userId, certSerialNo, pin',
+      });
+      return;
+    }
+    
+    if (!/^\d{8}$/.test(pin)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'PIN must be exactly 8 digits',
+      });
+      return;
+    }
+    
+    log.info('Verifying certificate PIN', { userId });
+    
+    const result = await mtsaClient.verifyCertPin({
+      UserID: userId,
+      CertSerialNo: certSerialNo,
+      CertPin: pin
+    }, req.correlationId!);
+    
+    const statusCode = result?.statusCode || '9999';
+    const statusMsg = result?.statusMsg || 'Unknown response';
+    const pinVerified = statusCode === '000';
+    
+    res.status(200).json({
+      success: pinVerified,
+      message: statusMsg,
+      data: {
+        statusCode: statusCode,
+        pinVerified: pinVerified,
+        certPinStatus: pinVerified ? 'Valid' : 'Invalid'
+      },
+      correlationId: req.correlationId,
+    });
+    
+  } catch (error) {
+    log.error('Certificate PIN verification failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Certificate PIN verification failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
  * Request Certificate endpoint
  * POST /api/certificate
  */
@@ -962,7 +1024,7 @@ router.post('/pki/sign-pdf', verifyApiKey, async (req, res) => {
   const log = createCorrelatedLogger(req.correlationId!);
   
   try {
-    const { userId, otp, submissionId, applicationId, userFullName } = req.body;
+    const { userId, otp, submissionId, applicationId, userFullName, vpsUserId } = req.body;
     
     if (!userId || !otp || !submissionId) {
       res.status(400).json({
@@ -986,7 +1048,7 @@ router.post('/pki/sign-pdf', verifyApiKey, async (req, res) => {
     log.info('Starting PKI PDF signing process', { userId, submissionId, applicationId });
     
     // Call the signing service to complete PKI signing
-    const result = await signingService.signPDFWithPKI(userId, otp, submissionId, applicationId, req.correlationId!, userFullName);
+    const result = await signingService.signPDFWithPKI(userId, otp, submissionId, applicationId, req.correlationId!, userFullName, vpsUserId);
     
     if (result.success) {
       res.status(200).json({
@@ -1015,6 +1077,84 @@ router.post('/pki/sign-pdf', verifyApiKey, async (req, res) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'PKI PDF signing failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * PKI Sign PDF with PIN (for internal users)
+ * POST /api/pki/sign-pdf-pin
+ */
+router.post('/pki/sign-pdf-pin', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const { userId, pin, submissionId, applicationId, userFullName, vpsUserId, signatoryType } = req.body;
+    
+    if (!userId || !pin || !submissionId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required parameters: userId, pin, submissionId',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    // Validate PIN format (8 digits)
+    if (!/^\d{8}$/.test(pin)) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid PIN format. Must be 8 digits.',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    
+    log.info('Starting PKI PDF signing process with PIN', { 
+      userId, 
+      submissionId, 
+      applicationId, 
+      signatoryType,
+      userFullName
+    });
+    
+    // Call the signing service with PIN instead of OTP
+    // For PIN-based signing, we'll use a modified version that accepts PIN
+    const result = await signingService.signPDFWithPKIPin(
+      userId, 
+      pin, 
+      submissionId, 
+      applicationId, 
+      req.correlationId!, 
+      userFullName, 
+      vpsUserId,
+      signatoryType
+    );
+    
+    if (result.success) {
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result.data,
+        correlationId: req.correlationId,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: result.message,
+        correlationId: req.correlationId,
+      });
+    }
+    
+  } catch (error) {
+    log.error('PKI PDF signing with PIN failed', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'PKI PDF signing with PIN failed',
       correlationId: req.correlationId,
     });
   }

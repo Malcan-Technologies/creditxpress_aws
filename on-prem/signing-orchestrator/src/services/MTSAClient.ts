@@ -382,18 +382,18 @@ export class MTSAClient {
    * Verify certificate PIN for digital signing
    */
   async verifyCertPin(
-    request: { UserID: string; AuthFactor: string },
+    request: { UserID: string; CertSerialNo: string; CertPin: string },
     correlationId?: string
   ): Promise<{ statusCode: string; statusMsg: string; pinVerified: boolean }> {
     const log = correlationId ? createCorrelatedLogger(correlationId) : logger;
     
     log.info('Verifying certificate PIN', { 
       userId: request.UserID,
-      hasAuthFactor: !!request.AuthFactor 
+      hasCertPin: !!request.CertPin 
     });
 
     const result = await this.executeSoapMethod<{ statusCode: string; statusMsg: string; pinVerified: boolean }>(
-      'VerifyCertPIN',
+      'VerifyCertPin',
       request,
       correlationId
     );

@@ -23,6 +23,7 @@ interface SubmitterData {
   fields?: SubmitterField[];
   completed?: boolean;
   external_id?: string;
+  completed_redirect_url?: string;
 }
 
 interface CreateSubmissionRequest {
@@ -423,7 +424,7 @@ class DocuSealService {
       // Note: company_signature will not be pre-filled - company must sign manually
       // company_stamp field has been removed from the document template
 
-      // Create submission with all three parties
+      // Create submission with all three parties and different redirect URLs
       const submission = await this.createSubmission({
         template_id: process.env.DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID || '',
         send_email: true,
@@ -433,7 +434,8 @@ class DocuSealService {
             name: 'Kredit.my Sdn Bhd',
             email: process.env.COMPANY_SIGNING_EMAIL || 'admin@kredit.my',
             role: 'Company',
-            fields: companyFields // Company gets pre-filled data but must sign manually
+            fields: companyFields, // Company gets pre-filled data but must sign manually
+            completed_redirect_url: `${process.env.ADMIN_BASE_URL || 'http://localhost:3002'}/pki-signing?application=${applicationId}&signatory=COMPANY`
             // Note: completed: true removed - company must sign manually
           },
           {
@@ -452,16 +454,18 @@ class DocuSealService {
                 default_value: applicationData.user.icNumber || 'N/A',
                 readonly: true
               }
-            ]
+            ],
+            completed_redirect_url: `${process.env.FRONTEND_URL}/pki-signing?application=${applicationId}&status=processing`
           },
           {
             name: process.env.WITNESS_NAME || 'Legal Representative',
             email: process.env.WITNESS_EMAIL || 'legal@kredit.my',
-            role: 'Witness'
+            role: 'Witness',
+            completed_redirect_url: `${process.env.ADMIN_BASE_URL || 'http://localhost:3002'}/pki-signing?application=${applicationId}&signatory=WITNESS`
             // No fields array - witness signs but doesn't need pre-filled data
           }
         ],
-        completed_redirect_url: `${process.env.FRONTEND_URL}/pki-signing?application=${applicationId}&status=processing`,
+        // Remove global redirect URL since we're using per-submitter URLs
         expired_redirect_url: `${process.env.FRONTEND_URL}/dashboard/loans?tab=applications&signed=expired`
       });
 
@@ -1366,17 +1370,28 @@ class DocuSealService {
         }
       });
 
-      return signatories.map(signatory => ({
-        id: signatory.id,
-        type: signatory.signatoryType,
-        name: signatory.name,
-        email: signatory.email,
-        role: signatory.role,
-        status: signatory.status,
-        signedAt: signatory.signedAt,
-        signingUrl: this.generateSigningUrl(signatory.signingSlug || signatory.signingUrl),
-        canSign: signatory.status === 'PENDING' && (signatory.signingSlug || signatory.signingUrl)
-      }));
+      const signatures = signatories.map(signatory => {
+        const canSign = (
+          (signatory.status === 'PENDING' && (signatory.signingSlug || signatory.signingUrl)) ||
+          signatory.status === 'PENDING_PKI_SIGNING'
+        );
+        
+        console.log(`📋 Signatory ${signatory.signatoryType}: status=${signatory.status}, canSign=${canSign}, hasSigningUrl=${!!(signatory.signingSlug || signatory.signingUrl)}`);
+        
+        return {
+          id: signatory.id,
+          type: signatory.signatoryType,
+          name: signatory.name,
+          email: signatory.email,
+          role: signatory.role,
+          status: signatory.status,
+          signedAt: signatory.signedAt,
+          signingUrl: this.generateSigningUrl(signatory.signingSlug || signatory.signingUrl),
+          canSign
+        };
+      });
+      
+      return signatures;
     } catch (error) {
       console.error('Failed to get signature status:', error);
       throw error;

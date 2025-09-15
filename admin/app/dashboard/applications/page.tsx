@@ -119,12 +119,16 @@ function AdminApplicationsPageContent() {
 	const searchParams = useSearchParams();
 	const filterParam = searchParams.get("filter");
 	const tabParam = searchParams.get("tab");
+	const signedParam = searchParams.get("signed");
 
 	const [applications, setApplications] = useState<LoanApplication[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [search, setSearch] = useState("");
 	const [userName, setUserName] = useState("Admin");
+	const [userRole, setUserRole] = useState<string>("");
 	const [error, setError] = useState<string | null>(null);
+
+	// Note: PIN signing now handled in separate admin PKI page
 
 	// Dialog states
 	const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -145,6 +149,12 @@ function AdminApplicationsPageContent() {
 			return "disbursement";
 		} else if (filterParam === "pending_signature") {
 			return "signatures";
+		} else if (filterParam === "pending_company_signature") {
+			return "signatures";
+		} else if (filterParam === "pending_witness_signature") {
+			return "signatures";
+		} else if (filterParam === "pending_kyc") {
+			return "details";
 		}
 		return "details";
 	};
@@ -163,16 +173,28 @@ function AdminApplicationsPageContent() {
 		} else if (filterParam === "collateral-review") {
 			return ["COLLATERAL_REVIEW"];
 		} else if (filterParam === "pending_signature") {
-			return ["PENDING_SIGNATURE"];
+			return ["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_OTP_DS"];
+		} else if (filterParam === "pending_company_signature") {
+			return ["PENDING_SIGNING_COMPANY_WITNESS"];
+		} else if (filterParam === "pending_witness_signature") {
+			return ["PENDING_SIGNING_COMPANY_WITNESS"];
+		} else if (filterParam === "pending_kyc") {
+			return ["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"];
 		} else {
 			// Default "All Applications" view - show active workflow statuses, exclude rejected/withdrawn/incomplete
 			return [
 				"PENDING_APP_FEE",
+				"PENDING_PROFILE_CONFIRMATION",
 				"PENDING_KYC",
+				"PENDING_KYC_VERIFICATION",
+				"PENDING_CERTIFICATE_OTP",
 				"PENDING_APPROVAL",
 				"PENDING_FRESH_OFFER",
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
+				"PENDING_PKI_SIGNING",
+				"PENDING_SIGNING_COMPANY_WITNESS",
+				"PENDING_SIGNING_OTP_DS",
 				"PENDING_DISBURSEMENT",
 				"COLLATERAL_REVIEW",
 			];
@@ -254,7 +276,13 @@ function AdminApplicationsPageContent() {
 				return PencilSquareIcon;
 			case "PENDING_APP_FEE":
 				return CurrencyDollarIcon;
+			case "PENDING_PROFILE_CONFIRMATION":
+				return UserCircleIcon;
 			case "PENDING_KYC":
+				return ClipboardDocumentCheckIcon;
+			case "PENDING_KYC_VERIFICATION":
+				return ClipboardDocumentCheckIcon;
+			case "PENDING_CERTIFICATE_OTP":
 				return ClipboardDocumentCheckIcon;
 			case "PENDING_APPROVAL":
 				return DocumentMagnifyingGlassIcon;
@@ -264,10 +292,18 @@ function AdminApplicationsPageContent() {
 				return ClipboardDocumentCheckIcon;
 			case "PENDING_SIGNATURE":
 				return DocumentTextIcon;
+			case "PENDING_PKI_SIGNING":
+				return ClockIcon;
+			case "PENDING_SIGNING_COMPANY_WITNESS":
+				return DocumentTextIcon;
+			case "PENDING_SIGNING_OTP_DS":
+				return DocumentTextIcon;
 			case "PENDING_DISBURSEMENT":
 				return BanknotesIcon;
 			case "COLLATERAL_REVIEW":
 				return DocumentMagnifyingGlassIcon;
+			case "ACTIVE":
+				return CheckCircleIcon;
 			case "REJECTED":
 				return XCircleIcon;
 			case "WITHDRAWN":
@@ -283,7 +319,13 @@ function AdminApplicationsPageContent() {
 				return "bg-yellow-500/20 text-yellow-200 border-yellow-400/20";
 			case "PENDING_APP_FEE":
 				return "bg-blue-500/20 text-blue-200 border-blue-400/20";
+			case "PENDING_PROFILE_CONFIRMATION":
+				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
 			case "PENDING_KYC":
+				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
+			case "PENDING_KYC_VERIFICATION":
+				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
+			case "PENDING_CERTIFICATE_OTP":
 				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
 			case "PENDING_APPROVAL":
 				return "bg-amber-500/20 text-amber-200 border-amber-400/20";
@@ -293,10 +335,18 @@ function AdminApplicationsPageContent() {
 				return "bg-cyan-500/20 text-cyan-200 border-cyan-400/20";
 			case "PENDING_SIGNATURE":
 				return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
+			case "PENDING_PKI_SIGNING":
+				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
+			case "PENDING_SIGNING_COMPANY_WITNESS":
+				return "bg-teal-500/20 text-teal-200 border-teal-400/20";
+			case "PENDING_SIGNING_OTP_DS":
+				return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
 			case "PENDING_DISBURSEMENT":
 				return "bg-emerald-500/20 text-emerald-200 border-emerald-400/20";
 			case "COLLATERAL_REVIEW":
 				return "bg-orange-500/20 text-orange-200 border-orange-400/20";
+			case "ACTIVE":
+				return "bg-green-500/20 text-green-200 border-green-400/20";
 			case "REJECTED":
 				return "bg-red-500/20 text-red-200 border-red-400/20";
 			case "WITHDRAWN":
@@ -312,8 +362,14 @@ function AdminApplicationsPageContent() {
 				return "Incomplete";
 			case "PENDING_APP_FEE":
 				return "Pending Application Fee";
+			case "PENDING_PROFILE_CONFIRMATION":
+				return "Pending Profile Confirmation";
 			case "PENDING_KYC":
 				return "Pending KYC";
+			case "PENDING_KYC_VERIFICATION":
+				return "Pending KYC Verification";
+			case "PENDING_CERTIFICATE_OTP":
+				return "Pending Certificate OTP";
 			case "PENDING_APPROVAL":
 				return "Pending Approval";
 			case "PENDING_FRESH_OFFER":
@@ -322,10 +378,18 @@ function AdminApplicationsPageContent() {
 				return "Pending Attestation";
 			case "PENDING_SIGNATURE":
 				return "Pending Signature";
+			case "PENDING_PKI_SIGNING":
+				return "Pending PKI Signing";
+			case "PENDING_SIGNING_COMPANY_WITNESS":
+				return "Awaiting Signatures";
+			case "PENDING_SIGNING_OTP_DS":
+				return "Pending Signing OTP";
 			case "PENDING_DISBURSEMENT":
 				return "Pending Disbursement";
 			case "COLLATERAL_REVIEW":
 				return "Collateral Review";
+			case "ACTIVE":
+				return "Active";
 			case "REJECTED":
 				return "Rejected";
 			case "WITHDRAWN":
@@ -341,19 +405,43 @@ function AdminApplicationsPageContent() {
 		try {
 			setError(null);
 
-			// Fetch user data
+			// Fetch user data and role
+			let currentUserRole = "";
 			try {
 				const userData = await fetchWithAdminTokenRefresh<any>(
-					"/api/users/me"
+					"/api/admin/me"
 				);
 				if (userData.fullName) {
 					setUserName(userData.fullName);
+				}
+				if (userData.role) {
+					currentUserRole = userData.role;
+					setUserRole(userData.role);
 				}
 			} catch (error) {
 				console.error("Error fetching user data:", error);
 			}
 
-			// Try fetching applications from applications endpoint
+			// ATTESTOR users get filtered applications from backend
+			if (currentUserRole === "ATTESTOR") {
+				try {
+					const applicationsData = await fetchWithAdminTokenRefresh<
+						LoanApplication[]
+					>("/api/admin/applications");
+					
+					if (applicationsData) {
+						setApplications(applicationsData);
+					} else {
+						setApplications([]);
+					}
+				} catch (error) {
+					console.error("Error refreshing applications for ATTESTOR:", error);
+					setApplications([]);
+				}
+				return;
+			}
+
+			// Try fetching applications from applications endpoint (ADMIN only)
 			try {
 				const applicationsData = await fetchWithAdminTokenRefresh<
 					LoanApplication[]
@@ -408,8 +496,8 @@ function AdminApplicationsPageContent() {
 					if (updatedApp) {
 						setSelectedApplication(updatedApp);
 						
-						// If we're currently on the signatures tab and the application has PENDING_SIGNATURE status, refresh signatures data
-						if (selectedTab === "signatures" && updatedApp.status === "PENDING_SIGNATURE") {
+						// If we're currently on the signatures tab and the application has signature-related status, refresh signatures data
+						if (selectedTab === "signatures" && ["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(updatedApp.status)) {
 							await fetchSignatureStatus(updatedApp.id);
 						}
 					}
@@ -433,19 +521,44 @@ function AdminApplicationsPageContent() {
 			setLoading(true);
 			setError(null);
 
-			// Fetch user data
+			// Fetch user data and role
+			let currentUserRole = "";
 			try {
 				const userData = await fetchWithAdminTokenRefresh<any>(
-					"/api/users/me"
+					"/api/admin/me"
 				);
 				if (userData.fullName) {
 					setUserName(userData.fullName);
+				}
+				if (userData.role) {
+					currentUserRole = userData.role;
+					setUserRole(userData.role);
 				}
 			} catch (error) {
 				console.error("Error fetching user data:", error);
 			}
 
-			// Try fetching applications from applications endpoint
+			// ATTESTOR users get filtered applications from backend
+			if (currentUserRole === "ATTESTOR") {
+				try {
+					const applicationsData = await fetchWithAdminTokenRefresh<
+						LoanApplication[]
+					>("/api/admin/applications");
+					
+					if (applicationsData) {
+						setApplications(applicationsData);
+					} else {
+						setApplications([]);
+					}
+				} catch (error) {
+					console.error("Error fetching applications for ATTESTOR:", error);
+					setApplications([]);
+				}
+				setLoading(false);
+				return;
+			}
+
+			// Try fetching applications from applications endpoint (ADMIN only)
 			try {
 				const applicationsData = await fetchWithAdminTokenRefresh<
 					LoanApplication[]
@@ -588,11 +701,18 @@ function AdminApplicationsPageContent() {
 		if (
 			selectedTab === "signatures" &&
 			selectedApplication &&
-			selectedApplication.status === "PENDING_SIGNATURE"
+			["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(selectedApplication.status)
 		) {
 			fetchSignatureStatus(selectedApplication.id);
 		}
 	}, [selectedTab, selectedApplication?.id, selectedApplication?.status]);
+
+	// Redirect ATTESTOR users from restricted tabs
+	useEffect(() => {
+		if (userRole === "ATTESTOR" && ["documents", "audit", "actions"].includes(selectedTab)) {
+			setSelectedTab("details"); // Default to details tab for ATTESTOR users
+		}
+	}, [userRole, selectedTab]);
 
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString("en-MY", {
@@ -609,6 +729,9 @@ function AdminApplicationsPageContent() {
 			currency: "MYR",
 		}).format(amount);
 	};
+
+	// Handle PIN-based signing for internal users
+	// Note: PIN signing now handled in separate admin PKI page
 
 	// Filter applications based on search and status filters
 	const filteredApplications = applications.filter((app) => {
@@ -647,7 +770,7 @@ function AdminApplicationsPageContent() {
 					setSelectedTab("approval");
 				} else if (firstApp.status === "PENDING_ATTESTATION") {
 					setSelectedTab("attestation");
-				} else if (firstApp.status === "PENDING_SIGNATURE") {
+				} else if (["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(firstApp.status)) {
 					setSelectedTab("signatures");
 				} else if (firstApp.status === "PENDING_DISBURSEMENT") {
 					setSelectedTab("disbursement");
@@ -683,7 +806,7 @@ function AdminApplicationsPageContent() {
 				setSelectedTab("approval");
 			} else if (application.status === "PENDING_ATTESTATION") {
 				setSelectedTab("attestation");
-			} else if (application.status === "PENDING_SIGNATURE") {
+			} else if (["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(application.status)) {
 				setSelectedTab("signatures");
 			} else if (application.status === "PENDING_DISBURSEMENT") {
 				setSelectedTab("disbursement");
@@ -1534,7 +1657,13 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 		} else if (filterParam === "collateral-review") {
 			return "Collateral Review";
 		} else if (filterParam === "pending_signature") {
-			return "Pending Signature";
+			return "Pending User Signature";
+		} else if (filterParam === "pending_company_signature") {
+			return "Pending Company Signature";
+		} else if (filterParam === "pending_witness_signature") {
+			return "Pending Witness Signature";
+		} else if (filterParam === "pending_kyc") {
+			return "Pending KYC";
 		} else {
 			return "Loan Applications";
 		}
@@ -1548,7 +1677,13 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 		} else if (filterParam === "collateral-review") {
 			return "Review collateral-based loan applications requiring asset evaluation";
 		} else if (filterParam === "pending_signature") {
-			return "Manage document signing process for approved loan applications";
+			return "Manage user document signing process for approved loan applications";
+		} else if (filterParam === "pending_company_signature") {
+			return "Manage company signing process for loan agreements";
+		} else if (filterParam === "pending_witness_signature") {
+			return "Manage witness signing process for loan agreements";
+		} else if (filterParam === "pending_kyc") {
+			return "Review KYC verification and profile confirmation processes";
 		} else {
 			return "Manage active loan applications in the workflow (excludes incomplete, rejected, and withdrawn)";
 		}
@@ -1556,6 +1691,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
 	return (
 		<AdminLayout title={getPageTitle()} description={getPageDescription()}>
+			{/* DocuSeal completion now redirects to separate admin PKI page */}
+			
 			{/* Error Display */}
 			{error && (
 				<div className="mb-6 bg-red-700/30 border border-red-600/30 text-red-300 px-4 py-3 rounded-lg flex items-center justify-between">
@@ -1598,7 +1735,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 						Application Management
 					</h2>
 					<p className="text-gray-400">
-						{filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => app.status === "PENDING_APPROVAL").length} pending approval • {applications.filter(app => app.status === "PENDING_DISBURSEMENT").length} pending disbursement • {applications.filter(app => app.status === "COLLATERAL_REVIEW").length} collateral review
+						{filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => app.status === "PENDING_APPROVAL").length} pending approval • {applications.filter(app => ["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(app.status)).length} pending signature • {applications.filter(app => ["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"].includes(app.status)).length} pending KYC • {applications.filter(app => app.status === "PENDING_DISBURSEMENT").length} pending disbursement
 					</p>
 				</div>
 				<button
@@ -1615,56 +1752,65 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 				</button>
 			</div>
 
-			{/* Search and Filter Bar */}
-			<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
-				<div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-					<div className="flex-1 relative">
-						<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-							<svg
-								className="h-5 w-5 text-gray-400"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-								/>
-							</svg>
-						</div>
-						<input
-							type="text"
-							className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-							placeholder="Search by applicant name, email, purpose, or application ID"
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-						/>
-						{search && (
-							<button
-								onClick={() => setSearch("")}
-								className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
-								title="Clear search"
-							>
-								<XMarkIcon className="h-4 w-4" />
-							</button>
-						)}
+			{/* Search Bar */}
+			<div className="mb-4 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+				<div className="relative">
+					<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+						<svg
+							className="h-5 w-5 text-gray-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+							/>
+						</svg>
 					</div>
-					<div className="flex space-x-2">
+					<input
+						type="text"
+						className="block w-full pl-10 pr-10 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+						placeholder="Search by applicant name, email, purpose, or application ID"
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+					/>
+					{search && (
+						<button
+							onClick={() => setSearch("")}
+							className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-300 transition-colors"
+							title="Clear search"
+						>
+							<XMarkIcon className="h-4 w-4" />
+						</button>
+					)}
+				</div>
+			</div>
+
+			{/* Filter Bar */}
+			<div className="mb-6 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
+				<div className="flex flex-wrap gap-2">
 						<button
 							onClick={() => setSelectedFilters([
 								"PENDING_APP_FEE",
+								"PENDING_PROFILE_CONFIRMATION",
 								"PENDING_KYC",
+								"PENDING_KYC_VERIFICATION",
+								"PENDING_CERTIFICATE_OTP",
 								"PENDING_APPROVAL",
 								"PENDING_FRESH_OFFER",
 								"PENDING_ATTESTATION",
 								"PENDING_SIGNATURE",
+								"PENDING_PKI_SIGNING",
+								"PENDING_SIGNING_COMPANY_WITNESS",
+								"PENDING_SIGNING_OTP_DS",
 								"PENDING_DISBURSEMENT",
 								"COLLATERAL_REVIEW",
 							])}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 8 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW") && selectedFilters.includes("PENDING_FRESH_OFFER")
+								selectedFilters.length === 14 && selectedFilters.includes("PENDING_APP_FEE") && selectedFilters.includes("COLLATERAL_REVIEW") && selectedFilters.includes("PENDING_FRESH_OFFER") && selectedFilters.includes("PENDING_PKI_SIGNING")
 									? "bg-blue-500/30 text-blue-100 border-blue-400/30"
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
@@ -1692,14 +1838,44 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 							Fresh Offers
 						</button>
 						<button
-							onClick={() => setSelectedFilters(["PENDING_SIGNATURE"])}
+							onClick={() => setSelectedFilters(["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_OTP_DS"])}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("PENDING_SIGNATURE")
+								selectedFilters.length === 3 && selectedFilters.includes("PENDING_SIGNATURE") && selectedFilters.includes("PENDING_PKI_SIGNING") && selectedFilters.includes("PENDING_SIGNING_OTP_DS")
 									? "bg-indigo-500/30 text-indigo-100 border-indigo-400/30"
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
-							Pending Signature
+							Pending User Signature
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_SIGNING_COMPANY_WITNESS"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_SIGNING_COMPANY_WITNESS")
+									? "bg-teal-500/30 text-teal-100 border-teal-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Company Signature
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_SIGNING_COMPANY_WITNESS"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 1 && selectedFilters.includes("PENDING_SIGNING_COMPANY_WITNESS")
+									? "bg-orange-500/30 text-orange-100 border-orange-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending Witness Signature
+						</button>
+						<button
+							onClick={() => setSelectedFilters(["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"])}
+							className={`px-4 py-2 rounded-lg border transition-colors ${
+								selectedFilters.length === 4 && selectedFilters.includes("PENDING_PROFILE_CONFIRMATION") && selectedFilters.includes("PENDING_KYC") && selectedFilters.includes("PENDING_KYC_VERIFICATION") && selectedFilters.includes("PENDING_CERTIFICATE_OTP")
+									? "bg-purple-500/30 text-purple-100 border-purple-400/30"
+									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+							}`}
+						>
+							Pending KYC
 						</button>
 						<button
 							onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
@@ -1732,7 +1908,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 						>
 							Closed Applications
 						</button>
-					</div>
 				</div>
 			</div>
 
@@ -1746,11 +1921,11 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 							</h3>
 						</div>
 						<div className="overflow-y-auto max-h-[70vh]">
-							{loading ? (
-								<div className="flex justify-center items-center p-8">
-									<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
-								</div>
-							) : filteredApplications.length > 0 ? (
+						{loading ? (
+							<div className="flex justify-center items-center p-8">
+								<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
+							</div>
+						) : filteredApplications.length > 0 ? (
 								<ul className="divide-y divide-gray-700/30">
 									{filteredApplications.map((app) => {
 										const StatusIcon = getStatusIcon(
@@ -1863,6 +2038,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									>
 										Details
 									</div>
+									{/* Documents tab - ADMIN only */}
+									{userRole === "ADMIN" && (
 									<div
 										className={`px-4 py-2 cursor-pointer transition-colors ${
 											selectedTab === "documents"
@@ -1888,6 +2065,9 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 												)}
 										</div>
 									</div>
+									)}
+									{/* Audit Trail tab - ADMIN only */}
+									{userRole === "ADMIN" && (
 									<div
 										className={`px-4 py-2 cursor-pointer transition-colors ${
 											selectedTab === "audit"
@@ -1898,8 +2078,9 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									>
 										Audit Trail
 									</div>
-									{/* Show Signatures tab for PENDING_SIGNATURE applications */}
-									{selectedApplication.status === "PENDING_SIGNATURE" && (
+									)}
+									{/* Show Signatures tab for signature-related applications */}
+									{["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(selectedApplication.status) && (
 										<div
 											className={`px-4 py-2 cursor-pointer transition-colors ${
 												selectedTab === "signatures"
@@ -1980,6 +2161,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 											Disbursement
 										</div>
 									)}
+									{/* Actions tab - ADMIN only */}
+									{userRole === "ADMIN" && (
 									<div
 										className={`px-4 py-2 cursor-pointer transition-colors ${
 											selectedTab === "actions"
@@ -1992,6 +2175,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									>
 										Actions
 									</div>
+									)}
 								</div>
 
 								{/* Tab Content */}
@@ -2158,8 +2342,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									</div>
 								)}
 
-								{/* Documents Tab */}
-								{selectedTab === "documents" && (
+								{/* Documents Tab - ADMIN only */}
+								{selectedTab === "documents" && userRole === "ADMIN" && (
 									<div>
 										{/* Application Documents */}
 										{selectedApplication.documents &&
@@ -2263,8 +2447,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									</div>
 								)}
 
-								{/* Audit Trail Tab */}
-								{selectedTab === "audit" && (
+								{/* Audit Trail Tab - ADMIN only */}
+								{selectedTab === "audit" && userRole === "ADMIN" && (
 									<div>
 										{/* Audit Trail Section */}
 										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">
@@ -2431,6 +2615,11 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 																						<ClockIcon className="h-3 w-3 mr-1" />
 																						Pending
 																					</span>
+																				) : signature.status === 'PENDING_PKI_SIGNING' ? (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-800/20 text-purple-400 border border-purple-800/30">
+																						<ClockIcon className="h-3 w-3 mr-1" />
+																						Pending PKI Signing
+																					</span>
 																				) : (
 																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-800/20 text-red-400 border border-red-800/30">
 																						<XMarkIcon className="h-3 w-3 mr-1" />
@@ -2446,16 +2635,49 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 																		)}
 																	</div>
 																	<div className="ml-4">
-																		{signature.canSign && signature.signingUrl ? (
-																			<a
-																				href={signature.signingUrl}
-																				target="_blank"
-																				rel="noopener noreferrer"
-																				className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-																			>
-																				<PencilSquareIcon className="h-3 w-3 mr-1" />
-																				Sign Document
-																			</a>
+																		{signature.canSign ? (
+																			// Hide company signing button for ATTESTOR users
+																			(userRole === "ATTESTOR" && signature.type === "COMPANY") ? (
+																				<span className="text-gray-500 text-xs">
+																					Admin access required
+																				</span>
+																			) : signature.status === 'PENDING' && signature.signingUrl ? (
+																				// PENDING status: Complete DocuSeal (for all signatory types)
+																				<a
+																					href={signature.signingUrl}
+																					target="_blank"
+																					rel="noopener noreferrer"
+																					className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-yellow-600 text-white hover:bg-yellow-700 transition-colors"
+																				>
+																					<PencilSquareIcon className="h-3 w-3 mr-1" />
+																					Sign Document
+																				</a>
+																			) : signature.status === 'PENDING_PKI_SIGNING' ? (
+																				// PENDING_PKI_SIGNING status: Sign with PKI/PIN
+																				signature.type === "USER" ? (
+																					// For USER signatures, redirect to PKI signing page
+																					<a
+																						href={`/pki-signing?submissionId=${signaturesData?.docusealSubmissionId}&applicationId=${selectedApplication?.id}`}
+																						className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+																					>
+																						<PencilSquareIcon className="h-3 w-3 mr-1" />
+																						Complete Signing
+																					</a>
+																				) : (
+																					// For COMPANY and WITNESS signatures, redirect to PKI signing page
+																					<a
+																						href={`/pki-signing?application=${selectedApplication?.id}&signatory=${signature.type.toLowerCase()}`}
+																						className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+																					>
+																						<PencilSquareIcon className="h-3 w-3 mr-1" />
+																						Complete Signing
+																					</a>
+																				)
+																			) : (
+																				<span className="text-gray-500 text-xs">
+																					No action available
+																				</span>
+																			)
 																		) : signature.status === 'SIGNED' ? (
 																			<span className="text-gray-500 text-xs">
 																				{/* Status already shown above */}
@@ -3563,8 +3785,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									</div>
 								)}
 
-								{/* Actions Tab */}
-								{selectedTab === "actions" && (
+								{/* Actions Tab - ADMIN only */}
+								{selectedTab === "actions" && userRole === "ADMIN" && (
 									<div>
 										{/* Update Status Section */}
 										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">
@@ -3723,6 +3945,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 					)}
 				</div>
 			</div>
+
+			{/* PIN signing now handled in separate admin PKI page */}
 		</AdminLayout>
 	);
 }

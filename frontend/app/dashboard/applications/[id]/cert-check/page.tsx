@@ -62,6 +62,7 @@ export default function CertCheckPage() {
 	const [showIcInput, setShowIcInput] = useState(false);
 	const [icNumber, setIcNumber] = useState("");
 	const [updating, setUpdating] = useState(false);
+	const [signingInProgress, setSigningInProgress] = useState(false);
 
 	useEffect(() => {
 		const fetchApplication = async () => {
@@ -399,6 +400,70 @@ export default function CertCheckPage() {
 		);
 	}
 
+	// Handle proceeding to document signing (same logic as loan applications card)
+	const handleProceedToSigning = async () => {
+		if (!application) return;
+
+		try {
+			setSigningInProgress(true);
+			
+			// First, try to get existing signing URL from loan_signatories table
+			try {
+				const signingResponse = await fetchWithTokenRefresh<{
+					success: boolean;
+					data?: {
+						signingUrl: string;
+						applicationId: string;
+						loanId: string;
+					};
+				}>(`/api/loan-applications/${application.id}/signing-url`);
+
+				if (signingResponse?.success && signingResponse?.data?.signingUrl) {
+					// Open existing signing URL
+					window.open(signingResponse.data.signingUrl, '_blank');
+					return;
+				}
+			} catch (error) {
+				console.log('No existing signing URL found, will initiate new signing process');
+			}
+			
+			// If no existing signing URL, initiate new document signing with DocuSeal
+			const response = await fetchWithTokenRefresh<{
+				success: boolean;
+				message: string;
+				data?: {
+					submissionId: string;
+					signUrl: string;
+					status: string;
+				};
+			}>('/api/docuseal/initiate-application-signing', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					applicationId: application.id,
+				}),
+			});
+
+			if (response?.success && response?.data?.signUrl) {
+				// Open DocuSeal signing URL in a new tab
+				window.open(response.data.signUrl, '_blank');
+				
+				// Navigate back to dashboard to see updated status
+				router.push("/dashboard/loans?tab=applications");
+			} else {
+				throw new Error(response?.message || 'Failed to initiate document signing');
+			}
+
+		} catch (error) {
+			console.error('Error initiating document signing:', error);
+			setError(`Failed to initiate document signing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+		} finally {
+			setSigningInProgress(false);
+		}
+	};
+
 	return (
 		<DashboardLayout>
 			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-8">
@@ -504,11 +569,12 @@ export default function CertCheckPage() {
 								<div className="space-y-3">
 									{checkResult.hasValidCert ? (
 										<button
-											onClick={() => router.push("/dashboard/loans?tab=applications")}
-											className="w-full inline-flex items-center justify-center px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 transition-colors font-semibold"
+											onClick={handleProceedToSigning}
+											disabled={signingInProgress}
+											className="w-full inline-flex items-center justify-center px-6 py-3 bg-purple-primary text-white rounded-xl hover:bg-purple-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors font-semibold"
 										>
 											<CheckCircleIcon className="h-4 w-4 mr-2" />
-											Continue to Document Signing
+											{signingInProgress ? "Initiating..." : "Continue to Document Signing"}
 										</button>
 									) : (
 										<button

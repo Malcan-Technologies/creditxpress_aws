@@ -2743,9 +2743,34 @@ router.get(
 
 			// ATTESTOR users only need specific counts for their work
 			if (userRole === "ATTESTOR") {
-				// Get pending signature count
-				const pendingSignatureCount = await prisma.loanApplication.count({
-					where: { status: "PENDING_SIGNATURE" },
+				// Get pending witness signature count (ATTESTOR can act on these)
+				const pendingWitnessSignatureCount = await prisma.loanApplication.count({
+					where: {
+						status: "PENDING_SIGNING_COMPANY_WITNESS",
+						loan: {
+							signatories: {
+								some: {
+									signatoryType: "WITNESS",
+									status: "PENDING"
+								}
+							}
+						}
+					}
+				});
+
+				// Get pending company signature count (ATTESTOR can see but not act on these)
+				const pendingCompanySignatureCount = await prisma.loanApplication.count({
+					where: {
+						status: "PENDING_SIGNING_COMPANY_WITNESS",
+						loan: {
+							signatories: {
+								some: {
+									signatoryType: "COMPANY",
+									status: "PENDING"
+								}
+							}
+						}
+					}
 				});
 
 				// Get live attestation count
@@ -2757,9 +2782,10 @@ router.get(
 					},
 				});
 
-				// Return minimal counts for ATTESTOR
+				// Return counts for ATTESTOR (including company signatures for visibility)
 				return res.json({
-					PENDING_SIGNATURE: pendingSignatureCount,
+					PENDING_WITNESS_SIGNATURE: pendingWitnessSignatureCount,
+					PENDING_COMPANY_SIGNATURE: pendingCompanySignatureCount, // Visible but not actionable
 					PENDING_ATTESTATION: liveAttestationCount,
 					LIVE_ATTESTATIONS: liveAttestationCount, // Alias for compatibility
 					// Set all other counts to 0
@@ -2774,7 +2800,8 @@ router.get(
 					ACTIVE: 0,
 					WITHDRAWN: 0,
 					REJECTED: 0,
-					total: pendingSignatureCount + liveAttestationCount,
+					PENDING_SIGNATURE: 0,
+					total: pendingWitnessSignatureCount + liveAttestationCount,
 				});
 			}
 
@@ -2783,12 +2810,18 @@ router.get(
 			const statusList = [
 				"INCOMPLETE",
 				"PENDING_APP_FEE",
+				"PENDING_PROFILE_CONFIRMATION",
 				"PENDING_KYC",
+				"PENDING_KYC_VERIFICATION",
+				"PENDING_CERTIFICATE_OTP",
 				"PENDING_APPROVAL",
 				"APPROVED",
 				"PENDING_FRESH_OFFER",
 				"PENDING_ATTESTATION",
 				"PENDING_SIGNATURE",
+				"PENDING_PKI_SIGNING",
+				"PENDING_SIGNING_COMPANY_WITNESS",
+				"PENDING_SIGNING_OTP_DS",
 				"PENDING_DISBURSEMENT",
 				"COLLATERAL_REVIEW",
 				"ACTIVE",
@@ -2827,6 +2860,39 @@ router.get(
 				console.log(`Count for status ${status}: ${count}`);
 				counts[status] = count;
 			}
+
+			// Get specific counts for company vs witness signatures
+			const pendingCompanySignatureCount = await prisma.loanApplication.count({
+				where: {
+					status: "PENDING_SIGNING_COMPANY_WITNESS",
+					loan: {
+						signatories: {
+							some: {
+								signatoryType: "COMPANY",
+								status: "PENDING"
+							}
+						}
+					}
+				}
+			});
+
+			const pendingWitnessSignatureCount = await prisma.loanApplication.count({
+				where: {
+					status: "PENDING_SIGNING_COMPANY_WITNESS",
+					loan: {
+						signatories: {
+							some: {
+								signatoryType: "WITNESS",
+								status: "PENDING"
+							}
+						}
+					}
+				}
+			});
+
+			// Add these specific counts
+			counts.PENDING_COMPANY_SIGNATURE = pendingCompanySignatureCount;
+			counts.PENDING_WITNESS_SIGNATURE = pendingWitnessSignatureCount;
 
 			// Add total count
 			counts.total = total;
@@ -2867,18 +2933,34 @@ router.get(
  *       500:
  *         description: Server error
  */
-// Get all loan applications (admin only)
+// Get all loan applications (admin and attestor)
 // @ts-ignore
 router.get(
 	"/applications",
 	authenticateToken,
-	isAdmin as unknown as RequestHandler,
+	requireAdminOrAttestor as unknown as RequestHandler,
 	// @ts-ignore
 	async (req: AuthRequest, res: Response) => {
 		try {
-			console.log("Fetching all applications for admin");
+			const userRole = req.user?.role;
+			console.log(`Fetching applications for ${userRole}`);
+
+			// ATTESTOR users only see signing-related applications
+			const whereCondition = userRole === "ATTESTOR" 
+				? {
+					status: {
+						in: [
+							"PENDING_SIGNING_COMPANY_WITNESS",
+							"PENDING_SIGNATURE", 
+							"PENDING_PKI_SIGNING",
+							"PENDING_SIGNING_OTP_DS"
+						]
+					}
+				}
+				: {}; // ADMIN sees all applications
 
 			const applications = await prisma.loanApplication.findMany({
+				where: whereCondition,
 				orderBy: {
 					createdAt: "desc",
 				},
@@ -10554,5 +10636,301 @@ router.get('/applications/:applicationId/signatures', authenticateToken, async (
 		});
 	}
 });
+
+/**
+ * @swagger
+ * /api/admin/applications/pin-sign:
+ *   post:
+ *     summary: Sign document with PIN for company/witness (admin and attestor)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               applicationId:
+ *                 type: string
+ *               signatoryId:
+ *                 type: string
+ *               pin:
+ *                 type: string
+ *               signatoryType:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Document signed successfully
+ *       400:
+ *         description: Invalid request
+ *       403:
+ *         description: Access denied
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/applications/pin-sign",
+	authenticateToken,
+	requireAdminOrAttestor as unknown as RequestHandler,
+	// @ts-ignore
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId, pin, signatoryType } = req.body;
+			const userRole = req.user?.role;
+
+			// Validate required fields
+			if (!applicationId || !pin || !signatoryType) {
+				return res.status(400).json({
+					success: false,
+					message: "Missing required fields"
+				});
+			}
+
+			// Validate PIN format (8 digits)
+			if (!/^\d{8}$/.test(pin)) {
+				return res.status(400).json({
+					success: false,
+					message: "PIN must be exactly 8 digits"
+				});
+			}
+
+			// ATTESTOR users can only sign as WITNESS
+			if (userRole === "ATTESTOR" && signatoryType !== "WITNESS") {
+				return res.status(403).json({
+					success: false,
+					message: "ATTESTOR users can only sign as witness"
+				});
+			}
+
+			// Get application and loan details
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: {
+						include: {
+							signatories: true
+						}
+					}
+				}
+			});
+
+			if (!application || !application.loan) {
+				return res.status(404).json({
+					success: false,
+					message: "Application or loan not found"
+				});
+			}
+
+			// Find the signatory by type (since we don't have signatoryId anymore)
+			const signatory = await prisma.loanSignatory.findFirst({
+				where: { 
+					loanId: application.loan.id,
+					signatoryType: signatoryType
+				}
+			});
+
+			if (!signatory) {
+				return res.status(404).json({
+					success: false,
+					message: `${signatoryType} signatory not found`
+				});
+			}
+
+			// Check if already signed
+			if (signatory.status === "SIGNED") {
+				return res.status(400).json({
+					success: false,
+					message: "Document already signed by this party"
+				});
+			}
+
+			// TODO: Validate PIN against stored PIN/credentials (implement your PIN validation logic here)
+			// For now, we'll assume PIN validation passes
+			console.log(`PIN signing attempt for ${signatoryType} with PIN: ${pin}`);
+
+			// Call signing orchestrator for PKI signing
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.kredit.my';
+			
+			// Get the IC number and full name of the currently logged-in admin user
+			const adminUserId = req.user?.userId;
+			const adminUser = await prisma.user.findUnique({
+				where: { id: adminUserId },
+				select: { icNumber: true, idNumber: true, fullName: true }
+			});
+
+			if (!adminUser) {
+				return res.status(404).json({
+					success: false,
+					message: "Admin user not found"
+				});
+			}
+
+			const adminIcNumber = adminUser.icNumber || adminUser.idNumber;
+			if (!adminIcNumber) {
+				return res.status(400).json({
+					success: false,
+					message: "Admin user IC number not found. Please update your profile."
+				});
+			}
+
+			// Use admin user's IC number and name for signing
+			const userInfo = {
+				userId: adminIcNumber, // Admin user's IC number for MTSA
+				fullName: adminUser.fullName || `${signatoryType} Representative`,
+				vpsUserId: `${signatoryType}_${application.loan.id}` // Unique identifier for database
+			};
+
+			try {
+				const orchestratorResponse = await fetch(`${orchestratorUrl}/api/pki/sign-pdf-pin`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+					},
+					body: JSON.stringify({
+						userId: userInfo?.userId || `${signatoryType}_DEFAULT`, // IC number for MTSA
+						vpsUserId: userInfo?.vpsUserId || `${signatoryType}_${applicationId}`, // Unique identifier for database
+						pin: pin, // PIN instead of OTP
+						submissionId: application.loan.docusealSubmissionId,
+						applicationId: applicationId,
+						docusealSubmitterId: signatory.docusealSubmitterId,
+						userFullName: userInfo?.fullName || `${signatoryType} Representative`,
+						signatoryType: signatoryType
+					})
+				});
+
+				const orchestratorResult = await orchestratorResponse.json();
+
+				if (!orchestratorResult.success) {
+					return res.status(400).json({
+						success: false,
+						message: orchestratorResult.message || 'PKI signing failed',
+						error: orchestratorResult.error || 'Unknown error from signing orchestrator'
+					});
+				}
+
+				console.log(`PKI signing successful for ${signatoryType} - updating database`);
+
+			} catch (orchestratorError) {
+				console.error("Error calling signing orchestrator:", orchestratorError);
+				return res.status(500).json({
+					success: false,
+					message: "Failed to complete PKI signing",
+					error: orchestratorError instanceof Error ? orchestratorError.message : "Unknown orchestrator error"
+				});
+			}
+
+			// Update signatory status to SIGNED (only after successful PKI signing)
+			await prisma.loanSignatory.update({
+				where: { id: signatory.id },
+				data: {
+					status: "SIGNED",
+					signedAt: new Date()
+				}
+			});
+
+			// Add audit trail entry for PIN-based PKI signing completion
+			try {
+				const roleDisplayName = signatoryType === 'COMPANY' ? 'Company' : 'Witness';
+				await prisma.loanApplicationHistory.create({
+					data: {
+						applicationId: applicationId,
+						previousStatus: 'PENDING_PKI_SIGNING',
+						newStatus: 'PENDING_PKI_SIGNING', // Keep same status until all parties sign
+						changedBy: 'ADMIN_PKI_SIGNING',
+						changeReason: `${roleDisplayName} completed PKI signing via PIN`,
+						notes: `${roleDisplayName} completed PKI digital signing using PIN method. Signed by admin user.`,
+						metadata: {
+							loanId: application.loan.id,
+							signatoryType: signatoryType,
+							signedAt: new Date().toISOString(),
+							pkiSigningMethod: 'admin_pin_signing',
+							adminUserId: req.user?.userId,
+							adminUserName: adminUser?.fullName || 'Unknown Admin',
+							docusealSubmissionId: application.loan.docusealSubmissionId
+						}
+					}
+				});
+				console.log(`✅ Audit trail entry created for ${signatoryType} PIN-based PKI signing completion`);
+			} catch (auditError) {
+				console.error('❌ Failed to create audit trail entry for PIN-based PKI signing:', auditError);
+				// Don't fail the main operation for audit trail issues
+			}
+
+			// Check if all parties have signed
+			const allSignatories = await prisma.loanSignatory.findMany({
+				where: { loanId: application.loan.id }
+			});
+
+			const allSigned = allSignatories.every(sig => sig.status === "SIGNED");
+
+			// If all parties have signed, update loan and application status to ACTIVE
+			if (allSigned) {
+				await prisma.$transaction([
+					// Update loan status to ACTIVE
+					prisma.loan.update({
+						where: { id: application.loan.id },
+						data: { 
+							status: "ACTIVE",
+							updatedAt: new Date()
+						}
+					}),
+					// Update loan application status to ACTIVE
+					prisma.loanApplication.update({
+						where: { id: applicationId },
+						data: { 
+							status: "ACTIVE",
+							updatedAt: new Date()
+						}
+					})
+				]);
+
+				// Add audit trail entry for loan activation after all signatures completed
+				try {
+					await prisma.loanApplicationHistory.create({
+						data: {
+							applicationId: applicationId,
+							previousStatus: 'PENDING_PKI_SIGNING',
+							newStatus: 'ACTIVE',
+							changedBy: 'SYSTEM_PKI_COMPLETE',
+							changeReason: 'All parties completed PKI signing - loan activated',
+							notes: `All required parties (Borrower, Company, and Witness) have completed PKI digital signing. Loan and application status updated to ACTIVE.`,
+							metadata: {
+								loanId: application.loan.id,
+								completedAt: new Date().toISOString(),
+								allSignatoriesCount: allSignatories.length,
+								finalSignatoryType: signatoryType,
+								docusealSubmissionId: application.loan.docusealSubmissionId
+							}
+						}
+					});
+					console.log('✅ Audit trail entry created for loan activation after all PKI signatures completed');
+				} catch (auditError) {
+					console.error('❌ Failed to create audit trail entry for loan activation:', auditError);
+					// Don't fail the main operation for audit trail issues
+				}
+
+				console.log(`All parties signed - Loan ${application.loan.id} and Application ${applicationId} set to ACTIVE`);
+			}
+
+			return res.json({
+				success: true,
+				message: `Document signed successfully as ${signatoryType}`,
+				allSigned,
+				newStatus: allSigned ? "ACTIVE" : application.status
+			});
+
+		} catch (error) {
+			console.error("Error in PIN signing:", error);
+			return res.status(500).json({
+				success: false,
+				message: "Failed to sign document",
+				error: error instanceof Error ? error.message : "Unknown error"
+			});
+		}
+	}
+);
 
 export default router;
