@@ -10933,4 +10933,109 @@ router.post(
 	}
 );
 
+// Health check endpoint for on-prem services
+router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (req: AuthRequest, res: Response) => {
+	try {
+		console.log('🔍 Health check endpoint called by:', req.user?.userId);
+
+		const healthStatus = {
+			timestamp: new Date().toISOString(),
+			services: {
+				docuseal: { status: 'unknown' as const, url: '', responseTime: 0, error: null as string | null },
+				signingOrchestrator: { status: 'unknown' as const, url: '', responseTime: 0, error: null as string | null },
+				mtsa: { status: 'unknown' as const, url: '', responseTime: 0, error: null as string | null }
+			},
+			overall: 'checking' as const
+		};
+
+		// Define service URLs - these are configurable based on environment
+		const isProduction = process.env.NODE_ENV === 'production';
+		const baseHost = isProduction ? 'sign.kredit.my' : 'host.docker.internal';
+		
+		const services = [
+			{
+				name: 'docuseal',
+				url: `${isProduction ? 'https' : 'http'}://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
+				timeout: 5000
+			},
+			{
+				name: 'signingOrchestrator', 
+				url: `${isProduction ? 'https' : 'http'}://${baseHost}:4010/health`,
+				timeout: 5000
+			},
+			{
+				name: 'mtsa',
+				url: `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
+				timeout: 5000
+			}
+		];
+
+		// Check each service health
+		const healthChecks = services.map(async (service) => {
+			const startTime = Date.now();
+			try {
+				const controller = new AbortController();
+				const timeoutId = setTimeout(() => controller.abort(), service.timeout);
+
+				const response = await fetch(service.url, {
+					method: 'GET',
+					signal: controller.signal,
+					headers: {
+						'User-Agent': 'Kredit-HealthCheck/1.0',
+						'Accept': 'application/json, text/plain, */*'
+					}
+				});
+
+				clearTimeout(timeoutId);
+				const responseTime = Date.now() - startTime;
+
+				(healthStatus.services as any)[service.name] = {
+					status: response.ok ? 'healthy' : 'unhealthy',
+					url: service.url,
+					responseTime,
+					error: response.ok ? null : `HTTP ${response.status}: ${response.statusText}`
+				};
+
+			} catch (error: any) {
+				const responseTime = Date.now() - startTime;
+				(healthStatus.services as any)[service.name] = {
+					status: 'unreachable',
+					url: service.url,
+					responseTime,
+					error: error.name === 'AbortError' ? 'Request timeout' : error.message
+				};
+			}
+		});
+
+		// Wait for all health checks to complete
+		await Promise.all(healthChecks);
+
+		// Determine overall status
+		const statuses = Object.values(healthStatus.services).map(s => s.status as string);
+		if (statuses.every(status => status === 'healthy')) {
+			(healthStatus as any).overall = 'healthy';
+		} else if (statuses.some(status => status === 'healthy')) {
+			(healthStatus as any).overall = 'degraded';
+		} else {
+			(healthStatus as any).overall = 'unhealthy';
+		}
+
+		console.log('✅ Health check completed:', healthStatus.overall);
+		res.json(healthStatus);
+
+	} catch (error) {
+		console.error('❌ Health check endpoint error:', error);
+		res.status(500).json({
+			timestamp: new Date().toISOString(),
+			services: {
+				docuseal: { status: 'error', url: '', responseTime: 0, error: 'Internal server error' },
+				signingOrchestrator: { status: 'error', url: '', responseTime: 0, error: 'Internal server error' },
+				mtsa: { status: 'error', url: '', responseTime: 0, error: 'Internal server error' }
+			},
+			overall: 'error',
+			error: error instanceof Error ? error.message : 'Unknown error'
+		});
+	}
+});
+
 export default router;

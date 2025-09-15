@@ -163,17 +163,11 @@ volumes:
   
   agreements-postgres-data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${AGREEMENTS_DB_HOST_DIR:-./data/postgres}
+    # Use named volume instead of bind mount to prevent data loss on rebuild
   
   agreements-postgres-logs:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${AGREEMENTS_LOGS_HOST_DIR:-./logs/postgres}
+    # Use named volume instead of bind mount to prevent data loss on rebuild
   
   # MTSA volumes managed separately
 

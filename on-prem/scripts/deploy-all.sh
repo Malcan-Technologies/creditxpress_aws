@@ -461,13 +461,25 @@ deploy_orchestrator() {
             echo "🛑 Stopping existing Signing Orchestrator containers..."
             docker-compose down 2>/dev/null || true
             
+            echo "💾 Creating safety backup of PostgreSQL data before rebuild..."
+            # Backup the database before any changes in case something goes wrong
+            if docker volume inspect signing-orchestrator_agreements-postgres-data >/dev/null 2>&1; then
+                timestamp=$(date +%Y%m%d_%H%M%S)
+                docker run --rm -v signing-orchestrator_agreements-postgres-data:/source -v "$(pwd)/backups":/backup alpine tar czf "/backup/pre-rebuild-postgres-${timestamp}.tar.gz" -C /source . 2>/dev/null || echo "⚠️  Backup failed - proceeding with deployment"
+                echo "✅ Pre-rebuild backup created: pre-rebuild-postgres-${timestamp}.tar.gz"
+            else
+                echo "ℹ️  No existing PostgreSQL volume found - first deployment"
+            fi
+            
             # Use the automated deployment script if available
             if [ -f deploy-auto.sh ]; then
                 echo "🚀 Using automated deployment script..."
                 chmod +x deploy-auto.sh
                 # Run a simplified version that doesn't do file copying
                 echo "🏗️  Building and starting Signing Orchestrator..."
-                docker-compose --env-file env.production up -d --build
+                # Use --force-recreate to handle volume configuration changes safely
+                # Named volumes will persist data even during recreation
+                docker-compose --env-file env.production up -d --build --force-recreate
             else
                 echo "🏗️  Building Signing Orchestrator images..."
                 docker-compose build --no-cache

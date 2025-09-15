@@ -29,6 +29,8 @@ import {
 	ClipboardDocumentCheckIcon,
 	UserCircleIcon,
 	ArrowPathIcon,
+	SignalIcon,
+	ServerIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh, checkAdminAuth } from "../../lib/authUtils";
 import Link from "next/link";
@@ -183,6 +185,24 @@ interface DashboardStats {
 	}[];
 }
 
+interface HealthStatus {
+	timestamp: string;
+	services: {
+		docuseal: ServiceHealth;
+		signingOrchestrator: ServiceHealth;
+		mtsa: ServiceHealth;
+	};
+	overall: 'healthy' | 'degraded' | 'unhealthy' | 'checking' | 'error';
+	error?: string;
+}
+
+interface ServiceHealth {
+	status: 'healthy' | 'unhealthy' | 'unreachable' | 'error' | 'unknown';
+	url: string;
+	responseTime: number;
+	error: string | null;
+}
+
 export default function AdminDashboardPage() {
 	const [stats, setStats] = useState<DashboardStats>({
 		totalUsers: 0,
@@ -223,6 +243,8 @@ export default function AdminDashboardPage() {
 		PENDING_WITNESS_SIGNATURE: 0,
 	});
 	const [refreshing, setRefreshing] = useState(false);
+	const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
+	const [healthLoading, setHealthLoading] = useState(false);
 
 	const fetchDashboardData = async () => {
 		console.log('🔍 fetchDashboardData - Starting with userRole:', userRole);
@@ -704,10 +726,37 @@ export default function AdminDashboardPage() {
 		}
 	};
 
+	const fetchHealthStatus = async () => {
+		setHealthLoading(true);
+		try {
+			const response = await fetchWithAdminTokenRefresh<HealthStatus>(
+				"/api/admin/health-check"
+			);
+			setHealthStatus(response);
+		} catch (error) {
+			console.error("Error fetching health status:", error);
+			setHealthStatus({
+				timestamp: new Date().toISOString(),
+				services: {
+					docuseal: { status: 'error', url: '', responseTime: 0, error: 'Failed to fetch' },
+					signingOrchestrator: { status: 'error', url: '', responseTime: 0, error: 'Failed to fetch' },
+					mtsa: { status: 'error', url: '', responseTime: 0, error: 'Failed to fetch' }
+				},
+				overall: 'error',
+				error: 'Failed to fetch health status'
+			});
+		} finally {
+			setHealthLoading(false);
+		}
+	};
+
 	const handleRefresh = async () => {
 		setRefreshing(true);
 		try {
-			await fetchDashboardData();
+			await Promise.all([
+				fetchDashboardData(),
+				fetchHealthStatus()
+			]);
 		} catch (error) {
 			console.error("Error refreshing dashboard data:", error);
 		} finally {
@@ -719,7 +768,10 @@ export default function AdminDashboardPage() {
 		const initialLoad = async () => {
 			setLoading(true);
 			try {
-				await fetchDashboardData();
+				await Promise.all([
+					fetchDashboardData(),
+					fetchHealthStatus()
+				]);
 			} catch (error) {
 				console.error("Error loading dashboard:", error);
 			} finally {
@@ -855,6 +907,53 @@ export default function AdminDashboardPage() {
 		return viewMode === 'monthly' ? 'MoM Growth' : 'DoD Growth';
 	};
 
+	const getHealthStatusColor = (status: string) => {
+		switch (status) {
+			case 'healthy':
+				return 'text-green-400';
+			case 'degraded':
+				return 'text-yellow-400';
+			case 'unhealthy':
+			case 'unreachable':
+				return 'text-red-400';
+			case 'checking':
+				return 'text-blue-400';
+			case 'error':
+			default:
+				return 'text-gray-400';
+		}
+	};
+
+	const getHealthStatusIcon = (status: string) => {
+		switch (status) {
+			case 'healthy':
+				return <CheckCircleIcon className="h-4 w-4" />;
+			case 'degraded':
+				return <ExclamationTriangleIcon className="h-4 w-4" />;
+			case 'unhealthy':
+			case 'unreachable':
+				return <XCircleIcon className="h-4 w-4" />;
+			case 'checking':
+				return <ArrowPathIcon className="h-4 w-4 animate-spin" />;
+			case 'error':
+			default:
+				return <ServerIcon className="h-4 w-4" />;
+		}
+	};
+
+	const getServiceDisplayName = (serviceName: string) => {
+		switch (serviceName) {
+			case 'docuseal':
+				return 'DocuSeal';
+			case 'signingOrchestrator':
+				return 'Signing Orchestrator';
+			case 'mtsa':
+				return 'MTSA';
+			default:
+				return serviceName;
+		}
+	};
+
 	if (loading) {
 		return (
 			<AdminLayout
@@ -875,6 +974,88 @@ export default function AdminDashboardPage() {
 			title="Dashboard"
 			description="Overview of your platform's performance"
 		>
+			{/* On-Prem Health Status - Minimal UI */}
+			<div className="mb-8">
+				<div className="flex items-center justify-between mb-4">
+					<h2 className="text-lg font-medium text-white flex items-center">
+						<SignalIcon className="h-6 w-6 mr-2 text-blue-400" />
+						On-Premises Status
+					</h2>
+					<button
+						onClick={fetchHealthStatus}
+						disabled={healthLoading}
+						className="flex items-center gap-2 px-3 py-1 bg-gray-800/50 border border-gray-700/50 rounded-lg hover:bg-gray-700/50 transition-colors disabled:opacity-50"
+					>
+						<ArrowPathIcon className={`h-4 w-4 text-gray-300 ${healthLoading ? 'animate-spin' : ''}`} />
+						<span className="text-sm text-gray-300">Check</span>
+					</button>
+				</div>
+				
+				<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg p-4">
+					{healthStatus ? (
+						<>
+							{/* Overall Status */}
+							<div className="flex items-center justify-between mb-4">
+								<div className="flex items-center gap-2">
+									<div className={`${getHealthStatusColor(healthStatus.overall)}`}>
+										{getHealthStatusIcon(healthStatus.overall)}
+									</div>
+									<span className={`text-sm font-medium ${getHealthStatusColor(healthStatus.overall)}`}>
+										{healthStatus.overall.charAt(0).toUpperCase() + healthStatus.overall.slice(1)}
+									</span>
+								</div>
+								<span className="text-xs text-gray-500">
+									Last checked: {new Date(healthStatus.timestamp).toLocaleTimeString()}
+								</span>
+							</div>
+
+							{/* Services Grid */}
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+								{Object.entries(healthStatus.services).map(([serviceName, service]) => (
+									<div 
+										key={serviceName}
+										className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700/30"
+									>
+										<div className="flex items-center gap-2">
+											<div className={`${getHealthStatusColor(service.status)}`}>
+												{getHealthStatusIcon(service.status)}
+											</div>
+											<span className="text-sm text-gray-300">
+												{getServiceDisplayName(serviceName)}
+											</span>
+										</div>
+										<div className="text-right">
+											<div className={`text-xs font-medium ${getHealthStatusColor(service.status)}`}>
+												{service.status.charAt(0).toUpperCase() + service.status.slice(1)}
+											</div>
+											{service.responseTime > 0 && (
+												<div className="text-xs text-gray-500">
+													{service.responseTime}ms
+												</div>
+											)}
+										</div>
+									</div>
+								))}
+							</div>
+
+							{/* Error Details */}
+							{healthStatus.overall === 'error' && healthStatus.error && (
+								<div className="mt-3 p-3 bg-red-900/20 border border-red-800/30 rounded-lg">
+									<p className="text-xs text-red-400">{healthStatus.error}</p>
+								</div>
+							)}
+						</>
+					) : (
+						<div className="flex items-center justify-center py-4">
+							<div className="flex items-center gap-2 text-gray-400">
+								<ArrowPathIcon className="h-4 w-4 animate-spin" />
+								<span className="text-sm">Loading health status...</span>
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
+
 			{/* Quick Actions */}
 			<div className="mb-8">
 				<div className="flex items-center justify-between mb-5">
