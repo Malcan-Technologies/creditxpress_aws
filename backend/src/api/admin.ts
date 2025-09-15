@@ -10955,17 +10955,17 @@ router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (re
 		const services = [
 			{
 				name: 'docuseal',
-				url: `${isProduction ? 'https' : 'http'}://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
+				url: isProduction ? 'https://sign.kredit.my/' : `http://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
 				timeout: 5000
 			},
 			{
 				name: 'signingOrchestrator', 
-				url: `${isProduction ? 'https' : 'http'}://${baseHost}:4010/health`,
+				url: isProduction ? 'https://sign.kredit.my/orchestrator/health' : `http://${baseHost}:4010/health`,
 				timeout: 5000
 			},
 			{
 				name: 'mtsa',
-				url: `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
+				url: isProduction ? 'https://sign.kredit.my/mtsa/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
 				timeout: 5000
 			}
 		];
