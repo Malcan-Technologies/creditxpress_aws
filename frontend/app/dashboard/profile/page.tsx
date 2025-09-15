@@ -24,6 +24,7 @@ import {
 	AcademicCapIcon,
 	PencilIcon,
 	EyeSlashIcon,
+	InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithTokenRefresh, checkAuth, TokenStorage } from "@/lib/authUtils";
 import { validatePhoneNumber } from "@/lib/phoneUtils";
@@ -37,6 +38,7 @@ import {
 	validateEmergencyContactPhone 
 } from "@/lib/icUtils";
 import { checkProfileCompleteness } from "@/lib/profileUtils";
+import * as Tooltip from "@radix-ui/react-tooltip";
 
 interface UserProfile {
 	id: string;
@@ -174,6 +176,13 @@ export default function ProfilePage() {
 	const [phoneChangeToken, setPhoneChangeToken] = useState("");
 	const [phoneChangeError, setPhoneChangeError] = useState("");
 	const [phoneChangeLoading, setPhoneChangeLoading] = useState(false);
+
+	// Tooltip state
+	const [openTooltip, setOpenTooltip] = useState<string | null>(null);
+
+	const handleTooltipClick = (tooltipId: string) => {
+		setOpenTooltip(openTooltip === tooltipId ? null : tooltipId);
+	};
 
 
 	const fetchDocuments = async () => {
@@ -678,66 +687,87 @@ export default function ProfilePage() {
 							<div className="p-6 lg:p-8">
 								<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
 									<div className="flex items-center">
-										<div className="w-16 h-16 lg:w-20 lg:h-20 bg-purple-primary/10 rounded-xl lg:rounded-2xl flex items-center justify-center mr-4 border border-purple-primary/20">
-											<UserCircleIcon className="h-10 w-10 lg:h-12 lg:w-12 text-purple-primary" />
-										</div>
 										<div>
-											<div className="flex items-center space-x-3 mb-1">
+											<div className="mb-1">
 												<h1 className="text-2xl lg:text-3xl font-heading font-bold text-gray-700">
 													{profile?.fullName || "User Profile"}
 												</h1>
-												
+											</div>
+											
+											{/* Phone Number Section */}
+											<div className="flex items-center space-x-3 mb-3">
+												<p className="text-sm lg:text-base text-purple-primary font-semibold">
+													{profile?.phoneNumber}
+												</p>
+												<button
+													onClick={handleStartPhoneChange}
+													className="text-xs px-3 py-1.5 bg-purple-primary/10 hover:bg-purple-primary/20 text-purple-primary rounded-lg transition-all duration-200 font-medium border border-purple-primary/20 hover:border-purple-primary/30"
+												>
+													Change
+												</button>
+											</div>
+
+											{/* Status Bar */}
+											<div className="flex flex-wrap items-center gap-2 sm:gap-3">
+												{/* Profile Completion Badge */}
+												<span
+													className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold font-body ${
+														profileStatus.isComplete
+															? "bg-green-100 text-green-700 border border-green-200"
+															: "bg-amber-100 text-amber-700 border border-amber-200"
+													}`}
+												>
+													<span
+														className={`h-2 w-2 mr-1.5 rounded-full ${
+															profileStatus.isComplete ? "bg-green-500" : "bg-amber-500"
+														}`}
+													></span>
+													{profileStatus.isComplete ? "Profile Complete" : `Profile ${profileStatus.completionPercentage}% Complete`}
+												</span>
+
 												{/* Certificate Status Badge */}
 												{profile?.icNumber && (
-													<div className="flex items-center space-x-2">
+													<span
+														className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold font-body ${
+															certificateStatus.loading
+																? "bg-gray-100 text-gray-600 border border-gray-200"
+																: certificateStatus.hasValidCert
+																? certificateStatus.nameMatches
+																	? "bg-green-100 text-green-700 border border-green-200"
+																	: "bg-amber-100 text-amber-700 border border-amber-200"
+																: "bg-gray-100 text-gray-600 border border-gray-200"
+														}`}
+													>
 														{certificateStatus.loading ? (
-															<div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-primary"></div>
-														) : certificateStatus.hasValidCert ? (
-															certificateStatus.nameMatches ? (
-																<span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
-																	<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-																		<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-																	</svg>
-																	Certificate Ready
-																</span>
-															) : (
-																<span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-																	<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-																		<path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-																	</svg>
-																	Name Mismatch
-																</span>
-															)
+															<>
+																<div className="animate-spin rounded-full h-2 w-2 border border-purple-primary border-t-transparent mr-1.5"></div>
+																Checking...
+															</>
 														) : (
-															<span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
-																<svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-																	<path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-																</svg>
-																No Certificate
-															</span>
+															<>
+																<span
+																	className={`h-2 w-2 mr-1.5 rounded-full ${
+																		certificateStatus.hasValidCert
+																			? certificateStatus.nameMatches
+																				? "bg-green-500"
+																				: "bg-amber-500"
+																			: "bg-gray-500"
+																	}`}
+																></span>
+																{certificateStatus.hasValidCert
+																	? certificateStatus.nameMatches
+																		? "Cert Ready"
+																		: "Name Mismatch"
+																	: "No Certificate"}
+															</>
 														)}
-													</div>
+													</span>
 												)}
 											</div>
-									<div className="flex items-center space-x-3">
-										<p className="text-sm lg:text-base text-purple-primary font-semibold">
-											{profile?.phoneNumber}
-										</p>
-									<button
-										onClick={handleStartPhoneChange}
-										className="text-xs px-3 py-1.5 bg-purple-primary/10 hover:bg-purple-primary/20 text-purple-primary rounded-lg transition-all duration-200 font-medium border border-purple-primary/20 hover:border-purple-primary/30"
-									>
-										Change
-									</button>
-								</div>
 										</div>
 									</div>
 									<div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
 										<div className="flex flex-col space-y-3">
-											<div className="flex items-center space-x-3">
-												{renderBadge(profileStatus.isComplete, profileStatus.isComplete ? "Profile Complete" : `Profile ${profileStatus.completionPercentage}% Complete`)}
-											</div>
-                        {/* KYC button moved next to Update Profile button */}
 											{!profileStatus.isComplete && profileStatus.missing.length > 0 && (
 												<div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
 													<p className="text-sm font-medium text-amber-800 font-body mb-1">
@@ -871,7 +901,7 @@ export default function ProfilePage() {
 
 								{/* IC/Passport Display */}
 								<div className="pt-6">
-									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">IC/Passport & Digital Certificate</h4>
+									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Digital Identity</h4>
 									<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 										{/* IC/Passport Information */}
 										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -879,7 +909,7 @@ export default function ProfilePage() {
 												<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
 												<div className="min-w-0 flex-1">
 													<label className="block text-sm font-medium text-gray-500 font-body">
-														IC/Passport Number
+														IC Number
 													</label>
 													<div className="mt-1 space-y-1">
 														{profile?.icNumber ? (
@@ -906,9 +936,33 @@ export default function ProfilePage() {
 											<div className="flex items-center space-x-3">
 												<ShieldCheckIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
 												<div className="min-w-0 flex-1">
-													<label className="block text-sm font-medium text-gray-500 font-body">
-														Digital Certificate
-													</label>
+													<div className="flex items-center gap-1">
+														<label className="block text-sm font-medium text-gray-500 font-body">
+															Signing Certificate
+														</label>
+														<Tooltip.Provider>
+															<Tooltip.Root
+																open={openTooltip === "signing-certificate"}
+																onOpenChange={() => handleTooltipClick("signing-certificate")}
+															>
+																<Tooltip.Trigger asChild>
+																	<InformationCircleIcon
+																		className="h-4 w-4 text-gray-400 cursor-pointer hover:text-gray-600 transition-colors"
+																		onClick={() => handleTooltipClick("signing-certificate")}
+																	/>
+																</Tooltip.Trigger>
+																<Tooltip.Portal>
+																	<Tooltip.Content
+																		className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs z-50"
+																		sideOffset={5}
+																	>
+																		A digital certificate obtained after completing KYC verification. This certificate allows you to digitally sign loan agreements and other documents securely.
+																		<Tooltip.Arrow className="fill-gray-800" />
+																	</Tooltip.Content>
+																</Tooltip.Portal>
+															</Tooltip.Root>
+														</Tooltip.Provider>
+													</div>
 													<div className="mt-1 space-y-1">
 														{profile?.icNumber && certificateStatus.hasValidCert && certificateStatus.certificateData ? (
 															<>
@@ -936,7 +990,7 @@ export default function ProfilePage() {
 															)
 														) : (
 															<p className="text-base text-gray-500 font-body italic">
-																IC/Passport required
+																IC required
 															</p>
 														)}
 													</div>
