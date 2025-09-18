@@ -58,6 +58,8 @@ interface DashboardStats {
 	approvedLoans: number;
 	pendingDisbursementCount?: number;
 	disbursedLoans: number;
+	potentialDefaultLoansCount?: number;
+	defaultedLoansCount?: number;
 	totalDisbursedAmount: number;
 	totalLoanValue?: number;
 	currentLoanValue?: number;
@@ -241,6 +243,8 @@ export default function AdminDashboardPage() {
 		PENDING_SIGNATURE: 0,
 		PENDING_COMPANY_SIGNATURE: 0,
 		PENDING_WITNESS_SIGNATURE: 0,
+		POTENTIAL_DEFAULT_LOANS: 0,
+		DEFAULTED_LOANS: 0,
 	});
 	const [refreshing, setRefreshing] = useState(false);
 	const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
@@ -683,6 +687,8 @@ export default function AdminDashboardPage() {
 					PENDING_SIGNATURE: pendingCompanySignatureCount + pendingWitnessSignatureCount, // Combined count
 					PENDING_COMPANY_SIGNATURE: pendingCompanySignatureCount,
 					PENDING_WITNESS_SIGNATURE: pendingWitnessSignatureCount,
+					POTENTIAL_DEFAULT_LOANS: data.potentialDefaultLoansCount || 0,
+					DEFAULTED_LOANS: data.defaultedLoansCount || 0,
 				});
 
 				// Update the status breakdown with workflow counts
@@ -719,6 +725,8 @@ export default function AdminDashboardPage() {
 					PENDING_SIGNATURE: 0,
 					PENDING_COMPANY_SIGNATURE: 0,
 					PENDING_WITNESS_SIGNATURE: 0,
+					POTENTIAL_DEFAULT_LOANS: data.potentialDefaultLoansCount || 0,
+					DEFAULTED_LOANS: data.defaultedLoansCount || 0,
 				});
 			}
 		} catch (error) {
@@ -1317,6 +1325,76 @@ export default function AdminDashboardPage() {
 							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 						</div>
 					</Link>
+
+					{/* Default Risk Loans - ADMIN only */}
+					{userRole === "ADMIN" && (
+					<Link
+						href="/dashboard/loans?filter=potential_default"
+						className="group bg-gradient-to-br from-amber-600/20 to-amber-800/20 backdrop-blur-md border border-amber-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-amber-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-amber-500/30 rounded-lg">
+								<ExclamationTriangleIcon className="h-6 w-6 text-amber-300" />
+							</div>
+							{workflowCounts.POTENTIAL_DEFAULT_LOANS > 0 && (
+								<span className="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.POTENTIAL_DEFAULT_LOANS
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Default Risk Loans
+						</h3>
+						<p className="text-sm text-amber-200 mb-3">
+							{workflowCounts.POTENTIAL_DEFAULT_LOANS > 0
+								? `${formatNumber(
+										workflowCounts.POTENTIAL_DEFAULT_LOANS
+								  )} loans at risk`
+								: "No loans at default risk"}
+						</p>
+						<div className="flex items-center text-amber-300 text-sm font-medium group-hover:text-amber-200">
+							Review now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+					)}
+
+					{/* Defaulted Loans - ADMIN only */}
+					{userRole === "ADMIN" && (
+					<Link
+						href="/dashboard/loans?filter=defaulted"
+						className="group bg-gradient-to-br from-red-600/20 to-red-800/20 backdrop-blur-md border border-red-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-red-400/50"
+					>
+						<div className="flex items-center justify-between mb-3">
+							<div className="p-2 bg-red-500/30 rounded-lg">
+								<XCircleIcon className="h-6 w-6 text-red-300" />
+							</div>
+							{workflowCounts.DEFAULTED_LOANS > 0 && (
+								<span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+									{formatNumber(
+										workflowCounts.DEFAULTED_LOANS
+									)}
+								</span>
+							)}
+						</div>
+						<h3 className="text-white font-medium mb-1">
+							Defaulted Loans
+						</h3>
+						<p className="text-sm text-red-200 mb-3">
+							{workflowCounts.DEFAULTED_LOANS > 0
+								? `${formatNumber(
+										workflowCounts.DEFAULTED_LOANS
+								  )} loans defaulted`
+								: "No defaulted loans"}
+						</p>
+						<div className="flex items-center text-red-300 text-sm font-medium group-hover:text-red-200">
+							Manage now
+							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+						</div>
+					</Link>
+					)}
 
 				</div>
 			</div>

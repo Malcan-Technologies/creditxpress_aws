@@ -261,17 +261,74 @@ export async function calculateOutstandingBalance(loanId: string, tx: any) {
 	console.log(`Outstanding balance: ${finalOutstandingBalance}`);
 
 	// Check if loan should be marked as PENDING_DISCHARGE
-	if (loan.status === "ACTIVE" && finalOutstandingBalance === 0) {
+	if ((loan.status === "ACTIVE" || loan.status === "DEFAULT") && finalOutstandingBalance === 0) {
 		console.log(
-			`🎯 Loan ${loanId} fully paid - updating status to PENDING_DISCHARGE`
+			`🎯 Loan ${loanId} fully paid - updating status to PENDING_DISCHARGE and clearing default flags`
 		);
+		
+		// Check if we're clearing default flags to create audit trail
+		const clearingDefaultFlags = loan.defaultRiskFlaggedAt || loan.defaultedAt || loan.status === "DEFAULT";
+		
 		await tx.loan.update({
 			where: { id: loanId },
 			data: {
 				status: "PENDING_DISCHARGE",
 				outstandingBalance: finalOutstandingBalance,
+				// Clear default flags when loan is fully paid
+				defaultRiskFlaggedAt: null,
+				defaultedAt: null,
 			},
 		});
+
+		// Create audit trail entry if we cleared default flags
+		if (clearingDefaultFlags) {
+			await tx.loanDefaultLog.create({
+				data: {
+					loanId: loanId,
+					eventType: 'RECOVERED',
+					daysOverdue: 0,
+					outstandingAmount: 0,
+					totalLateFees: 0,
+					noticeType: 'FULL_PAYMENT_RECOVERY',
+					processedAt: new Date(),
+					metadata: {
+						clearedVia: 'FULL_LOAN_PAYMENT',
+						previousStatus: loan.status,
+						previousDefaultRiskFlaggedAt: loan.defaultRiskFlaggedAt,
+						previousDefaultedAt: loan.defaultedAt,
+						newStatus: 'PENDING_DISCHARGE',
+						reason: 'Loan fully paid - moved to pending discharge'
+					}
+				}
+			});
+
+			// Also create audit trail entry in LoanApplicationHistory
+			const loanWithApp = await tx.loan.findUnique({
+				where: { id: loanId },
+				select: { applicationId: true }
+			});
+			
+			if (loanWithApp?.applicationId) {
+				await tx.loanApplicationHistory.create({
+					data: {
+						applicationId: loanWithApp.applicationId,
+						previousStatus: loan.status,
+						newStatus: 'PENDING_DISCHARGE',
+						changedBy: 'SYSTEM',
+						changeReason: 'Default flags cleared after full loan payment',
+						notes: 'Loan fully paid - default risk and default flags cleared, moved to pending discharge.',
+						metadata: {
+							clearedVia: 'FULL_LOAN_PAYMENT',
+							previousDefaultRiskFlaggedAt: loan.defaultRiskFlaggedAt,
+							previousDefaultedAt: loan.defaultedAt,
+							finalOutstandingBalance: finalOutstandingBalance
+						}
+					}
+				});
+			}
+			
+			console.log(`✅ Default flags cleared for loan ${loanId} via full payment - audit trail created`);
+		}
 	} else {
 		// Just update the outstanding balance
 		await tx.loan.update({
@@ -720,13 +777,13 @@ router.post(
 					id: loanId,
 					userId,
 					status: {
-						in: ["ACTIVE", "OVERDUE"],
+						in: ["ACTIVE", "OVERDUE", "DEFAULT"], // Allow DEFAULT loans to make payments
 					},
 				},
 			});
 
 			if (!loan) {
-				return res.status(404).json({ error: "Active loan not found" });
+				return res.status(404).json({ error: "Loan not found or not eligible for payments" });
 			}
 
 					// Import SafeMath utilities for precise calculations

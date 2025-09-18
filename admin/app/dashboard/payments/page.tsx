@@ -161,6 +161,9 @@ function PaymentsContent() {
 	const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
 	const [showMatchingResults, setShowMatchingResults] = useState(false);
 
+	// Default processing states
+	const [defaultProcessing, setDefaultProcessing] = useState(false);
+
 	// Early settlement states
 	const [earlySettlements, setEarlySettlements] = useState<any[]>([]);
 	const [selectedEarlySettlement, setSelectedEarlySettlement] = useState<any>(null);
@@ -678,6 +681,31 @@ function PaymentsContent() {
 		setCSVProcessing(false);
 	};
 
+	// Default processing handler
+	const handleManualDefaultProcessing = async () => {
+		setDefaultProcessing(true);
+		try {
+			const data = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data?: any;
+				message?: string;
+			}>("/api/admin/cron/trigger-default-processing", {
+				method: "POST",
+			});
+
+			if (data.success) {
+				alert(`Default processing completed successfully!\n\nResults:\n${JSON.stringify(data.data, null, 2)}`);
+			} else {
+				throw new Error(data.message || "Failed to trigger default processing");
+			}
+		} catch (error) {
+			console.error("Error triggering default processing:", error);
+			alert(`Failed to trigger default processing: ${error instanceof Error ? error.message : "Unknown error"}`);
+		} finally {
+			setDefaultProcessing(false);
+		}
+	};
+
 	if (loading) {
 		return (
 			<AdminLayout>
@@ -706,6 +734,15 @@ function PaymentsContent() {
 						</p>
 					</div>
 					<div className="flex gap-3">
+						<button
+							onClick={handleManualDefaultProcessing}
+							disabled={defaultProcessing}
+							className="px-4 py-2 bg-amber-500/20 text-amber-200 rounded-lg border border-amber-400/20 hover:bg-amber-500/30 transition-colors flex items-center disabled:opacity-50"
+							title="Manually trigger default processing (28-day and 42-day checks)"
+						>
+							<ExclamationTriangleIcon className={`h-5 w-5 mr-2 ${defaultProcessing ? "animate-pulse" : ""}`} />
+							{defaultProcessing ? "Processing..." : "Process Defaults"}
+						</button>
 						<button
 							onClick={() => setShowCSVModal(true)}
 							className="px-4 py-2 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors flex items-center"

@@ -75,6 +75,8 @@ interface LoanLateFeeCalculation {
 	loanId: string;
 	totalAccruedFees: number;
 	calculationDetails: Record<string, any>;
+	gracePeriodRepayments?: number;
+	totalGracePeriodFees?: number;
 }
 
 export class LateFeeProcessor {
@@ -87,6 +89,8 @@ export class LateFeeProcessor {
 		feesCalculated: number;
 		totalFeeAmount: number;
 		overdueRepayments: number;
+		gracePeriodRepayments?: number;
+		gracePeriodDays?: number;
 		errorMessage?: string;
 		processingTimeMs: number;
 		isManualRun?: boolean;
@@ -95,6 +99,8 @@ export class LateFeeProcessor {
 		let feesCalculated = 0;
 		let totalFeeAmount = 0;
 		let overdueRepaymentsCount = 0;
+		let gracePeriodRepaymentsCount = 0;
+		let gracePeriodDays = 0; // Initialize here for scope
 		let errorMessage: string | undefined;
 
 		// Prevent concurrent processing using database-level lock
@@ -105,6 +111,8 @@ export class LateFeeProcessor {
 				feesCalculated: 0,
 				totalFeeAmount: 0,
 				overdueRepayments: 0,
+				gracePeriodRepayments: 0,
+				gracePeriodDays: 0,
 				errorMessage: "Late fee processing already in progress. Please wait for it to complete.",
 				processingTimeMs: Date.now() - startTime,
 				isManualRun: force,
@@ -113,7 +121,7 @@ export class LateFeeProcessor {
 
 		try {
 			// Get grace period settings once at the start
-			const gracePeriodDays = await getLateFeeGraceSettings();
+			gracePeriodDays = await getLateFeeGraceSettings();
 			logger.info(
 				`Starting late fee processing... ${
 					force ? "(Manual/Force mode)" : "(Automatic mode)"
@@ -144,6 +152,8 @@ export class LateFeeProcessor {
 						feesCalculated: 0,
 						totalFeeAmount: 0,
 						overdueRepayments: 0,
+						gracePeriodRepayments: 0,
+						gracePeriodDays: gracePeriodDays,
 						processingTimeMs: Date.now() - startTime,
 						isManualRun: force,
 					};
@@ -191,38 +201,67 @@ export class LateFeeProcessor {
 						continue; // Skip entire loan if already calculated today
 					}
 
-					// Process all repayments for this loan
-					for (const repayment of loanRepayments) {
-						try {
-							// Calculate late fees for this repayment
-													const repaymentUpdate =
-							await LateFeeProcessor.calculateRepaymentLateFees(
-						repayment,
-						force,
-						gracePeriodDays
-					);
-							
-							if (repaymentUpdate) {
-								repaymentUpdates.push(repaymentUpdate);
-								totalFeeAmount = SafeMath.add(totalFeeAmount, repaymentUpdate.lateFeeAmount);
+			// Initialize loan calculation entry if it doesn't exist
+			if (!loanCalculations.has(loanId)) {
+				loanCalculations.set(loanId, {
+					loanId,
+					totalAccruedFees: 0,
+					calculationDetails: {},
+					gracePeriodRepayments: 0,
+					totalGracePeriodFees: 0
+				});
+			}
+			
+			const loanCalc = loanCalculations.get(loanId)!;
+
+			// Process all repayments for this loan
+			for (const repayment of loanRepayments) {
+				try {
+					// Check if this repayment is in grace period
+					const dueDate = new Date(repayment.due_date);
+					const totalDaysOverdue = TimeUtils.daysOverdue(dueDate);
+					const isInGracePeriod = totalDaysOverdue > 0 && totalDaysOverdue <= gracePeriodDays;
+					
+					if (isInGracePeriod) {
+						gracePeriodRepaymentsCount++;
+						loanCalc.gracePeriodRepayments = (loanCalc.gracePeriodRepayments || 0) + 1;
+						
+						console.log(`⏰ Grace period repayment found: Loan ${loanId}, Repayment ${repayment.id}, ${totalDaysOverdue} days overdue (within ${gracePeriodDays}-day grace period)`);
+						
+						// Calculate what the late fee would be if not in grace period (for tracking)
+						const potentialLateFee = await LateFeeProcessor.calculateRepaymentLateFees(
+							repayment,
+							true, // force mode to calculate even in grace period
+							0 // no grace period for this calculation
+						);
+						if (potentialLateFee) {
+							loanCalc.totalGracePeriodFees = SafeMath.add(
+								loanCalc.totalGracePeriodFees || 0, 
+								potentialLateFee.lateFeeAmount
+							);
+							console.log(`⏰ Potential grace period fee calculated: $${potentialLateFee.lateFeeAmount} for repayment ${repayment.id}`);
+						}
+					}
+
+					// Calculate late fees for this repayment (respecting grace period)
+					const repaymentUpdate =
+						await LateFeeProcessor.calculateRepaymentLateFees(
+							repayment,
+							force,
+							gracePeriodDays
+						);
+					
+					if (repaymentUpdate) {
+						repaymentUpdates.push(repaymentUpdate);
+						totalFeeAmount = SafeMath.add(totalFeeAmount, repaymentUpdate.lateFeeAmount);
 						feesCalculated++;
 
-								// Aggregate by loan for the single late_fees entry
-								if (!loanCalculations.has(loanId)) {
-									loanCalculations.set(loanId, {
-										loanId,
-										totalAccruedFees: 0,
-										calculationDetails: {}
-									});
-								}
-								
-								const loanCalc = loanCalculations.get(loanId)!;
-								loanCalc.totalAccruedFees = SafeMath.add(loanCalc.totalAccruedFees, repaymentUpdate.lateFeeAmount);
-								loanCalc.calculationDetails[repayment.id] = {
-									lateFeeAmount: repaymentUpdate.lateFeeAmount,
-									daysOverdue: repaymentUpdate.daysOverdue,
-									outstandingPrincipal: repaymentUpdate.outstandingPrincipal
-								};
+						loanCalc.totalAccruedFees = SafeMath.add(loanCalc.totalAccruedFees, repaymentUpdate.lateFeeAmount);
+						loanCalc.calculationDetails[repayment.id] = {
+							lateFeeAmount: repaymentUpdate.lateFeeAmount,
+							daysOverdue: repaymentUpdate.daysOverdue,
+							outstandingPrincipal: repaymentUpdate.outstandingPrincipal
+						};
 					}
 				} catch (error) {
 					logger.error(
@@ -242,7 +281,8 @@ export class LateFeeProcessor {
 			}
 
 			// Save all calculations in a transaction
-			if (repaymentUpdates.length > 0) {
+			// Include loans that only have grace period repayments (no actual late fees applied)
+			if (repaymentUpdates.length > 0 || loanCalculations.size > 0) {
 				await LateFeeProcessor.saveLateFees(repaymentUpdates, Array.from(loanCalculations.values()), force, gracePeriodDays);
 				
 				// Update outstanding balances for all affected loans to reflect new late fees
@@ -286,6 +326,8 @@ export class LateFeeProcessor {
 				feesCalculated,
 				totalFeeAmount: SafeMath.round(totalFeeAmount),
 				overdueRepayments: overdueRepaymentsCount,
+				gracePeriodRepayments: gracePeriodRepaymentsCount,
+				gracePeriodDays: gracePeriodDays,
 				processingTimeMs: Date.now() - startTime,
 				isManualRun: force,
 			};
@@ -309,6 +351,8 @@ export class LateFeeProcessor {
 				feesCalculated,
 				totalFeeAmount: SafeMath.round(totalFeeAmount),
 				overdueRepayments: overdueRepaymentsCount,
+				gracePeriodRepayments: gracePeriodRepaymentsCount,
+				gracePeriodDays: gracePeriodDays,
 				errorMessage,
 				processingTimeMs: Date.now() - startTime,
 				isManualRun: force,
@@ -323,7 +367,9 @@ export class LateFeeProcessor {
 	 * Get all overdue repayments with their product configuration
 	 */
 	private static async getOverdueRepaymentsWithProduct() {
-		const today = TimeUtils.malaysiaStartOfDay();
+		// Use current timestamp to catch all payments that are currently overdue
+		// instead of start-of-day which could miss payments that became due in the last hour
+		const now = new Date();
 
 		// Use raw query to get repayments with product late fee configuration
 		const query = `
@@ -341,11 +387,11 @@ export class LateFeeProcessor {
 			JOIN products p ON la."productId" = p.id
 			WHERE lr.status IN ('PENDING', 'PARTIAL')
 			  AND lr."dueDate" < $1
-			  AND l.status = 'ACTIVE'
+			  AND l.status IN ('ACTIVE', 'DEFAULT')
 			ORDER BY l.id, lr."dueDate" ASC
 		`;
 
-		const result = await prisma.$queryRawUnsafe(query, today) as any[];
+		const result = await prisma.$queryRawUnsafe(query, now) as any[];
 		return result;
 	}
 
@@ -502,13 +548,22 @@ export class LateFeeProcessor {
 				const allRepayments = await tx.loanRepayment.findMany({
 					where: { loanId: loanCalc.loanId },
 					select: { 
+						id: true,
 						lateFeeAmount: true,
 						lateFeesPaid: true,
 						principalAmount: true,
 						interestAmount: true,
-						principalPaid: true
+						principalPaid: true,
+						dueDate: true,
+						status: true
 					}
 				});
+
+				// Use grace period information from loan calculations (already calculated in main loop)
+				const gracePeriodRepaymentsCount = loanCalc.gracePeriodRepayments || 0;
+				const totalGracePeriodFees = loanCalc.totalGracePeriodFees || 0;
+				
+				console.log(`💾 Saving late_fees for loan ${loanCalc.loanId}: gracePeriodRepayments=${gracePeriodRepaymentsCount}, totalGracePeriodFees=${totalGracePeriodFees}, totalAccruedFees=${loanCalc.totalAccruedFees}`);
 
 				// Calculate total outstanding late fees for this loan
 				const totalOutstandingLateFees = allRepayments.reduce((total: number, repayment: any) => {
@@ -537,6 +592,9 @@ export class LateFeeProcessor {
 						lastCalculationDate: today,
 						calculationDetails: loanCalc.calculationDetails,
 						status: status,
+						gracePeriodDays: gracePeriodDays,
+						gracePeriodRepayments: gracePeriodRepaymentsCount,
+						totalGracePeriodFees: totalGracePeriodFees,
 						updatedAt: new Date()
 					},
 					create: {
@@ -544,7 +602,10 @@ export class LateFeeProcessor {
 						totalAccruedFees: loanCalc.totalAccruedFees,
 						lastCalculationDate: today,
 						calculationDetails: loanCalc.calculationDetails,
-						status: status
+						status: status,
+						gracePeriodDays: gracePeriodDays,
+						gracePeriodRepayments: gracePeriodRepaymentsCount,
+						totalGracePeriodFees: totalGracePeriodFees
 					}
 				});
 

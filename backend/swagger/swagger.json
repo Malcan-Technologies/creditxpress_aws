@@ -20,6 +20,26 @@
       }
     },
     "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "description": "Error message describing what went wrong",
+            "example": "Validation failed"
+          },
+          "error": {
+            "type": "string",
+            "description": "Technical error details (optional)",
+            "example": "Missing required field: loanId"
+          }
+        },
+        "required": ["success", "message"]
+      },
       "AdminLogin": {
         "type": "object",
         "required": [
@@ -393,6 +413,274 @@
             "type": "string",
             "format": "date-time",
             "description": "When the document was last updated"
+          }
+        }
+      },
+      "EarlySettlementTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "loanId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "requestedAmount": {
+            "type": "number"
+          },
+          "approvedAmount": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "APPROVED", "REJECTED", "COMPLETED"]
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "processedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "processedBy": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "rejectionReason": {
+            "type": "string"
+          }
+        }
+      },
+      "LateFee": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "repaymentId": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "daysOverdue": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "PAID", "WAIVED"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paidAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "waivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "waivedBy": {
+            "type": "string"
+          },
+          "waiverReason": {
+            "type": "string"
+          }
+        }
+      },
+      "PKISession": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "OTP_SENT", "COMPLETED", "FAILED"]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DocuSealSubmission": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "completed", "expired"]
+          },
+          "signUrl": {
+            "type": "string"
+          },
+          "downloadUrl": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CTOSTransaction": {
+        "type": "object",
+        "properties": {
+          "kycSessionId": {
+            "type": "string"
+          },
+          "onboardingId": {
+            "type": "string"
+          },
+          "redirectUrl": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["IN_PROGRESS", "COMPLETED", "FAILED"]
+          },
+          "result": {
+            "type": "integer",
+            "description": "1 for approved, 0 for rejected"
+          }
+        }
+      },
+      "KYCDocument": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["front", "back", "selfie"]
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "fileUrl": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "APPROVED", "REJECTED"]
+          },
+          "uploadedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BankAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bankName": {
+            "type": "string"
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "accountNumber": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PaymentReceipt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "repaymentId": {
+            "type": "string"
+          },
+          "receiptNumber": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "paymentMethod": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "downloadUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "CompanySettings": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "companyAddress": {
+            "type": "string"
+          },
+          "companyPhone": {
+            "type": "string"
+          },
+          "companyEmail": {
+            "type": "string"
+          },
+          "companyRegistrationNumber": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }
@@ -5699,6 +5987,2007 @@
         }
       }
     },
+    "/api/pki/check-certificate": {
+      "post": {
+        "summary": "Check PKI certificate status for a user",
+        "description": "Checks the PKI certificate status for a user through the signing orchestrator. Users can only check their own certificates for security.",
+        "tags": ["PKI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId"],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "User ID (typically IC number) to check certificate for",
+                    "example": "123456789012"
+                  },
+                  "submissionId": {
+                    "type": "string",
+                    "description": "Optional DocuSeal submission ID for context",
+                    "example": "sub_123456789"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Certificate status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Certificate status retrieved successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "certificateExists": {
+                          "type": "boolean",
+                          "description": "Whether a valid certificate exists for the user"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Certificate status",
+                          "enum": ["active", "expired", "revoked", "not_found"]
+                        },
+                        "expiryDate": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Certificate expiry date (if applicable)"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - User ID is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied - can only check own certificate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pki/request-otp": {
+      "post": {
+        "summary": "Request OTP for PKI signing",
+        "description": "Requests an OTP (One-Time Password) for PKI digital signing through the signing orchestrator. The OTP will be sent to the user's registered email or phone.",
+        "tags": ["PKI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId", "email"],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "User ID (typically IC number) for PKI certificate identification",
+                    "example": "123456789012"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "User email address for OTP delivery",
+                    "example": "user@example.com"
+                  },
+                  "submissionId": {
+                    "type": "string",
+                    "description": "Optional DocuSeal submission ID for context",
+                    "example": "sub_123456789"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP request sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "OTP sent successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "otpId": {
+                          "type": "string",
+                          "description": "OTP session ID for verification",
+                          "example": "otp_123456789"
+                        },
+                        "expiresIn": {
+                          "type": "integer",
+                          "description": "OTP expiry time in seconds",
+                          "example": 300
+                        },
+                        "deliveryMethod": {
+                          "type": "string",
+                          "description": "How the OTP was delivered",
+                          "enum": ["email", "sms"],
+                          "example": "email"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - User ID and email are required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pki/complete-signing": {
+      "post": {
+        "summary": "Complete PKI signing with OTP",
+        "tags": ["PKI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["sessionId", "otp"],
+                "properties": {
+                  "sessionId": {
+                    "type": "string",
+                    "description": "PKI session ID"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$",
+                    "description": "6-digit OTP code"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PKI signing completed successfully"
+          },
+          "400": {
+            "description": "Session ID and OTP are required or invalid OTP format"
+          },
+          "500": {
+            "description": "Failed to complete PKI signing"
+          }
+        }
+      }
+    },
+    "/api/pki/sign-pdf": {
+      "post": {
+        "summary": "Sign PDF with PKI using OTP",
+        "tags": ["PKI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId", "otp", "submissionId"],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "User ID (IC number)"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$",
+                    "description": "6-digit OTP code"
+                  },
+                  "submissionId": {
+                    "type": "string",
+                    "description": "DocuSeal submission ID"
+                  },
+                  "applicationId": {
+                    "type": "string",
+                    "description": "Loan application ID"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PDF signed successfully with PKI"
+          },
+          "400": {
+            "description": "Invalid request parameters or OTP format"
+          },
+          "403": {
+            "description": "Access denied: can only sign with own account"
+          },
+          "404": {
+            "description": "User or loan not found"
+          },
+          "500": {
+            "description": "Failed to sign PDF"
+          }
+        }
+      }
+    },
+    "/api/pki/session/{sessionId}": {
+      "get": {
+        "summary": "Get PKI session status",
+        "tags": ["PKI"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "PKI session ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session status retrieved successfully"
+          },
+          "400": {
+            "description": "Session ID is required"
+          },
+          "500": {
+            "description": "Failed to get session status"
+          }
+        }
+      }
+    },
+    "/api/docuseal/initiate-loan-signing": {
+      "post": {
+        "summary": "Initiate document signing for a loan",
+        "description": "Creates a DocuSeal submission for loan agreement signing. The loan must be in APPROVED status. When the form is completed, it triggers PKI signing workflow through the signing orchestrator with additional parameters including user details, submission IDs, and signatory information.",
+        "tags": ["DocuSeal"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["loanId"],
+                "properties": {
+                  "loanId": {
+                    "type": "string",
+                    "description": "The ID of the approved loan to initiate signing for",
+                    "example": "cm123abc456def789"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document signing initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Document signing initiated successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "submissionId": {
+                          "type": "string",
+                          "description": "DocuSeal submission ID",
+                          "example": "sub_123456789"
+                        },
+                        "signUrl": {
+                          "type": "string",
+                          "description": "URL for the borrower to sign the document",
+                          "example": "https://docuseal.co/s/abc123def456"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Current submission status",
+                          "enum": ["pending", "completed", "expired"],
+                          "example": "pending"
+                        }
+                      }
+
+                    },
+                    "pkiIntegration": {
+                      "type": "object",
+                      "description": "PKI signing integration details (passed to signing orchestrator on form completion)",
+                      "properties": {
+                        "note": {
+                          "type": "string",
+                          "description": "When the DocuSeal form is completed, the following parameters are automatically forwarded to the signing orchestrator for PKI processing"
+                        },
+                        "orchestratorParams": {
+                          "type": "object",
+                          "description": "Parameters forwarded to signing orchestrator",
+                          "properties": {
+                            "userId": {
+                              "type": "string",
+                              "description": "User IC number for MTSA PKI signing"
+                            },
+                            "vpsUserId": {
+                              "type": "string", 
+                              "description": "VPS database user ID"
+                            },
+                            "submissionId": {
+                              "type": "string",
+                              "description": "DocuSeal submission ID"
+                            },
+                            "docusealSubmitterId": {
+                              "type": "string",
+                              "description": "DocuSeal submitter ID"
+                            },
+                            "userFullName": {
+                              "type": "string",
+                              "description": "User's full name from database"
+                            },
+                            "applicationId": {
+                              "type": "string",
+                              "description": "Loan application ID"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing loanId or loan not in correct status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Loan not found or access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docuseal/initiate-application-signing": {
+      "post": {
+        "summary": "Initiate document signing for a loan application",
+        "description": "Creates a DocuSeal submission for loan application signing. The application must be in PENDING_SIGNATURE status. If a submission already exists, returns the existing signing URL.",
+        "tags": ["DocuSeal"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["applicationId"],
+                "properties": {
+                  "applicationId": {
+                    "type": "string",
+                    "description": "The ID of the loan application in PENDING_SIGNATURE status",
+                    "example": "app_123abc456def789"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document signing initiated successfully or existing submission retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Document signing initiated successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "submissionId": {
+                          "type": "string",
+                          "description": "DocuSeal submission ID",
+                          "example": "sub_123456789"
+                        },
+                        "signUrl": {
+                          "type": "string",
+                          "description": "URL for the applicant to sign the document",
+                          "example": "https://docuseal.co/s/abc123def456"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Current submission status",
+                          "enum": ["pending", "completed", "expired"],
+                          "example": "pending"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing applicationId or application not in PENDING_SIGNATURE status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application not found or access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docuseal/submission/{submissionId}": {
+      "get": {
+        "summary": "Get DocuSeal submission status",
+        "tags": ["DocuSeal"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submissionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "DocuSeal submission ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submission status retrieved successfully"
+          },
+          "500": {
+            "description": "Failed to get submission status"
+          }
+        }
+      }
+    },
+    "/api/docuseal/webhook": {
+      "post": {
+        "summary": "Handle DocuSeal webhook events",
+        "description": "Processes DocuSeal webhook events. When event_type is 'form.completed', the webhook is intercepted and forwarded to the signing orchestrator for PKI processing with additional parameters (userId, vpsUserId, submissionId, docusealSubmitterId, userFullName, applicationId).",
+        "tags": ["DocuSeal"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "event_type": {
+                    "type": "string",
+                    "description": "Type of webhook event"
+                  },
+                  "data": {
+                    "type": "object",
+                    "description": "Event data payload"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully"
+          },
+          "401": {
+            "description": "Invalid signature"
+          },
+          "500": {
+            "description": "Failed to process webhook"
+          }
+        }
+      }
+    },
+    "/api/docuseal/download/{submissionId}": {
+      "get": {
+        "summary": "Download signed agreement document",
+        "tags": ["DocuSeal"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submissionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "DocuSeal submission ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Download URL retrieved successfully"
+          },
+          "400": {
+            "description": "Submission ID is required or agreement is not yet signed"
+          },
+          "404": {
+            "description": "Agreement not found or access denied"
+          },
+          "500": {
+            "description": "Failed to download agreement"
+          }
+        }
+      }
+    },
+    "/api/ctos/create-transaction": {
+      "post": {
+        "summary": "Create CTOS eKYC transaction",
+        "description": "Creates a new CTOS eKYC transaction for identity verification. This initiates the KYC process and returns a transaction URL for the user to complete verification.",
+        "tags": ["CTOS"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId", "documentName", "documentNumber"],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "description": "The ID of the user to create KYC transaction for",
+                    "example": "user_123abc456def789"
+                  },
+                  "documentName": {
+                    "type": "string",
+                    "description": "Type of identity document",
+                    "enum": ["NRIC", "Passport", "MyKad"],
+                    "example": "NRIC"
+                  },
+                  "documentNumber": {
+                    "type": "string",
+                    "description": "The identity document number",
+                    "example": "123456789012"
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": ["Web", "iOS", "Android"],
+                    "default": "Web",
+                    "description": "Platform where KYC will be completed",
+                    "example": "Web"
+                  },
+                  "responseUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Optional callback URL for completion notification",
+                    "example": "https://app.kredit.my/kyc/callback"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CTOS transaction created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "CTOS transaction created successfully"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "kycSessionId": {
+                          "type": "string",
+                          "description": "KYC session ID for tracking",
+                          "example": "kyc_123456789"
+                        },
+                        "transactionId": {
+                          "type": "string",
+                          "description": "CTOS transaction ID",
+                          "example": "ctos_987654321"
+                        },
+                        "verificationUrl": {
+                          "type": "string",
+                          "description": "URL for user to complete KYC verification",
+                          "example": "https://ctos.com.my/verify/abc123def456"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Current transaction status",
+                          "enum": ["IN_PROGRESS", "COMPLETED", "FAILED"],
+                          "example": "IN_PROGRESS"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Transaction expiry time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ctos/status/{kycSessionId}": {
+      "get": {
+        "summary": "Get CTOS eKYC transaction status",
+        "tags": ["CTOS"],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kycSessionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "KYC session ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CTOS status retrieved successfully"
+          },
+          "404": {
+            "description": "KYC session not found"
+          },
+          "500": {
+            "description": "Failed to get CTOS status"
+          }
+        }
+      }
+    },
+    "/api/ctos/webhook": {
+      "post": {
+        "summary": "Handle CTOS webhook callbacks",
+        "tags": ["CTOS"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ref_id": {
+                    "type": "string",
+                    "description": "Reference ID (user ID)"
+                  },
+                  "onboarding_id": {
+                    "type": "string",
+                    "description": "CTOS onboarding ID"
+                  },
+                  "result": {
+                    "type": "integer",
+                    "description": "Result code (1=approved, 0=rejected)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully"
+          },
+          "500": {
+            "description": "Failed to process webhook"
+          }
+        }
+      }
+    },
+    "/api/kyc/start-ctos": {
+      "post": {
+        "summary": "Start CTOS eKYC process",
+        "tags": ["KYC"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["documentName", "documentNumber"],
+                "properties": {
+                  "applicationId": {
+                    "type": "string",
+                    "description": "Loan application ID"
+                  },
+                  "documentName": {
+                    "type": "string",
+                    "description": "Document name (e.g., NRIC, Passport)"
+                  },
+                  "documentNumber": {
+                    "type": "string",
+                    "description": "Document number"
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": ["Web", "iOS", "Android"],
+                    "default": "Web",
+                    "description": "Platform type"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CTOS eKYC process started successfully"
+          },
+          "400": {
+            "description": "Document name and number are required"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Failed to start CTOS eKYC"
+          }
+        }
+      }
+    },
+    "/api/kyc/upload": {
+      "post": {
+        "summary": "Upload KYC documents",
+        "tags": ["KYC"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "KYC document file"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["front", "back", "selfie"],
+                    "description": "Document type"
+                  },
+                  "applicationId": {
+                    "type": "string",
+                    "description": "Loan application ID"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document uploaded successfully"
+          },
+          "400": {
+            "description": "Invalid file type or missing parameters"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Failed to upload document"
+          }
+        }
+      }
+    },
+    "/api/kyc/status": {
+      "get": {
+        "summary": "Get KYC status for authenticated user",
+        "tags": ["KYC"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "KYC status retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Failed to get KYC status"
+          }
+        }
+      }
+    },
+    "/api/bank-accounts": {
+      "get": {
+        "summary": "Get all bank accounts (Admin only)",
+        "tags": ["Bank Accounts"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of bank accounts retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to get bank accounts"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create new bank account (Admin only)",
+        "tags": ["Bank Accounts"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["bankName", "accountName", "accountNumber"],
+                "properties": {
+                  "bankName": {
+                    "type": "string",
+                    "description": "Bank name"
+                  },
+                  "accountName": {
+                    "type": "string",
+                    "description": "Account holder name"
+                  },
+                  "accountNumber": {
+                    "type": "string",
+                    "description": "Bank account number"
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "description": "Whether account is active"
+                  },
+                  "isDefault": {
+                    "type": "boolean",
+                    "description": "Whether this is the default account"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Bank account created successfully"
+          },
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to create bank account"
+          }
+        }
+      }
+    },
+    "/api/bank-accounts/default": {
+      "get": {
+        "summary": "Get default/active bank account",
+        "tags": ["Bank Accounts"],
+        "responses": {
+          "200": {
+            "description": "Default bank account retrieved successfully"
+          },
+          "404": {
+            "description": "No default bank account found"
+          },
+          "500": {
+            "description": "Failed to get default bank account"
+          }
+        }
+      }
+    },
+    "/api/receipts": {
+      "get": {
+        "summary": "List all receipts with pagination (Admin only)",
+        "tags": ["Receipts"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of receipts retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to get receipts"
+          }
+        }
+      }
+    },
+    "/api/receipts/generate": {
+      "post": {
+        "summary": "Generate a receipt for a specific repayment (Admin only)",
+        "tags": ["Receipts"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["repaymentId"],
+                "properties": {
+                  "repaymentId": {
+                    "type": "string",
+                    "description": "Loan repayment ID"
+                  },
+                  "paymentMethod": {
+                    "type": "string",
+                    "description": "Payment method used"
+                  },
+                  "reference": {
+                    "type": "string",
+                    "description": "Payment reference number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Receipt generated successfully"
+          },
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "404": {
+            "description": "Repayment not found"
+          },
+          "500": {
+            "description": "Failed to generate receipt"
+          }
+        }
+      }
+    },
+    "/api/receipts/{receiptId}/download": {
+      "get": {
+        "summary": "Download a receipt PDF (Admin only)",
+        "tags": ["Receipts"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "receiptId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Receipt ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt PDF downloaded successfully",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "404": {
+            "description": "Receipt not found"
+          },
+          "500": {
+            "description": "Failed to download receipt"
+          }
+        }
+      }
+    },
+    "/api/companySettings": {
+      "get": {
+        "summary": "Get current company settings (Admin only)",
+        "tags": ["Company Settings"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Company settings retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to get company settings"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create or update company settings (Admin only)",
+        "tags": ["Company Settings"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "companyName": {
+                    "type": "string",
+                    "description": "Company name"
+                  },
+                  "companyAddress": {
+                    "type": "string",
+                    "description": "Company address"
+                  },
+                  "companyPhone": {
+                    "type": "string",
+                    "description": "Company phone number"
+                  },
+                  "companyEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Company email"
+                  },
+                  "companyRegistrationNumber": {
+                    "type": "string",
+                    "description": "Company registration number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Company settings updated successfully"
+          },
+          "201": {
+            "description": "Company settings created successfully"
+          },
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to update company settings"
+          }
+        }
+      }
+    },
+    "/api/onboarding": {
+      "get": {
+        "summary": "Get user onboarding status",
+        "tags": ["Onboarding"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Onboarding status retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Failed to get onboarding status"
+          }
+        }
+      },
+      "post": {
+        "summary": "Update user onboarding information",
+        "tags": ["Onboarding"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "step": {
+                    "type": "integer",
+                    "description": "Current onboarding step"
+                  },
+                  "data": {
+                    "type": "object",
+                    "description": "Onboarding step data"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Onboarding information updated successfully"
+          },
+          "400": {
+            "description": "Invalid request parameters"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Failed to update onboarding information"
+          }
+        }
+      }
+    },
+    "/api/admin/early-settlement/pending": {
+      "get": {
+        "summary": "Get pending early settlement requests (Admin/Attestor only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            },
+            "description": "Items per page"
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search term"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending early settlement requests retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin/Attestor access required"
+          },
+          "500": {
+            "description": "Failed to get early settlement requests"
+          }
+        }
+      }
+    },
+    "/api/admin/early-settlement/{transactionId}": {
+      "get": {
+        "summary": "Get early settlement request details (Admin/Attestor only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transactionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Early settlement transaction ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Early settlement request details retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin/Attestor access required"
+          },
+          "404": {
+            "description": "Early settlement request not found"
+          },
+          "500": {
+            "description": "Failed to get early settlement request details"
+          }
+        }
+      }
+    },
+    "/api/admin/early-settlement/{transactionId}/approve": {
+      "post": {
+        "summary": "Approve early settlement request (Admin/Attestor only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transactionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Early settlement transaction ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "description": "Admin notes for approval"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Early settlement request approved successfully"
+          },
+          "400": {
+            "description": "Invalid request or settlement already processed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin/Attestor access required"
+          },
+          "404": {
+            "description": "Early settlement request not found"
+          },
+          "500": {
+            "description": "Failed to approve early settlement request"
+          }
+        }
+      }
+    },
+    "/api/admin/early-settlement/{transactionId}/reject": {
+      "post": {
+        "summary": "Reject early settlement request (Admin/Attestor only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transactionId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Early settlement transaction ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "Reason for rejection"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional admin notes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Early settlement request rejected successfully"
+          },
+          "400": {
+            "description": "Invalid request or settlement already processed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin/Attestor access required"
+          },
+          "404": {
+            "description": "Early settlement request not found"
+          },
+          "500": {
+            "description": "Failed to reject early settlement request"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees": {
+      "get": {
+        "summary": "Get all repayments with late fees (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            },
+            "description": "Items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repayments with late fees retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to get late fees data"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/status": {
+      "get": {
+        "summary": "Get late fee processing status (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Late fee processing status retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to get processing status"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/process": {
+      "post": {
+        "summary": "Manually trigger late fee processing (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Late fee processing triggered successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to trigger late fee processing"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/repayment/{repaymentId}": {
+      "get": {
+        "summary": "Get late fee summary for a specific repayment (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repaymentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Repayment ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Late fee summary retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "404": {
+            "description": "Repayment not found"
+          },
+          "500": {
+            "description": "Failed to get late fee summary"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/repayment/{repaymentId}/total-due": {
+      "get": {
+        "summary": "Get total amount due for a repayment including late fees (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repaymentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Repayment ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Total amount due retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "404": {
+            "description": "Repayment not found"
+          },
+          "500": {
+            "description": "Failed to get total amount due"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/repayment/{repaymentId}/handle-payment": {
+      "post": {
+        "summary": "Manually handle late fee payment for a repayment (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repaymentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Repayment ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "amount": {
+                    "type": "number",
+                    "description": "Payment amount"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Payment notes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Late fee payment handled successfully"
+          },
+          "400": {
+            "description": "Invalid payment amount"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "404": {
+            "description": "Repayment not found"
+          },
+          "500": {
+            "description": "Failed to handle late fee payment"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/repayment/{repaymentId}/waive": {
+      "post": {
+        "summary": "Manually waive late fees for a specific repayment (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repaymentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Repayment ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "Reason for waiving late fees"
+                  },
+                  "amount": {
+                    "type": "number",
+                    "description": "Amount to waive (optional, defaults to all outstanding late fees)"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "description": "Additional notes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Late fees waived successfully"
+          },
+          "400": {
+            "description": "Invalid request or no late fees to waive"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "404": {
+            "description": "Repayment not found"
+          },
+          "500": {
+            "description": "Failed to waive late fees"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/logs": {
+      "get": {
+        "summary": "Get recent late fee processing logs (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            },
+            "description": "Number of logs to retrieve"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Processing logs retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to get processing logs"
+          }
+        }
+      }
+    },
+    "/api/admin/late-fees/alerts": {
+      "delete": {
+        "summary": "Clear late fee alerts (Admin only)",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alerts cleared successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Admin access required"
+          },
+          "500": {
+            "description": "Failed to clear alerts"
+          }
+        }
+      }
+    },
     "/api/notifications": {
       "get": {
         "summary": "Get user's notifications",
@@ -6777,6 +9066,42 @@
     {
       "name": "MTSA",
       "description": "MyTrustSigner Agent integration for digital certificates and OTP"
+    },
+    {
+      "name": "PKI",
+      "description": "PKI digital signing integration for loan agreements"
+    },
+    {
+      "name": "DocuSeal",
+      "description": "DocuSeal document signing integration"
+    },
+    {
+      "name": "CTOS",
+      "description": "CTOS eKYC integration for identity verification"
+    },
+    {
+      "name": "KYC",
+      "description": "Know Your Customer document verification"
+    },
+    {
+      "name": "Wallet",
+      "description": "User wallet and transaction management"
+    },
+    {
+      "name": "Bank Accounts",
+      "description": "Bank account management for loan disbursements"
+    },
+    {
+      "name": "Receipts",
+      "description": "Payment receipt generation and management"
+    },
+    {
+      "name": "Company Settings",
+      "description": "Company configuration and settings management"
+    },
+    {
+      "name": "Onboarding",
+      "description": "User onboarding process management"
     },
     {
       "name": "Products",

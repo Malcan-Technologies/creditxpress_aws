@@ -308,12 +308,25 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 				success: boolean;
 				message: string;
 				data: {
-					success?: boolean;
-					feesCalculated: number;
-					totalFeeAmount: number;
-					overdueRepayments: number;
-					processingTimeMs: number;
-					isManualRun?: boolean;
+					lateFeeResult: {
+						success?: boolean;
+						feesCalculated: number;
+						totalFeeAmount: number;
+						overdueRepayments: number;
+						processingTimeMs: number;
+						isManualRun?: boolean;
+					};
+					defaultResult: {
+						success: boolean;
+						riskLoansProcessed: number;
+						remedyLoansProcessed: number;
+						defaultedLoans: number;
+						recoveredLoans: number;
+						whatsappMessagesSent: number;
+						pdfLettersGenerated: number;
+						processingTimeMs: number;
+						isManualRun?: boolean;
+					};
 				};
 			}>("/api/admin/late-fees/process", {
 				method: "POST",
@@ -325,15 +338,27 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 					totalFeeAmount,
 					overdueRepayments,
 					processingTimeMs,
-				} = response.data;
+				} = response.data.lateFeeResult;
+
+				const {
+					riskLoansProcessed,
+					defaultedLoans,
+					pdfLettersGenerated,
+				} = response.data.defaultResult;
 
 				// Show detailed success message
 				const message =
 					`Manual processing completed successfully!\n\n` +
+					`Late Fee Processing:\n` +
 					`• Found ${overdueRepayments} overdue repayments\n` +
 					`• Calculated ${feesCalculated} new fees\n` +
 					`• Total fee amount: $${totalFeeAmount.toFixed(2)}\n` +
 					`• Processing time: ${processingTimeMs}ms\n\n` +
+					`Default Processing:\n` +
+					`• ${riskLoansProcessed} loans flagged as default risk\n` +
+					`• ${defaultedLoans} loans moved to default status\n` +
+					`• ${pdfLettersGenerated} PDF letters generated\n` +
+					`• WhatsApp notifications will be sent at 10 AM\n\n` +
 					`Data will be refreshed automatically.`;
 
 				alert(message);

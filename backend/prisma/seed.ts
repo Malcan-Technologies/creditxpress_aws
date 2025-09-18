@@ -554,6 +554,125 @@ async function main() {
 
 	console.log("Notification settings created/updated successfully");
 
+	// Default System Settings - Create only if they don't exist
+	console.log("Creating/updating default system settings...");
+	
+	const defaultSystemSettings = [
+		{
+			key: "ENABLE_DEFAULT_PROCESSING",
+			category: "DEFAULT_PROCESSING",
+			name: "Enable Default Processing",
+			description: "Enable automatic loan default processing and notifications",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(true),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "DEFAULT_RISK_DAYS",
+			category: "DEFAULT_PROCESSING",
+			name: "Default Risk Days",
+			description: "Number of days overdue before loan is flagged as default risk",
+			dataType: "NUMBER",
+			value: JSON.stringify(28),
+			options: {
+				min: 1,
+				max: 90,
+				step: 1,
+				unit: "days"
+			},
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "DEFAULT_REMEDY_DAYS",
+			category: "DEFAULT_PROCESSING",
+			name: "Default Remedy Days",
+			description: "Number of days borrower has to remedy default risk before loan defaults (includes 2 days for registered post delivery)",
+			dataType: "NUMBER",
+			value: JSON.stringify(16),
+			options: {
+				min: 1,
+				max: 30,
+				step: 1,
+				unit: "days"
+			},
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "WHATSAPP_DEFAULT_RISK",
+			category: "NOTIFICATIONS",
+			name: "WhatsApp Default Risk Notification",
+			description: "Send WhatsApp notifications when loans are flagged as default risk (28 days overdue)",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(true),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "WHATSAPP_DEFAULT_REMINDER",
+			category: "NOTIFICATIONS",
+			name: "WhatsApp Default Reminder Notification",
+			description: "Send WhatsApp reminder notifications during default remedy period",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(true),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		},
+		{
+			key: "WHATSAPP_DEFAULT_FINAL",
+			category: "NOTIFICATIONS",
+			name: "WhatsApp Default Final Notification",
+			description: "Send WhatsApp notifications when loans are officially defaulted (42 days overdue)",
+			dataType: "BOOLEAN",
+			value: JSON.stringify(true),
+			options: undefined,
+			isActive: true,
+			requiresRestart: false,
+			affectsExistingLoans: false,
+		}
+	];
+
+	// Create/update each default system setting individually (only update metadata, not values)
+	for (const setting of defaultSystemSettings) {
+		const existing = await prisma.systemSettings.findUnique({
+			where: { key: setting.key }
+		});
+
+		if (existing) {
+			// Only update metadata, preserve existing value
+			await prisma.systemSettings.update({
+				where: { key: setting.key },
+				data: {
+					name: setting.name,
+					description: setting.description,
+					dataType: setting.dataType as any,
+					options: setting.options,
+					isActive: setting.isActive,
+					requiresRestart: setting.requiresRestart,
+					affectsExistingLoans: setting.affectsExistingLoans,
+					// Don't update value - preserve existing
+				}
+			});
+		} else {
+			// Create new setting with default value
+			await prisma.systemSettings.create({
+				data: setting as any
+			});
+		}
+	}
+
+	console.log("Default system settings created/updated successfully");
+
 	// Early Settlement Settings - Create only if they don't exist
 	console.log("Creating/updating early settlement settings...");
 	

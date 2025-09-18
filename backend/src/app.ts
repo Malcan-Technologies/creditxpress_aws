@@ -2,7 +2,9 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
-import { swaggerSpec, baseUrl } from "./config/swagger";
+import { baseUrl } from "./config/swagger";
+import fs from "fs";
+import path from "path";
 import authRoutes from "./api/auth";
 import userRoutes from "./api/users";
 import onboardingRoutes from "./api/onboarding";
@@ -19,9 +21,44 @@ import docusealRoutes from "./api/docuseal";
 import mtsaRoutes from "./api/mtsa";
 import pkiRoutes from "./api/pki";
 import ctosRoutes from "./api/ctos";
-import fs from "fs";
-import path from "path";
 import prisma from "../lib/prisma";
+
+// Load the manually maintained swagger.json file with error handling
+const swaggerPath = path.join(__dirname, "..", "swagger", "swagger.json");
+let swaggerDocument: any;
+
+try {
+	if (fs.existsSync(swaggerPath)) {
+		const swaggerContent = fs.readFileSync(swaggerPath, 'utf8');
+		swaggerDocument = JSON.parse(swaggerContent);
+		console.log('✓ Swagger documentation loaded successfully');
+	} else {
+		console.warn('⚠️  swagger.json file not found, using minimal fallback');
+		swaggerDocument = {
+			openapi: "3.0.0",
+			info: {
+				title: "Kredit API",
+				version: "1.0.0",
+				description: "API documentation not available - swagger.json file missing"
+			},
+			servers: [],
+			paths: {}
+		};
+	}
+} catch (error) {
+	console.error('❌ Error loading swagger.json:', error instanceof Error ? error.message : 'Unknown error');
+	console.warn('⚠️  Using minimal fallback swagger configuration');
+	swaggerDocument = {
+		openapi: "3.0.0",
+		info: {
+			title: "Kredit API",
+			version: "1.0.0",
+			description: "API documentation not available - swagger.json file corrupted or unreadable"
+		},
+		servers: [],
+		paths: {}
+	};
+}
 
 dotenv.config();
 
@@ -80,8 +117,8 @@ if (isDevelopment) {
 	});
 }
 
-// Swagger UI
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// Swagger UI - use manually maintained swagger.json
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Health check endpoint
 app.get("/api/health", async (_req, res) => {
@@ -134,7 +171,7 @@ if (!fs.existsSync(swaggerDir)) {
 }
 
 // Update the server URL based on the environment
-(swaggerSpec as any).servers = [
+(swaggerDocument as any).servers = [
 	{
 		url: baseUrl,
 		description:
@@ -144,10 +181,10 @@ if (!fs.existsSync(swaggerDir)) {
 	},
 ];
 
-// Write the Swagger specification to a JSON file
-fs.writeFileSync(
-	path.join(swaggerDir, "swagger.json"),
-	JSON.stringify(swaggerSpec, null, 2)
-);
+// Write the Swagger specification to a JSON file (disabled to preserve manual updates)
+// fs.writeFileSync(
+// 	path.join(swaggerDir, "swagger.json"),
+// 	JSON.stringify(swaggerSpec, null, 2)
+// );
 
 export { app, port };

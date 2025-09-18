@@ -449,19 +449,28 @@ async function generatePaymentScheduleForPendingLoan(loanId: string, tx: any) {
 		let dueDate;
 		if (calculationSettings.scheduleType === 'EXACT_MONTHLY') {
 			// For EXACT_MONTHLY: use same day of each month from start date
-			// This is a placeholder schedule that will be updated during disbursement
-			const startDay = startDate.getDate();
-			dueDate = new Date(startDate.getFullYear(), startDate.getMonth() + i, startDay);
+			// Create due date at midnight Malaysia time (16:00 UTC = 00:00 MYT)
+			const malaysiaTime = new Date(startDate.getTime() + (8 * 60 * 60 * 1000));
+			const startDay = malaysiaTime.getUTCDate();
+			const targetYear = malaysiaTime.getUTCFullYear();
+			const targetMonth = malaysiaTime.getUTCMonth() + i;
+			
+			// Create date in UTC at 15:59:59 (which is 23:59:59 Malaysia time - end of day)
+			// This allows users to pay throughout the entire due date
+			dueDate = new Date(Date.UTC(targetYear, targetMonth, startDay, 15, 59, 59, 999));
 			
 			// Handle month overflow (e.g., day 31 in February)
-			if (dueDate.getDate() !== startDay) {
-				dueDate = new Date(dueDate.getFullYear(), dueDate.getMonth(), 0); // Last day of previous month
+			if (new Date(dueDate.getTime() + (8 * 60 * 60 * 1000)).getUTCDate() !== startDay) {
+				// Use last day of the target month at end of day Malaysia time
+				dueDate = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 15, 59, 59, 999));
 			}
 		} else if (calculationSettings.scheduleType === 'CUSTOM_DATE' && calculationSettings.customDueDate) {
-			// For CUSTOM_DATE: use cutoff logic with configurable date (same as admin.ts)
-			const startDay = startDate.getDate();
-			const startMonth = startDate.getMonth();
-			const startYear = startDate.getFullYear();
+			// For CUSTOM_DATE: use cutoff logic with configurable date
+			// Create due date at end of day Malaysia time (15:59:59 UTC = 23:59:59 MYT)
+			const malaysiaTime = new Date(startDate.getTime() + (8 * 60 * 60 * 1000));
+			const startDay = malaysiaTime.getUTCDate();
+			const startMonth = malaysiaTime.getUTCMonth();
+			const startYear = malaysiaTime.getUTCFullYear();
 			
 			let targetMonth: number;
 			let targetYear: number;
@@ -477,16 +486,18 @@ async function generatePaymentScheduleForPendingLoan(loanId: string, tx: any) {
 			}
 			
 			// Handle year rollover
-			if (targetMonth > 11) {
+			while (targetMonth > 11) {
 				targetMonth = targetMonth - 12;
 				targetYear++;
 			}
 			
-			dueDate = new Date(targetYear, targetMonth, calculationSettings.customDueDate);
+			// Create date in UTC at 15:59:59 (which is 23:59:59 Malaysia time - end of day)
+			dueDate = new Date(Date.UTC(targetYear, targetMonth, calculationSettings.customDueDate, 15, 59, 59, 999));
 			
 			// Handle month overflow (e.g., day 31 in February)
-			if (dueDate.getDate() !== calculationSettings.customDueDate) {
-				dueDate = new Date(dueDate.getFullYear(), dueDate.getMonth(), 0); // Last day of previous month
+			if (new Date(dueDate.getTime() + (8 * 60 * 60 * 1000)).getUTCDate() !== calculationSettings.customDueDate) {
+				// Use last day of the target month at end of day Malaysia time
+				dueDate = new Date(Date.UTC(targetYear, targetMonth + 1, 0, 15, 59, 59, 999));
 			}
 			
 			console.log(`🧮 CUSTOM_DATE calculation for installment ${i}:`);
@@ -496,7 +507,13 @@ async function generatePaymentScheduleForPendingLoan(loanId: string, tx: any) {
 			console.log(`🧮   Calculated due date: ${dueDate.toISOString()}`);
 		} else {
 			// Default: FIRST_OF_MONTH - Due on 1st of each month
-			dueDate = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+			// Create due date at end of day Malaysia time (15:59:59 UTC = 23:59:59 MYT)
+			const malaysiaTime = new Date(startDate.getTime() + (8 * 60 * 60 * 1000));
+			const targetYear = malaysiaTime.getUTCFullYear();
+			const targetMonth = malaysiaTime.getUTCMonth() + i;
+			
+			// Create date in UTC at 15:59:59 (which is 23:59:59 Malaysia time - end of day)
+			dueDate = new Date(Date.UTC(targetYear, targetMonth, 1, 15, 59, 59, 999));
 		}
 
 		// Get payment allocation for this installment (already includes proration if needed)

@@ -16,6 +16,8 @@ import kycAdminRoutes from "./admin/kyc";
 import companySettingsRoutes from "./companySettings";
 import receiptsRoutes from "./receipts";
 import earlySettlementRoutes from "./admin/early-settlement";
+import cronRoutes from "./admin/cron";
+import pdfLettersRoutes from "./admin/pdf-letters";
 import whatsappService from "../lib/whatsappService";
 import { processCSVFile } from "../lib/csvProcessor";
 import ReceiptService from "../lib/receiptService";
@@ -48,6 +50,131 @@ async function getLateFeeGraceSettings(prismaClient: any = prisma) {
 		console.error('Error fetching late fee grace settings:', error);
 		// Default fallback: 3 days grace period
 		return 3;
+	}
+}
+
+
+// Helper function to clear default flags if loan is no longer overdue
+async function clearDefaultFlagsIfNeeded(loanId: string, adminUserId: string) {
+	try {
+		// Get loan with current repayments to check if still overdue
+		const loan = await prisma.loan.findUnique({
+			where: { id: loanId },
+			include: {
+				repayments: {
+					where: {
+						status: { in: ['PENDING', 'PARTIAL'] }
+					}
+				},
+				application: {
+					select: {
+						id: true
+					}
+				}
+			}
+		});
+
+		if (!loan) {
+			console.log(`Loan ${loanId} not found for default flag clearing`);
+			return;
+		}
+
+		// Check if loan has any default flags set
+		const hasDefaultFlags = loan.defaultRiskFlaggedAt || loan.defaultedAt || loan.status === 'DEFAULT';
+		console.log(`🔍 Checking loan ${loanId} for default flag clearing:`);
+		console.log(`  • Current status: ${loan.status}`);
+		console.log(`  • Default risk flagged: ${loan.defaultRiskFlaggedAt}`);
+		console.log(`  • Defaulted at: ${loan.defaultedAt}`);
+		console.log(`  • Has default flags: ${hasDefaultFlags}`);
+		console.log(`  • Pending/Partial repayments found: ${loan.repayments.length}`);
+		
+		if (!hasDefaultFlags) {
+			console.log(`Loan ${loanId} has no default flags to clear`);
+			return;
+		}
+
+		// Check if loan still has overdue payments (considering grace period)
+		const today = new Date();
+		const gracePeriodDays = await getLateFeeGraceSettings();
+		
+		const overdueRepayments = loan.repayments.filter(repayment => {
+			const dueDate = new Date(repayment.dueDate);
+			const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
+			const isOverdue = daysOverdue > gracePeriodDays;
+			
+			console.log(`  📅 Repayment ${repayment.id}: due ${dueDate.toISOString().split('T')[0]}, ${daysOverdue} days overdue, status: ${repayment.status}, beyond grace: ${isOverdue}`);
+			
+			// Only consider truly overdue (beyond grace period)
+			return isOverdue;
+		});
+		
+		console.log(`  🎯 Found ${overdueRepayments.length} repayments beyond grace period (${gracePeriodDays} days)`);
+
+		if (overdueRepayments.length === 0) {
+			// No more overdue payments - clear default flags and restore to ACTIVE
+			console.log(`Clearing default flags for loan ${loanId} - no overdue payments remaining (grace period: ${gracePeriodDays} days)`);
+			
+			await prisma.$transaction(async (tx) => {
+				// Update loan to clear default flags and set status to ACTIVE
+				await tx.loan.update({
+					where: { id: loanId },
+					data: {
+						status: 'ACTIVE',
+						defaultRiskFlaggedAt: null,
+						defaultedAt: null,
+						updatedAt: new Date()
+					}
+				});
+
+				// Create audit trail entry in LoanDefaultLog
+				await tx.loanDefaultLog.create({
+					data: {
+						loanId: loanId,
+						eventType: 'RECOVERED',
+						daysOverdue: 0,
+						outstandingAmount: 0,
+						totalLateFees: 0,
+						noticeType: 'RECOVERY_NOTICE',
+						processedAt: new Date(),
+						metadata: {
+							clearedVia: 'ADMIN_PAYMENT_APPROVAL',
+							overdueRepaymentsRemaining: 0,
+							adminUserId,
+							previousStatus: loan.status,
+							previousDefaultRiskFlaggedAt: loan.defaultRiskFlaggedAt,
+							previousDefaultedAt: loan.defaultedAt,
+							reason: 'Payment approved - no overdue payments remaining'
+						}
+					}
+				});
+
+				// Create audit trail entry in LoanApplicationHistory for main audit trail
+				if (loan.application?.id) {
+					await tx.loanApplicationHistory.create({
+						data: {
+							applicationId: loan.application.id,
+							previousStatus: loan.status,
+							newStatus: 'ACTIVE',
+							changedBy: adminUserId,
+							changeReason: 'Default flags cleared after payment approval',
+							notes: 'Payment approved - no overdue payments remaining. Default risk and default flags cleared.',
+							metadata: {
+								clearedVia: 'ADMIN_PAYMENT_APPROVAL',
+								previousDefaultRiskFlaggedAt: loan.defaultRiskFlaggedAt,
+								previousDefaultedAt: loan.defaultedAt,
+								overdueRepaymentsRemaining: 0
+							}
+						}
+					});
+				}
+
+				console.log(`✅ Default flags cleared for loan ${loanId} - restored to ACTIVE status`);
+			});
+		} else {
+			console.log(`Loan ${loanId} still has ${overdueRepayments.length} overdue payment(s) beyond grace period (${gracePeriodDays} days) - keeping default flags`);
+		}
+	} catch (error) {
+		console.error(`Error clearing default flags for loan ${loanId}:`, error);
 	}
 }
 
@@ -92,6 +219,8 @@ router.use("/kyc", kycAdminRoutes);
 router.use("/company-settings", companySettingsRoutes);
 router.use("/receipts", receiptsRoutes);
 router.use("/early-settlement", earlySettlementRoutes);
+router.use("/cron", cronRoutes);
+router.use("/loans", pdfLettersRoutes);
 
 // Helper function to create a loan disbursement record
 async function createLoanDisbursementRecord(
@@ -507,6 +636,25 @@ router.get(
 					},
 				}
 			);
+
+			// Get potential default loans count (loans flagged as default risk but not yet defaulted)
+			const potentialDefaultLoansCount = await prisma.loan.count({
+				where: {
+					defaultRiskFlaggedAt: { not: null },
+					defaultedAt: null,
+					status: { not: "DEFAULT" }
+				}
+			});
+
+			// Get defaulted loans count (loans with DEFAULT status or defaultedAt flag)
+			const defaultedLoansCount = await prisma.loan.count({
+				where: {
+					OR: [
+						{ status: "DEFAULT" },
+						{ defaultedAt: { not: null } }
+					]
+				}
+			});
 
 			// Get disbursed loans count (status = DISBURSED only)
 			const disbursedLoans = await prisma.loanApplication.count({
@@ -1073,6 +1221,8 @@ router.get(
 				approvedLoans,
 				pendingDisbursementCount,
 				disbursedLoans,
+				potentialDefaultLoansCount,
+				defaultedLoansCount,
 				totalDisbursedAmount: totalDisbursedAmount._sum.amount || 0,
 				totalLoanValue,
 				currentLoanValue,
@@ -4637,7 +4787,7 @@ router.get(
 			const loans = await prisma.loan.findMany({
 				where: {
 					status: {
-						in: ["ACTIVE", "PENDING_DISCHARGE", "PENDING_EARLY_SETTLEMENT", "DISCHARGED"],
+						in: ["ACTIVE", "PENDING_DISCHARGE", "PENDING_EARLY_SETTLEMENT", "DISCHARGED", "DEFAULT"],
 					},
 				},
 				include: {
@@ -4681,16 +4831,22 @@ router.get(
 							dueDate: "asc",
 						},
 					},
+					lateFee: {
+						select: {
+							gracePeriodDays: true,
+							gracePeriodRepayments: true,
+							totalGracePeriodFees: true,
+							totalAccruedFees: true,
+							status: true,
+						},
+					},
 				},
 				orderBy: {
 					createdAt: "desc",
 				},
 			});
 
-			// Enhanced loans with overdue information (same logic as user loans endpoint)
-			// Get grace period settings once for all loans
-			const gracePeriodDays = await getLateFeeGraceSettings();
-
+			// Enhanced loans with overdue information using grace period data from late_fees table
 			const loansWithOverdueInfo = await Promise.all(
 				loans.map(async (loan) => {
 					// Get overdue repayments and late fee information
@@ -4705,15 +4861,25 @@ router.get(
 						// Get all pending/partial repayments that are overdue using raw query
 						const today = TimeUtils.malaysiaStartOfDay();
 
-						// Apply dynamic grace period - only consider repayments overdue after grace period
-						const gracePeriodDate = new Date(today);
-						gracePeriodDate.setDate(gracePeriodDate.getDate() - gracePeriodDays);
+						// Use grace period from late_fees table if available, otherwise fall back to settings
+						const gracePeriodDays = loan.lateFee?.gracePeriodDays ?? await getLateFeeGraceSettings();
 
+						// Get ALL overdue repayments (not filtered by grace period)
+						// Grace period affects charging, not the calculation of days overdue
 						const overdueRepaymentsQuery = `
 							SELECT 
 								lr.*,
 								COALESCE(lr."lateFeeAmount" - lr."lateFeesPaid", 0) as total_late_fees,
-								COALESCE(lr."principalPaid", 0) as principal_paid
+								COALESCE(lr."principalPaid", 0) as principal_paid,
+								CASE 
+									WHEN lr."dueDate" < $2 THEN 
+										EXTRACT(DAY FROM ($2 - lr."dueDate"))
+									ELSE 0 
+								END as actual_days_overdue,
+								CASE 
+									WHEN lr."dueDate" < $2 AND EXTRACT(DAY FROM ($2 - lr."dueDate")) <= $3 THEN true
+									ELSE false 
+								END as is_in_grace_period
 							FROM loan_repayments lr
 							WHERE lr."loanId" = $1
 							  AND lr.status IN ('PENDING', 'PARTIAL')
@@ -4724,12 +4890,13 @@ router.get(
 						const overdueRepayments = (await prisma.$queryRawUnsafe(
 							overdueRepaymentsQuery,
 							loan.id,
-							gracePeriodDate
+							today,
+							gracePeriodDays
 						)) as any[];
 
 						if (overdueRepayments.length > 0) {
 							console.log(
-								`🔍 DEBUG: Admin - Overdue repayments for loan ${loan.id} (after ${gracePeriodDays}-day grace period):`,
+								`🔍 DEBUG: Admin - Overdue repayments for loan ${loan.id}:`,
 								overdueRepayments.map((r) => ({
 									id: r.id,
 									amount: r.amount,
@@ -4737,7 +4904,9 @@ router.get(
 									status: r.status,
 									dueDate: r.dueDate,
 									total_late_fees: r.total_late_fees,
-									daysOverdue: TimeUtils.daysOverdue(new Date(r.dueDate)),
+									actualDaysOverdue: r.actual_days_overdue,
+									isInGracePeriod: r.is_in_grace_period,
+									databaseDaysLate: r.daysLate || 0,
 								}))
 							);
 
@@ -4764,6 +4933,10 @@ router.get(
 								overdueInfo.totalOverdueAmount += outstandingAmount;
 								overdueInfo.totalLateFees += totalLateFees;
 
+								// Use actual calculated days overdue (not affected by grace period)
+								const actualDaysOverdue = Number(repayment.actual_days_overdue) || 0;
+								const isInGracePeriod = repayment.is_in_grace_period || false;
+
 								overdueInfo.overdueRepayments.push({
 									id: repayment.id,
 									amount: repayment.amount,
@@ -4772,7 +4945,9 @@ router.get(
 									totalAmountDue:
 										outstandingAmount + totalLateFees,
 									dueDate: repayment.dueDate,
-									daysOverdue: TimeUtils.daysOverdue(new Date(repayment.dueDate)),
+									// Always show actual days overdue (not affected by grace period)
+									daysOverdue: actualDaysOverdue,
+									isInGracePeriod: isInGracePeriod, // Add grace period status
 									// Add breakdown of late fees for better frontend tracking
 									lateFeeAmount: Number(repayment.lateFeeAmount) || 0,
 									lateFeesPaid: Number(repayment.lateFeesPaid) || 0,
@@ -4799,6 +4974,14 @@ router.get(
 					return {
 						...loan,
 						overdueInfo,
+						// Add grace period information from late_fees table
+						gracePeriodInfo: loan.lateFee ? {
+							gracePeriodDays: loan.lateFee.gracePeriodDays,
+							gracePeriodRepayments: loan.lateFee.gracePeriodRepayments,
+							totalGracePeriodFees: loan.lateFee.totalGracePeriodFees,
+							totalAccruedFees: loan.lateFee.totalAccruedFees,
+							status: loan.lateFee.status,
+						} : null,
 					};
 				})
 			);
@@ -7069,7 +7252,7 @@ router.post(
 				return { updatedTransaction, scheduleUpdate: null };
 			});
 
-			// Log the results after transaction completion
+			// Check if we need to clear default flags after payment
 			if (result.scheduleUpdate && transaction.loan) {
 				const paymentAmount = Math.abs(transaction.amount);
 				console.log(`Payment approved for loan ${transaction.loan.id}:`);
@@ -7079,6 +7262,9 @@ router.post(
 				if (isEarlySettlement) {
 					console.log(`  • Early settlement processed - loan status changed to PENDING_DISCHARGE`);
 				}
+
+				// Clear default flags if loan is no longer overdue after payment
+				await clearDefaultFlagsIfNeeded(transaction.loan.id, adminUserId || 'SYSTEM');
 			}
 
 			// Create notification for user (outside transaction to avoid rollback issues)
@@ -8084,15 +8270,22 @@ async function calculateOutstandingBalance(loanId: string, tx: any) {
 	console.log(`Outstanding balance: ${finalOutstandingBalance}`);
 
 	// Check if loan should be marked as PENDING_DISCHARGE
-	if (loan.status === "ACTIVE" && finalOutstandingBalance === 0) {
+	if ((loan.status === "ACTIVE" || loan.status === "DEFAULT") && finalOutstandingBalance === 0) {
 		console.log(
-			`🎯 Loan ${loanId} fully paid - updating status to PENDING_DISCHARGE`
+			`🎯 Loan ${loanId} fully paid - updating status to PENDING_DISCHARGE and clearing default flags`
 		);
+		
+		// Check if we're clearing default flags to create audit trail
+		const clearingDefaultFlags = loan.defaultRiskFlaggedAt || loan.defaultedAt || loan.status === "DEFAULT";
+		
 		await tx.loan.update({
 			where: { id: loanId },
 			data: {
 				status: "PENDING_DISCHARGE",
 				outstandingBalance: finalOutstandingBalance,
+				// Clear default flags when loan is fully paid
+				defaultRiskFlaggedAt: null,
+				defaultedAt: null,
 			},
 		});
 
@@ -8100,17 +8293,68 @@ async function calculateOutstandingBalance(loanId: string, tx: any) {
 		await trackLoanStatusChange(
 			tx,
 			loanId,
-			"ACTIVE", // previous status
+			loan.status, // previous status (could be ACTIVE or DEFAULT)
 			"PENDING_DISCHARGE", // new status
 			"SYSTEM",
 			"Loan automatically marked as pending discharge - fully paid",
-			"Outstanding balance reached zero",
+			`Outstanding balance reached zero${loan.status === "DEFAULT" ? ", default flags cleared" : ""}`,
 			{
 				automaticStatusChange: true,
 				finalOutstandingBalance,
 				triggeredBy: "payment_processing",
+				defaultFlagsCleared: loan.status === "DEFAULT",
 			}
 		);
+
+		// Create specific default recovery audit trail entry if we cleared default flags
+		if (clearingDefaultFlags) {
+			await tx.loanDefaultLog.create({
+				data: {
+					loanId: loanId,
+					eventType: 'RECOVERED',
+					daysOverdue: 0,
+					outstandingAmount: 0,
+					totalLateFees: 0,
+					noticeType: 'FULL_PAYMENT_RECOVERY',
+					processedAt: new Date(),
+					metadata: {
+						clearedVia: 'ADMIN_FULL_LOAN_PAYMENT',
+						previousStatus: loan.status,
+						previousDefaultRiskFlaggedAt: loan.defaultRiskFlaggedAt,
+						previousDefaultedAt: loan.defaultedAt,
+						newStatus: 'PENDING_DISCHARGE',
+						reason: 'Loan fully paid via admin processing - moved to pending discharge'
+					}
+				}
+			});
+
+			// Also create audit trail entry in LoanApplicationHistory
+			const loanWithApp = await tx.loan.findUnique({
+				where: { id: loanId },
+				select: { applicationId: true }
+			});
+			
+			if (loanWithApp?.applicationId) {
+				await tx.loanApplicationHistory.create({
+					data: {
+						applicationId: loanWithApp.applicationId,
+						previousStatus: loan.status,
+						newStatus: 'PENDING_DISCHARGE',
+						changedBy: 'SYSTEM',
+						changeReason: 'Default flags cleared after admin full loan payment',
+						notes: 'Loan fully paid via admin processing - default risk and default flags cleared, moved to pending discharge.',
+						metadata: {
+							clearedVia: 'ADMIN_FULL_LOAN_PAYMENT',
+							previousDefaultRiskFlaggedAt: loan.defaultRiskFlaggedAt,
+							previousDefaultedAt: loan.defaultedAt,
+							finalOutstandingBalance: finalOutstandingBalance
+						}
+					}
+				});
+			}
+			
+			console.log(`✅ Default flags cleared for loan ${loanId} via admin full payment - audit trail created`);
+		}
 	} else {
 		// Just update the outstanding balance
 		await tx.loan.update({
@@ -10488,7 +10732,15 @@ router.post(
 								tx
 							);
 						}
+					});
 
+					// Clear default flags if needed (outside transaction to avoid conflicts)
+					if (payment.loanId) {
+						await clearDefaultFlagsIfNeeded(payment.loanId, adminUserId || 'SYSTEM');
+					}
+
+					// Continue with the rest of the processing in a new transaction
+					await prisma.$transaction(async (tx) => {
 						// Create admin notification
 						await tx.notification.create({
 							data: {

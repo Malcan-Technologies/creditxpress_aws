@@ -676,6 +676,8 @@ function SettingsPageContent() {
 				return "📊";
 			case "EARLY_SETTLEMENT":
 				return "💰";
+			case "DEFAULT_PROCESSING":
+				return "⚠️";
 			default:
 				return "⚙️";
 		}
@@ -693,6 +695,8 @@ function SettingsPageContent() {
 				return "Notification Settings";
 			case "EARLY_SETTLEMENT":
 				return "Early Settlement Settings";
+			case "DEFAULT_PROCESSING":
+				return "Default Risk Processing";
 			default:
 				return category.split("_").map(word => 
 					word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
@@ -709,6 +713,9 @@ function SettingsPageContent() {
 			case "LATE_FEES":
 				const lateFeeSetting = categorySettings.find(s => s.key === "ENABLE_LATE_FEE_GRACE_PERIOD");
 				return lateFeeSetting ? !lateFeeSetting.value : true;
+			case "DEFAULT_PROCESSING":
+				const defaultProcessingSetting = categorySettings.find(s => s.key === "ENABLE_DEFAULT_PROCESSING");
+				return defaultProcessingSetting ? !defaultProcessingSetting.value : true;
 			default:
 				return false;
 		}
@@ -1147,6 +1154,35 @@ function SettingsPageContent() {
 										})()}
 									</div>
 								)}
+								{category === "DEFAULT_PROCESSING" && (
+									<div className="flex items-center justify-between mt-2">
+										<p className={`text-sm leading-relaxed ${
+											isDisabled ? "text-gray-500" : "text-gray-400"
+										}`}>
+											Configure automatic default risk processing and notifications. Controls when loans are flagged as default risk and the remedy period workflow.
+										</p>
+										{/* Main Enable Toggle */}
+										{(() => {
+											const mainToggleSetting = categorySettings.find(s => s.key === "ENABLE_DEFAULT_PROCESSING");
+											if (!mainToggleSetting) return null;
+											
+											return (
+												<div className="flex items-center space-x-3 ml-6">
+													<span className="text-sm font-medium text-gray-300">Enable Default Processing</span>
+													<label className="relative inline-flex items-center cursor-pointer">
+														<input
+															type="checkbox"
+															checked={mainToggleSetting.value}
+															onChange={(e) => handleSettingChange(mainToggleSetting.key, e.target.checked)}
+															className="sr-only peer"
+														/>
+														<div className="w-12 h-7 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-400 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-amber-600 shadow-lg"></div>
+													</label>
+												</div>
+											);
+										})()}
+									</div>
+								)}
 							</div>
 
 							<div className={`p-6 space-y-6 relative ${isDisabled ? "pointer-events-none" : ""}`}>
@@ -1331,6 +1367,42 @@ function SettingsPageContent() {
 															</ul>
 														</div>
 													)}
+												</div>
+												<div className="flex-shrink-0 w-64">
+													{renderSettingInput(setting)}
+													{setting.options && setting.dataType === "NUMBER" && (
+														<div className="mt-1 text-xs text-gray-400">
+															Range: {setting.options.min} - {setting.options.max} {setting.options.unit}
+														</div>
+													)}
+												</div>
+											</div>
+										</div>
+									))
+								) : category === "DEFAULT_PROCESSING" ? (
+									/* Default Processing - exclude main toggle from regular settings */
+									categorySettings.filter(s => s.key !== "ENABLE_DEFAULT_PROCESSING").map((setting) => (
+										<div key={setting.key} className="border-b border-gray-700/30 last:border-b-0 pb-6 last:pb-0">
+											<div className="flex items-start justify-between">
+												<div className="flex-1 min-w-0 mr-6">
+													<div className="flex items-center space-x-2 mb-2">
+														<h3 className="text-base font-medium text-white">
+															{setting.name}
+														</h3>
+														{setting.requiresRestart && (
+															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-400/30">
+																Requires Restart
+															</span>
+														)}
+														{setting.affectsExistingLoans && (
+															<span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300 border border-red-400/30">
+																Affects Existing Loans
+															</span>
+														)}
+													</div>
+													<p className="text-sm text-gray-300 mb-3">
+														{setting.description}
+													</p>
 												</div>
 												<div className="flex-shrink-0 w-64">
 													{renderSettingInput(setting)}
@@ -1748,7 +1820,10 @@ function SettingsPageContent() {
 									s.key !== "UPCOMING_PAYMENT_CHECK_TIME" &&
 									s.key !== "LATE_PAYMENT_REMINDER_DAYS" &&
 									s.key !== "WHATSAPP_UPCOMING_PAYMENT" &&
-									s.key !== "WHATSAPP_LATE_PAYMENT"
+									s.key !== "WHATSAPP_LATE_PAYMENT" &&
+									s.key !== "WHATSAPP_DEFAULT_RISK" &&
+									s.key !== "WHATSAPP_DEFAULT_REMINDER" &&
+									s.key !== "WHATSAPP_DEFAULT_FINAL"
 								).map((setting) => {
 									const isMandatory = setting.key === "WHATSAPP_OTP_VERIFICATION";
 									const getNotificationIcon = (key: string) => {
@@ -1763,6 +1838,9 @@ function SettingsPageContent() {
 											case "WHATSAPP_PAYMENT_FAILED": return "⚠️";
 											case "WHATSAPP_UPCOMING_PAYMENT": return "⏰";
 											case "WHATSAPP_LATE_PAYMENT": return "🚨";
+											case "WHATSAPP_DEFAULT_RISK": return "⚠️";
+											case "WHATSAPP_DEFAULT_REMINDER": return "📢";
+											case "WHATSAPP_DEFAULT_FINAL": return "🚨";
 											default: return "📱";
 										}
 									};
@@ -1779,6 +1857,9 @@ function SettingsPageContent() {
 											case "WHATSAPP_PAYMENT_FAILED": return "bg-red-800/20 border-red-700/30";
 											case "WHATSAPP_UPCOMING_PAYMENT": return "bg-orange-800/20 border-orange-700/30";
 											case "WHATSAPP_LATE_PAYMENT": return "bg-red-800/20 border-red-700/30";
+											case "WHATSAPP_DEFAULT_RISK": return "bg-amber-800/20 border-amber-700/30";
+											case "WHATSAPP_DEFAULT_REMINDER": return "bg-orange-800/20 border-orange-700/30";
+											case "WHATSAPP_DEFAULT_FINAL": return "bg-red-800/20 border-red-700/30";
 											default: return "bg-gray-800/20 border-gray-700/30";
 										}
 									};
@@ -1952,6 +2033,82 @@ function SettingsPageContent() {
 									</div>
 								)}
 							</div>
+
+							{/* Default Risk Notifications Configuration */}
+							{whatsappSettings.some(s => s.key === "WHATSAPP_DEFAULT_RISK" || s.key === "WHATSAPP_DEFAULT_REMINDER" || s.key === "WHATSAPP_DEFAULT_FINAL") && (
+								<div className="bg-gradient-to-br from-amber-900/20 to-red-900/20 border border-amber-700/30 rounded-xl p-6">
+									<div className="flex items-center mb-6">
+										<div className="w-12 h-12 bg-amber-600/20 rounded-xl flex items-center justify-center mr-4">
+											<span className="text-2xl">⚠️</span>
+										</div>
+										<div>
+											<h3 className="text-lg font-semibold text-white">Default Risk Notifications</h3>
+											<p className="text-sm text-amber-300 mt-1">Automated notifications for loan default risk management</p>
+										</div>
+									</div>
+
+									<div className="grid lg:grid-cols-3 gap-6">
+										{/* Default Risk Warning (28 days) */}
+										{whatsappSettings.filter(s => s.key === "WHATSAPP_DEFAULT_RISK").map((setting) => (
+											<div key={setting.key} className="bg-amber-800/20 border border-amber-700/30 rounded-lg p-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">⚠️</span>
+													<h4 className="text-sm font-medium text-white">Initial Warning</h4>
+												</div>
+												<p className="text-xs text-amber-300 mb-4">
+													Sent when loan is 28 days overdue (default risk flagged)
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
+
+										{/* Default Reminder (during 14-day remedy period) */}
+										{whatsappSettings.filter(s => s.key === "WHATSAPP_DEFAULT_REMINDER").map((setting) => (
+											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">📢</span>
+													<h4 className="text-sm font-medium text-white">Remedy Reminders</h4>
+												</div>
+												<p className="text-xs text-orange-300 mb-4">
+													Periodic reminders during 14-day remedy period
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
+
+										{/* Final Default Notice */}
+										{whatsappSettings.filter(s => s.key === "WHATSAPP_DEFAULT_FINAL").map((setting) => (
+											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">🚨</span>
+													<h4 className="text-sm font-medium text-white">Final Notice</h4>
+												</div>
+												<p className="text-xs text-red-300 mb-4">
+													Sent when loan officially defaults (44 days overdue)
+												</p>
+												<div className="w-full">
+													{renderSettingInput(setting)}
+												</div>
+											</div>
+										))}
+									</div>
+
+									{/* Default Process Information */}
+									<div className="mt-6 text-xs text-amber-300 bg-amber-900/20 p-4 rounded border border-amber-700/30">
+										<strong>📋 Default Process Timeline:</strong><br/>
+										<div className="mt-2 space-y-1">
+											<div><strong>Day 28:</strong> Loan flagged as "potential default" → Initial warning sent + PDF letter generated</div>
+											<div><strong>Day 29-43:</strong> 16-day remedy period → Periodic reminders sent (includes 2 days for registered post delivery)</div>
+											<div><strong>Day 44:</strong> If not cleared → Loan status changed to "DEFAULT" → Final notice sent</div>
+											<div><strong>Recovery:</strong> When payments clear outstanding amounts → Loan returns to "ACTIVE"</div>
+										</div>
+									</div>
+								</div>
+							)}
 
 							{/* Manual Trigger Section */}
 							{(whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") || whatsappSettings.some(s => s.key === "WHATSAPP_LATE_PAYMENT")) && (

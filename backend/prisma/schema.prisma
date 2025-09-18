@@ -149,9 +149,14 @@ model Loan {
   agreementStatus       String?             // PENDING_SIGNATURE, COMPANY_SIGNED, BORROWER_SIGNED, WITNESS_SIGNED, SIGNED, SIGNATURE_EXPIRED, SIGNATURE_DECLINED, SIGNATURE_FAILED
   agreementSignedAt     DateTime?           // When the loan agreement was signed
   docusealSignUrl       String?             // DocuSeal signing slug for returning users
+  // Default tracking fields
+  defaultRiskFlaggedAt  DateTime?           // When loan was flagged as potential default (28 days overdue)
+  defaultNoticesSent    Int                 @default(0) // Count of default notices sent during remedy period
+  defaultedAt           DateTime?           // When loan officially defaulted (42 days overdue)
   lateFee               LateFee?
   repayments            LoanRepayment[]
   signatories           LoanSignatory[]     // Individual signatory tracking
+  defaultLogs           LoanDefaultLog[]    // Default processing audit trail
   application           LoanApplication     @relation(fields: [applicationId], references: [id])
   user                  User                @relation(fields: [userId], references: [id])
   walletTransactions    WalletTransaction[]
@@ -343,18 +348,23 @@ model LoanApplicationHistory {
 }
 
 model LateFee {
-  id                  String   @id @default(cuid())
-  status              String   @default("ACTIVE")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  calculationDetails  Json?
-  lastCalculationDate DateTime @default(now())
-  loanId              String   @unique
-  totalAccruedFees    Float    @default(0)
-  loan                Loan     @relation(fields: [loanId], references: [id])
+  id                     String   @id @default(cuid())
+  status                 String   @default("ACTIVE")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  calculationDetails     Json?
+  lastCalculationDate    DateTime @default(now())
+  loanId                 String   @unique
+  totalAccruedFees       Float    @default(0)
+  // Grace period tracking fields
+  gracePeriodDays        Int?     // Current grace period setting when calculated
+  gracePeriodRepayments  Int      @default(0) // Number of repayments in grace period
+  totalGracePeriodFees   Float    @default(0) // Total fees accumulated during grace period (not charged)
+  loan                   Loan     @relation(fields: [loanId], references: [id])
 
   @@index([lastCalculationDate])
   @@index([status])
+  @@index([gracePeriodRepayments])
   @@map("late_fees")
 }
 
@@ -605,4 +615,25 @@ model LoanSignatory {
   @@index([status])
   @@index([signatoryType])
   @@map("loan_signatories")
+}
+
+model LoanDefaultLog {
+  id                String   @id @default(cuid())
+  loanId            String
+  eventType         String   // RISK_FLAGGED, NOTICE_SENT, DEFAULTED, RECOVERED, PDF_GENERATED
+  daysOverdue       Int
+  outstandingAmount Float
+  totalLateFees     Float
+  noticeType        String?  // INITIAL_WARNING, REMINDER, FINAL_NOTICE
+  whatsappMessageId String?  // WhatsApp message ID for tracking
+  pdfLetterPath     String?  // Path to generated PDF letter
+  metadata          Json?
+  processedAt       DateTime
+  createdAt         DateTime @default(now())
+  loan              Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+  @@index([eventType])
+  @@index([processedAt])
+  @@map("loan_default_logs")
 }

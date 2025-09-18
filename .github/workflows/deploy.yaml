@@ -579,10 +579,16 @@ jobs:
                 docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
               fi
               
-              # Ensure receipts directory exists with proper permissions
-              echo "📁 Setting up receipts directory..."
+              # Run database seed to ensure default settings exist
+              echo "🌱 Running database seed to ensure default settings..."
+              docker compose -f docker-compose.prod.yml exec backend npx prisma db seed
+              
+              # Ensure receipts and uploads directories exist with proper permissions
+              echo "📁 Setting up receipts and uploads directories..."
               docker compose -f docker-compose.prod.yml exec backend mkdir -p receipts
               docker compose -f docker-compose.prod.yml exec backend chmod 777 receipts
+              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/default-letters
+              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/default-letters
               
               # ReactPDF dependencies are handled in Dockerfile - skipping verification
               

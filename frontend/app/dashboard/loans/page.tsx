@@ -97,6 +97,19 @@ interface Loan {
 		description: string;
 		dueDate: string | null;
 	};
+	gracePeriodDays?: number; // Grace period setting from backend
+	// Grace period information from late_fees table
+	gracePeriodInfo?: {
+		gracePeriodDays: number | null;
+		gracePeriodRepayments: number;
+		totalGracePeriodFees: number;
+		totalAccruedFees: number;
+		status: string;
+	} | null;
+	// Default tracking fields
+	defaultRiskFlaggedAt?: string | null;
+	defaultNoticesSent?: number;
+	defaultedAt?: string | null;
 	// DocuSeal Agreement fields
 	docusealSubmissionId?: string | null;
 	agreementStatus?: string | null;
@@ -123,6 +136,10 @@ interface Loan {
 		lateFeeAmount?: number | null;
 		lateFeesPaid?: number | null;
 		principalPaid?: number | null;
+		graceStatus?: string;
+		isInGracePeriod?: boolean;
+		daysIntoGracePeriod?: number;
+		effectiveDaysOverdue?: number;
 		receipts?: {
 			id: string;
 			receiptNumber: string;
@@ -145,6 +162,10 @@ interface LoanRepayment {
 	actualAmount?: number | null;
 	paymentType?: string | null;
 	installmentNumber?: number | null;
+	graceStatus?: string;
+	isInGracePeriod?: boolean;
+	daysIntoGracePeriod?: number;
+	effectiveDaysOverdue?: number;
 	// Receipt information - supports multiple receipts
 	receipts?: {
 		id: string;
@@ -1177,13 +1198,30 @@ function LoansPageContent() {
 		});
 	};
 
-	const getStatusBadge = (status: string) => {
+	const getStatusBadge = (status: string, loan?: Loan) => {
+		// Check for default risk status
+		if (loan?.defaultRiskFlaggedAt && !loan?.defaultedAt) {
+			return (
+				<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200 font-body">
+					<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
+					Default Risk
+				</span>
+			);
+		}
+
 		switch (status.toUpperCase()) {
 			case "ACTIVE":
 				return (
 					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200 font-body">
 						<CheckCircleIcon className="h-3 w-3 mr-1" />
 						Active
+					</span>
+				);
+			case "DEFAULT":
+				return (
+					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200 font-body">
+						<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
+						Defaulted
 					</span>
 				);
 		case "PENDING_DISCHARGE":
@@ -1253,9 +1291,27 @@ function LoansPageContent() {
 	};
 
 	const calculateDaysUntilDue = (dueDate: string) => {
-		const today = new Date();
-		const due = new Date(dueDate);
-		const diffTime = due.getTime() - today.getTime();
+		// Get current date in Malaysia timezone (UTC+8) for consistent calculation with backend
+		const now = new Date();
+		const malaysiaTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+		const todayMalaysia = new Date(Date.UTC(
+			malaysiaTime.getUTCFullYear(),
+			malaysiaTime.getUTCMonth(),
+			malaysiaTime.getUTCDate(),
+			0, 0, 0, 0
+		));
+		
+		// Parse due date and convert to Malaysia timezone start of day
+		const dueUTC = new Date(dueDate);
+		const dueMalaysiaTime = new Date(dueUTC.getTime() + (8 * 60 * 60 * 1000));
+		const dueMalaysia = new Date(Date.UTC(
+			dueMalaysiaTime.getUTCFullYear(),
+			dueMalaysiaTime.getUTCMonth(),
+			dueMalaysiaTime.getUTCDate(),
+			0, 0, 0, 0
+		));
+		
+		const diffTime = dueMalaysia.getTime() - todayMalaysia.getTime();
 		const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 		return diffDays;
 	};
@@ -1955,7 +2011,9 @@ function LoansPageContent() {
 										.filter(
 											(loan) =>
 												loan.status === "ACTIVE" ||
-											loan.status === "PENDING_DISCHARGE"
+												loan.status === "PENDING_DISCHARGE" ||
+												loan.status === "DEFAULT" ||
+												(loan.defaultRiskFlaggedAt && !loan.defaultedAt)
 										)
 										.forEach((loan) => {
 											if (!loan.repayments) return;
@@ -2402,9 +2460,10 @@ function LoansPageContent() {
 												"ACTIVE",
 												"PENDING_DISCHARGE",
 												"PENDING_EARLY_SETTLEMENT",
+												"DEFAULT",
 											].includes(
 												loan.status.toUpperCase()
-											)
+											) || (loan.defaultRiskFlaggedAt && !loan.defaultedAt)
 										).length > 0 && (
 											<span className="bg-blue-600/10 text-blue-600 py-0.5 px-1.5 rounded-full text-xs font-medium border border-blue-600/20 font-body sm:px-2">
 												{
@@ -2413,9 +2472,10 @@ function LoansPageContent() {
 															"ACTIVE",
 															"PENDING_DISCHARGE",
 															"PENDING_EARLY_SETTLEMENT",
+															"DEFAULT",
 														].includes(
 															loan.status.toUpperCase()
-														)
+														) || (loan.defaultRiskFlaggedAt && !loan.defaultedAt)
 													).length
 												}
 											</span>
@@ -2572,10 +2632,13 @@ function LoansPageContent() {
 												"ACTIVE",
 												"PENDING_DISCHARGE",
 												"PENDING_EARLY_SETTLEMENT",
+												"DEFAULT",
 											].includes(status) &&
 												loan.outstandingBalance > 0) ||
 											status === "PENDING_DISCHARGE" ||
-											status === "PENDING_EARLY_SETTLEMENT"
+											status === "PENDING_EARLY_SETTLEMENT" ||
+											status === "DEFAULT" ||
+											(loan.defaultRiskFlaggedAt && !loan.defaultedAt) // Include potential default loans
 										);
 									});
 
@@ -2636,6 +2699,18 @@ function LoansPageContent() {
 																						Early Settlement Pending
 																					</span>
 																				)}
+																				{loan.defaultRiskFlaggedAt && !loan.defaultedAt && (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200 font-body">
+																						<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
+																						Default Risk
+																					</span>
+																				)}
+																				{loan.status.toUpperCase() === "DEFAULT" && (
+																					<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200 font-body">
+																						<ExclamationTriangleIcon className="h-3 w-3 mr-1" />
+																						Defaulted
+																					</span>
+																				)}
 																			</div>
 																			<p className="text-sm lg:text-base text-blue-600 font-semibold font-body">
 																				ID: {loan.id
@@ -2663,7 +2738,57 @@ function LoansPageContent() {
 																	</div>
 																</div>
 
-
+																{/* Default Risk/Status Warning */}
+																{(loan.defaultRiskFlaggedAt || loan.status.toUpperCase() === "DEFAULT") && (
+																	<div className="mb-6">
+																		{loan.defaultRiskFlaggedAt && !loan.defaultedAt && (
+																			<div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-6">
+																				<div className="flex items-start">
+																					<div className="flex-shrink-0">
+																						<ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
+																					</div>
+																					<div className="ml-3 flex-1">
+																						<h3 className="text-lg font-semibold text-amber-800 font-heading">
+																								Default Risk Notice
+																						</h3>
+																						<div className="mt-2 text-sm text-amber-700 space-y-2">
+																							<p>
+																								Your loan has been flagged as at risk of default due to overdue payments. 
+																								You have a <strong>16-day remedy period</strong> to clear all outstanding amounts.
+																							</p>
+																							<p>
+																								<strong>Action Required:</strong> Please make payment immediately to avoid your loan being classified as defaulted.
+																							</p>
+																							
+																						</div>
+																					</div>
+																				</div>
+																			</div>
+																		)}
+																		{(loan.status.toUpperCase() === "DEFAULT" || loan.defaultedAt) && (
+																			<div className="bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-xl p-6">
+																				<div className="flex items-start">
+																					<div className="flex-shrink-0">
+																						<ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
+																					</div>
+																					<div className="ml-3 flex-1">
+																						<h3 className="text-lg font-semibold text-red-800 font-heading">
+																							🚨 Loan Defaulted
+																						</h3>
+																						<div className="mt-2 text-sm text-red-700 space-y-2">
+																							<p>
+																								Your loan has been classified as defaulted. Please contact us immediately to discuss resolution options.
+																							</p>
+																							<p>
+																								<strong>Contact:</strong> Our customer service team is available to help you resolve this matter.
+																							</p>
+																						</div>
+																					</div>
+																				</div>
+																			</div>
+																		)}
+																	</div>
+																)}
 
 																{/* Simplified Loan Overview - Focus on key repayment info */}
 																<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -2818,21 +2943,69 @@ function LoansPageContent() {
 																			const lateFees = loan.overdueInfo?.totalLateFees || 0;
 																			const totalDue = hasOverduePayments ? (overdueAmount + lateFees) : nextPayment.amount;
 																			
-																			// Use red theme for overdue, blue for regular payments
+																			// Check if any overdue repayments are in grace period
+																			const overdueRepayments = loan.overdueInfo?.overdueRepayments || [];
+																			// Use grace period from late_fees table if available, otherwise fall back to backend setting or default
+																			const gracePeriod = loan.gracePeriodInfo?.gracePeriodDays ?? loan.gracePeriodDays ?? 3;
+																			const hasGracePeriodPayments = (loan.gracePeriodInfo?.gracePeriodRepayments ?? 0) > 0 || 
+																				overdueRepayments.some(rep => {
+																					// Calculate if this repayment is in grace period using Malaysia timezone logic (matching backend)
+																					const dueDate = new Date(rep.dueDate);
+																					const now = new Date();
+																					
+																					// Convert both dates to Malaysia timezone (UTC+8) and normalize to start of day
+																					const getMalaysiaStartOfDay = (date: Date) => {
+																						const malaysiaTime = new Date(date.getTime() + (8 * 60 * 60 * 1000));
+																						const startOfDay = new Date(malaysiaTime);
+																						startOfDay.setUTCHours(0, 0, 0, 0);
+																						return new Date(startOfDay.getTime() - (8 * 60 * 60 * 1000)); // Convert back to UTC
+																					};
+																					
+																					const todayMalaysiaStart = getMalaysiaStartOfDay(now);
+																					const dueDateMalaysiaStart = getMalaysiaStartOfDay(dueDate);
+																					const daysOverdue = Math.floor((todayMalaysiaStart.getTime() - dueDateMalaysiaStart.getTime()) / (24 * 60 * 60 * 1000));
+																					
+																					return daysOverdue > 0 && daysOverdue <= gracePeriod;
+																				});
+																			
+																			// Use different themes based on payment status
 																			const isOverdue = hasOverduePayments || nextPayment.isOverdue;
-																			const cardColors = isOverdue 
-																				? "from-red-50 to-red-100 border-red-200" 
-																				: "from-blue-50 to-blue-100 border-blue-200";
-																			const iconColor = isOverdue ? "bg-red-400" : "bg-blue-400";
-																			const textColor = isOverdue ? "text-red-700" : "text-blue-700";
-																			const amountColor = isOverdue ? "text-red-600" : "text-blue-700";
+																			
+																			// Determine card styling based on grace period status
+																			let cardColors, iconColor, textColor, amountColor, cardTitle;
+																			if (hasGracePeriodPayments) {
+																				// Orange theme for grace period
+																				cardColors = "from-orange-50 to-orange-100 border-orange-200";
+																				iconColor = "bg-orange-400";
+																				textColor = "text-orange-700";
+																				amountColor = "text-orange-600";
+																				cardTitle = "Amount Due (Grace Period)";
+																			} else if (isOverdue) {
+																				// Red theme for truly overdue
+																				cardColors = "from-red-50 to-red-100 border-red-200";
+																				iconColor = "bg-red-400";
+																				textColor = "text-red-700";
+																				amountColor = "text-red-600";
+																				cardTitle = "Total Amount Due";
+																			} else {
+																				// Blue theme for regular payments
+																				cardColors = "from-blue-50 to-blue-100 border-blue-200";
+																				iconColor = "bg-blue-400";
+																				textColor = "text-blue-700";
+																				amountColor = "text-blue-700";
+																				cardTitle = "Next Payment";
+																			}
 																			
 																			return (
 																				<>
 																					<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
 																						<div className="flex items-center mb-4">
-																							<div className={`w-12 h-12 lg:w-14 lg:h-14 ${isOverdue ? 'bg-red-600/10' : 'bg-blue-600/10'} rounded-xl flex items-center justify-center mr-3`}>
-																								{isOverdue ? (
+																							<div className={`w-12 h-12 lg:w-14 lg:h-14 ${hasGracePeriodPayments ? 'bg-orange-600/10' : (isOverdue ? 'bg-red-600/10' : 'bg-blue-600/10')} rounded-xl flex items-center justify-center mr-3`}>
+																								{hasGracePeriodPayments ? (
+																									<svg className="h-6 w-6 lg:h-7 lg:w-7 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+																									</svg>
+																								) : isOverdue ? (
 																									<svg className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 																										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.982 16.5c-.77.833.192 2.5 1.732 2.5z" />
 																									</svg>
@@ -2844,7 +3017,7 @@ function LoansPageContent() {
 																							</div>
 																							<div>
 																								<h4 className="text-base lg:text-lg font-heading font-bold text-gray-700 mb-1">
-																									{hasOverduePayments ? "Total Amount Due" : "Next Payment"}
+																									{cardTitle}
 																								</h4>
 																							</div>
 																						</div>
@@ -2856,15 +3029,32 @@ function LoansPageContent() {
 																							</div>
 																							<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
 																								{hasOverduePayments && (
-																									<div className="space-y-1">
-																										<p className="text-sm text-red-600 font-body">
-																											Overdue: {formatCurrency(overdueAmount)}
-																										</p>
-																										{lateFees > 0 && (
+																									<div className="space-y-2">
+																										{hasGracePeriodPayments && (
+																											<div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-2">
+																												<div className="flex items-center">
+																													<svg className="h-4 w-4 text-orange-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+																														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+																													</svg>
+																													<p className="text-sm font-medium text-orange-800">
+																														Grace Period Active
+																													</p>
+																												</div>
+																												<p className="text-xs text-orange-700 mt-1">
+																													Your payment is overdue but you're still within the grace period. Late fees are accumulating but won't be charged yet.
+																												</p>
+																											</div>
+																										)}
+																										<div className="space-y-1">
 																											<p className="text-sm text-red-600 font-body">
-																												Late Fees: {formatCurrency(lateFees)}
-																						</p>
-																					)}
+																												Overdue: {formatCurrency(overdueAmount)}
+																											</p>
+																											{lateFees > 0 && (
+																												<p className="text-sm text-red-600 font-body">
+																													Late Fees: {formatCurrency(lateFees)}
+																												</p>
+																											)}
+																										</div>
 																									</div>
 																								)}
 																								{!hasOverduePayments && nextPayment.includesLateFees && (
@@ -3306,7 +3496,14 @@ function LoansPageContent() {
 																																Cancelled
 																															</span>
 																														);
-																													} else if (isOverdue) {
+																													} else if (repayment.graceStatus === "GRACE_PERIOD") {
+																														return (
+																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
+																																<ClockIcon className="h-3 w-3 mr-1" />
+																																Grace Period ({repayment.daysIntoGracePeriod}d)
+																															</span>
+																														);
+																													} else if (repayment.graceStatus === "OVERDUE" || isOverdue) {
 																														return (
 																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
 																																<ExclamationTriangleIcon className="h-3 w-3 mr-1" />

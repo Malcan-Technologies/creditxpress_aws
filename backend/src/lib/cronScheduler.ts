@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { LateFeeProcessor } from "./lateFeeProcessor";
 import { PaymentNotificationProcessor } from "./upcomingPaymentProcessor";
+import { DefaultProcessor } from "./defaultProcessor";
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -67,14 +68,22 @@ export class CronScheduler {
 				);
 
 				try {
-					const result = await LateFeeProcessor.processLateFees();
+					// Process late fees first
+					const lateFeeResult = await LateFeeProcessor.processLateFees();
 					console.log(
 						`[${new Date().toISOString()}] Late fee processing completed successfully:`,
-						result
+						lateFeeResult
+					);
+
+					// Then process defaults (28-day and 44-day checks) - calculations only, no WhatsApp
+					const defaultResult = await DefaultProcessor.processDefaults();
+					console.log(
+						`[${new Date().toISOString()}] Default processing completed successfully (calculations only):`,
+						defaultResult
 					);
 				} catch (error) {
 					console.error(
-						`[${new Date().toISOString()}] Error in late fee processing:`,
+						`[${new Date().toISOString()}] Error in late fee/default processing:`,
 						error
 					);
 				}
@@ -182,20 +191,30 @@ export class CronScheduler {
 	/**
 	 * Manually trigger late fee processing (for testing)
 	 */
-	async triggerLateFeeProcessing(): Promise<void> {
+	async triggerLateFeeProcessing(): Promise<any> {
 		console.log(
 			`[${new Date().toISOString()}] Manually triggering late fee processing...`
 		);
 
 		try {
-			const result = await LateFeeProcessor.processLateFees();
+			// Process late fees first
+			const lateFeeResult = await LateFeeProcessor.processLateFees();
 			console.log(
 				`[${new Date().toISOString()}] Manual late fee processing completed successfully:`,
-				result
+				lateFeeResult
 			);
+
+			// Then process defaults
+			const defaultResult = await DefaultProcessor.processDefaults();
+			console.log(
+				`[${new Date().toISOString()}] Manual default processing completed successfully:`,
+				defaultResult
+			);
+
+			return { lateFeeResult, defaultResult };
 		} catch (error) {
 			console.error(
-				`[${new Date().toISOString()}] Error in manual late fee processing:`,
+				`[${new Date().toISOString()}] Error in manual late fee/default processing:`,
 				error
 			);
 			throw error;
@@ -244,6 +263,30 @@ export class CronScheduler {
 		} catch (error) {
 			console.error(
 				`[${new Date().toISOString()}] Error in manual upcoming payment notification processing:`,
+				error
+			);
+			throw error;
+		}
+	}
+
+	/**
+	 * Manually trigger default processing only
+	 */
+	async triggerDefaultProcessing(): Promise<any> {
+		console.log(
+			`[${new Date().toISOString()}] Manually triggering default processing...`
+		);
+
+		try {
+			const result = await DefaultProcessor.processDefaults();
+			console.log(
+				`[${new Date().toISOString()}] Manual default processing completed successfully:`,
+				result
+			);
+			return result;
+		} catch (error) {
+			console.error(
+				`[${new Date().toISOString()}] Error in manual default processing:`,
 				error
 			);
 			throw error;

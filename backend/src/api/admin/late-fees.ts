@@ -8,7 +8,6 @@ import {
 import { LateFeeProcessor } from "../../lib/lateFeeProcessor";
 import { authenticateToken, AuthRequest } from "../../middleware/auth";
 import { PrismaClient } from "@prisma/client";
-import { TimeUtils } from "../../lib/precisionUtils";
 import fs from "fs";
 import path from "path";
 
@@ -86,8 +85,9 @@ router.get(
 
 			// Transform data to match the expected format for the frontend
 			const transformedData = overdueRepayments.map(repayment => {
-				const dueDate = new Date(repayment.dueDate);
-				const daysOverdue = TimeUtils.daysOverdue(dueDate);
+				// Use the database daysLate field instead of recalculating to avoid timing issues
+				// The daysLate field is calculated during late fee processing and is more accurate
+				const daysOverdue = repayment.daysLate || 0;
 				
 				const totalLateFees = repayment.lateFeeAmount; // Total late fees assessed (matches loans page)
 				const outstandingLateFees = Math.max(0, repayment.lateFeeAmount - repayment.lateFeesPaid);
@@ -135,10 +135,10 @@ router.get(
 					daysOverdue: daysOverdue,
 					outstandingPrincipal: outstandingPrincipal,
 					dailyRate: dailyRate, // Use actual product configuration
-									feeAmount: totalLateFees, // Total late fees assessed (matches loans page display)
-				outstandingFeeAmount: outstandingLateFees, // Outstanding late fees still owed
-				cumulativeFees: repayment.lateFeeAmount, // Use database value
-				feeType: "COMBINED",
+					feeAmount: totalLateFees, // Total late fees assessed (matches loans page display)
+					outstandingFeeAmount: outstandingLateFees, // Outstanding late fees still owed
+					cumulativeFees: repayment.lateFeeAmount, // Use database value
+					feeType: "COMBINED",
 					fixedFeeAmount: fixedFeeAmount,
 					frequencyDays: frequencyDays,
 					// Add breakdown for display (these are calculated from database values)
@@ -147,6 +147,12 @@ router.get(
 					status: status,
 					createdAt: repayment.createdAt,
 					updatedAt: repayment.updatedAt,
+					// Add grace period information from late_fees table
+					gracePeriodInfo: repayment.loan.lateFee ? {
+						gracePeriodDays: repayment.loan.lateFee.gracePeriodDays,
+						gracePeriodRepayments: repayment.loan.lateFee.gracePeriodRepayments,
+						totalGracePeriodFees: repayment.loan.lateFee.totalGracePeriodFees,
+					} : null,
 					loanRepayment: {
 						id: repayment.id,
 						amount: repayment.amount,
@@ -301,24 +307,45 @@ router.post(
 	async (_req: AuthRequest, res: Response) => {
 		try {
 			// Manual processing always uses force mode to bypass daily limits
-			const result = await LateFeeProcessor.processLateFees(true);
+			const lateFeeResult = await LateFeeProcessor.processLateFees(true);
+			
+			// Also process defaults with force mode
+			const { DefaultProcessor } = await import("../../lib/defaultProcessor");
+			const defaultResult = await DefaultProcessor.processDefaults(true);
+
+			const result = { lateFeeResult, defaultResult };
+
+			// Build detailed message with grace period information
+			let message = "Processing completed successfully.";
+			if (lateFeeResult.isManualRun) {
+				const gracePeriodInfo = lateFeeResult.gracePeriodRepayments && lateFeeResult.gracePeriodRepayments > 0
+					? ` (${lateFeeResult.gracePeriodRepayments} in ${lateFeeResult.gracePeriodDays}-day grace period)`
+					: "";
+				
+				message = `Manual processing completed successfully!\n\n` +
+					`Late Fee Processing:\n` +
+					`• Found ${lateFeeResult.overdueRepayments} overdue repayments${gracePeriodInfo}\n` +
+					`• Calculated ${lateFeeResult.feesCalculated} new fees\n` +
+					`• Total fee amount: $${lateFeeResult.totalFeeAmount.toFixed(2)}\n` +
+					`• Processing time: ${lateFeeResult.processingTimeMs}ms\n\n` +
+					`Default Processing:\n` +
+					`• ${defaultResult.riskLoansProcessed} loans flagged as default risk\n` +
+					`• ${defaultResult.defaultedLoans} loans moved to default status\n` +
+					`• ${defaultResult.pdfLettersGenerated || 0} PDF letters generated\n` +
+					`• WhatsApp notifications will be sent at 10 AM\n\n` +
+					`Data will be refreshed automatically.`;
+			}
 
 			res.json({
 				success: true,
 				data: result,
-				message: result.isManualRun
-					? `Manual processing completed successfully. ${
-							result.feesCalculated
-					  } fees calculated, $${result.totalFeeAmount.toFixed(
-							2
-					  )} total amount.`
-					: "Processing completed successfully.",
+				message: message,
 			});
 		} catch (error) {
-			console.error("Error processing late fees:", error);
+			console.error("Error processing late fees and defaults:", error);
 			res.status(500).json({
 				success: false,
-				error: "Failed to process late fees",
+				error: "Failed to process late fees and defaults",
 			});
 		}
 	}

@@ -589,6 +589,135 @@ class WhatsAppService {
 			parameters: [fullName, rejectionReason]
 		});
 	}
+
+	// Default Risk Notification (28 days overdue)
+	async sendDefaultRiskNotification(
+		to: string,
+		data: {
+			borrowerName: string;
+			productName: string;
+			daysOverdue: number;
+			outstandingAmount: number;
+			remedyDays: number;
+		}
+	): Promise<WhatsAppResponse> {
+		const isEnabled = await this.isNotificationEnabled('WHATSAPP_DEFAULT_RISK');
+		if (!isEnabled) {
+			console.log('Default risk WhatsApp notifications are disabled');
+			return { success: false, error: 'Notifications disabled' };
+		}
+
+		const formattedAmount = `RM ${data.outstandingAmount.toFixed(2)}`;
+		const remedyDeadline = new Date();
+		remedyDeadline.setDate(remedyDeadline.getDate() + data.remedyDays);
+		const formattedDeadline = remedyDeadline.toLocaleDateString('en-MY', {
+			day: 'numeric',
+			month: 'long',
+			year: 'numeric'
+		});
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'loan_default_risk',
+			parameters: [
+				data.borrowerName,
+				data.productName,
+				data.daysOverdue.toString(),
+				formattedAmount,
+				data.remedyDays.toString(),
+				formattedDeadline
+			]
+		});
+	}
+
+	// Default Reminder Notification (during remedy period)
+	async sendDefaultReminderNotification(
+		to: string,
+		data: {
+			borrowerName: string;
+			productName: string;
+			outstandingAmount: number;
+			daysRemaining: number;
+			remedyDeadline: Date;
+		}
+	): Promise<WhatsAppResponse> {
+		const isEnabled = await this.isNotificationEnabled('WHATSAPP_DEFAULT_REMINDER');
+		if (!isEnabled) {
+			console.log('Default reminder WhatsApp notifications are disabled');
+			return { success: false, error: 'Notifications disabled' };
+		}
+
+		const formattedAmount = `RM ${data.outstandingAmount.toFixed(2)}`;
+		const formattedDeadline = data.remedyDeadline.toLocaleDateString('en-MY', {
+			day: 'numeric',
+			month: 'long',
+			year: 'numeric'
+		});
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'loan_default_reminder',
+			parameters: [
+				data.borrowerName,
+				data.daysRemaining.toString(),
+				formattedAmount,
+				formattedDeadline
+			]
+		});
+	}
+
+	// Default Final Notification (loan defaulted)
+	async sendDefaultFinalNotification(
+		to: string,
+		data: {
+			borrowerName: string;
+			productName: string;
+			outstandingAmount: number;
+		}
+	): Promise<WhatsAppResponse> {
+		const isEnabled = await this.isNotificationEnabled('WHATSAPP_DEFAULT_FINAL');
+		if (!isEnabled) {
+			console.log('Default final WhatsApp notifications are disabled');
+			return { success: false, error: 'Notifications disabled' };
+		}
+
+		const formattedAmount = `RM ${data.outstandingAmount.toFixed(2)}`;
+
+		return this.sendUtilityNotification({
+			to,
+			templateName: 'loan_default_final',
+			parameters: [
+				data.borrowerName,
+				data.productName,
+				formattedAmount
+			]
+		});
+	}
 }
 
-export default new WhatsAppService(); 
+const whatsappService = new WhatsAppService();
+
+// Export individual functions for use in other modules
+export const sendDefaultRiskMessage = (phoneNumber: string, data: {
+	borrowerName: string;
+	productName: string;
+	daysOverdue: number;
+	outstandingAmount: number;
+	remedyDays: number;
+}) => whatsappService.sendDefaultRiskNotification(phoneNumber, data).then(result => result.messageId || null);
+
+export const sendDefaultReminderMessage = (phoneNumber: string, data: {
+	borrowerName: string;
+	productName: string;
+	outstandingAmount: number;
+	daysRemaining: number;
+	remedyDeadline: Date;
+}) => whatsappService.sendDefaultReminderNotification(phoneNumber, data).then(result => result.messageId || null);
+
+export const sendDefaultFinalMessage = (phoneNumber: string, data: {
+	borrowerName: string;
+	productName: string;
+	outstandingAmount: number;
+}) => whatsappService.sendDefaultFinalNotification(phoneNumber, data).then(result => result.messageId || null);
+
+export default whatsappService; 

@@ -3,6 +3,61 @@ import { PrismaClient } from "@prisma/client";
 import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils, SafeMath } from "../lib/precisionUtils";
 
+// Import grace period function from late fee processor
+async function getLateFeeGraceSettings(prismaClient: any = prisma) {
+	try {
+		const settings = await prismaClient.systemSettings.findMany({
+			where: {
+				key: {
+					in: ['ENABLE_LATE_FEE_GRACE_PERIOD', 'LATE_FEE_GRACE_DAYS']
+				},
+				isActive: true
+			}
+		});
+
+		const enableGraceSetting = settings.find((s: any) => s.key === 'ENABLE_LATE_FEE_GRACE_PERIOD');
+		const graceDaysSetting = settings.find((s: any) => s.key === 'LATE_FEE_GRACE_DAYS');
+
+		const isGraceEnabled = enableGraceSetting ? JSON.parse(enableGraceSetting.value) : true;
+		const graceDays = graceDaysSetting ? JSON.parse(graceDaysSetting.value) : 3;
+
+		// If grace period is disabled, return 0 days
+		return isGraceEnabled ? graceDays : 0;
+	} catch (error) {
+		console.error('Error fetching late fee grace settings:', error);
+		// Default fallback: 3 days grace period
+		return 3;
+	}
+}
+
+// Helper function to determine repayment status including grace period
+function getRepaymentStatusWithGracePeriod(repayment: any, gracePeriodDays: number) {
+	if (repayment.status === 'COMPLETED') {
+		return { status: 'COMPLETED', isInGracePeriod: false };
+	}
+	
+	if (repayment.status === 'CANCELLED') {
+		return { status: 'CANCELLED', isInGracePeriod: false };
+	}
+	
+	// For PENDING and PARTIAL repayments, check if they're overdue
+	const now = new Date();
+	const dueDate = new Date(repayment.dueDate);
+	const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000));
+	
+	if (daysOverdue <= 0) {
+		return { status: repayment.status, isInGracePeriod: false };
+	}
+	
+	// Payment is overdue - check if within grace period
+	if (daysOverdue <= gracePeriodDays) {
+		return { status: 'GRACE_PERIOD', isInGracePeriod: true, daysIntoGracePeriod: daysOverdue };
+	}
+	
+	// Beyond grace period - truly overdue
+	return { status: 'OVERDUE', isInGracePeriod: false, daysOverdue: daysOverdue - gracePeriodDays };
+}
+
 const router = Router();
 const prisma = new PrismaClient();
 
@@ -150,7 +205,7 @@ async function computeEarlySettlementQuote(loanId: string) {
   if (!loan) {
     throw new Error('Loan not found');
   }
-  if (!['ACTIVE','OVERDUE','PENDING_DISCHARGE'].includes(loan.status)) {
+  if (!['ACTIVE','OVERDUE','PENDING_DISCHARGE','DEFAULT'].includes(loan.status)) {
     return { allowed: false, reason: `Loan status ${loan.status} not eligible for early settlement.` } as const;
   }
 
@@ -268,7 +323,7 @@ router.post('/:id/early-settlement/request', authenticateAndVerifyPhone, async (
     const { reference, description } = req.body || {};
 
     // Validate loan
-    const loan = await prisma.loan.findFirst({ where: { id: loanId, userId, status: { in: ['ACTIVE','OVERDUE','PENDING_DISCHARGE'] } } });
+    const loan = await prisma.loan.findFirst({ where: { id: loanId, userId, status: { in: ['ACTIVE','OVERDUE','PENDING_DISCHARGE','DEFAULT'] } } });
     if (!loan) return res.status(404).json({ success: false, message: 'Loan not found or not eligible' });
 
     // Compute quote
@@ -457,6 +512,7 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 						"PENDING_DISCHARGE",
 						"PENDING_EARLY_SETTLEMENT",
 						"DISCHARGED",
+						"DEFAULT", // Include DEFAULT loans so they show in user dashboard
 					], // Include all loan statuses for dashboard
 				},
 			},
@@ -487,6 +543,15 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 						dueDate: "asc",
 					},
 				},
+				lateFee: {
+					select: {
+						gracePeriodDays: true,
+						gracePeriodRepayments: true,
+						totalGracePeriodFees: true,
+						totalAccruedFees: true,
+						status: true,
+					},
+				},
 			},
 			orderBy: {
 				createdAt: "desc",
@@ -496,7 +561,7 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 		// Ensure outstanding balances are accurate by recalculating them for all active loans
 		// This ensures single source of truth even if there were any inconsistencies
 		for (const loan of loans.filter(
-			(l) => l.status === "ACTIVE" || l.status === "OVERDUE" || l.status === "PENDING_DISCHARGE" || l.status === "PENDING_EARLY_SETTLEMENT"
+			(l) => l.status === "ACTIVE" || l.status === "OVERDUE" || l.status === "PENDING_DISCHARGE" || l.status === "PENDING_EARLY_SETTLEMENT" || l.status === "DEFAULT"
 		)) {
 			await prisma.$transaction(async (tx) => {
 				// Import the calculation function from wallet API
@@ -510,6 +575,8 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 		// Calculate additional loan information including late fees
 		const loansWithDetails = await Promise.all(
 			loans.map(async (loan) => {
+				// Use grace period from late_fees table if available, otherwise fall back to settings
+				const gracePeriodDays = loan.lateFee?.gracePeriodDays ?? await getLateFeeGraceSettings();
 				const totalRepaid = loan.repayments.reduce(
 					(sum, repayment) => sum + repayment.amount,
 					0
@@ -692,6 +759,15 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 					canRepay: loan.outstandingBalance > 0 && loan.status !== 'PENDING_EARLY_SETTLEMENT' && loan.status !== 'PENDING_DISCHARGE',
 					overdueInfo,
 					nextPaymentInfo,
+					gracePeriodDays, // Include grace period setting for frontend reference
+					// Add grace period information from late_fees table
+					gracePeriodInfo: loan.lateFee ? {
+						gracePeriodDays: loan.lateFee.gracePeriodDays,
+						gracePeriodRepayments: loan.lateFee.gracePeriodRepayments,
+						totalGracePeriodFees: loan.lateFee.totalGracePeriodFees,
+						totalAccruedFees: loan.lateFee.totalAccruedFees,
+						status: loan.lateFee.status,
+					} : null,
 				};
 			})
 		);
@@ -760,6 +836,15 @@ router.get(
 							createdAt: "desc",
 						},
 					},
+					lateFee: {
+						select: {
+							gracePeriodDays: true,
+							gracePeriodRepayments: true,
+							totalGracePeriodFees: true,
+							totalAccruedFees: true,
+							status: true,
+						},
+					},
 				},
 			});
 
@@ -778,11 +863,36 @@ router.get(
 					  100
 					: 0;
 
+			// Use grace period from late_fees table if available, otherwise fall back to settings
+			const gracePeriodDays = loan.lateFee?.gracePeriodDays ?? await getLateFeeGraceSettings();
+
+			// Add grace period status to each repayment
+			const repaymentsWithGraceStatus = loan.repayments.map(repayment => {
+				const graceStatus = getRepaymentStatusWithGracePeriod(repayment, gracePeriodDays);
+				return {
+					...repayment,
+					graceStatus: graceStatus.status,
+					isInGracePeriod: graceStatus.isInGracePeriod,
+					daysIntoGracePeriod: graceStatus.daysIntoGracePeriod,
+					effectiveDaysOverdue: graceStatus.daysOverdue
+				};
+			});
+
 			const loanWithDetails = {
 				...loan,
+				repayments: repaymentsWithGraceStatus,
 				totalRepaid,
 				progressPercentage: Math.round(progressPercentage * 100) / 100,
 				canRepay: loan.outstandingBalance > 0,
+				gracePeriodDays, // Include grace period setting for frontend reference
+				// Add grace period information from late_fees table
+				gracePeriodInfo: loan.lateFee ? {
+					gracePeriodDays: loan.lateFee.gracePeriodDays,
+					gracePeriodRepayments: loan.lateFee.gracePeriodRepayments,
+					totalGracePeriodFees: loan.lateFee.totalGracePeriodFees,
+					totalAccruedFees: loan.lateFee.totalAccruedFees,
+					status: loan.lateFee.status,
+				} : null,
 			};
 
 			res.json(loanWithDetails);

@@ -113,12 +113,18 @@ export class PaymentNotificationProcessor {
 				notificationType: 'late' as const
 			})));
 
+			// Process default notifications (risk, reminder, final)
+			const defaultResult = await this.processDefaultNotifications();
+			result.notificationsSent += defaultResult.riskNotificationsSent + defaultResult.reminderNotificationsSent + defaultResult.finalNotificationsSent;
+			result.errors += defaultResult.errors;
+
 			console.log(`[${new Date().toISOString()}] Payment notification processing completed:`, {
 				totalChecked: result.totalChecked,
 				notificationsSent: result.notificationsSent,
 				errors: result.errors,
 				upcomingPayments: result.upcomingPayments,
-				latePayments: result.latePayments
+				latePayments: result.latePayments,
+				defaultNotifications: defaultResult
 			});
 
 			return result;
@@ -712,5 +718,45 @@ export class PaymentNotificationProcessor {
 		const year = malaysiaDate.getUTCFullYear();
 		
 		return `${day}/${month}/${year}`;
+	}
+
+	/**
+	 * Process default-related WhatsApp notifications
+	 * This runs at 10 AM to send notifications for loans that were flagged/defaulted at 1 AM
+	 */
+	static async processDefaultNotifications(): Promise<{
+		riskNotificationsSent: number;
+		reminderNotificationsSent: number;
+		finalNotificationsSent: number;
+		errors: number;
+	}> {
+		console.log(`[${new Date().toISOString()}] Starting default notification processing...`);
+
+		const result = {
+			riskNotificationsSent: 0,
+			reminderNotificationsSent: 0,
+			finalNotificationsSent: 0,
+			errors: 0
+		};
+
+		try {
+			const { DefaultProcessor } = await import("./defaultProcessor");
+			
+			// Process default notifications without doing calculations (notifications only)
+			const notificationResult = await DefaultProcessor.processDefaultNotifications();
+			
+			result.riskNotificationsSent = notificationResult.riskNotificationsSent;
+			result.reminderNotificationsSent = notificationResult.reminderNotificationsSent;
+			result.finalNotificationsSent = notificationResult.finalNotificationsSent;
+			result.errors = notificationResult.errors;
+
+			console.log(`[${new Date().toISOString()}] Default notification processing completed:`, result);
+
+		} catch (error) {
+			console.error(`[${new Date().toISOString()}] Error in default notification processing:`, error);
+			result.errors++;
+		}
+
+		return result;
 	}
 }
