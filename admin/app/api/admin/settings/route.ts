@@ -67,12 +67,14 @@ export async function PUT(request: Request) {
 
 		console.log("Admin Settings PUT API - forwarding to backend");
 
-		// Forward the request to the backend
+		// Forward the request to the backend with cache-busting headers
 		const response = await fetch(`${backendUrl}/api/settings`, {
 			method: "PUT",
 			headers: {
 				Authorization: `Bearer ${token}`,
 				"Content-Type": "application/json",
+				"Cache-Control": "no-cache, no-store, must-revalidate",
+				"Pragma": "no-cache",
 			},
 			body: JSON.stringify(body),
 		});
@@ -86,7 +88,14 @@ export async function PUT(request: Request) {
 			);
 		}
 
-		return NextResponse.json(data);
+		// Return response with cache-busting headers
+		return NextResponse.json(data, {
+			headers: {
+				"Cache-Control": "no-cache, no-store, must-revalidate",
+				"Pragma": "no-cache",
+				"Expires": "0",
+			},
+		});
 	} catch (error) {
 		console.error("Settings update API error:", error);
 		return NextResponse.json(

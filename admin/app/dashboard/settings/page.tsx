@@ -29,6 +29,7 @@ interface SystemSetting {
 	affectsExistingLoans: boolean;
 	lastChangedBy?: string;
 	lastChangedAt?: string;
+	isMissing?: boolean; // Flag to indicate placeholder settings
 }
 
 interface SettingsData {
@@ -128,6 +129,26 @@ function SettingsPageContent() {
 		}
 	}, [activeTab]);
 
+	// Force refresh function to clear all cached data
+	const forceRefresh = async () => {
+		// Clear local state first
+		setSettings({});
+		setPendingChanges([]);
+		setHasUnsavedChanges(false);
+		setError(null);
+		
+		// Reload current tab data
+		if (activeTab === "system") {
+			await loadSettings();
+		} else if (activeTab === "notifications") {
+			await loadSettings(); // Notifications are part of the main settings
+		} else if (activeTab === "bank-accounts") {
+			await loadBankAccounts();
+		} else if (activeTab === "company-settings") {
+			await loadCompanySettings();
+		}
+	};
+
 	// Load bank accounts
 	const loadBankAccounts = async () => {
 		try {
@@ -216,10 +237,9 @@ function SettingsPageContent() {
 			setSaving(true);
 			setError(null);
 
-			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			const url = bankAccount.id 
-				? `${backendUrl}/api/bank-accounts/${bankAccount.id}`
-				: `${backendUrl}/api/bank-accounts`;
+				? `/api/admin/bank-accounts/${bankAccount.id}`
+				: `/api/admin/bank-accounts`;
 			
 			const method = bankAccount.id ? "PUT" : "POST";
 
@@ -313,14 +333,20 @@ function SettingsPageContent() {
 			setLoading(true);
 			setError(null);
 
-			// Fetch settings directly from backend like the products page
-			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-			const response = await fetchWithAdminTokenRefresh(`/api/admin/settings/categories`, {
+			// Add cache-busting timestamp to ensure fresh data
+			const timestamp = Date.now();
+			const response = await fetchWithAdminTokenRefresh(`/api/admin/settings/categories?_t=${timestamp}`, {
 				method: "GET",
+				headers: {
+					"Cache-Control": "no-cache, no-store, must-revalidate",
+					"Pragma": "no-cache",
+					"Expires": "0",
+				},
 			}) as ApiResponse<SettingsData>;
 
 			if (response.success) {
 				setSettings(response.data || {});
+				console.log("Settings loaded successfully:", response.data);
 			} else {
 				throw new Error(response.message || "Failed to load settings");
 			}
@@ -385,8 +411,8 @@ function SettingsPageContent() {
 				// Show success message
 				alert("Settings saved successfully!");
 				
-				// Reload settings to get latest data
-				await loadSettings();
+				// Force reload settings to get latest data
+				await forceRefresh();
 			} else {
 				throw new Error(response.message || "Failed to save settings");
 			}
@@ -398,10 +424,10 @@ function SettingsPageContent() {
 		}
 	};
 
-	const discardChanges = () => {
+	const discardChanges = async () => {
 		setPendingChanges([]);
 		setHasUnsavedChanges(false);
-		loadSettings(); // Reload original settings
+		await forceRefresh(); // Force reload original settings
 	};
 
 	// Manual trigger for payment notifications (both upcoming and late)
@@ -1478,11 +1504,11 @@ function SettingsPageContent() {
 					</div>
 					<div className="flex space-x-3">
 						<button
-							onClick={loadSettings}
+							onClick={forceRefresh}
 							disabled={loading}
 							className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
 						>
-							{loading ? "Loading..." : "Refresh"}
+							{loading ? "Loading..." : "Force Refresh"}
 						</button>
 						<button
 							onClick={saveSettings}
@@ -1756,10 +1782,34 @@ function SettingsPageContent() {
 			setting.key !== 'UPCOMING_PAYMENT_CHECK_TIME'
 		) || [];
 
+		// Check if WhatsApp notifications are enabled
+		const whatsappEnabled = whatsappSettings.find(s => s.key === 'ENABLE_WHATSAPP_NOTIFICATIONS')?.value || false;
+
+		// Helper function to find a setting or return a placeholder
+		const findSettingOrPlaceholder = (key: string, name: string, description: string) => {
+			const setting = whatsappSettings.find(s => s.key === key);
+			if (setting) return setting;
+			
+			// Return a placeholder setting when the actual setting is missing
+			return {
+				id: `placeholder-${key}`,
+				key,
+				category: 'NOTIFICATIONS',
+				name,
+				description,
+				dataType: 'BOOLEAN',
+				value: false,
+				isActive: false,
+				requiresRestart: false,
+				affectsExistingLoans: false,
+				isMissing: true // Flag to indicate this is a placeholder
+			};
+		};
+
 		return (
 			<div className="space-y-6">
-				{/* WhatsApp Notifications Card */}
-				{whatsappSettings.length > 0 && (
+				{/* WhatsApp Notifications Card - Always show, but disable content when turned off */}
+				{(whatsappSettings.length > 0 || notificationSettings.length > 0) && (
 					<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
 						<div className="px-6 py-4 border-b border-gray-700/30">
 							<div className="flex items-center">
@@ -1769,15 +1819,37 @@ function SettingsPageContent() {
 									</svg>
 								</div>
 								<div>
-									<h2 className="text-lg font-semibold text-white">WhatsApp Notifications</h2>
-									<p className="text-sm text-green-300 mt-1">Configure WhatsApp Business API notifications for loan and payment events</p>
+									<h2 className="text-lg font-semibold text-white flex items-center">
+										WhatsApp Notifications
+										{!whatsappEnabled && (
+											<span className="ml-3 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
+												DISABLED
+											</span>
+										)}
+									</h2>
+									<p className={`text-sm mt-1 ${whatsappEnabled ? 'text-green-300' : 'text-gray-400'}`}>
+										{whatsappEnabled 
+											? 'Configure WhatsApp Business API notifications for loan and payment events'
+											: 'WhatsApp notifications are currently disabled. Enable the master toggle below to configure individual notification types.'
+										}
+									</p>
 								</div>
 							</div>
-							</div>
 
-							<div className="p-6 space-y-6">
-							{/* Master toggle first */}
-							{whatsappSettings.filter(s => s.key === "ENABLE_WHATSAPP_NOTIFICATIONS").map((setting) => (
+							<div className={`p-6 space-y-6 relative ${!whatsappEnabled ? 'opacity-60' : ''}`}>
+							{/* Disabled overlay */}
+							{!whatsappEnabled && whatsappSettings.length === 0 && (
+								<div className="absolute inset-0 bg-gray-900/40 rounded-lg flex items-center justify-center z-10">
+									<div className="bg-gray-800/90 text-gray-300 px-6 py-4 rounded-lg text-center backdrop-blur-sm">
+										<h3 className="text-lg font-medium mb-2">WhatsApp Notifications Disabled</h3>
+										<p className="text-sm text-gray-400">Enable WhatsApp notifications to configure individual notification types</p>
+									</div>
+								</div>
+							)}
+							
+							{/* Master toggle first - Always show even if other settings are missing */}
+							{whatsappSettings.filter(s => s.key === "ENABLE_WHATSAPP_NOTIFICATIONS").length > 0 ? (
+								whatsappSettings.filter(s => s.key === "ENABLE_WHATSAPP_NOTIFICATIONS").map((setting) => (
 								<div key={setting.key} className="border-b border-green-700/30 pb-6">
 										<div className="flex items-start justify-between">
 											<div className="flex-1 min-w-0 mr-6">
@@ -1810,10 +1882,36 @@ function SettingsPageContent() {
 										</div>
 									</div>
 								</div>
-							))}
+							))
+							) : (
+								/* Fallback when ENABLE_WHATSAPP_NOTIFICATIONS setting is missing */
+								<div className="border-b border-green-700/30 pb-6">
+									<div className="flex items-start justify-between">
+										<div className="flex-1 min-w-0 mr-6">
+											<div className="flex items-center space-x-2 mb-2">
+												<h3 className="text-base font-medium text-white">
+													🔧 Enable WhatsApp Notifications
+												</h3>
+											</div>
+											<p className="text-sm text-gray-300 mb-3">
+												Master toggle to enable or disable all WhatsApp Business API notifications
+											</p>
+											<div className="text-xs text-red-300 bg-red-900/20 p-3 rounded border border-red-700/30">
+												<strong>⚠️ Setting Not Found:</strong><br/>
+												The ENABLE_WHATSAPP_NOTIFICATIONS setting is missing from the database. Please contact your system administrator to add this setting.
+											</div>
+										</div>
+										<div className="flex-shrink-0 w-64">
+											<div className="text-sm text-gray-500 italic">
+												Setting not available
+											</div>
+										</div>
+									</div>
+								</div>
+							)}
 							
-							{/* Individual notification types */}
-							<div className="grid md:grid-cols-2 gap-6">
+							{/* Individual notification types - Show when enabled or when master toggle exists */}
+							<div className={`grid md:grid-cols-2 gap-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
 								{whatsappSettings.filter(s => 
 									s.key !== "ENABLE_WHATSAPP_NOTIFICATIONS" && 
 									s.key !== "UPCOMING_PAYMENT_REMINDER_DAYS" && 
@@ -1925,177 +2023,312 @@ function SettingsPageContent() {
 							</div>
 
 														{/* Payment Reminder Configuration Cards */}
-							<div className="grid lg:grid-cols-2 gap-6">
-								{/* Upcoming Payment Configuration */}
-								{whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") && (
-									<div className="bg-orange-900/20 border border-orange-700/30 rounded-xl p-6">
-										<div className="flex items-center mb-6">
-											<div className="w-12 h-12 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4">
-												<span className="text-2xl">⏰</span>
-											</div>
-											<div>
-												<h3 className="text-lg font-semibold text-white">Upcoming Payment Reminders</h3>
-												<p className="text-sm text-orange-300 mt-1">Reminders before payment due date</p>
-											</div>
+							<div className={`grid lg:grid-cols-2 gap-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
+								{/* Upcoming Payment Configuration - Always show */}
+								<div className="bg-orange-900/20 border border-orange-700/30 rounded-xl p-6">
+									<div className="flex items-center mb-6">
+										<div className="w-12 h-12 bg-orange-600/20 rounded-xl flex items-center justify-center mr-4">
+											<span className="text-2xl">⏰</span>
 										</div>
+										<div>
+											<h3 className="text-lg font-semibold text-white">Upcoming Payment Reminders</h3>
+											<p className="text-sm text-orange-300 mt-1">Reminders before payment due date</p>
+										</div>
+									</div>
 
-										{/* Main Toggle */}
-										{whatsappSettings.filter(s => s.key === "WHATSAPP_UPCOMING_PAYMENT").map((setting) => (
+									{/* Main Toggle - Always show */}
+									{(() => {
+										const setting = findSettingOrPlaceholder(
+											"WHATSAPP_UPCOMING_PAYMENT",
+											"WhatsApp Upcoming Payment Reminders",
+											"Send WhatsApp reminders before payment due dates"
+										);
+										return (
 											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4 mb-4">
 												<div className="flex items-center space-x-2 mb-3">
 													<span className="text-lg">⏰</span>
-													<h4 className="text-sm font-medium text-white">Enable Reminders</h4>
+													<h4 className="text-sm font-medium text-white">
+														Enable Reminders
+														{setting.isMissing && (
+															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
+																MISSING
+															</span>
+														)}
+													</h4>
 												</div>
 												<p className="text-xs text-gray-400 mb-4">
 													{setting.description}
 												</p>
 												<div className="w-full">
-													{renderSettingInput(setting)}
+													{setting.isMissing ? (
+														<div className="text-sm text-gray-500 italic">
+															Setting not available in database
+														</div>
+													) : (
+														renderSettingInput(setting)
+													)}
 												</div>
 											</div>
-										))}
+										);
+									})()}
 
-										{/* Upcoming Payment Reminder Days */}
-										{whatsappSettings.filter(s => s.key === "UPCOMING_PAYMENT_REMINDER_DAYS").map((setting) => (
+									{/* Upcoming Payment Reminder Days - Always show */}
+									{(() => {
+										const setting = findSettingOrPlaceholder(
+											"UPCOMING_PAYMENT_REMINDER_DAYS",
+											"Upcoming Payment Reminder Days",
+											"Days before payment due date to send reminders"
+										);
+										return (
 											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4 mb-4">
 												<div className="flex items-center space-x-2 mb-3">
 													<span className="text-lg">📅</span>
-													<h4 className="text-sm font-medium text-white">Reminder Days</h4>
-												</div>
-												<p className="text-xs text-gray-400 mb-4">
-													Days before payment due date to send reminders
-												</p>
-												<div className="w-full">
-													{renderSettingInput(setting)}
-												</div>
-											</div>
-										))}
-
-										{/* Example Configuration */}
-										<div className="text-xs text-orange-300 bg-orange-900/20 p-3 rounded border border-orange-700/30">
-											<strong>📋 Example:</strong><br/>
-											"Hi John, this is a reminder that your payment of RM 1000 for your PayAdvance loan is due in 3 days. Please ensure payment is made before 28/8/2025 to avoid late charges."
-										</div>
-									</div>
-								)}
-
-								{/* Late Payment Configuration */}
-								{whatsappSettings.some(s => s.key === "WHATSAPP_LATE_PAYMENT") && (
-									<div className="bg-red-900/20 border border-red-700/30 rounded-xl p-6">
-										<div className="flex items-center mb-6">
-											<div className="w-12 h-12 bg-red-600/20 rounded-xl flex items-center justify-center mr-4">
-												<span className="text-2xl">🚨</span>
-											</div>
-											<div>
-												<h3 className="text-lg font-semibold text-white">Late Payment Reminders</h3>
-												<p className="text-sm text-red-300 mt-1">Reminders after payment due date</p>
-											</div>
-										</div>
-
-										{/* Main Toggle */}
-										{whatsappSettings.filter(s => s.key === "WHATSAPP_LATE_PAYMENT").map((setting) => (
-											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4 mb-4">
-												<div className="flex items-center space-x-2 mb-3">
-													<span className="text-lg">🚨</span>
-													<h4 className="text-sm font-medium text-white">Enable Late Reminders</h4>
+													<h4 className="text-sm font-medium text-white">
+														Reminder Days
+														{setting.isMissing && (
+															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
+																MISSING
+															</span>
+														)}
+													</h4>
 												</div>
 												<p className="text-xs text-gray-400 mb-4">
 													{setting.description}
 												</p>
 												<div className="w-full">
-													{renderSettingInput(setting)}
+													{setting.isMissing ? (
+														<div className="text-sm text-gray-500 italic">
+															Setting not available in database
+														</div>
+													) : (
+														renderSettingInput(setting)
+													)}
 												</div>
 											</div>
-										))}
+										);
+									})()}
 
-										{/* Late Payment Reminder Days */}
-										{whatsappSettings.filter(s => s.key === "LATE_PAYMENT_REMINDER_DAYS").map((setting) => (
+									{/* Example Configuration */}
+									<div className="text-xs text-orange-300 bg-orange-900/20 p-3 rounded border border-orange-700/30">
+										<strong>📋 Example:</strong><br/>
+										"Hi John, this is a reminder that your payment of RM 1000 for your PayAdvance loan is due in 3 days. Please ensure payment is made before 28/8/2025 to avoid late charges."
+									</div>
+								</div>
+
+								{/* Late Payment Configuration - Always show */}
+								<div className="bg-red-900/20 border border-red-700/30 rounded-xl p-6">
+									<div className="flex items-center mb-6">
+										<div className="w-12 h-12 bg-red-600/20 rounded-xl flex items-center justify-center mr-4">
+											<span className="text-2xl">🚨</span>
+										</div>
+										<div>
+											<h3 className="text-lg font-semibold text-white">Late Payment Reminders</h3>
+											<p className="text-sm text-red-300 mt-1">Reminders after payment due date</p>
+										</div>
+									</div>
+
+									{/* Main Toggle - Always show */}
+									{(() => {
+										const setting = findSettingOrPlaceholder(
+											"WHATSAPP_LATE_PAYMENT",
+											"WhatsApp Late Payment Reminders",
+											"Send WhatsApp reminders after payment due dates"
+										);
+										return (
+											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4 mb-4">
+												<div className="flex items-center space-x-2 mb-3">
+													<span className="text-lg">🚨</span>
+													<h4 className="text-sm font-medium text-white">
+														Enable Late Reminders
+														{setting.isMissing && (
+															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
+																MISSING
+															</span>
+														)}
+													</h4>
+												</div>
+												<p className="text-xs text-gray-400 mb-4">
+													{setting.description}
+												</p>
+												<div className="w-full">
+													{setting.isMissing ? (
+														<div className="text-sm text-gray-500 italic">
+															Setting not available in database
+														</div>
+													) : (
+														renderSettingInput(setting)
+													)}
+												</div>
+											</div>
+										);
+									})()}
+
+									{/* Late Payment Reminder Days - Always show */}
+									{(() => {
+										const setting = findSettingOrPlaceholder(
+											"LATE_PAYMENT_REMINDER_DAYS",
+											"Late Payment Reminder Days",
+											"Days after payment due date to send reminders"
+										);
+										return (
 											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4 mb-4">
 												<div className="flex items-center space-x-2 mb-3">
 													<span className="text-lg">📅</span>
-													<h4 className="text-sm font-medium text-white">Reminder Days</h4>
+													<h4 className="text-sm font-medium text-white">
+														Reminder Days
+														{setting.isMissing && (
+															<span className="ml-2 text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-400/30">
+																MISSING
+															</span>
+														)}
+													</h4>
 												</div>
 												<p className="text-xs text-gray-400 mb-4">
-													Days after payment due date to send reminders
+													{setting.description}
 												</p>
 												<div className="w-full">
-													{renderSettingInput(setting)}
+													{setting.isMissing ? (
+														<div className="text-sm text-gray-500 italic">
+															Setting not available in database
+														</div>
+													) : (
+														renderSettingInput(setting)
+													)}
 												</div>
 											</div>
-										))}
+										);
+									})()}
 
-										{/* Example Configuration */}
-										<div className="text-xs text-red-300 bg-red-900/20 p-3 rounded border border-red-700/30">
-											<strong>📋 Example:</strong><br/>
-											"Hi John, your loan payment of RM 1050 for PayAdvance is past due."<br/>
-											<span className="text-xs text-gray-400">Amount includes late fees and outstanding balance</span>
-										</div>
+									{/* Example Configuration */}
+									<div className="text-xs text-red-300 bg-red-900/20 p-3 rounded border border-red-700/30">
+										<strong>📋 Example:</strong><br/>
+										"Hi John, your loan payment of RM 1050 for PayAdvance is past due."<br/>
+										<span className="text-xs text-gray-400">Amount includes late fees and outstanding balance</span>
 									</div>
-								)}
+								</div>
 							</div>
 
-							{/* Default Risk Notifications Configuration */}
-							{whatsappSettings.some(s => s.key === "WHATSAPP_DEFAULT_RISK" || s.key === "WHATSAPP_DEFAULT_REMINDER" || s.key === "WHATSAPP_DEFAULT_FINAL") && (
-								<div className="bg-gradient-to-br from-amber-900/20 to-red-900/20 border border-amber-700/30 rounded-xl p-6">
-									<div className="flex items-center mb-6">
-										<div className="w-12 h-12 bg-amber-600/20 rounded-xl flex items-center justify-center mr-4">
-											<span className="text-2xl">⚠️</span>
-										</div>
-										<div>
-											<h3 className="text-lg font-semibold text-white">Default Risk Notifications</h3>
-											<p className="text-sm text-amber-300 mt-1">Automated notifications for loan default risk management</p>
-										</div>
+							{/* Default Risk Notifications Configuration - Always show */}
+							<div className={`bg-gradient-to-br from-amber-900/20 to-red-900/20 border border-amber-700/30 rounded-xl p-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
+								<div className="flex items-center mb-6">
+									<div className="w-12 h-12 bg-amber-600/20 rounded-xl flex items-center justify-center mr-4">
+										<span className="text-2xl">⚠️</span>
 									</div>
+									<div>
+										<h3 className="text-lg font-semibold text-white">Default Risk Notifications</h3>
+										<p className="text-sm text-amber-300 mt-1">Automated notifications for loan default risk management</p>
+									</div>
+								</div>
 
-									<div className="grid lg:grid-cols-3 gap-6">
-										{/* Default Risk Warning (28 days) */}
-										{whatsappSettings.filter(s => s.key === "WHATSAPP_DEFAULT_RISK").map((setting) => (
+								<div className="grid lg:grid-cols-3 gap-6">
+									{/* Default Risk Warning (28 days) - Always show */}
+									{(() => {
+										const setting = findSettingOrPlaceholder(
+											"WHATSAPP_DEFAULT_RISK",
+											"WhatsApp Default Risk Warning",
+											"Sent when loan is 28 days overdue (default risk flagged)"
+										);
+										return (
 											<div key={setting.key} className="bg-amber-800/20 border border-amber-700/30 rounded-lg p-4">
 												<div className="flex items-center space-x-2 mb-3">
 													<span className="text-lg">⚠️</span>
-													<h4 className="text-sm font-medium text-white">Initial Warning</h4>
+													<h4 className="text-sm font-medium text-white">
+														Initial Warning
+														{setting.isMissing && (
+															<span className="ml-2 bg-red-500/20 text-red-300 px-1 py-0.5 rounded text-xs">
+																MISSING
+															</span>
+														)}
+													</h4>
 												</div>
 												<p className="text-xs text-amber-300 mb-4">
-													Sent when loan is 28 days overdue (default risk flagged)
+													{setting.description}
 												</p>
 												<div className="w-full">
-													{renderSettingInput(setting)}
+													{setting.isMissing ? (
+														<div className="text-xs text-gray-500 italic">
+															Setting not available
+														</div>
+													) : (
+														renderSettingInput(setting)
+													)}
 												</div>
 											</div>
-										))}
+										);
+									})()}
 
-										{/* Default Reminder (during 14-day remedy period) */}
-										{whatsappSettings.filter(s => s.key === "WHATSAPP_DEFAULT_REMINDER").map((setting) => (
+									{/* Default Reminder (during 14-day remedy period) - Always show */}
+									{(() => {
+										const setting = findSettingOrPlaceholder(
+											"WHATSAPP_DEFAULT_REMINDER",
+											"WhatsApp Default Remedy Reminders",
+											"Periodic reminders during 14-day remedy period"
+										);
+										return (
 											<div key={setting.key} className="bg-orange-800/20 border border-orange-700/30 rounded-lg p-4">
 												<div className="flex items-center space-x-2 mb-3">
 													<span className="text-lg">📢</span>
-													<h4 className="text-sm font-medium text-white">Remedy Reminders</h4>
+													<h4 className="text-sm font-medium text-white">
+														Remedy Reminders
+														{setting.isMissing && (
+															<span className="ml-2 bg-red-500/20 text-red-300 px-1 py-0.5 rounded text-xs">
+																MISSING
+															</span>
+														)}
+													</h4>
 												</div>
 												<p className="text-xs text-orange-300 mb-4">
-													Periodic reminders during 14-day remedy period
+													{setting.description}
 												</p>
 												<div className="w-full">
-													{renderSettingInput(setting)}
+													{setting.isMissing ? (
+														<div className="text-xs text-gray-500 italic">
+															Setting not available
+														</div>
+													) : (
+														renderSettingInput(setting)
+													)}
 												</div>
 											</div>
-										))}
+										);
+									})()}
 
-										{/* Final Default Notice */}
-										{whatsappSettings.filter(s => s.key === "WHATSAPP_DEFAULT_FINAL").map((setting) => (
+									{/* Final Default Notice - Always show */}
+									{(() => {
+										const setting = findSettingOrPlaceholder(
+											"WHATSAPP_DEFAULT_FINAL",
+											"WhatsApp Final Default Notice",
+											"Sent when loan officially defaults (44 days overdue)"
+										);
+										return (
 											<div key={setting.key} className="bg-red-800/20 border border-red-700/30 rounded-lg p-4">
 												<div className="flex items-center space-x-2 mb-3">
 													<span className="text-lg">🚨</span>
-													<h4 className="text-sm font-medium text-white">Final Notice</h4>
+													<h4 className="text-sm font-medium text-white">
+														Final Notice
+														{setting.isMissing && (
+															<span className="ml-2 bg-red-500/20 text-red-300 px-1 py-0.5 rounded text-xs">
+																MISSING
+															</span>
+														)}
+													</h4>
 												</div>
 												<p className="text-xs text-red-300 mb-4">
-													Sent when loan officially defaults (44 days overdue)
+													{setting.description}
 												</p>
 												<div className="w-full">
-													{renderSettingInput(setting)}
+													{setting.isMissing ? (
+														<div className="text-xs text-gray-500 italic">
+															Setting not available
+														</div>
+													) : (
+														renderSettingInput(setting)
+													)}
 												</div>
 											</div>
-										))}
-									</div>
+										);
+									})()}
+								</div>
 
 									{/* Default Process Information */}
 									<div className="mt-6 text-xs text-amber-300 bg-amber-900/20 p-4 rounded border border-amber-700/30">
@@ -2108,11 +2341,11 @@ function SettingsPageContent() {
 										</div>
 									</div>
 								</div>
-							)}
+							</div>
 
 							{/* Manual Trigger Section */}
 							{(whatsappSettings.some(s => s.key === "WHATSAPP_UPCOMING_PAYMENT") || whatsappSettings.some(s => s.key === "WHATSAPP_LATE_PAYMENT")) && (
-								<div className="bg-gradient-to-r from-orange-900/20 to-red-900/20 border border-orange-700/30 rounded-xl p-6">
+								<div className={`bg-gradient-to-r from-orange-900/20 to-red-900/20 border border-orange-700/30 rounded-xl p-6 ${!whatsappEnabled ? 'pointer-events-none' : ''}`}>
 									<div className="flex items-center mb-6">
 										<div className="w-12 h-12 bg-gradient-to-r from-orange-600/20 to-red-600/20 rounded-xl flex items-center justify-center mr-4">
 											<span className="text-2xl">🚀</span>
@@ -2276,11 +2509,11 @@ function SettingsPageContent() {
 					</div>
 					<div className="flex space-x-3">
 						<button
-							onClick={loadSettings}
+							onClick={forceRefresh}
 							disabled={loading}
 							className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
 						>
-							{loading ? "Loading..." : "Refresh"}
+							{loading ? "Loading..." : "Force Refresh"}
 						</button>
 						<button
 							onClick={saveSettings}

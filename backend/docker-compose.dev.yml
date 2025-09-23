@@ -44,6 +44,7 @@ services:
             - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
             - DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID=${DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID}
             - FRONTEND_URL=http://localhost:3000
+            - ADMIN_BASE_URL=http://localhost:3002
             - COMPANY_SIGNING_EMAIL=admin@kredit.my
             - WITNESS_EMAIL=legal@kredit.my
             - WITNESS_NAME=Legal Representative

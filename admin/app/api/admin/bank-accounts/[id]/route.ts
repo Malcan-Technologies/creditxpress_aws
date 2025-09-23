@@ -32,15 +32,84 @@ export async function DELETE(
       headers: {
         'Authorization': token,
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       },
     });
 
     const data = await response.json();
     
-    return NextResponse.json(data, { status: response.status });
+    // Return response with cache-busting headers
+    return NextResponse.json(data, { 
+      status: response.status,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
 
   } catch (error) {
     console.error('Error in delete bank account API route:', error);
+    return NextResponse.json(
+      { success: false, message: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const token = request.headers.get('authorization');
+    
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: 'No token provided' },
+        { status: 401 }
+      );
+    }
+
+    const { id } = params;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: 'Bank account ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+
+    // Forward request to backend API
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+    const response = await fetch(`${backendUrl}/api/bank-accounts/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+    
+    // Return response with cache-busting headers
+    return NextResponse.json(data, { 
+      status: response.status,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
+
+  } catch (error) {
+    console.error('Error in update bank account API route:', error);
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }

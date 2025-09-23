@@ -32,12 +32,22 @@ export async function POST(
       headers: {
         'Authorization': token,
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       },
     });
 
     const data = await response.json();
     
-    return NextResponse.json(data, { status: response.status });
+    // Return response with cache-busting headers
+    return NextResponse.json(data, { 
+      status: response.status,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
 
   } catch (error) {
     console.error('Error in set default bank account API route:', error);

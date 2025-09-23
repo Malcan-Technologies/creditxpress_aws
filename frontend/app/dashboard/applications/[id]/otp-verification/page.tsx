@@ -628,7 +628,39 @@ export default function OTPVerificationPage() {
 						{/* Action Buttons */}
 						<div className="flex flex-col sm:flex-row gap-4 justify-center">
 							<button
-								onClick={() => router.push(`/dashboard/applications/${params.id}/signing`)}
+								onClick={async () => {
+									try {
+										// First, try to get existing signing URL
+										const signingResponse = await fetchWithTokenRefresh<{
+											success: boolean;
+											data?: { signingUrl: string; };
+										}>(`/api/loan-applications/${params.id}/signing-url`);
+
+										if (signingResponse?.success && signingResponse?.data?.signingUrl) {
+											window.location.href = signingResponse.data.signingUrl;
+											return;
+										}
+
+										// If no existing URL, initiate new signing
+										const response = await fetchWithTokenRefresh<{
+											success: boolean;
+											data?: { signUrl: string; };
+										}>('/api/docuseal/initiate-application-signing', {
+											method: 'POST',
+											headers: { 'Content-Type': 'application/json' },
+											body: JSON.stringify({ applicationId: params.id }),
+										});
+
+										if (response?.success && response?.data?.signUrl) {
+											window.location.href = response.data.signUrl;
+										} else {
+											throw new Error('Failed to initiate document signing');
+										}
+									} catch (error) {
+										console.error('Error initiating signing:', error);
+										alert('Failed to initiate document signing. Please try again.');
+									}
+								}}
 								className="bg-purple-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors"
 							>
 								Proceed to Document Signing

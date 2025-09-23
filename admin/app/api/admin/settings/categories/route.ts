@@ -17,11 +17,16 @@ export async function GET(request: Request) {
 
 		console.log("Admin Settings Categories API - forwarding to backend");
 
-		const response = await fetch(`${backendUrl}/api/settings/categories`, {
+		// Add cache-busting timestamp to ensure fresh data
+		const timestamp = Date.now();
+		const response = await fetch(`${backendUrl}/api/settings/categories?_t=${timestamp}`, {
 			method: "GET",
 			headers: {
 				Authorization: `Bearer ${token}`,
 				"Content-Type": "application/json",
+				"Cache-Control": "no-cache, no-store, must-revalidate",
+				"Pragma": "no-cache",
+				"Expires": "0",
 			},
 		});
 
@@ -36,7 +41,14 @@ export async function GET(request: Request) {
 			);
 		}
 
-		return NextResponse.json(data);
+		// Return response with cache-busting headers
+		return NextResponse.json(data, {
+			headers: {
+				"Cache-Control": "no-cache, no-store, must-revalidate",
+				"Pragma": "no-cache",
+				"Expires": "0",
+			},
+		});
 	} catch (error) {
 		console.error("Settings categories API error:", error);
 		return NextResponse.json(
