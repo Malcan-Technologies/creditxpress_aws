@@ -9,10 +9,10 @@ interface LogoProps {
 }
 
 const sizeClasses = {
-	sm: "w-24 h-8 sm:w-28 sm:h-9", // Small - for mobile nav, compact spaces
-	md: "w-32 h-10 sm:w-36 sm:h-11", // Medium - for login/signup pages
-	lg: "w-36 h-11 sm:w-40 sm:h-12 md:w-44 md:h-14", // Large - for main navbar, dashboard nav
-	xl: "w-44 h-14 sm:w-48 sm:h-16 md:w-52 md:h-20", // Extra large - for hero sections
+	sm: "w-32 h-10 sm:w-36 sm:h-11", // Small - for mobile nav, compact spaces
+	md: "w-40 h-12 sm:w-44 sm:h-14", // Medium - for login/signup pages
+	lg: "w-48 h-14 sm:w-52 sm:h-16 md:w-56 md:h-18", // Large - for main navbar, dashboard nav
+	xl: "w-56 h-18 sm:w-60 sm:h-20 md:w-64 md:h-24", // Extra large - for hero sections
 };
 
 export default function Logo({
