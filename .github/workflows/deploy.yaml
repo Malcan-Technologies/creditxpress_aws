@@ -94,7 +94,7 @@ jobs:
           # Make sure CORS_ALLOWED_ORIGINS is set in the backend .env file
           if ! grep -q "CORS_ALLOWED_ORIGINS" backend/.env; then
             echo "Adding CORS_ALLOWED_ORIGINS to backend/.env"
-            echo "CORS_ALLOWED_ORIGINS=https://kredit.my,https://admin.kredit.my,https://api.kredit.my" >> backend/.env
+            echo "CORS_ALLOWED_ORIGINS=https://creditxpress.com.my,https://admin.creditxpress.com.my,https://api.creditxpress.com.my" >> backend/.env
           fi
 
       - name: Detect changes and determine deployment strategy
@@ -477,7 +477,7 @@ jobs:
             ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
               if ! grep -q "CORS_ALLOWED_ORIGINS" /var/www/growkapital/backend/.env; then
                 echo "Adding CORS_ALLOWED_ORIGINS to backend .env on server"
-                echo "CORS_ALLOWED_ORIGINS=https://kredit.my,https://admin.kredit.my,https://api.kredit.my" >> /var/www/growkapital/backend/.env
+                echo "CORS_ALLOWED_ORIGINS=https://creditxpress.com.my,https://admin.creditxpress.com.my,https://api.creditxpress.com.my" >> /var/www/growkapital/backend/.env
               fi
             '
             
@@ -702,7 +702,7 @@ jobs:
           # Apply nginx configuration
           ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             echo "📋 Copying nginx configuration..."
-            sudo cp /var/www/growkapital/config/nginx.conf /etc/nginx/sites-enabled/kredit.conf
+            sudo cp /var/www/growkapital/config/nginx.conf /etc/nginx/sites-enabled/creditxpress.conf
             
             # Test nginx configuration
             echo "🧪 Testing nginx configuration..."
@@ -783,7 +783,7 @@ jobs:
                   sleep 5
                 fi
                 
-                if timeout 10 curl -s https://kredit.my/api/health | grep -q "ok"; then
+                if timeout 10 curl -s https://creditxpress.com.my/api/health | grep -q "ok"; then
                   BACKEND_OK=true
                   echo "✅ Backend is accessible"
                 else

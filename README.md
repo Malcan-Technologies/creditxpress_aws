@@ -27,7 +27,7 @@ on-prem/   # On-premises DocuSeal & signing services
 Digital Ocean VPS (Cloud)           On-Premises Server
 ┌─────────────────────┐            ┌──────────────────────┐
 │ nginx (reverse proxy)│◄─Tailscale─►│ DocuSeal + Orchestrator│
-│ SSL: *.kredit.my    │   VPN       │ IP: 100.81.21.118    │
+│ SSL: *.kredit.my    │   VPN       │ IP: 100.76.8.62    │
 │ Ports: 80, 443      │            │ Services: 80, 4010   │
 └─────────────────────┘            └──────────────────────┘
           │

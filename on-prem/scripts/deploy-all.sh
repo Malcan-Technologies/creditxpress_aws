@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-REMOTE_HOST="admin-kapital@100.81.21.118"  # Direct Tailscale connection to on-prem server
+REMOTE_HOST="admin-kapital@100.76.8.62"  # Direct Tailscale connection to on-prem server
 REMOTE_PORT=""         # Port handled by SSH config
 REMOTE_USER=""         # User handled by SSH config
 REMOTE_BASE_DIR="/home/admin-kapital"

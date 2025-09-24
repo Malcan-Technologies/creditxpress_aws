@@ -7,7 +7,7 @@
 set -e
 
 # Configuration
-REMOTE_HOST="admin-kapital@100.81.21.118"
+REMOTE_HOST="admin-kapital@100.76.8.62"
 REMOTE_DIR="~/signing-orchestrator"
 LOCAL_DIR="."
 

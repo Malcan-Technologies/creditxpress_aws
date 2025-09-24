@@ -63,6 +63,73 @@ interface UserProfile {
 	icType?: string | null;
 }
 
+// Helper component for rendering field display or input
+const ProfileField = ({ 
+	label, 
+	value, 
+	field, 
+	icon, 
+	type = "text", 
+	multiline = false,
+	isEditing,
+	editedProfile,
+	validationErrors,
+	handleInputChange
+}: { 
+	label: string; 
+	value: string | null; 
+	field: keyof UserProfile; 
+	icon: React.ReactNode; 
+	type?: string; 
+	multiline?: boolean;
+	isEditing: boolean;
+	editedProfile: UserProfile | null;
+	validationErrors: {[key: string]: string};
+	handleInputChange: (field: keyof UserProfile, value: string) => void;
+}) => {
+	const currentValue = isEditing ? (editedProfile?.[field] as string || "") : (value || "");
+	const hasError = validationErrors[field as string];
+
+	return (
+		<div className={`bg-gray-50 p-4 rounded-lg border border-gray-200 ${hasError ? 'border-red-300 bg-red-50' : ''}`}>
+			<div className="flex items-start space-x-3">
+				<div className="mt-0.5">{icon}</div>
+				<div className="min-w-0 flex-1">
+					<label className="block text-sm font-medium text-gray-500 font-body mb-1">
+						{label}
+					</label>
+					{isEditing ? (
+						<div>
+							{multiline ? (
+								<textarea
+									value={currentValue}
+									onChange={(e) => handleInputChange(field, e.target.value)}
+									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-body text-gray-900"
+									rows={2}
+								/>
+							) : (
+								<input
+									type={type}
+									value={currentValue}
+									onChange={(e) => handleInputChange(field, e.target.value)}
+									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-body text-gray-900"
+								/>
+							)}
+							{hasError && (
+								<p className="mt-1 text-sm text-red-600 font-body">{hasError}</p>
+							)}
+						</div>
+					) : (
+						<p className="mt-1 text-base text-gray-700 font-body">
+							{value || "Not provided"}
+						</p>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+};
+
 export default function ProfileConfirmationPage() {
 	const router = useRouter();
 	const params = useParams();
@@ -368,65 +435,6 @@ export default function ProfileConfirmationPage() {
 		});
 	};
 
-	// Helper component for rendering field display or input
-	const ProfileField = ({ 
-		label, 
-		value, 
-		field, 
-		icon, 
-		type = "text", 
-		multiline = false 
-	}: { 
-		label: string; 
-		value: string | null; 
-		field: keyof UserProfile; 
-		icon: React.ReactNode; 
-		type?: string; 
-		multiline?: boolean; 
-	}) => {
-		const currentValue = isEditing ? (editedProfile?.[field] as string || "") : (value || "");
-		const hasError = validationErrors[field as string];
-
-		return (
-			<div className={`bg-gray-50 p-4 rounded-lg border border-gray-200 ${hasError ? 'border-red-300 bg-red-50' : ''}`}>
-				<div className="flex items-start space-x-3">
-					<div className="mt-0.5">{icon}</div>
-					<div className="min-w-0 flex-1">
-						<label className="block text-sm font-medium text-gray-500 font-body mb-1">
-							{label}
-						</label>
-						{isEditing ? (
-							<div>
-								{multiline ? (
-									<textarea
-										value={currentValue}
-										onChange={(e) => handleInputChange(field, e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-body text-gray-900"
-										rows={2}
-									/>
-								) : (
-									<input
-										type={type}
-										value={currentValue}
-										onChange={(e) => handleInputChange(field, e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-purple-primary font-body text-gray-900"
-									/>
-								)}
-								{hasError && (
-									<p className="mt-1 text-sm text-red-600 font-body">{hasError}</p>
-								)}
-							</div>
-						) : (
-							<p className="mt-1 text-base text-gray-700 font-body">
-								{value || "Not provided"}
-							</p>
-						)}
-					</div>
-				</div>
-			</div>
-		);
-	};
-
 
 
 	return (
@@ -549,6 +557,10 @@ export default function ProfileConfirmationPage() {
 										value={profile.fullName}
 										field="fullName"
 										icon={<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />}
+										isEditing={isEditing}
+										editedProfile={editedProfile}
+										validationErrors={validationErrors}
+										handleInputChange={handleInputChange}
 									/>
 
 									<ProfileField
@@ -556,6 +568,10 @@ export default function ProfileConfirmationPage() {
 										value={profile.icNumber ?? null}
 										field="icNumber"
 										icon={<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />}
+										isEditing={isEditing}
+										editedProfile={editedProfile}
+										validationErrors={validationErrors}
+										handleInputChange={handleInputChange}
 									/>
 								</div>
 
@@ -571,6 +587,10 @@ export default function ProfileConfirmationPage() {
 										field="email"
 										type="email"
 										icon={<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />}
+										isEditing={isEditing}
+										editedProfile={editedProfile}
+										validationErrors={validationErrors}
+										handleInputChange={handleInputChange}
 									/>
 
 									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">

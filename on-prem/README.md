@@ -67,7 +67,7 @@ sudo ./copy-ssl-certificates.sh
 - Paths have been updated to work with the new structure
 - SSH key authentication is configured for passwordless deployment
 - Backup system prevents data loss during deployments
-- **Tailscale Connection**: On-prem server connects to Digital Ocean VPS via Tailscale VPN (IP: 100.81.21.118)
+- **Tailscale Connection**: On-prem server connects to Digital Ocean VPS via Tailscale VPN (IP: 100.76.8.62)
 - VPS nginx reverse proxy routes sign.kredit.my requests to on-prem DocuSeal through Tailscale network
 - No external port forwarding required - secure access via Tailscale tunnel
 
