@@ -1,6 +1,26 @@
 import Cookies from "js-cookie";
 
 /**
+ * Get the cookie domain from NEXT_PUBLIC_SITE_URL environment variable
+ * Extracts domain and adds dot prefix for subdomain sharing
+ */
+function getCookieDomain(): string | undefined {
+	if (typeof window === "undefined") return undefined;
+	
+	const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+	if (!siteUrl) return undefined;
+	
+	try {
+		const url = new URL(siteUrl);
+		// Add dot prefix to allow subdomain sharing (e.g., '.creditxpress.com.my')
+		return `.${url.hostname}`;
+	} catch (error) {
+		console.warn('Failed to parse NEXT_PUBLIC_SITE_URL for cookie domain:', error);
+		return undefined;
+	}
+}
+
+/**
  * Utility function to detect if user is on mobile device
  */
 function isMobileDevice(): boolean {
@@ -29,7 +49,13 @@ export const TokenStorage = {
 					"[TokenStorage] Access token stored in localStorage"
 				);
 			}
-			Cookies.set("token", token, { expires: expiresInDays });
+			const cookieDomain = getCookieDomain();
+			Cookies.set("token", token, { 
+				expires: expiresInDays,
+				...(cookieDomain && { domain: cookieDomain }),
+				secure: true,
+				sameSite: 'lax'
+			});
 			console.log("[TokenStorage] Access token stored in cookies");
 		} catch (error) {
 			console.error(
@@ -44,7 +70,8 @@ export const TokenStorage = {
 			if (typeof window !== "undefined") {
 				localStorage.removeItem("token");
 			}
-			Cookies.remove("token");
+			const cookieDomain = getCookieDomain();
+			Cookies.remove("token", cookieDomain ? { domain: cookieDomain } : {});
 			console.log("[TokenStorage] Access token removed");
 		} catch (error) {
 			console.error(
@@ -74,7 +101,13 @@ export const TokenStorage = {
 					"[TokenStorage] Refresh token stored in localStorage"
 				);
 			}
-			Cookies.set("refreshToken", token, { expires: expiresInDays });
+			const cookieDomain = getCookieDomain();
+			Cookies.set("refreshToken", token, { 
+				expires: expiresInDays,
+				...(cookieDomain && { domain: cookieDomain }),
+				secure: true,
+				sameSite: 'lax'
+			});
 			console.log("[TokenStorage] Refresh token stored in cookies");
 		} catch (error) {
 			console.error(
@@ -89,7 +122,8 @@ export const TokenStorage = {
 			if (typeof window !== "undefined") {
 				localStorage.removeItem("refreshToken");
 			}
-			Cookies.remove("refreshToken");
+			const cookieDomain = getCookieDomain();
+			Cookies.remove("refreshToken", cookieDomain ? { domain: cookieDomain } : {});
 			console.log("[TokenStorage] Refresh token removed");
 		} catch (error) {
 			console.error(
