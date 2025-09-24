@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         signatoryType
       }),
     });
-
+    
     const data = await response.json();
     
     return NextResponse.json(data, { status: response.status });

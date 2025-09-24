@@ -10,14 +10,14 @@ services:
     environment:
       # Application Settings
       - APP_PORT=4010
-      - APP_BASE_URL=${APP_BASE_URL:-https://sign.kredit.my}
+      - APP_BASE_URL=${APP_BASE_URL:-https://sign.creditxpress.com.my}
       - NODE_ENV=${NODE_ENV:-production}
       
       # Database Configuration
       - DATABASE_URL=postgresql://agreements_user:${AGREEMENTS_DB_PASSWORD}@agreements-postgres:5432/agreements_db
       
       # DocuSeal Integration
-      - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL:-https://sign.kredit.my:3001}
+      - DOCUSEAL_BASE_URL=${DOCUSEAL_BASE_URL:-https://sign.creditxpress.com.my:3001}
       - DOCUSEAL_WEBHOOK_HMAC_SECRET=${DOCUSEAL_WEBHOOK_HMAC_SECRET}
       - DOCUSEAL_API_TOKEN=${DOCUSEAL_API_TOKEN}
       
@@ -52,7 +52,7 @@ services:
       - SIGNING_ORCHESTRATOR_API_KEY=${SIGNING_ORCHESTRATOR_API_KEY}
       
       # Security
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://sign.kredit.my,https://api.kredit.my}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://sign.creditxpress.com.my,https://api.creditxpress.com.my}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
       - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
       
@@ -97,7 +97,7 @@ services:
     
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.orchestrator.rule=Host(`sign.kredit.my`) && PathPrefix(`/api/signing`)"
+      - "traefik.http.routers.orchestrator.rule=Host(`sign.creditxpress.com.my`) && PathPrefix(`/api/signing`)"
       - "traefik.http.routers.orchestrator.tls=true"
       - "traefik.http.services.orchestrator.loadbalancer.server.port=4010"
 

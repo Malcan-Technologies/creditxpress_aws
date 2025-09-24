@@ -715,11 +715,11 @@ show_deployment_status() {
         
         echo ""
         echo "🌐 Service URLs:"
-        echo "   DocuSeal Web UI: http://sign.kredit.my"
-        echo "   DocuSeal Direct: http://sign.kredit.my:3001"
-        echo "   Orchestrator API: http://sign.kredit.my:4010"
-        echo "   Orchestrator Health: http://sign.kredit.my:4010/health"
-        echo "   MTSA Pilot WSDL: http://sign.kredit.my:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"
+        echo "   DocuSeal Web UI: http://sign.creditxpress.com.my"
+        echo "   DocuSeal Direct: http://sign.creditxpress.com.my:3001"
+        echo "   Orchestrator API: http://sign.creditxpress.com.my:4010"
+        echo "   Orchestrator Health: http://sign.creditxpress.com.my:4010/health"
+        echo "   MTSA Pilot WSDL: http://sign.creditxpress.com.my:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"
 EOF
     
     print_success "Status overview completed"
@@ -880,7 +880,7 @@ deploy_all() {
     echo ""
     echo "📋 Next steps:"
     echo "   1. Configure .env files if needed"
-    echo "   2. Set up DocuSeal webhook URL: http://sign.kredit.my:4010/webhooks/docuseal"
+    echo "   2. Set up DocuSeal webhook URL: http://sign.creditxpress.com.my:4010/webhooks/docuseal"
     echo "   3. Test certificate enrollment and revocation in admin panel"
     echo "   4. Test the complete signing workflow"
     echo ""
