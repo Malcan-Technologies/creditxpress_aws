@@ -734,7 +734,9 @@ export default function Home() {
 						</div>
 
 						<div className="space-y-2 text-sm text-gray-400">
-							<p>Licensed under Moneylenders Act 1951, KPKT license no. XXX.</p>
+							<p>Licensed under Moneylenders Act 1951, KPKT license no: WL3337/07/01-9/020223</p>
+							<p>Company registration no: 202101043135 (1443435-P)</p>
+							<p>Business address: 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang</p>
 							<p className="font-semibold">Disclaimer: "Please borrow responsibly. Loans are subject to approval and terms."</p>
 							</div>
 							
