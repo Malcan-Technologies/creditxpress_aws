@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
 	title: {
-		template: "%s | Kredit.my",
-		default: "Kredit.my - Modern credit for Malaysia",
+		template: "%s | CreditXpress",
+		default: "CreditXpress - Modern credit for Malaysia",
 	},
 	description:
 		"Get the funding you need with industry-leading rates and lightning-fast approval times. Business loans, personal loans, and salary advance solutions in Malaysia.",
@@ -20,19 +20,19 @@ export const metadata: Metadata = {
 		"malaysia",
 		"fintech",
 	],
-	metadataBase: new URL("https://kredit.my"),
+	metadataBase: new URL("https://creditxpress.com.my"),
 	openGraph: {
-		title: "Kredit.my - Modern credit for Malaysia",
+		title: "CreditXpress - Modern credit for Malaysia",
 		description:
 			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
-		url: "https://kredit.my",
-		siteName: "Kredit.my",
+		url: "https://creditxpress.com.my",
+		siteName: "CreditXpress",
 		images: [
 			{
 				url: "/og-image.jpg",
 				width: 1200,
 				height: 630,
-				alt: "Kredit.my - Smart Financing Solutions",
+				alt: "CreditXpress - Smart Financing Solutions",
 			},
 		],
 		locale: "en_MY",
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
 	manifest: "/site.webmanifest",
 	twitter: {
 		card: "summary_large_image",
-		title: "Kredit.my - Smart Financing Solutions for Every Need",
+		title: "CreditXpress - Smart Financing Solutions for Every Need",
 		description:
 			"Get the funding you need with industry-leading rates and lightning-fast approval times.",
 		images: ["/og-image.jpg"],
