@@ -418,6 +418,11 @@ class DocuSealService {
           name: 'company_registration',
           default_value: companySettings.companyRegNo,
           readonly: true
+        },
+        {
+          name: 'ip_address',
+          default_value: 'on-prem ip address: 210.186.80.101',
+          readonly: true
         }
       ];
 

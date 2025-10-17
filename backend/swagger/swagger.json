@@ -4705,7 +4705,12 @@
                     "items": {
                       "type": "string",
                       "format": "binary"
-                    }
+                    },
+                    "description": "Array of document files to upload"
+                  },
+                  "documentTypes": {
+                    "type": "string",
+                    "description": "JSON string array of document types corresponding to each uploaded file"
                   }
                 }
               }
