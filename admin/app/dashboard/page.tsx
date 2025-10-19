@@ -31,6 +31,7 @@ import {
 	ArrowPathIcon,
 	SignalIcon,
 	ServerIcon,
+	DocumentArrowDownIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh, checkAdminAuth } from "../../lib/authUtils";
 import Link from "next/link";
@@ -62,6 +63,7 @@ interface DashboardStats {
 	defaultedLoansCount?: number;
 	pendingStampedAgreements?: number;
 	completedStampedAgreements?: number;
+	disbursementsWithoutSlips?: number;
 	totalDisbursedAmount: number;
 	totalLoanValue?: number;
 	currentLoanValue?: number;
@@ -1431,6 +1433,33 @@ export default function AdminDashboardPage() {
 					</p>
 					<div className="flex items-center text-teal-300 text-sm font-medium group-hover:text-teal-200">
 						Upload certificate
+						<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+					</div>
+				</Link>
+				)}
+
+				{/* Missing Disbursement Slips - ADMIN only */}
+				{userRole === "ADMIN" && (stats.disbursementsWithoutSlips || 0) > 0 && (
+				<Link
+					href="/dashboard/loans?tab=disbursements"
+					className="group bg-gradient-to-br from-yellow-600/20 to-yellow-800/20 backdrop-blur-md border border-yellow-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-yellow-400/50"
+				>
+					<div className="flex items-center justify-between mb-3">
+						<div className="p-2 bg-yellow-500/30 rounded-lg">
+							<DocumentArrowDownIcon className="h-6 w-6 text-yellow-300" />
+						</div>
+						<span className="bg-yellow-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+							{formatNumber(stats.disbursementsWithoutSlips || 0)}
+						</span>
+					</div>
+					<h3 className="text-white font-medium mb-1">
+						Missing Payment Slips
+					</h3>
+					<p className="text-sm text-yellow-200 mb-3">
+						{formatNumber(stats.disbursementsWithoutSlips || 0)} disbursements need slips
+					</p>
+					<div className="flex items-center text-yellow-300 text-sm font-medium group-hover:text-yellow-200">
+						Upload now
 						<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
 					</div>
 				</Link>

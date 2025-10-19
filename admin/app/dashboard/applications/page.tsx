@@ -79,6 +79,7 @@ interface LoanApplication {
 		id: string;
 		status: string;
 		agreementStatus?: string;
+		pkiStampCertificateUrl?: string;
 		signatories?: {
 			id: string;
 			signatoryType: string;
@@ -243,6 +244,8 @@ function AdminApplicationsPageContent() {
 	const [processingDecision, setProcessingDecision] = useState(false);
 	const [processingCollateral, setProcessingCollateral] = useState(false);
 	const [processingDisbursement, setProcessingDisbursement] = useState(false);
+	const [disbursementSlipFile, setDisbursementSlipFile] = useState<File | null>(null);
+	const [uploadingSlip, setUploadingSlip] = useState(false);
 	
 	// Fresh offer states
 	const [showFreshOfferForm, setShowFreshOfferForm] = useState(false);
@@ -1427,6 +1430,47 @@ function AdminApplicationsPageContent() {
 			setError("Failed to disburse loan");
 		} finally {
 			setProcessingDisbursement(false);
+		}
+	};
+
+	// Disbursement slip upload handler
+	const handleDisbursementSlipUpload = async () => {
+		if (!selectedApplication || !disbursementSlipFile) return;
+
+		setUploadingSlip(true);
+		try {
+			const formData = new FormData();
+			formData.append('paymentSlip', disbursementSlipFile);
+
+			const response = await fetch(
+				`/api/admin/applications/${selectedApplication.id}/upload-disbursement-slip`,
+				{
+					method: 'POST',
+					headers: {
+						'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+					},
+					body: formData
+				}
+			);
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.message || 'Upload failed');
+			}
+
+			const data = await response.json();
+			console.log('✅ Payment slip uploaded:', data);
+			
+			alert('Payment slip uploaded successfully');
+			setDisbursementSlipFile(null);
+			
+			// Refresh application data
+			await fetchApplications();
+		} catch (error) {
+			console.error('Error uploading payment slip:', error);
+			alert(error instanceof Error ? error.message : 'Failed to upload payment slip');
+		} finally {
+			setUploadingSlip(false);
 		}
 	};
 

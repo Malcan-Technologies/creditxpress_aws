@@ -518,18 +518,26 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 					], // Include all loan statuses for dashboard
 				},
 			},
-			include: {
-				application: {
-					include: {
-						product: {
-							select: {
-								name: true,
-								code: true,
-							},
+		include: {
+			application: {
+				include: {
+					product: {
+						select: {
+							name: true,
+							code: true,
 						},
 					},
+					disbursement: {
+						select: {
+							referenceNumber: true,
+							amount: true,
+							disbursedAt: true,
+							paymentSlipUrl: true,
+						}
+					},
 				},
-				repayments: {
+			},
+			repayments: {
 					include: {
 						receipts: {
 							select: {

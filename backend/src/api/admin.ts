@@ -1328,25 +1328,33 @@ router.get(
 		}
 	});
 
-			res.json({
-			// Legacy KPIs (keep for backward compatibility)
-				totalUsers,
-				totalApplications,
-				pendingReviewApplications,
-				approvedLoans,
-				pendingDisbursementCount,
-				disbursedLoans,
-				potentialDefaultLoansCount,
-				defaultedLoansCount,
-				pendingStampedAgreements,
-				completedStampedAgreements,
-				totalDisbursedAmount: totalDisbursedAmount._sum.amount || 0,
-				totalLoanValue,
-				currentLoanValue,
-				totalFeesCollected,
-				totalLateFeesCollected,
-				totalRepayments,
-				recentApplications,
+	// Count disbursements without payment slips
+	const disbursementsWithoutSlips = await prisma.loanDisbursement.count({
+		where: {
+			paymentSlipUrl: null
+		}
+	});
+
+		res.json({
+		// Legacy KPIs (keep for backward compatibility)
+			totalUsers,
+			totalApplications,
+			pendingReviewApplications,
+			approvedLoans,
+			pendingDisbursementCount,
+			disbursedLoans,
+			potentialDefaultLoansCount,
+			defaultedLoansCount,
+			pendingStampedAgreements,
+			completedStampedAgreements,
+			disbursementsWithoutSlips,
+			totalDisbursedAmount: totalDisbursedAmount._sum.amount || 0,
+			totalLoanValue,
+			currentLoanValue,
+			totalFeesCollected,
+			totalLateFeesCollected,
+			totalRepayments,
+			recentApplications,
 
 			// 🔹 NEW INDUSTRY-STANDARD LOAN PORTFOLIO KPIs
 			// 1. Portfolio Overview
@@ -11892,6 +11900,32 @@ const stampCertUpload = multer({
 	limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
+// Configure multer for disbursement slip uploads (persistent storage)
+const disbursementSlipUpload = multer({
+	storage: (multer as any).diskStorage({
+		destination: (_req: any, _file: any, cb: any) => {
+			const uploadDir = path.join(__dirname, '../../uploads/disbursement-slips');
+			if (!fs.existsSync(uploadDir)) {
+				fs.mkdirSync(uploadDir, { recursive: true });
+			}
+			cb(null, uploadDir);
+		},
+		filename: (req: any, _file: any, cb: any) => {
+			const applicationId = req.params.id;
+			const timestamp = Date.now();
+			cb(null, `disbursement-slip-${applicationId}-${timestamp}.pdf`);
+		}
+	}),
+	fileFilter: (_req: any, file: any, cb: any) => {
+		if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+			cb(null, true);
+		} else {
+			cb(new Error('Only PDF files are allowed'), false);
+		}
+	},
+	limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
 /**
  * @swagger
  * /api/admin/loans/{id}/upload-stamped-agreement:
@@ -12477,36 +12511,46 @@ router.post(
 				});
 			}
 
-			// File has been saved to disk by multer, get the relative path
-			const relativePath = `uploads/stamp-certificates/${file.filename}`;
+		// File has been saved to disk by multer, get the relative path
+		const relativePath = `uploads/stamp-certificates/${file.filename}`;
 
-			// Update loan with certificate URL
-			await prisma.loan.update({
-				where: { id: application.loan.id },
-				data: {
-					pkiStampCertificateUrl: relativePath,
-					updatedAt: new Date()
-				}
-			});
+		// Check if certificate already exists (replacement scenario)
+		const existingCertUrl = application.loan.pkiStampCertificateUrl;
+		const isReplacement = !!existingCertUrl;
+		const action = isReplacement ? 'replaced' : 'uploaded';
+		const adminName = adminUser?.fullName || `admin_${adminUser?.userId}`;
 
-			// Create audit trail entry
-			await prisma.loanApplicationHistory.create({
-				data: {
-					applicationId: applicationId,
-					previousStatus: application.status,
-					newStatus: application.status, // Status doesn't change yet
-					changedBy: `admin_${adminUser?.userId}`,
-					changeReason: 'Stamp certificate uploaded',
-					notes: `Stamp certificate uploaded by admin ${adminUser?.userId}. File: ${file.filename}`,
-					metadata: {
-						fileName: file.filename,
-						fileSize: file.size,
-						uploadedBy: adminUser?.userId,
-						uploadedAt: new Date().toISOString(),
-						loanId: application.loan.id
-					}
+		// Update loan with certificate URL
+		await prisma.loan.update({
+			where: { id: application.loan.id },
+			data: {
+				pkiStampCertificateUrl: relativePath,
+				updatedAt: new Date()
+			}
+		});
+
+		// Create audit trail entry
+		await prisma.loanApplicationHistory.create({
+			data: {
+				applicationId: applicationId,
+				previousStatus: null,
+				newStatus: `STAMP_CERTIFICATE_${action.toUpperCase()}`,
+				changedBy: adminName,
+				changeReason: `Stamp certificate ${action}`,
+				notes: `Stamp certificate ${action} by ${adminName}. File: ${file.filename}`,
+				metadata: {
+					action,
+					previousCertUrl: existingCertUrl,
+					newCertUrl: relativePath,
+				fileName: file.filename,
+				fileSize: file.size,
+				uploadedBy: adminUser?.userId,
+				uploadedByName: adminName,
+				uploadedAt: new Date().toISOString(),
+					loanId: application.loan.id
 				}
-			});
+			}
+		});
 
 			console.log(`✅ Stamp certificate uploaded for application ${applicationId}: ${file.filename}`);
 
@@ -13069,5 +13113,240 @@ router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (re
 		});
 	}
 });
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/upload-disbursement-slip:
+ *   post:
+ *     summary: Upload disbursement payment slip (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               paymentSlip:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Payment slip uploaded successfully
+ *       404:
+ *         description: Disbursement not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/applications/:id/upload-disbursement-slip",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	disbursementSlipUpload.single('paymentSlip'),
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id: applicationId } = req.params;
+			const file = req.file;
+			const adminName = req.user?.fullName || `admin_${req.user?.userId}` || 'Unknown Admin';
+
+			if (!file) {
+				return res.status(400).json({ success: false, message: 'No file uploaded' });
+			}
+
+			// Find disbursement record
+			const disbursement = await prisma.loanDisbursement.findUnique({
+				where: { applicationId }
+			});
+
+			if (!disbursement) {
+				return res.status(404).json({ success: false, message: 'Disbursement not found' });
+			}
+
+			const previousSlipUrl = disbursement.paymentSlipUrl;
+			const action = previousSlipUrl ? 'replaced' : 'uploaded';
+			const newSlipUrl = `/uploads/disbursement-slips/${file.filename}`;
+
+			// Update with payment slip URL
+			const updatedDisbursement = await prisma.loanDisbursement.update({
+				where: { applicationId },
+				data: {
+					paymentSlipUrl: newSlipUrl
+				}
+			});
+
+			// Create audit trail entry
+			await prisma.loanApplicationHistory.create({
+				data: {
+					applicationId,
+					previousStatus: null,
+					newStatus: 'PAYMENT_SLIP_' + action.toUpperCase(),
+					changedBy: adminName,
+					notes: `Payment slip ${action} by ${adminName}`,
+					metadata: {
+					action,
+					previousSlipUrl,
+					newSlipUrl,
+					fileName: file.filename,
+					fileSize: file.size,
+					uploadedBy: req.user?.userId,
+					uploadedByName: adminName,
+					uploadedAt: new Date().toISOString()
+					}
+				}
+			});
+
+			return res.json({
+				success: true,
+				message: `Payment slip ${action} successfully`,
+				data: updatedDisbursement
+			});
+		} catch (error) {
+			console.error('Error uploading disbursement slip:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to upload payment slip',
+				error: error instanceof Error ? error.message : 'Unknown error'
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/disbursements/{applicationId}/payment-slip:
+ *   get:
+ *     summary: Download disbursement payment slip
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Payment slip PDF file
+ *       404:
+ *         description: Payment slip not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/disbursements/:applicationId/payment-slip",
+	authenticateToken,
+	requireAdminOrAttestor as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId } = req.params;
+
+			const disbursement = await prisma.loanDisbursement.findUnique({
+				where: { applicationId },
+				select: { paymentSlipUrl: true }
+			});
+
+			if (!disbursement?.paymentSlipUrl) {
+				return res.status(404).json({
+					success: false,
+					message: 'Payment slip not found'
+				});
+			}
+
+			const filePath = path.join(process.cwd(), disbursement.paymentSlipUrl);
+			
+			if (!fs.existsSync(filePath)) {
+				return res.status(404).json({
+					success: false,
+					message: 'File not found on server'
+				});
+			}
+
+		res.setHeader('Content-Type', 'application/pdf');
+		res.setHeader('Content-Disposition', `attachment; filename="disbursement-slip-${applicationId}.pdf"`);
+		
+		const fileStream = fs.createReadStream(filePath);
+		fileStream.pipe(res);
+		return;
+	} catch (error) {
+		console.error('Error downloading disbursement slip:', error);
+		return res.status(500).json({
+			success: false,
+			message: 'Failed to download payment slip'
+		});
+	}
+}
+);
+
+/**
+ * @swagger
+ * /api/admin/disbursements:
+ *   get:
+ *     summary: Get all disbursements with details
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of disbursements
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/disbursements",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (_req: AuthRequest, res: Response) => {
+		try {
+			const disbursements = await prisma.loanDisbursement.findMany({
+				include: {
+					application: {
+						include: {
+							user: {
+								select: {
+									id: true,
+									fullName: true,
+									email: true,
+									phoneNumber: true,
+									bankName: true,
+									accountNumber: true
+								}
+							},
+							product: {
+								select: {
+									name: true,
+									code: true
+								}
+							}
+						}
+					}
+				},
+				orderBy: {
+					disbursedAt: 'desc'
+				}
+			});
+
+			return res.json({
+				success: true,
+				data: disbursements
+			});
+		} catch (error) {
+			console.error('Error fetching disbursements:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to fetch disbursements'
+			});
+		}
+	}
+);
 
 export default router;

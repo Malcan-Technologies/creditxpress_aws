@@ -229,6 +229,21 @@ jobs:
             ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
               cd /var/www/growkapital/frontend
               
+              # Stop and remove any existing frontend processes on port 3002
+              echo "🧹 Cleaning up existing frontend processes..."
+              pm2 stop frontend 2>/dev/null || true
+              pm2 delete frontend 2>/dev/null || true
+              pm2 stop growkapital-frontend 2>/dev/null || true
+              pm2 delete growkapital-frontend 2>/dev/null || true
+              
+              # Kill any process using port 3002
+              EXISTING_PID=$(lsof -ti:3002 || true)
+              if [ ! -z "$EXISTING_PID" ]; then
+                echo "Killing existing process on port 3002: $EXISTING_PID"
+                kill -9 $EXISTING_PID 2>/dev/null || true
+                sleep 2
+              fi
+              
               # Install pnpm if needed
               if ! command -v pnpm &> /dev/null; then
                 echo "Installing pnpm..."
@@ -300,23 +315,15 @@ jobs:
                 fi
               fi
               
-              # Start or restart the frontend service
-              if pm2 list | grep -q "growkapital-frontend"; then
-                echo "🔄 Restarting frontend service..."
-                if [ "$BUILD_SUCCESS" = "true" ]; then
-                  pm2 restart growkapital-frontend
-                else
-                  echo "❌ Build failed - stopping frontend service"
-                  pm2 stop growkapital-frontend
-                fi
+              # Start the frontend service
+              if [ "$BUILD_SUCCESS" = "true" ]; then
+                echo "▶️ Starting frontend service..."
+                pm2 start npm --name "frontend" -- start -- --port 3002 --hostname 0.0.0.0
+                pm2 save
+                echo "✅ Frontend service started as 'frontend'"
               else
-                if [ "$BUILD_SUCCESS" = "true" ]; then
-                  echo "▶️ Starting frontend service..."
-                  pm2 start npm --name "growkapital-frontend" -- start -- --port 3002 --hostname 0.0.0.0
-                  pm2 save
-                else
-                  echo "❌ Build failed - cannot start frontend service"
-                fi
+                echo "❌ Build failed - cannot start frontend service"
+                exit 1
               fi
             '
             echo "✅ Frontend deployment completed"
@@ -345,6 +352,21 @@ jobs:
             # Build and start admin
             ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=60 -o ServerAliveCountMax=10 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
               cd /var/www/growkapital/admin
+              
+              # Stop and remove any existing admin processes on port 3003
+              echo "🧹 Cleaning up existing admin processes..."
+              pm2 stop admin 2>/dev/null || true
+              pm2 delete admin 2>/dev/null || true
+              pm2 stop growkapital-admin 2>/dev/null || true
+              pm2 delete growkapital-admin 2>/dev/null || true
+              
+              # Kill any process using port 3003
+              EXISTING_PID=$(lsof -ti:3003 || true)
+              if [ ! -z "$EXISTING_PID" ]; then
+                echo "Killing existing process on port 3003: $EXISTING_PID"
+                kill -9 $EXISTING_PID 2>/dev/null || true
+                sleep 2
+              fi
               
               # Install pnpm if needed
               if ! command -v pnpm &> /dev/null; then
@@ -437,26 +459,17 @@ jobs:
                 fi
               fi
               
-              # Start or restart the admin service
-              if pm2 list | grep -q "growkapital-admin"; then
-                echo "🔄 Restarting admin service..."
-                pm2 stop growkapital-admin
-                pm2 delete growkapital-admin
-              fi
-              
-              echo "▶️ Starting admin service..."
-              # Choose startup method based on build success and available files
-              if [ "$BUILD_SUCCESS" = "true" ] && [ -f ".next/standalone/server.js" ]; then
-                echo "Using standalone server..."
-                PORT=3003 pm2 start .next/standalone/server.js --name "growkapital-admin"
-              elif [ "$BUILD_SUCCESS" = "true" ]; then
-                echo "Using npm start..."
-                pm2 start npm --name "growkapital-admin" -- start
+              # Start the admin service
+              if [ "$BUILD_SUCCESS" = "true" ]; then
+                echo "▶️ Starting admin service..."
+                # Use npm start for consistency (standalone can cause issues)
+                pm2 start npm --name "admin" -- start -- --port 3003 --hostname 0.0.0.0
+                pm2 save
+                echo "✅ Admin service started as 'admin'"
               else
                 echo "❌ Build failed - cannot start admin service"
-                echo "Skipping service start due to build failure"
+                exit 1
               fi
-              pm2 save
             '
             echo "✅ Admin deployment completed"
           else
@@ -737,11 +750,11 @@ jobs:
             # Check frontend (if deployed)
             if [ "${{ steps.changes.outputs.frontend_changed }}" = "true" ]; then
               echo "🔍 Verifying frontend..."
-              if timeout 10 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/login | grep -q "200"; then
+              if timeout 10 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3002/ | grep -q "200"; then
                 echo "✅ Frontend is accessible"
               else
                 echo "⚠️ Frontend verification failed"
-                pm2 logs growkapital-frontend --lines 5 --nostream
+                pm2 logs frontend --lines 5 --nostream
               fi
             fi
             
@@ -754,8 +767,8 @@ jobs:
                 echo "✅ Admin is accessible"
               else
                 echo "⚠️ Admin verification failed, checking PM2 status..."
-                pm2 show growkapital-admin || echo "Admin process not found in PM2"
-                pm2 logs growkapital-admin --lines 10 --nostream || echo "No logs available"
+                pm2 show admin || echo "Admin process not found in PM2"
+                pm2 logs admin --lines 10 --nostream || echo "No logs available"
               fi
             fi
             

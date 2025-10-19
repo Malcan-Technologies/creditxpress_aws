@@ -265,6 +265,7 @@ model LoanDisbursement {
   disbursedBy       String
   notes             String?
   status            String          @default("COMPLETED")
+  paymentSlipUrl    String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   application       LoanApplication @relation(fields: [applicationId], references: [id])

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import Link from "next/link";
+import Cookies from "js-cookie";
 import PieChart from "@/components/PieChart";
 import {
 	CreditCardIcon,
@@ -76,6 +77,7 @@ interface OverdueInfo {
 
 interface Loan {
 	id: string;
+	applicationId: string;
 	principalAmount: number;
 	totalAmount: number;
 	outstandingBalance: number;
@@ -126,6 +128,12 @@ interface Loan {
 			code: string;
 		};
 		createdAt: string;
+		disbursement?: {
+			referenceNumber: string;
+			amount: number;
+			disbursedAt: string;
+			paymentSlipUrl: string | null;
+		};
 	};
 	repayments?: Array<{
 		id: string;
@@ -764,6 +772,29 @@ function LoansPageContent() {
 			setSelectedLoan(loans[0]);
 		}
 		setShowLoanRepayModal(true);
+	};
+
+	const downloadDisbursementSlip = async (loan: Loan) => {
+		try {
+			const response = await fetch(
+				`/api/loans/${loan.id}/disbursement-slip`,
+				{ method: 'GET' }
+			);
+
+			if (response.ok) {
+				const blob = await response.blob();
+				const url = window.URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `disbursement-slip-${loan.id}.pdf`;
+				a.click();
+			} else {
+				alert('Payment slip not available');
+			}
+		} catch (error) {
+			console.error('Error downloading slip:', error);
+			alert('Failed to download payment slip');
+		}
 	};
 
 	const handleConfirmRepayment = async () => {
@@ -3813,26 +3844,40 @@ function LoansPageContent() {
 														{/* Unsigned Agreement */}
 														<button
 															onClick={async () => {
-																try {
-																	const response = await fetch(
-																		`/api/loan-applications/${loan.application.id}/unsigned-agreement`,
-																		{ method: 'GET' }
-																	);
-																	if (response.ok) {
-																		const data = await response.json();
-																		if (data.url) {
-																			// Open DocuSeal URL in new tab
-																			window.open(data.url, '_blank');
-																		} else {
-																			throw new Error('No URL returned');
-																		}
-																	} else {
-																		throw new Error('Failed to get unsigned agreement');
-																	}
-																} catch (error) {
-																	console.error('Error opening unsigned agreement:', error);
-																	alert('Failed to open unsigned agreement');
+															try {
+																// Get token from storage
+																const token = typeof window !== 'undefined' 
+																	? localStorage.getItem('token') || Cookies.get('token')
+																	: null;
+																
+																if (!token) {
+																	throw new Error('No authentication token found');
 																}
+																
+																const response = await fetch(
+																	`/api/loan-applications/${loan.application.id}/unsigned-agreement`,
+																	{ 
+																		method: 'GET',
+																		headers: {
+																			'Authorization': `Bearer ${token}`
+																		}
+																	}
+																);
+																if (response.ok) {
+																	const data = await response.json();
+																	if (data.url) {
+																		// Open DocuSeal URL in new tab
+																		window.open(data.url, '_blank');
+																	} else {
+																		throw new Error('No URL returned');
+																	}
+																} else {
+																	throw new Error('Failed to get unsigned agreement');
+																}
+															} catch (error) {
+																console.error('Error opening unsigned agreement:', error);
+																alert('Failed to open unsigned agreement');
+															}
 															}}
 															className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
 														>
@@ -3864,6 +3909,47 @@ function LoansPageContent() {
 																				Certificate
 																			</button>
 																		</div>
+																	</div>
+																)}
+
+																{/* Disbursement Information */}
+																{loan.application?.disbursement && (
+																	<div className="pt-3 border-t border-gray-100">
+																		<h6 className="text-sm font-medium text-gray-600 mb-3">Disbursement Information</h6>
+																		<div className="space-y-2 mb-3">
+																			<div className="flex justify-between text-sm">
+																				<span className="text-gray-600">Reference</span>
+																				<span className="font-medium text-gray-700">{loan.application.disbursement.referenceNumber}</span>
+																			</div>
+																			<div className="flex justify-between text-sm">
+																				<span className="text-gray-600">Disbursed Date</span>
+																				<span className="font-medium text-gray-700">
+																					{new Date(loan.application.disbursement.disbursedAt).toLocaleDateString("en-MY", {
+																						day: "numeric",
+																						month: "short",
+																						year: "numeric",
+																					})}
+																				</span>
+																			</div>
+																			<div className="flex justify-between text-sm">
+																				<span className="text-gray-600">Amount</span>
+																				<span className="font-medium text-green-600">
+																					{new Intl.NumberFormat("en-MY", {
+																						style: "currency",
+																						currency: "MYR",
+																					}).format(loan.application.disbursement.amount)}
+																				</span>
+																			</div>
+																		</div>
+																		{loan.application.disbursement.paymentSlipUrl && (
+																			<button
+																				onClick={() => downloadDisbursementSlip(loan)}
+																				className="w-full inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+																			>
+																				<DocumentTextIcon className="h-4 w-4 mr-2" />
+																				Download Payment Slip
+																			</button>
+																		)}
 																	</div>
 																)}
 															</div>

@@ -187,8 +187,34 @@ interface LoanData {
 	} | null;
 }
 
+interface Disbursement {
+	id: string;
+	applicationId: string;
+	referenceNumber: string;
+	amount: number;
+	bankName: string | null;
+	bankAccountNumber: string | null;
+	disbursedAt: string;
+	disbursedBy: string;
+	notes: string | null;
+	status: string;
+	paymentSlipUrl: string | null;
+	application: {
+		id: string;
+		user: {
+			fullName: string;
+			email: string;
+			phoneNumber: string;
+		};
+		product: {
+			name: string;
+		};
+	};
+}
+
 function ActiveLoansContent() {
 	const searchParams = useSearchParams();
+	const [viewMode, setViewMode] = useState<"loans" | "disbursements">("loans");
 	const [loans, setLoans] = useState<LoanData[]>([]);
 	const [filteredLoans, setFilteredLoans] = useState<LoanData[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -209,6 +235,9 @@ function ActiveLoansContent() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [selectedTab, setSelectedTab] = useState<string>("details");
+	const [disbursements, setDisbursements] = useState<Disbursement[]>([]);
+	const [loadingDisbursements, setLoadingDisbursements] = useState(false);
+	const [uploadingSlipFor, setUploadingSlipFor] = useState<string | null>(null);
 	const [loadingRepayments, setLoadingRepayments] = useState(false);
 	const [walletTransactions, setWalletTransactions] = useState<
 		WalletTransaction[]
@@ -293,10 +322,21 @@ function ActiveLoansContent() {
 		fetchActiveLoans();
 	}, []);
 
+	useEffect(() => {
+		if (viewMode === "disbursements") {
+			fetchDisbursements();
+		}
+	}, [viewMode]);
+
 	// Handle URL parameters
 	useEffect(() => {
+		const tabParam = searchParams.get("tab");
 		const searchParam = searchParams.get("search");
 		const filterParam = searchParams.get("filter");
+
+		if (tabParam === "disbursements") {
+			setViewMode("disbursements");
+		}
 
 		if (searchParam) {
 			setSearchTerm(searchParam);
@@ -398,6 +438,90 @@ function ActiveLoansContent() {
 		} finally {
 			setLoading(false);
 			setRefreshing(false);
+		}
+	};
+
+	const fetchDisbursements = async () => {
+		setLoadingDisbursements(true);
+		try {
+			const response = await fetchWithAdminTokenRefresh<{ success: boolean; data: Disbursement[] }>(
+				"/api/admin/disbursements"
+			);
+			if (response.success) {
+				setDisbursements(response.data);
+			}
+		} catch (error) {
+			console.error("Error fetching disbursements:", error);
+		} finally {
+			setLoadingDisbursements(false);
+		}
+	};
+
+	const downloadDisbursementSlip = async (applicationId: string, refNumber: string) => {
+		try {
+			const response = await fetch(
+				`/api/admin/disbursements/${applicationId}/payment-slip`,
+				{
+					headers: {
+						Authorization: `Bearer ${localStorage.getItem('adminToken')}`,
+					},
+				}
+			);
+
+			if (response.ok) {
+				const blob = await response.blob();
+				const url = window.URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `disbursement-slip-${refNumber}.pdf`;
+				a.click();
+			} else {
+				alert('Payment slip not found');
+			}
+		} catch (error) {
+			console.error('Error downloading slip:', error);
+			alert('Failed to download payment slip');
+		}
+	};
+
+	const handleUploadDisbursementSlip = async (applicationId: string, fileInput: HTMLInputElement) => {
+		const file = fileInput.files?.[0];
+		if (!file) return;
+
+		setUploadingSlipFor(applicationId);
+		try {
+			const formData = new FormData();
+			formData.append('paymentSlip', file);
+
+			const response = await fetch(
+				`/api/admin/applications/${applicationId}/upload-disbursement-slip`,
+				{
+					method: 'POST',
+					headers: {
+						'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+					},
+					body: formData
+				}
+			);
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.message || 'Upload failed');
+			}
+
+			const data = await response.json();
+			console.log('✅ Payment slip uploaded:', data);
+			
+			alert('Payment slip uploaded successfully');
+			fileInput.value = ''; // Clear file input
+			
+			// Refresh disbursements
+			await fetchDisbursements();
+		} catch (error) {
+			console.error('Error uploading payment slip:', error);
+			alert(error instanceof Error ? error.message : 'Failed to upload payment slip');
+		} finally {
+			setUploadingSlipFor(null);
 		}
 	};
 
@@ -2322,6 +2446,33 @@ function ActiveLoansContent() {
 				</div>
 			)}
 
+			{/* Tab Switcher */}
+			<div className="mb-6 flex gap-2">
+				<button
+					onClick={() => setViewMode("loans")}
+					className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${
+						viewMode === "loans"
+							? "bg-gray-800 text-white border-b-2 border-blue-500"
+							: "bg-gray-700/50 text-gray-400 hover:text-gray-200"
+					}`}
+				>
+					Loans
+				</button>
+				<button
+					onClick={() => setViewMode("disbursements")}
+					className={`px-6 py-3 text-sm font-medium rounded-t-lg transition-colors ${
+						viewMode === "disbursements"
+							? "bg-gray-800 text-white border-b-2 border-blue-500"
+							: "bg-gray-700/50 text-gray-400 hover:text-gray-200"
+					}`}
+				>
+					Disbursements
+				</button>
+			</div>
+
+			{/* Loans View */}
+			{viewMode === "loans" && (
+			<>
 			{/* Search Bar */}
 			<div className="mb-4 bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl p-4">
 				<div className="flex-1 relative">
@@ -5469,6 +5620,148 @@ function ActiveLoansContent() {
 							</button>
 						</div>
 					</div>
+				</div>
+			)}
+			</>
+			)}
+
+			{/* Disbursements View */}
+			{viewMode === "disbursements" && (
+				<div className="bg-gray-800/50 rounded-lg border border-gray-700/30 overflow-hidden">
+					{loadingDisbursements ? (
+						<div className="flex items-center justify-center py-12">
+							<div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-400"></div>
+						</div>
+					) : disbursements.length > 0 ? (
+						<div className="overflow-x-auto">
+							<table className="min-w-full divide-y divide-gray-700">
+								<thead className="bg-gray-900/50">
+									<tr>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											Borrower
+										</th>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											Reference
+										</th>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											Amount
+										</th>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											Bank Details
+										</th>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											Disbursed
+										</th>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											By
+										</th>
+										<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+											Payment Slip
+										</th>
+									</tr>
+								</thead>
+								<tbody className="divide-y divide-gray-700/50">
+									{disbursements.map((d) => (
+										<tr key={d.id} className="hover:bg-gray-700/30 transition-colors">
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm font-medium text-white">
+													{d.application.user.fullName}
+												</div>
+												<div className="text-xs text-gray-400">
+													{d.application.product.name}
+												</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm text-gray-300 font-mono">
+													{d.referenceNumber}
+												</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm font-semibold text-green-400">
+													{formatCurrency(d.amount)}
+												</div>
+											</td>
+											<td className="px-6 py-4">
+												<div className="text-sm text-gray-300">
+													{d.bankName || 'N/A'}
+												</div>
+												<div className="text-xs text-gray-400 font-mono">
+													{d.bankAccountNumber || 'N/A'}
+												</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm text-gray-300">
+													{formatDateTime(d.disbursedAt)}
+												</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="text-sm text-gray-400">
+													{d.disbursedBy}
+												</div>
+											</td>
+											<td className="px-6 py-4 whitespace-nowrap">
+												<div className="flex flex-col gap-2">
+													{/* Download button - shown when slip exists */}
+													{d.paymentSlipUrl && (
+														<button
+															onClick={() => downloadDisbursementSlip(d.applicationId, d.referenceNumber)}
+															className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors"
+														>
+															<DocumentArrowDownIcon className="h-4 w-4 mr-1.5" />
+															Download
+														</button>
+													)}
+													
+													{/* Upload/Replace button - always shown */}
+													<input
+														type="file"
+														id={`file-${d.applicationId}`}
+														accept=".pdf"
+														className="hidden"
+														onChange={(e) => {
+															if (e.target.files?.[0]) {
+																handleUploadDisbursementSlip(d.applicationId, e.target);
+															}
+														}}
+													/>
+													<label
+														htmlFor={`file-${d.applicationId}`}
+														className={`inline-flex items-center px-3 py-1.5 text-white text-xs font-medium rounded-md transition-colors cursor-pointer ${
+															uploadingSlipFor === d.applicationId
+																? 'bg-green-600/50 cursor-wait'
+																: 'bg-green-600 hover:bg-green-700'
+														}`}
+													>
+														{uploadingSlipFor === d.applicationId ? (
+															<>
+																<ArrowPathIcon className="h-4 w-4 mr-1.5 animate-spin" />
+																Uploading...
+															</>
+														) : (
+															<>
+																<DocumentArrowDownIcon className="h-4 w-4 mr-1.5" />
+																{d.paymentSlipUrl ? 'Replace Slip' : 'Upload Slip'}
+															</>
+														)}
+													</label>
+												</div>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					) : (
+						<div className="text-center py-12">
+							<BanknotesIcon className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+							<h4 className="text-xl font-medium text-gray-300 mb-2">
+								No Disbursements Found
+							</h4>
+							<p className="text-gray-500">
+								Disbursements will appear here once loans are disbursed.
+							</p>
+						</div>
+					)}
 				</div>
 			)}
 		</AdminLayout>

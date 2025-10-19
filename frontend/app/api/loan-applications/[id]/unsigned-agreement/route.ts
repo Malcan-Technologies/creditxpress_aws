@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 
 export async function GET(
 	request: NextRequest,
-	context: { params: Promise<{ id: string }> }
+	{ params }: { params: { id: string } }
 ) {
 	try {
-		const params = await context.params;
 		const { id } = params;
 		
-		// Get token from cookies
-		const cookieStore = await cookies();
-		const token = cookieStore.get("token")?.value;
+		// Get authorization header (sent from frontend)
+		const authHeader = request.headers.get("authorization");
 		
 		console.log('🔐 Unsigned agreement request:', {
 			applicationId: id,
-			hasToken: !!token,
-			tokenPreview: token ? `${token.substring(0, 20)}...` : 'none'
+			hasAuthHeader: !!authHeader,
 		});
 		
-		if (!token) {
-			console.error('❌ No authentication token found in cookies');
+		if (!authHeader) {
+			console.error('❌ No authorization header found');
 			return NextResponse.json(
-				{ success: false, message: "No authentication token provided" },
+				{ success: false, message: "No authorization token provided" },
 				{ status: 401 }
 			);
 		}
@@ -35,7 +31,7 @@ export async function GET(
 		const response = await fetch(backendUrl, {
 			method: "GET",
 			headers: {
-				Authorization: `Bearer ${token}`,
+				Authorization: authHeader,
 			},
 		});
 
