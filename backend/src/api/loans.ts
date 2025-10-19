@@ -2,6 +2,8 @@ import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils, SafeMath } from "../lib/precisionUtils";
+import fs from "fs";
+import path from "path";
 
 // Import grace period function from late fee processor
 async function getLateFeeGraceSettings(prismaClient: any = prisma) {
@@ -1619,56 +1621,49 @@ router.get("/:loanId/download-stamp-certificate", authenticateAndVerifyPhone, as
 			});
 		}
 
-		// Check if certificate exists
-		if (!loan.pkiStampCertificateUrl) {
-			return res.status(400).json({
-				success: false,
-				message: 'Stamp certificate is not yet available for download'
-			});
-		}
+	// Check if certificate exists
+	if (!loan.pkiStampCertificateUrl) {
+		return res.status(400).json({
+			success: false,
+			message: 'Stamp certificate is not yet available for download'
+		});
+	}
 
-		// Download certificate from signing orchestrator
-		if (!loan.applicationId) {
-			return res.status(400).json({
-				success: false,
-				message: 'No application ID found for this loan'
-			});
-		}
+	// Read certificate from local file system
+	const certificatePath = path.join(__dirname, '../../', loan.pkiStampCertificateUrl);
+	console.log(`📁 Reading stamp certificate from: ${certificatePath}`);
 
-		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL;
-			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY;
+	if (!fs.existsSync(certificatePath)) {
+		console.error(`❌ Stamp certificate file not found at: ${certificatePath}`);
+		return res.status(404).json({
+			success: false,
+			message: 'Stamp certificate file not found on server'
+		});
+	}
 
-			if (!orchestratorUrl || !orchestratorApiKey) {
-				throw new Error('Signing orchestrator configuration missing');
+	try {
+		// Send the file
+		res.setHeader('Content-Type', 'application/pdf');
+		res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${loanId.substring(0, 8)}.pdf"`);
+		
+		const fileStream = fs.createReadStream(certificatePath);
+		fileStream.on('error', (error: Error) => {
+			console.error('❌ Error streaming file:', error);
+			if (!res.headersSent) {
+				res.status(500).json({
+					success: false,
+					message: "Error streaming certificate file",
+					error: error.message
+				});
 			}
+		});
+		fileStream.pipe(res);
+		return;
 
-			const response = await fetch(`${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/certificate`, {
-				method: 'GET',
-				headers: {
-					'X-API-Key': orchestratorApiKey,
-				},
-			});
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				throw new Error(`Orchestrator download failed: ${response.status} - ${errorText}`);
-			}
-
-			// Stream the PDF directly to the client
-			const pdfBuffer = await response.arrayBuffer();
-			
-			res.setHeader('Content-Type', 'application/pdf');
-			res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${loanId.substring(0, 8)}.pdf"`);
-			res.setHeader('Content-Length', pdfBuffer.byteLength);
-			
-			res.send(Buffer.from(pdfBuffer));
-			return;
-
-		} catch (orchestratorError) {
-			console.error('❌ Error downloading from signing orchestrator:', orchestratorError);
-			throw new Error(`Failed to download from signing orchestrator: ${orchestratorError instanceof Error ? orchestratorError.message : 'Unknown error'}`);
-		}
+	} catch (fileError) {
+		console.error('❌ Error reading certificate file:', fileError);
+		throw new Error(`Failed to read certificate file: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
+	}
 
 	} catch (error) {
 		console.error('❌ Error downloading stamp certificate:', error);

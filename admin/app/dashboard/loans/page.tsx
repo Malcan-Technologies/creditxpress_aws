@@ -23,6 +23,7 @@ import {
 	ReceiptPercentIcon,
 	PencilIcon,
 	PlusIcon,
+	DocumentCheckIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 
@@ -4334,75 +4335,77 @@ function ActiveLoansContent() {
 															Document Signature Status
 														</h4>
 														
-														{/* Download Section */}
+													{/* Download Loan Documents */}
+													{selectedLoan?.agreementStatus === 'SIGNED' && (
 														<div className="mb-4">
-															<h5 className="text-gray-300 text-sm font-medium mb-2">Download Documents</h5>
-															<div className="flex flex-wrap gap-2">
-																{/* Download Signed Agreement Button */}
-																{selectedLoan?.agreementStatus === 'SIGNED' && selectedLoan?.pkiSignedPdfUrl && (
-																	<button
-																		onClick={() => downloadSignedAgreement(selectedLoan.id)}
-																		className="inline-flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-																		title="Download signed loan agreement"
-																	>
-																		<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
-																		Download Signed
-																	</button>
-																)}
-																
-																{/* Download Stamped Agreement Button */}
-																{selectedLoan?.pkiStampedPdfUrl && (
-																	<button
-																		onClick={() => downloadStampedAgreement(selectedLoan.id)}
-																		className="inline-flex items-center px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition-colors"
-																		title="Download stamped loan agreement"
-																	>
-																		<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
-																		Download Stamped
-																	</button>
-																)}
+															<h5 className="text-gray-300 text-sm font-medium mb-2">Download Loan Documents</h5>
+															<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+															{/* Download Unsigned Agreement */}
+															<button
+																onClick={async () => {
+																	try {
+																		const response = await fetch(
+																			`/api/admin/applications/${selectedLoan.applicationId}/unsigned-agreement`,
+																			{
+																				method: 'GET',
+																				headers: {
+																					'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+																				}
+																			}
+																		);
+																		
+																		if (!response.ok) {
+																			throw new Error('Failed to get unsigned agreement');
+																		}
+																		
+																		const data = await response.json();
+																		if (data.url) {
+																			// Open DocuSeal URL in new tab
+																			window.open(data.url, '_blank');
+																		} else {
+																			throw new Error('No URL returned');
+																		}
+																	} catch (error) {
+																		console.error('Error opening unsigned agreement:', error);
+																		alert('Failed to open unsigned agreement');
+																	}
+																}}
+																className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+															>
+																<DocumentTextIcon className="h-4 w-4 mr-2" />
+																Unsigned
+															</button>
 
-																{/* Download Certificate Button */}
-																{selectedLoan?.pkiStampCertificateUrl && (
-																	<button
-																		onClick={() => downloadStampCertificate(selectedLoan.id)}
-																		className="inline-flex items-center px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
-																		title="Download stamp certificate"
-																	>
-																		<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
-																		Download Certificate
-																	</button>
-																)}
+																{/* Download Signed Agreement */}
+																<button
+																	onClick={() => downloadSignedAgreement(selectedLoan.id)}
+																	disabled={!selectedLoan?.pkiSignedPdfUrl}
+																	className={`inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+																		selectedLoan?.pkiSignedPdfUrl
+																			? 'bg-green-600 hover:bg-green-700 text-white'
+																			: 'bg-gray-600 text-gray-400 cursor-not-allowed'
+																	}`}
+																>
+																	<CheckCircleIcon className="h-4 w-4 mr-2" />
+																	Signed
+																</button>
+
+																{/* Download Stamp Certificate */}
+																<button
+																	onClick={() => downloadStampCertificate(selectedLoan.id)}
+																	disabled={!selectedLoan?.pkiStampCertificateUrl}
+																	className={`inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+																		selectedLoan?.pkiStampCertificateUrl
+																			? 'bg-purple-600 hover:bg-purple-700 text-white'
+																			: 'bg-gray-600 text-gray-400 cursor-not-allowed'
+																	}`}
+																>
+																	<DocumentCheckIcon className="h-4 w-4 mr-2" />
+																	Certificate
+																</button>
 															</div>
 														</div>
-
-														{/* Upload Section - ADMIN ONLY */}
-														{(userRole === "ADMIN" || userRole === "admin") && selectedLoan?.agreementStatus === 'SIGNED' && selectedLoan?.pkiSignedPdfUrl && (
-															<div>
-																<h5 className="text-gray-300 text-sm font-medium mb-2">Upload Documents (Admin Only)</h5>
-																<div className="flex flex-wrap gap-2">
-																	{/* Upload Stamped Agreement Button */}
-																	<button
-																		onClick={() => handleUploadStampedAgreement(selectedLoan.id)}
-																		className="inline-flex items-center px-3 py-2 border-2 border-orange-500 text-orange-500 hover:bg-orange-50 hover:border-orange-600 hover:text-orange-600 text-sm font-medium rounded-lg transition-colors"
-																		title={selectedLoan?.pkiStampedPdfUrl ? "Replace stamped agreement" : "Upload stamped agreement"}
-																	>
-																		<PlusIcon className="h-4 w-4 mr-2" />
-																		{selectedLoan?.pkiStampedPdfUrl ? "Replace Stamped" : "Upload Stamped"}
-																	</button>
-
-																	{/* Upload Certificate Button */}
-																	<button
-																		onClick={() => handleUploadStampCertificate(selectedLoan.id)}
-																		className="inline-flex items-center px-3 py-2 border-2 border-purple-500 text-purple-500 hover:bg-purple-50 hover:border-purple-600 hover:text-purple-600 text-sm font-medium rounded-lg transition-colors"
-																		title={selectedLoan?.pkiStampCertificateUrl ? "Replace stamp certificate" : "Upload stamp certificate"}
-																	>
-																		<PlusIcon className="h-4 w-4 mr-2" />
-																		{selectedLoan?.pkiStampCertificateUrl ? "Replace Certificate" : "Upload Certificate"}
-																	</button>
-																</div>
-															</div>
-														)}
+													)}
 													</div>
 													<div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4 mb-4">
 														<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">

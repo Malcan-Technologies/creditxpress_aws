@@ -158,6 +158,8 @@ function AdminApplicationsPageContent() {
 		// Auto-select relevant tab based on filter
 		if (filterParam === "pending-approval") {
 			return "approval";
+		} else if (filterParam === "pending-stamping") {
+			return "stamping";
 		} else if (filterParam === "pending-disbursement") {
 			return "disbursement";
 		} else if (filterParam === "pending_signature") {
@@ -208,23 +210,24 @@ function AdminApplicationsPageContent() {
 		} else if (filterParam === "pending_kyc") {
 			return ["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"];
 		} else {
-			// Default "All Applications" view - show active workflow statuses, exclude rejected/withdrawn/incomplete
-			return [
-				"PENDING_APP_FEE",
-				"PENDING_PROFILE_CONFIRMATION",
-				"PENDING_KYC",
-				"PENDING_KYC_VERIFICATION",
-				"PENDING_CERTIFICATE_OTP",
-				"PENDING_APPROVAL",
-				"PENDING_FRESH_OFFER",
-				"PENDING_ATTESTATION",
-				"PENDING_SIGNATURE",
-				"PENDING_PKI_SIGNING",
-				"PENDING_SIGNING_COMPANY_WITNESS",
-				"PENDING_SIGNING_OTP_DS",
-				"PENDING_DISBURSEMENT",
-				"COLLATERAL_REVIEW",
-			];
+		// Default "All Applications" view - show active workflow statuses, exclude rejected/withdrawn/incomplete
+		return [
+			"PENDING_APP_FEE",
+			"PENDING_PROFILE_CONFIRMATION",
+			"PENDING_KYC",
+			"PENDING_KYC_VERIFICATION",
+			"PENDING_CERTIFICATE_OTP",
+			"PENDING_APPROVAL",
+			"PENDING_FRESH_OFFER",
+			"PENDING_ATTESTATION",
+			"PENDING_SIGNATURE",
+			"PENDING_PKI_SIGNING",
+			"PENDING_SIGNING_COMPANY_WITNESS",
+			"PENDING_SIGNING_OTP_DS",
+			"PENDING_STAMPING",
+			"PENDING_DISBURSEMENT",
+			"COLLATERAL_REVIEW",
+		];
 		}
 	};
 
@@ -273,6 +276,12 @@ function AdminApplicationsPageContent() {
 	const [meetingCompletedAt, setMeetingCompletedAt] = useState("");
 	const [processingAttestation, setProcessingAttestation] = useState(false);
 
+	// Stamping states
+	const [stampCertificateFile, setStampCertificateFile] = useState<File | null>(null);
+	const [uploadingStampCertificate, setUploadingStampCertificate] = useState(false);
+	const [stampCertificateUploaded, setStampCertificateUploaded] = useState(false);
+	const [confirmingStamping, setConfirmingStamping] = useState(false);
+
 	// Generate disbursement reference when application is selected for disbursement
 	useEffect(() => {
 		if (
@@ -292,6 +301,7 @@ function AdminApplicationsPageContent() {
 		PENDING_APP_FEE: { bg: "bg-blue-100", text: "text-blue-800" },
 		PENDING_KYC: { bg: "bg-indigo-100", text: "text-indigo-800" },
 		PENDING_APPROVAL: { bg: "bg-yellow-100", text: "text-yellow-800" },
+		PENDING_STAMPING: { bg: "bg-teal-100", text: "text-teal-800" },
 		REJECTED: { bg: "bg-red-100", text: "text-red-800" },
 		WITHDRAWN: { bg: "bg-gray-100", text: "text-gray-800" },
 	};
@@ -323,12 +333,14 @@ function AdminApplicationsPageContent() {
 				return ClockIcon;
 			case "PENDING_SIGNING_COMPANY_WITNESS":
 				return DocumentTextIcon;
-			case "PENDING_SIGNING_OTP_DS":
-				return DocumentTextIcon;
-			case "PENDING_DISBURSEMENT":
-				return BanknotesIcon;
-			case "COLLATERAL_REVIEW":
-				return DocumentMagnifyingGlassIcon;
+		case "PENDING_SIGNING_OTP_DS":
+			return DocumentTextIcon;
+		case "PENDING_STAMPING":
+			return DocumentTextIcon;
+		case "PENDING_DISBURSEMENT":
+			return BanknotesIcon;
+		case "COLLATERAL_REVIEW":
+			return DocumentMagnifyingGlassIcon;
 			case "ACTIVE":
 				return CheckCircleIcon;
 			case "REJECTED":
@@ -366,10 +378,12 @@ function AdminApplicationsPageContent() {
 				return "bg-purple-500/20 text-purple-200 border-purple-400/20";
 			case "PENDING_SIGNING_COMPANY_WITNESS":
 				return "bg-teal-500/20 text-teal-200 border-teal-400/20";
-			case "PENDING_SIGNING_OTP_DS":
-				return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
-			case "PENDING_DISBURSEMENT":
-				return "bg-emerald-500/20 text-emerald-200 border-emerald-400/20";
+		case "PENDING_SIGNING_OTP_DS":
+			return "bg-indigo-500/20 text-indigo-200 border-indigo-400/20";
+		case "PENDING_STAMPING":
+			return "bg-teal-500/20 text-teal-200 border-teal-400/20";
+		case "PENDING_DISBURSEMENT":
+			return "bg-emerald-500/20 text-emerald-200 border-emerald-400/20";
 			case "COLLATERAL_REVIEW":
 				return "bg-orange-500/20 text-orange-200 border-orange-400/20";
 			case "ACTIVE":
@@ -409,10 +423,12 @@ function AdminApplicationsPageContent() {
 				return "Pending PKI Signing";
 			case "PENDING_SIGNING_COMPANY_WITNESS":
 				return "Awaiting Signatures";
-			case "PENDING_SIGNING_OTP_DS":
-				return "Pending Signing OTP";
-			case "PENDING_DISBURSEMENT":
-				return "Pending Disbursement";
+		case "PENDING_SIGNING_OTP_DS":
+			return "Pending Signing OTP";
+		case "PENDING_STAMPING":
+			return "Pending Stamp Certificate";
+		case "PENDING_DISBURSEMENT":
+			return "Pending Disbursement";
 			case "COLLATERAL_REVIEW":
 				return "Collateral Review";
 			case "ACTIVE":
@@ -1775,7 +1791,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 						Application Management
 					</h2>
 					<p className="text-gray-400">
-						{filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => app.status === "PENDING_APPROVAL").length} pending approval • {applications.filter(app => ["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(app.status)).length} pending signature • {applications.filter(app => ["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"].includes(app.status)).length} pending KYC • {applications.filter(app => app.status === "PENDING_DISBURSEMENT").length} pending disbursement
+						{filteredApplications.length} application{filteredApplications.length !== 1 ? "s" : ""} • {applications.filter(app => app.status === "PENDING_APPROVAL").length} pending approval • {applications.filter(app => ["PENDING_SIGNATURE", "PENDING_PKI_SIGNING", "PENDING_SIGNING_COMPANY_WITNESS", "PENDING_SIGNING_OTP_DS"].includes(app.status)).length} pending signature • {applications.filter(app => ["PENDING_PROFILE_CONFIRMATION", "PENDING_KYC", "PENDING_KYC_VERIFICATION", "PENDING_CERTIFICATE_OTP"].includes(app.status)).length} pending KYC • {applications.filter(app => app.status === "PENDING_STAMPING").length} pending stamping • {applications.filter(app => app.status === "PENDING_DISBURSEMENT").length} pending disbursement
 					</p>
 				</div>
 				<button
@@ -1938,20 +1954,30 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
 							}`}
 						>
-							Pending Witness Signature ({applications.filter(app => 
-								app.status === "PENDING_SIGNING_COMPANY_WITNESS" && hasPendingWitnessSignature(app)
-							).length})
-						</button>
-						<button
-							onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
-							className={`px-4 py-2 rounded-lg border transition-colors ${
-								selectedFilters.length === 1 && selectedFilters.includes("PENDING_DISBURSEMENT")
-									? "bg-green-500/30 text-green-100 border-green-400/30"
-									: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-							}`}
-						>
-							Pending Disbursement ({applications.filter(app => app.status === "PENDING_DISBURSEMENT").length})
-						</button>
+					Pending Witness Signature ({applications.filter(app => 
+						app.status === "PENDING_SIGNING_COMPANY_WITNESS" && hasPendingWitnessSignature(app)
+					).length})
+				</button>
+				<button
+					onClick={() => setSelectedFilters(["PENDING_STAMPING"])}
+					className={`px-4 py-2 rounded-lg border transition-colors ${
+						selectedFilters.length === 1 && selectedFilters.includes("PENDING_STAMPING")
+							? "bg-teal-500/30 text-teal-100 border-teal-400/30"
+							: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+					}`}
+				>
+					Pending Stamping ({applications.filter(app => app.status === "PENDING_STAMPING").length})
+				</button>
+				<button
+					onClick={() => setSelectedFilters(["PENDING_DISBURSEMENT"])}
+					className={`px-4 py-2 rounded-lg border transition-colors ${
+						selectedFilters.length === 1 && selectedFilters.includes("PENDING_DISBURSEMENT")
+							? "bg-green-500/30 text-green-100 border-green-400/30"
+							: "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
+					}`}
+				>
+					Pending Disbursement ({applications.filter(app => app.status === "PENDING_DISBURSEMENT").length})
+				</button>
 						<button
 							onClick={() => setSelectedFilters(["COLLATERAL_REVIEW"])}
 							className={`px-4 py-2 rounded-lg border transition-colors ${
@@ -2218,11 +2244,28 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 										>
 											<ClipboardDocumentCheckIcon className="inline h-4 w-4 mr-1" />
 											Attestation
-										</div>
-									)}
-									{/* Show Disbursement tab for PENDING_DISBURSEMENT applications */}
-									{selectedApplication.status ===
-										"PENDING_DISBURSEMENT" && (
+								</div>
+							)}
+							{/* Show Stamping tab for PENDING_STAMPING applications */}
+							{selectedApplication.status ===
+								"PENDING_STAMPING" && (
+								<div
+									className={`px-4 py-2 cursor-pointer transition-colors ${
+										selectedTab === "stamping"
+											? "border-b-2 border-teal-400 font-medium text-white"
+											: "text-gray-400 hover:text-gray-200"
+									}`}
+									onClick={() =>
+										setSelectedTab("stamping")
+									}
+								>
+									<DocumentTextIcon className="inline h-4 w-4 mr-1" />
+									Stamping
+								</div>
+							)}
+							{/* Show Disbursement tab for PENDING_DISBURSEMENT applications */}
+							{selectedApplication.status ===
+								"PENDING_DISBURSEMENT" && (
 										<div
 											className={`px-4 py-2 cursor-pointer transition-colors ${
 												selectedTab === "disbursement"
@@ -3877,12 +3920,316 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 													</li>
 												</ul>
 											</div>
+									</div>
+								</div>
+							)}
+
+							{/* Stamping Tab */}
+							{selectedTab === "stamping" && (
+								<div>
+									{/* Stamping Section */}
+									<div className="border border-teal-500/30 rounded-lg p-6 bg-teal-500/10 mb-6">
+										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+											<DocumentTextIcon className="h-6 w-6 mr-2 text-teal-400" />
+											Stamp Certificate Upload
+										</h4>
+
+										{/* Application Summary */}
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
+											<div>
+												<h5 className="text-sm font-medium text-gray-300 mb-2">
+													Applicant
+												</h5>
+												<p className="text-white">
+													{selectedApplication.user?.fullName}
+												</p>
+												<p className="text-sm text-gray-400">
+													{selectedApplication.user?.email}
+												</p>
+											</div>
+											<div>
+												<h5 className="text-sm font-medium text-gray-300 mb-2">
+													Loan Details
+												</h5>
+												<p className="text-white">
+													{selectedApplication.amount
+														? formatCurrency(selectedApplication.amount)
+														: "Amount not set"}
+												</p>
+												<p className="text-sm text-gray-400">
+													{selectedApplication.term
+														? `${selectedApplication.term} months`
+														: "Term not set"}
+												</p>
+											</div>
+										</div>
+
+										{/* Document Download Section */}
+										<div className="mb-6 p-4 bg-gray-800/30 rounded-lg">
+											<h5 className="text-white font-medium mb-3">Download Loan Documents</h5>
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+												<button
+													onClick={async () => {
+														try {
+															const response = await fetch(
+																`/api/admin/applications/${selectedApplication.id}/signed-agreement`,
+																{
+																	method: 'GET',
+																	headers: {
+																		'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+																	}
+																}
+															);
+															
+															if (!response.ok) {
+																throw new Error('Failed to download signed agreement');
+															}
+															
+															const blob = await response.blob();
+															const url = window.URL.createObjectURL(blob);
+															const a = document.createElement('a');
+															a.href = url;
+															a.download = `signed-agreement-${selectedApplication.id.substring(0, 8)}.pdf`;
+															document.body.appendChild(a);
+															a.click();
+															window.URL.revokeObjectURL(url);
+															document.body.removeChild(a);
+														} catch (error) {
+															console.error('Error downloading signed agreement:', error);
+															alert('Failed to download signed agreement');
+														}
+													}}
+													className="flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+												>
+													<CheckCircleIcon className="h-4 w-4 mr-2" />
+													Signed Agreement
+												</button>
+												{selectedApplication.loan?.pkiStampCertificateUrl && (
+													<button
+														onClick={async () => {
+															try {
+																const response = await fetch(
+																	`/api/admin/applications/${selectedApplication.id}/stamp-certificate`,
+																	{
+																		method: 'GET',
+																		headers: {
+																			'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+																		}
+																	}
+																);
+																
+																if (!response.ok) {
+																	throw new Error('Failed to download stamp certificate');
+																}
+																
+																const blob = await response.blob();
+																const url = window.URL.createObjectURL(blob);
+																const a = document.createElement('a');
+																a.href = url;
+																a.download = `stamp-certificate-${selectedApplication.id.substring(0, 8)}.pdf`;
+																document.body.appendChild(a);
+																a.click();
+																window.URL.revokeObjectURL(url);
+																document.body.removeChild(a);
+															} catch (error) {
+																console.error('Error downloading stamp certificate:', error);
+																alert('Failed to download stamp certificate');
+															}
+														}}
+														className="flex items-center justify-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
+													>
+														<DocumentTextIcon className="h-4 w-4 mr-2" />
+														Stamp Certificate
+													</button>
+												)}
+											</div>
+										</div>
+
+										{/* Stamp Certificate Upload */}
+										<div className="mb-6">
+											<label className="block text-sm font-medium text-gray-300 mb-2">
+												Upload Stamp Certificate (PDF)
+											</label>
+											<input
+												type="file"
+												accept=".pdf,application/pdf"
+												onChange={(e) => setStampCertificateFile(e.target.files?.[0] || null)}
+												className="block w-full text-sm text-gray-300
+													file:mr-4 file:py-2 file:px-4
+													file:rounded-lg file:border-0
+													file:text-sm file:font-semibold
+													file:bg-teal-600 file:text-white
+													hover:file:bg-teal-700
+													cursor-pointer"
+												disabled={uploadingStampCertificate || stampCertificateUploaded || !!selectedApplication.loan?.pkiStampCertificateUrl}
+											/>
+											{stampCertificateFile && (
+												<p className="mt-2 text-sm text-gray-400">
+													Selected: {stampCertificateFile.name} ({(stampCertificateFile.size / 1024 / 1024).toFixed(2)} MB)
+												</p>
+											)}
+											{selectedApplication.loan?.pkiStampCertificateUrl && (
+												<p className="mt-2 text-sm text-green-400">
+													✓ Stamp certificate already uploaded
+												</p>
+											)}
+										</div>
+
+										{/* Upload Button */}
+										{!selectedApplication.loan?.pkiStampCertificateUrl && (
+											<div className="flex space-x-4 mb-6">
+												<button
+													onClick={async () => {
+														if (!stampCertificateFile) {
+															alert('Please select a stamp certificate file');
+															return;
+														}
+
+														setUploadingStampCertificate(true);
+														try {
+															const formData = new FormData();
+															formData.append('stampCertificate', stampCertificateFile);
+
+															const response = await fetch(
+																`/api/admin/applications/${selectedApplication.id}/upload-stamp-certificate`,
+																{
+																	method: 'POST',
+																	headers: {
+																		'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+																	},
+																	body: formData
+																}
+															);
+
+															if (!response.ok) {
+																const error = await response.json();
+																throw new Error(error.message || 'Upload failed');
+															}
+
+													const data = await response.json();
+													console.log('✅ Stamp certificate uploaded:', data);
+													
+													// Update selected application immediately with the new certificate URL
+													const updatedSelectedApp = {
+														...selectedApplication,
+														loan: {
+															...selectedApplication.loan,
+															pkiStampCertificateUrl: data.data.certificateUrl
+														}
+													};
+													setSelectedApplication(updatedSelectedApp as any);
+													setStampCertificateUploaded(true);
+													
+													// Refresh application data
+													await fetchApplications();
+													
+													console.log('✅ Certificate URL set, Confirm button should now appear');
+													alert('Stamp certificate uploaded successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.');
+														} catch (error) {
+															console.error('Error uploading stamp certificate:', error);
+															alert(`Failed to upload stamp certificate: ${error instanceof Error ? error.message : 'Unknown error'}`);
+														} finally {
+															setUploadingStampCertificate(false);
+														}
+													}}
+													disabled={uploadingStampCertificate || !stampCertificateFile}
+													className="flex items-center px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600/50 text-white font-medium rounded-lg transition-colors"
+												>
+													{uploadingStampCertificate ? 'Uploading...' : 'Upload Stamp Certificate'}
+												</button>
+											</div>
+										)}
+
+										{/* Confirm Stamping Button */}
+										{selectedApplication.loan?.pkiStampCertificateUrl && (
+											<div className="flex space-x-4">
+												<button
+													onClick={async () => {
+														const confirmMessage = `Are you sure you want to confirm stamping for ${selectedApplication.user?.fullName}?\n\nThis will move the application to PENDING_DISBURSEMENT status and allow loan disbursement.`;
+														
+														if (!window.confirm(confirmMessage)) {
+															return;
+														}
+
+													setConfirmingStamping(true);
+													try {
+														console.log('🔄 Confirming stamping for application:', selectedApplication.id);
+														console.log('Current status:', selectedApplication.status);
+														console.log('Certificate URL:', selectedApplication.loan?.pkiStampCertificateUrl);
+														
+														const response = await fetch(
+															`/api/admin/applications/${selectedApplication.id}/confirm-stamping`,
+															{
+																method: 'POST',
+																headers: {
+																	'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+																	'Content-Type': 'application/json'
+																}
+															}
+														);
+
+														const data = await response.json();
+														console.log('Response status:', response.status);
+														console.log('Response data:', data);
+
+														if (!response.ok) {
+															throw new Error(data.message || 'Confirmation failed');
+														}
+
+														console.log('✅ Stamping confirmed successfully');
+														alert('Stamping confirmed! Application moved to PENDING_DISBURSEMENT.');
+														
+														// Refresh application data
+														console.log('🔄 Refreshing applications...');
+														await fetchApplications();
+														
+														// Switch to disbursement tab
+														setSelectedTab('disbursement');
+													} catch (error) {
+														console.error('❌ Error confirming stamping:', error);
+														alert(`Failed to confirm stamping: ${error instanceof Error ? error.message : 'Unknown error'}`);
+													} finally {
+														setConfirmingStamping(false);
+													}
+													}}
+													disabled={confirmingStamping}
+													className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
+												>
+													<CheckCircleIcon className="h-5 w-5 mr-2" />
+													{confirmingStamping ? 'Confirming...' : 'Confirm Stamping & Proceed to Disbursement'}
+												</button>
+											</div>
+										)}
+
+										{/* Workflow Information */}
+										<div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
+											<h5 className="text-sm font-medium text-blue-200 mb-2">
+												Stamping Process
+											</h5>
+											<ul className="text-xs text-blue-200 space-y-1">
+												<li>
+													• All parties have completed digital PKI signing
+												</li>
+												<li>
+													• Download and review the signed agreement
+												</li>
+												<li>
+													• Upload the official stamp certificate (PDF format, max 10MB)
+												</li>
+												<li>
+													• Confirm stamping to proceed to disbursement stage
+												</li>
+												<li>
+													• Once confirmed, the application status will change to PENDING_DISBURSEMENT
+												</li>
+											</ul>
 										</div>
 									</div>
-								)}
+								</div>
+							)}
 
-								{/* Actions Tab - ADMIN only */}
-								{selectedTab === "actions" && userRole === "ADMIN" && (
+							{/* Actions Tab - ADMIN only */}
+							{selectedTab === "actions" && userRole === "ADMIN" && (
 									<div>
 										{/* Update Status Section */}
 										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">

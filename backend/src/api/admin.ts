@@ -7,6 +7,8 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
+import fs from "fs";
+import path from "path";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import { requireAdminOrAttestor } from "../lib/permissions";
@@ -1313,24 +1315,18 @@ router.get(
 			? (manualReviewApplications / totalApplicationsCount) * 100 
 			: 0;
 
-		// Get stamped agreement counts - now requires both stamped PDF and certificate
-		const pendingStampedAgreements = await prisma.loan.count({
-			where: {
-				pkiSignedPdfUrl: { not: null },
-				OR: [
-					{ pkiStampedPdfUrl: null },
-					{ pkiStampCertificateUrl: null }
-				],
-				status: { not: "DEFAULT" }
-			}
-		});
+	// Get stamping workflow counts
+	const pendingStampedAgreements = await prisma.loanApplication.count({
+		where: {
+			status: "PENDING_STAMPING"
+		}
+	});
 
-		const completedStampedAgreements = await prisma.loan.count({
-			where: {
-				pkiStampedPdfUrl: { not: null },
-				pkiStampCertificateUrl: { not: null }
-			}
-		});
+	const completedStampedAgreements = await prisma.loan.count({
+		where: {
+			pkiStampCertificateUrl: { not: null }
+		}
+	});
 
 			res.json({
 			// Legacy KPIs (keep for backward compatibility)
@@ -5244,20 +5240,28 @@ router.post(
 				});
 			}
 
-			// Allow disbursement if status is PENDING_DISBURSEMENT or APPROVED for flexibility
-			if (
-				application.status !== "PENDING_DISBURSEMENT" &&
-				application.status !== "APPROVED"
-			) {
-				console.log(
-					`Invalid application status: ${application.status}`
-				);
-				return res.status(400).json({
-					message: `Application is in ${application.status} status. Only applications in PENDING_DISBURSEMENT or APPROVED status can be disbursed.`,
-				});
-			}
+		// Allow disbursement if status is PENDING_DISBURSEMENT or APPROVED for flexibility
+		if (
+			application.status !== "PENDING_DISBURSEMENT" &&
+			application.status !== "APPROVED"
+		) {
+			console.log(
+				`Invalid application status: ${application.status}`
+			);
+			return res.status(400).json({
+				message: `Application is in ${application.status} status. Only applications in PENDING_DISBURSEMENT or APPROVED status can be disbursed.`,
+			});
+		}
 
-			try {
+		// Validate that stamp certificate has been uploaded
+		if (application.loan && !application.loan.pkiStampCertificateUrl) {
+			console.log('Stamp certificate not uploaded for loan:', application.loan.id);
+			return res.status(400).json({
+				message: "Stamp certificate must be uploaded before disbursement. Please upload the stamp certificate in the application stamping tab first."
+			});
+		}
+
+		try {
 				// Process the disbursement in a transaction to ensure consistency
 				const result = await prisma.$transaction(
 					async (prismaTransaction) => {
@@ -11588,66 +11592,66 @@ router.post(
 				const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
 				const signedPdfUrl = `${orchestratorUrl}/api/signed/${applicationId}/download`;
 				
-				await prisma.$transaction([
-					// Update loan status to PENDING_DISBURSEMENT and record signed agreement details
-					prisma.loan.update({
-						where: { id: application.loan.id },
-						data: { 
-							status: "PENDING_DISBURSEMENT",
-							agreementStatus: "SIGNED",
-							agreementSignedAt: new Date(),
-							pkiSignedPdfUrl: signedPdfUrl, // Store the PKI-signed PDF URL for download
-							updatedAt: new Date()
-						}
-					}),
-					// Update loan application status to PENDING_DISBURSEMENT
-					prisma.loanApplication.update({
-						where: { id: applicationId },
-						data: { 
-							status: "PENDING_DISBURSEMENT",
-							updatedAt: new Date()
-						}
-					})
-				]);
+			await prisma.$transaction([
+				// Update loan status to PENDING_STAMPING and record signed agreement details
+				prisma.loan.update({
+					where: { id: application.loan.id },
+					data: { 
+						status: "PENDING_STAMPING",
+						agreementStatus: "SIGNED",
+						agreementSignedAt: new Date(),
+						pkiSignedPdfUrl: signedPdfUrl, // Store the PKI-signed PDF URL for download
+						updatedAt: new Date()
+					}
+				}),
+				// Update loan application status to PENDING_STAMPING
+				prisma.loanApplication.update({
+					where: { id: applicationId },
+					data: { 
+						status: "PENDING_STAMPING",
+						updatedAt: new Date()
+					}
+				})
+			]);
 
-				// Add audit trail entry for loan status update after all signatures completed
-				try {
-					const finalSignerName = adminUser?.fullName || 'Unknown Admin';
-					const roleDisplayName = signatoryType === 'COMPANY' ? 'Company' : 'Witness';
-					await prisma.loanApplicationHistory.create({
-						data: {
-							applicationId: applicationId,
-							previousStatus: 'PENDING_PKI_SIGNING',
-							newStatus: 'PENDING_DISBURSEMENT',
-							changedBy: 'SYSTEM_PKI_COMPLETE',
-							changeReason: 'All parties completed PKI signing - ready for disbursement',
-							notes: `All required parties (Borrower, Company, and Witness) have completed PKI digital signing. Final signature completed by ${finalSignerName} as ${roleDisplayName}. Loan and application status updated to PENDING_DISBURSEMENT, ready for disbursement process.`,
-							metadata: {
-								loanId: application.loan.id,
-								completedAt: new Date().toISOString(),
-								allSignatoriesCount: allSignatories.length,
-								finalSignatoryType: signatoryType,
-								finalSignerName: finalSignerName,
-								finalSignerUserId: req.user?.userId,
-								docusealSubmissionId: application.loan.docusealSubmissionId
-							}
+			// Add audit trail entry for loan status update after all signatures completed
+			try {
+				const finalSignerName = adminUser?.fullName || 'Unknown Admin';
+				const roleDisplayName = signatoryType === 'COMPANY' ? 'Company' : 'Witness';
+				await prisma.loanApplicationHistory.create({
+					data: {
+						applicationId: applicationId,
+						previousStatus: 'PENDING_PKI_SIGNING',
+						newStatus: 'PENDING_STAMPING',
+						changedBy: 'SYSTEM_PKI_COMPLETE',
+						changeReason: 'All parties completed PKI signing - pending stamp certificate upload',
+						notes: `All required parties (Borrower, Company, and Witness) have completed PKI digital signing. Final signature completed by ${finalSignerName} as ${roleDisplayName}. Loan and application status updated to PENDING_STAMPING, awaiting stamp certificate upload before disbursement.`,
+						metadata: {
+							loanId: application.loan.id,
+							completedAt: new Date().toISOString(),
+							allSignatoriesCount: allSignatories.length,
+							finalSignatoryType: signatoryType,
+							finalSignerName: finalSignerName,
+							finalSignerUserId: req.user?.userId,
+							docusealSubmissionId: application.loan.docusealSubmissionId
 						}
-					});
-					console.log('✅ Audit trail entry created for loan activation after all PKI signatures completed');
-				} catch (auditError) {
-					console.error('❌ Failed to create audit trail entry for loan activation:', auditError);
-					// Don't fail the main operation for audit trail issues
-				}
-
-				console.log(`All parties signed - Loan ${application.loan.id} and Application ${applicationId} set to PENDING_DISBURSEMENT`);
+					}
+				});
+				console.log('✅ Audit trail entry created for loan activation after all PKI signatures completed');
+			} catch (auditError) {
+				console.error('❌ Failed to create audit trail entry for loan activation:', auditError);
+				// Don't fail the main operation for audit trail issues
 			}
 
-			return res.json({
-				success: true,
-				message: `Document signed successfully as ${signatoryType}`,
-				allSigned,
-				newStatus: allSigned ? "PENDING_DISBURSEMENT" : application.status
-			});
+			console.log(`All parties signed - Loan ${application.loan.id} and Application ${applicationId} set to PENDING_STAMPING`);
+			}
+
+		return res.json({
+			success: true,
+			message: `Document signed successfully as ${signatoryType}`,
+			allSigned,
+			newStatus: allSigned ? "PENDING_STAMPING" : application.status
+		});
 
 		} catch (error) {
 			console.error("Error in PIN signing:", error);
@@ -11860,6 +11864,32 @@ const stampedPdfUpload = multer({
 			cb(new Error('Only PDF files are allowed'), false);
 		}
 	}
+});
+
+// Configure multer for stamp certificate uploads (persistent storage)
+const stampCertUpload = multer({
+	storage: (multer as any).diskStorage({
+		destination: (_req: any, _file: any, cb: any) => {
+			const uploadDir = path.join(__dirname, '../../uploads/stamp-certificates');
+			if (!fs.existsSync(uploadDir)) {
+				fs.mkdirSync(uploadDir, { recursive: true });
+			}
+			cb(null, uploadDir);
+		},
+		filename: (req: any, _file: any, cb: any) => {
+			const applicationId = req.params.id;
+			const timestamp = Date.now();
+			cb(null, `stamp-cert-${applicationId}-${timestamp}.pdf`);
+		}
+	}),
+	fileFilter: (_req: any, file: any, cb: any) => {
+		if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+			cb(null, true);
+		} else {
+			cb(new Error('Only PDF files are allowed'), false);
+		}
+	},
+	limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
 /**
@@ -12306,60 +12336,626 @@ router.get(
 				});
 			}
 
-			// Check if certificate exists
-			if (!loan.pkiStampCertificateUrl) {
-				return res.status(400).json({
+		// Check if certificate exists
+		if (!loan.pkiStampCertificateUrl) {
+			return res.status(400).json({
+				success: false,
+				message: 'No stamp certificate available for download'
+			});
+		}
+
+		// Read certificate from local file system
+		const certificatePath = path.join(__dirname, '../../', loan.pkiStampCertificateUrl);
+		console.log(`📁 Reading stamp certificate from: ${certificatePath}`);
+
+		if (!fs.existsSync(certificatePath)) {
+			console.error(`❌ Stamp certificate file not found at: ${certificatePath}`);
+			return res.status(404).json({
+				success: false,
+				message: 'Stamp certificate file not found on server'
+			});
+		}
+
+		// Send the file
+		res.setHeader('Content-Type', 'application/pdf');
+		res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${loanId.substring(0, 8)}.pdf"`);
+		
+		const fileStream = fs.createReadStream(certificatePath);
+		fileStream.on('error', (error: Error) => {
+			console.error('❌ Error streaming file:', error);
+			if (!res.headersSent) {
+				res.status(500).json({
 					success: false,
-					message: 'No stamp certificate available for download'
+					message: "Error streaming certificate file",
+					error: error.message
 				});
 			}
-
-			// Download certificate from signing orchestrator
-			if (!loan.applicationId) {
-				return res.status(400).json({
-					success: false,
-					message: 'No application ID found for this loan'
-				});
-			}
-
-			try {
-				const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL;
-				const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY;
-
-				if (!orchestratorUrl || !orchestratorApiKey) {
-					throw new Error('Signing orchestrator configuration missing');
-				}
-
-				const response = await fetch(`${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/certificate`, {
-					method: 'GET',
-					headers: {
-						'X-API-Key': orchestratorApiKey,
-					},
-				});
-
-				if (!response.ok) {
-					const errorText = await response.text();
-					throw new Error(`Orchestrator download failed: ${response.status} - ${errorText}`);
-				}
-
-				// Stream the PDF directly to the client
-				const pdfBuffer = await response.arrayBuffer();
-				
-				res.setHeader('Content-Type', 'application/pdf');
-				res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${loanId.substring(0, 8)}.pdf"`);
-				res.setHeader('Content-Length', pdfBuffer.byteLength);
-				
-				res.send(Buffer.from(pdfBuffer));
-				return;
-
-			} catch (orchestratorError) {
-				console.error('❌ Error downloading from signing orchestrator:', orchestratorError);
-				throw new Error(`Failed to download from signing orchestrator: ${orchestratorError instanceof Error ? orchestratorError.message : 'Unknown error'}`);
-			}
+		});
+		fileStream.pipe(res);
+		return;
 
 		} catch (error) {
 			console.error('❌ Error downloading stamp certificate:', error);
 
+			return res.status(500).json({
+				success: false,
+				message: "Error downloading stamp certificate",
+				error: error instanceof Error ? error.message : 'Unknown error'
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/upload-stamp-certificate:
+ *   post:
+ *     summary: Upload stamp certificate for an application (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               stampCertificate:
+ *                 type: string
+ *                 format: binary
+ *                 description: The stamp certificate PDF file
+ *     responses:
+ *       200:
+ *         description: Certificate uploaded successfully
+ *       400:
+ *         description: Bad request or validation error
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/applications/:id/upload-stamp-certificate",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	stampCertUpload.single('stampCertificate'),
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id: applicationId } = req.params;
+			const file = req.file;
+			const adminUser = req.user;
+
+			if (!file) {
+				return res.status(400).json({
+					success: false,
+					message: "No stamp certificate file provided"
+				});
+			}
+
+			// Verify application exists and has an associated loan
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: true,
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true
+						}
+					}
+				}
+			});
+
+			if (!application) {
+				return res.status(404).json({
+					success: false,
+					message: "Application not found"
+				});
+			}
+
+			if (!application.loan) {
+				return res.status(400).json({
+					success: false,
+					message: "No loan associated with this application"
+				});
+			}
+
+			// Verify application is in PENDING_STAMPING status
+			if (application.status !== 'PENDING_STAMPING') {
+				return res.status(400).json({
+					success: false,
+					message: `Application must be in PENDING_STAMPING status. Current status: ${application.status}`
+				});
+			}
+
+			// File has been saved to disk by multer, get the relative path
+			const relativePath = `uploads/stamp-certificates/${file.filename}`;
+
+			// Update loan with certificate URL
+			await prisma.loan.update({
+				where: { id: application.loan.id },
+				data: {
+					pkiStampCertificateUrl: relativePath,
+					updatedAt: new Date()
+				}
+			});
+
+			// Create audit trail entry
+			await prisma.loanApplicationHistory.create({
+				data: {
+					applicationId: applicationId,
+					previousStatus: application.status,
+					newStatus: application.status, // Status doesn't change yet
+					changedBy: `admin_${adminUser?.userId}`,
+					changeReason: 'Stamp certificate uploaded',
+					notes: `Stamp certificate uploaded by admin ${adminUser?.userId}. File: ${file.filename}`,
+					metadata: {
+						fileName: file.filename,
+						fileSize: file.size,
+						uploadedBy: adminUser?.userId,
+						uploadedAt: new Date().toISOString(),
+						loanId: application.loan.id
+					}
+				}
+			});
+
+			console.log(`✅ Stamp certificate uploaded for application ${applicationId}: ${file.filename}`);
+
+			return res.json({
+				success: true,
+				message: "Stamp certificate uploaded successfully",
+				data: {
+					certificateUrl: relativePath,
+					fileName: file.filename,
+					applicationId: applicationId,
+					loanId: application.loan.id
+				}
+			});
+
+		} catch (error) {
+			console.error('❌ Error uploading stamp certificate:', error);
+			return res.status(500).json({
+				success: false,
+				message: "Error uploading stamp certificate",
+				error: error instanceof Error ? error.message : 'Unknown error'
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/confirm-stamping:
+ *   post:
+ *     summary: Confirm stamping and transition application to PENDING_DISBURSEMENT (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The application ID
+ *     responses:
+ *       200:
+ *         description: Stamping confirmed, status updated to PENDING_DISBURSEMENT
+ *       400:
+ *         description: Bad request or validation error
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+router.post(
+	"/applications/:id/confirm-stamping",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id: applicationId } = req.params;
+			const adminUser = req.user;
+
+			// Verify application exists and has an associated loan
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: true,
+					user: {
+						select: {
+							id: true,
+							fullName: true,
+							email: true
+						}
+					}
+				}
+			});
+
+			if (!application) {
+				return res.status(404).json({
+					success: false,
+					message: "Application not found"
+				});
+			}
+
+			if (!application.loan) {
+				return res.status(400).json({
+					success: false,
+					message: "No loan associated with this application"
+				});
+			}
+
+			// Verify application is in PENDING_STAMPING status
+			if (application.status !== 'PENDING_STAMPING') {
+				return res.status(400).json({
+					success: false,
+					message: `Application must be in PENDING_STAMPING status. Current status: ${application.status}`
+				});
+			}
+
+			// Verify stamp certificate has been uploaded
+			if (!application.loan.pkiStampCertificateUrl) {
+				return res.status(400).json({
+					success: false,
+					message: "Stamp certificate must be uploaded before confirming stamping"
+				});
+			}
+
+			// Update both loan and application status to PENDING_DISBURSEMENT
+			await prisma.$transaction([
+				prisma.loan.update({
+					where: { id: application.loan.id },
+					data: {
+						status: 'PENDING_DISBURSEMENT',
+						updatedAt: new Date()
+					}
+				}),
+				prisma.loanApplication.update({
+					where: { id: applicationId },
+					data: {
+						status: 'PENDING_DISBURSEMENT',
+						updatedAt: new Date()
+					}
+				})
+			]);
+
+			// Create audit trail entry
+			await prisma.loanApplicationHistory.create({
+				data: {
+					applicationId: applicationId,
+					previousStatus: 'PENDING_STAMPING',
+					newStatus: 'PENDING_DISBURSEMENT',
+					changedBy: `admin_${adminUser?.userId}`,
+					changeReason: 'Stamping confirmed by admin',
+					notes: `Stamping process completed. Stamp certificate verified and uploaded. Application and loan status updated to PENDING_DISBURSEMENT, ready for disbursement by admin ${adminUser?.userId}.`,
+					metadata: {
+						confirmedBy: adminUser?.userId,
+						confirmedAt: new Date().toISOString(),
+						loanId: application.loan.id,
+						certificateUrl: application.loan.pkiStampCertificateUrl
+					}
+				}
+			});
+
+			console.log(`✅ Stamping confirmed for application ${applicationId}, status updated to PENDING_DISBURSEMENT`);
+
+			return res.json({
+				success: true,
+				message: "Stamping confirmed successfully. Application ready for disbursement.",
+				data: {
+					applicationId: applicationId,
+					loanId: application.loan.id,
+					previousStatus: 'PENDING_STAMPING',
+					newStatus: 'PENDING_DISBURSEMENT'
+				}
+			});
+
+		} catch (error) {
+			console.error('❌ Error confirming stamping:', error);
+			return res.status(500).json({
+				success: false,
+				message: "Error confirming stamping",
+				error: error instanceof Error ? error.message : 'Unknown error'
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/unsigned-agreement:
+ *   get:
+ *     summary: Download unsigned loan agreement from DocuSeal (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The application ID
+ *     responses:
+ *       200:
+ *         description: Unsigned agreement PDF file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: No agreement available or invalid application
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/applications/:id/unsigned-agreement",
+	authenticateToken,
+	requireAdminOrAttestor as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id: applicationId } = req.params;
+
+			// Verify application exists and has an associated loan
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: true
+				}
+			});
+
+			if (!application) {
+				return res.status(404).json({
+					success: false,
+					message: "Application not found"
+				});
+			}
+
+		if (!application.loan) {
+			return res.status(400).json({
+				success: false,
+				message: "No loan associated with this application"
+			});
+		}
+
+	// Check if DocuSeal sign URL exists
+	if (!application.loan.docusealSignUrl) {
+		return res.status(400).json({
+			success: false,
+			message: "No DocuSeal submission found for this loan"
+		});
+	}
+
+	// Build the DocuSeal URL from environment variable and slug
+	const docusealBaseUrl = process.env.DOCUSEAL_BASE_URL || 'https://sign.creditxpress.com.my';
+	const docusealUrl = `${docusealBaseUrl}/s/${application.loan.docusealSignUrl}`;
+	
+	// Return the URL for the frontend to open
+	return res.json({
+		success: true,
+		url: docusealUrl,
+		message: "Please open this URL to view the unsigned agreement"
+	});
+
+		} catch (error) {
+			console.error('❌ Error downloading unsigned agreement:', error);
+			return res.status(500).json({
+				success: false,
+				message: "Error downloading unsigned agreement",
+				error: error instanceof Error ? error.message : 'Unknown error'
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/signed-agreement:
+ *   get:
+ *     summary: Download signed loan agreement with PKI signatures (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The application ID
+ *     responses:
+ *       200:
+ *         description: Signed agreement PDF file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: No agreement available or invalid application
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/applications/:id/signed-agreement",
+	authenticateToken,
+	requireAdminOrAttestor as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id: applicationId } = req.params;
+
+			// Verify application exists and has an associated loan
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: true
+				}
+			});
+
+			if (!application) {
+				return res.status(404).json({
+					success: false,
+					message: "Application not found"
+				});
+			}
+
+			if (!application.loan) {
+				return res.status(400).json({
+					success: false,
+					message: "No loan associated with this application"
+				});
+			}
+
+			if (!application.loan.pkiSignedPdfUrl) {
+				return res.status(400).json({
+					success: false,
+					message: "No signed agreement available for this loan. PKI signing may not be complete."
+				});
+			}
+
+			// Get signed agreement from signing orchestrator
+			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL;
+			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY;
+
+			if (!orchestratorUrl || !orchestratorApiKey) {
+				throw new Error('Signing orchestrator configuration missing');
+			}
+
+			const response = await fetch(`${orchestratorUrl}/api/signed/${applicationId}/download`, {
+				method: 'GET',
+				headers: {
+					'X-API-Key': orchestratorApiKey,
+				},
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`Orchestrator download failed: ${response.status} - ${errorText}`);
+			}
+
+			// Stream the PDF directly to the client
+			const pdfBuffer = await response.arrayBuffer();
+			
+			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="signed-agreement-${applicationId.substring(0, 8)}.pdf"`);
+			res.setHeader('Content-Length', pdfBuffer.byteLength);
+			
+			res.send(Buffer.from(pdfBuffer));
+			return;
+
+		} catch (error) {
+			console.error('❌ Error downloading signed agreement:', error);
+			return res.status(500).json({
+				success: false,
+				message: "Error downloading signed agreement",
+				error: error instanceof Error ? error.message : 'Unknown error'
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{id}/stamp-certificate:
+ *   get:
+ *     summary: Download stamp certificate for an application (admin only)
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The application ID
+ *     responses:
+ *       200:
+ *         description: Stamp certificate PDF file
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: No certificate available or invalid application
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/applications/:id/stamp-certificate",
+	authenticateToken,
+	requireAdminOrAttestor as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { id: applicationId } = req.params;
+
+			// Verify application exists and has an associated loan
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: true
+				}
+			});
+
+			if (!application) {
+				return res.status(404).json({
+					success: false,
+					message: "Application not found"
+				});
+			}
+
+			if (!application.loan) {
+				return res.status(400).json({
+					success: false,
+					message: "No loan associated with this application"
+				});
+			}
+
+			if (!application.loan.pkiStampCertificateUrl) {
+				return res.status(400).json({
+					success: false,
+					message: "No stamp certificate available for this loan"
+				});
+			}
+
+			// Read the certificate file from disk
+			const certificatePath = path.join(__dirname, '../../', application.loan.pkiStampCertificateUrl);
+
+			if (!fs.existsSync(certificatePath)) {
+				return res.status(404).json({
+					success: false,
+					message: "Stamp certificate file not found on server"
+				});
+			}
+
+		// Send the file
+		res.setHeader('Content-Type', 'application/pdf');
+		res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${applicationId.substring(0, 8)}.pdf"`);
+		
+		const fileStream = fs.createReadStream(certificatePath);
+		fileStream.pipe(res);
+		return;
+
+	} catch (error) {
+			console.error('❌ Error downloading stamp certificate:', error);
 			return res.status(500).json({
 				success: false,
 				message: "Error downloading stamp certificate",

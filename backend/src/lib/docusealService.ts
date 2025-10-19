@@ -816,11 +816,11 @@ class DocuSealService {
             console.log(`Current loan status: ${loan.status}`);
             console.log(`Current application status: ${loan.application.status}`);
             
-            // Update loan status to PENDING_DISBURSEMENT and set legacy fields for backward compatibility
+            // Update loan status to PENDING_STAMPING and set legacy fields for backward compatibility
             const updatedLoan = await tx.loan.update({
               where: { id: loan.id },
               data: {
-                status: 'PENDING_DISBURSEMENT', // Move to pending disbursement after ALL signatures
+                status: 'PENDING_STAMPING', // Move to pending stamping after ALL signatures
                 agreementStatus: 'SIGNED', // Set legacy field for backward compatibility
                 agreementSignedAt: new Date(), // Set timestamp for backward compatibility
                 docusealSignUrl: userSignatory?.slug || null // Set user slug for backward compatibility
@@ -828,11 +828,11 @@ class DocuSealService {
             });
             console.log(`Updated loan status to: ${updatedLoan.status}, agreementStatus: ${updatedLoan.agreementStatus}`);
 
-            // Update loan application status to PENDING_DISBURSEMENT
+            // Update loan application status to PENDING_STAMPING
             const updatedApplication = await tx.loanApplication.update({
               where: { id: loan.applicationId },
               data: {
-                status: 'PENDING_DISBURSEMENT'
+                status: 'PENDING_STAMPING'
               }
             });
             console.log(`Updated application status to: ${updatedApplication.status}`);
@@ -842,10 +842,10 @@ class DocuSealService {
               data: {
                 applicationId: loan.applicationId,
                 previousStatus: loan.application.status,
-                newStatus: 'PENDING_DISBURSEMENT',
+                newStatus: 'PENDING_STAMPING',
                 changedBy: 'SYSTEM_DOCUSEAL',
-                changeReason: 'All signatures completed via DocuSeal, ready for disbursement',
-                notes: `All parties (Company, Borrower, and Witness) have signed the loan agreement. DocuSeal Submission ID: ${submissionId}. Status updated to PENDING_DISBURSEMENT.`,
+                changeReason: 'All signatures completed via DocuSeal, awaiting stamp certificate',
+                notes: `All parties (Company, Borrower, and Witness) have signed the loan agreement. DocuSeal Submission ID: ${submissionId}. Status updated to PENDING_STAMPING, awaiting stamp certificate upload before disbursement.`,
                 metadata: {
                   docusealSubmissionId: submissionId,
                   signedAt: new Date().toISOString(),

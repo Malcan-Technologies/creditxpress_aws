@@ -241,6 +241,9 @@ interface LoanApplication {
 		agreementStatus?: string | null;
 		agreementSignedAt?: string | null;
 		docusealSignUrl?: string | null;
+		pkiSignedPdfUrl?: string | null;
+		pkiStampedPdfUrl?: string | null;
+		pkiStampCertificateUrl?: string | null;
 	};
 }
 
@@ -285,6 +288,9 @@ function LoansPageContent() {
 		[key: string]: boolean;
 	}>({});
 	const [showApplicationDetails, setShowApplicationDetails] = useState<{
+		[key: string]: boolean;
+	}>({});
+	const [showTimelineDetails, setShowTimelineDetails] = useState<{
 		[key: string]: boolean;
 	}>({});
 	const [applicationHistory, setApplicationHistory] = useState<{
@@ -1521,12 +1527,14 @@ function LoansPageContent() {
 				return "bg-purple-100 text-purple-800";
 		case "PENDING_CERTIFICATE_OTP":
 			return "bg-purple-100 text-purple-800";
-		case "PENDING_SIGNATURE":
-				return "bg-indigo-100 text-indigo-800";
-		case "PENDING_SIGNING_COMPANY_WITNESS":
-				return "bg-teal-100 text-teal-800";
-			case "PENDING_DISBURSEMENT":
-				return "bg-orange-100 text-orange-800";
+	case "PENDING_SIGNATURE":
+			return "bg-indigo-100 text-indigo-800";
+	case "PENDING_SIGNING_COMPANY_WITNESS":
+			return "bg-teal-100 text-teal-800";
+	case "PENDING_STAMPING":
+			return "bg-teal-100 text-teal-800";
+		case "PENDING_DISBURSEMENT":
+			return "bg-orange-100 text-orange-800";
 			case "APPROVED":
 				return "bg-green-100 text-green-800";
 			case "REJECTED":
@@ -1546,41 +1554,47 @@ function LoansPageContent() {
 	) => {
 		switch (status) {
 			case "INCOMPLETE":
-				return "Incomplete";
+				return "Application Started";
 			case "PENDING_APP_FEE":
-				return "Pending Fee";
+				return "Application Started";
+			case "PENDING_PROFILE_CONFIRMATION":
+				return "KYC Verification";
 			case "PENDING_KYC":
-				return "Pending KYC";
+				return "KYC Verification";
 			case "PENDING_APPROVAL":
-				return "Under Review";
+				return "Pending Approval";
 			case "PENDING_FRESH_OFFER":
-				return "Fresh Offer Available";
+				return "Pending Approval";
 			case "PENDING_ATTESTATION":
 				// Show special status for live call requests
 				if (attestationType === "MEETING") {
 					return "Awaiting Live Call";
 				}
-				return "Pending Attestation";
+				return "Attestation";
 			case "CERT_CHECK":
 				return "Certificate Check";
-			case "PENDING_PKI_SIGNING":
-				return "Pending PKI Signing";
-			case "PENDING_SIGNING_OTP":
-				return "Pending OTP Verification";
-		case "PENDING_CERTIFICATE_OTP":
-			return "Pending Certificate OTP";
-		case "PENDING_SIGNATURE":
-				return "Pending Signature";
-		case "PENDING_SIGNING_COMPANY_WITNESS":
-				return "Awaiting Company Signature";
-			case "PENDING_DISBURSEMENT":
-				return "Pending Disbursement";
+		case "PENDING_PKI_SIGNING":
+			return "Document Signing";
+		case "PENDING_SIGNING_OTP":
+			return "Pending OTP Verification";
+	case "PENDING_CERTIFICATE_OTP":
+		return "Pending Certificate OTP";
+	case "PENDING_SIGNATURE":
+			return "Document Signing";
+	case "PENDING_SIGNING_COMPANY_WITNESS":
+			return "Company & Witness Signing";
+	case "PENDING_STAMPING":
+			return "Agreement Stamping";
+		case "PENDING_DISBURSEMENT":
+			return "Loan Disbursement";
 			case "APPROVED":
 				return "Approved";
 			case "REJECTED":
 				return "Rejected";
 			case "DISBURSED":
 				return "Disbursed";
+			case "ACTIVE":
+				return "Loan Active";
 			case "WITHDRAWN":
 				return "Withdrawn";
 			default:
@@ -3788,58 +3802,75 @@ function LoansPageContent() {
 																								Signed Date
 																							</span>
 																							<span className="font-semibold text-gray-700 font-body">
-																								{formatDateTime(loan.agreementSignedAt)}
-																							</span>
-																						</div>
-																					)}
-																					{loan.agreementStatus === 'SIGNED' && (
-																						<div className="pt-3 border-t border-gray-100">
-																							{(loan.pkiStampedPdfUrl || loan.pkiStampCertificateUrl) ? (
-																								<div className="flex flex-wrap gap-2">
-																									{loan.pkiStampedPdfUrl && (
-																										<button
-																											onClick={() => downloadStampedAgreement(loan)}
-																											className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-																										>
-																											<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-																											</svg>
-																											Download Stamped Agreement
-																										</button>
-																									)}
-																									
-																									{loan.pkiStampCertificateUrl && (
-																										<button
-																											onClick={() => downloadStampCertificate(loan)}
-																											className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium"
-																										>
-																											<svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-																											</svg>
-																											Download Certificate
-																										</button>
-																									)}
-																								</div>
-																							) : (
-																								<div className="flex items-center p-3 bg-amber-50 border border-amber-200 rounded-lg">
-																									<ClockIcon className="h-5 w-5 text-amber-600 mr-3" />
-																									<div>
-																										<p className="text-sm font-medium text-amber-800">
-																											Waiting for loan stamping
-																										</p>
-																										<p className="text-xs text-amber-600 mt-1">
-																											Your agreement has been signed and is being processed for final stamping.
-																										</p>
-																									</div>
-																								</div>
-																							)}
-																						</div>
-																					)}
-																				</div>
-																			</div>
-																		)}
+																			{formatDateTime(loan.agreementSignedAt)}
+																		</span>
+																	</div>
+																)}
+																{loan.agreementStatus === 'SIGNED' && (
+																	<div className="pt-3 border-t border-gray-100">
+																		<h6 className="text-sm font-medium text-gray-600 mb-3">Download Loan Documents</h6>
+																		<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+														{/* Unsigned Agreement */}
+														<button
+															onClick={async () => {
+																try {
+																	const response = await fetch(
+																		`/api/loan-applications/${loan.application.id}/unsigned-agreement`,
+																		{ method: 'GET' }
+																	);
+																	if (response.ok) {
+																		const data = await response.json();
+																		if (data.url) {
+																			// Open DocuSeal URL in new tab
+																			window.open(data.url, '_blank');
+																		} else {
+																			throw new Error('No URL returned');
+																		}
+																	} else {
+																		throw new Error('Failed to get unsigned agreement');
+																	}
+																} catch (error) {
+																	console.error('Error opening unsigned agreement:', error);
+																	alert('Failed to open unsigned agreement');
+																}
+															}}
+															className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+														>
+															<DocumentTextIcon className="h-4 w-4 mr-2" />
+															Unsigned
+														</button>
+																			
+																			{/* Signed Agreement */}
+																			<button
+																				onClick={() => downloadSignedAgreement(loan)}
+																				className="inline-flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+																			>
+																				<CheckCircleIcon className="h-4 w-4 mr-2" />
+																				Signed
+																			</button>
+																			
+																			{/* Stamp Certificate */}
+																			<button
+																				onClick={() => downloadStampCertificate(loan)}
+																				disabled={!loan.pkiStampCertificateUrl}
+																				className={`inline-flex items-center justify-center px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+																					loan.pkiStampCertificateUrl
+																						? 'bg-purple-600 text-white hover:bg-purple-700'
+																						: 'bg-gray-300 text-gray-500 cursor-not-allowed'
+																				}`}
+																				title={!loan.pkiStampCertificateUrl ? 'Stamp certificate pending' : 'Download stamp certificate'}
+																			>
+																				<DocumentCheckIcon className="h-4 w-4 mr-2" />
+																				Certificate
+																			</button>
+																		</div>
+																	</div>
+																)}
+															</div>
+														</div>
+													)}
 
-																		{/* Recent Payments */}
+													{/* Recent Payments */}
 																		<div>
 																			<h5 className="text-lg lg:text-xl font-heading font-bold text-gray-700 mb-6">
 																				Recent Payments
@@ -4834,6 +4865,158 @@ function LoansPageContent() {
 																		</div>
 																	</div>
 
+																	{/* Application Status Timeline */}
+																	<div className="mb-6">
+																		<div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+																			{/* Timeline Header - Always Visible */}
+																			<button
+																				onClick={() => setShowTimelineDetails(prev => ({
+																					...prev,
+																					[app.id]: !prev[app.id]
+																				}))}
+																				className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
+																			>
+																				<div className="flex items-center flex-1">
+																					<div className="w-12 h-12 bg-purple-600/10 rounded-xl flex items-center justify-center mr-3">
+																						<ClockIcon className="h-6 w-6 text-purple-600" />
+																					</div>
+																					<div className="text-left">
+																						<h4 className="text-lg font-heading font-bold text-gray-700 mb-1">
+																							Application Progress
+																						</h4>
+																						{!showTimelineDetails[app.id] && (
+																							<p className="text-sm text-purple-600 font-medium">
+																								Current: {getApplicationStatusLabel(app.status, app.attestationType)}
+																							</p>
+																						)}
+																					</div>
+																				</div>
+																				<div className="ml-4">
+																					{showTimelineDetails[app.id] ? (
+																						<ChevronUpIcon className="h-5 w-5 text-gray-400" />
+																					) : (
+																						<ChevronDownIcon className="h-5 w-5 text-gray-400" />
+																					)}
+																				</div>
+																			</button>
+
+																			{/* Timeline Content - Collapsible */}
+																			{showTimelineDetails[app.id] && (
+																			<div className="px-6 pb-6 pt-2">
+																			<div className="relative">
+																				{/* Vertical line connecting steps */}
+																				<div className="absolute left-4 top-4 bottom-4 w-0.5 bg-gray-200"></div>
+																				
+																				<div className="space-y-6 relative">
+																					{[
+																						{ status: 'INCOMPLETE', label: 'Application Started', icon: DocumentTextIcon },
+																						{ status: 'PENDING_APPROVAL', label: 'Pending Approval', icon: ChartBarIcon },
+																						{ status: 'PENDING_ATTESTATION', label: 'Attestation', icon: VideoCameraIcon },
+																						{ status: 'PENDING_KYC', label: 'KYC Verification', icon: ShieldCheckIcon },
+																						{ status: 'PENDING_SIGNATURE', label: 'Document Signing', icon: DocumentCheckIcon },
+																						{ status: 'PENDING_SIGNING_COMPANY_WITNESS', label: 'Company & Witness Signing', icon: DocumentTextIcon },
+																						{ status: 'PENDING_STAMPING', label: 'Agreement Stamping', icon: DocumentTextIcon },
+																						{ status: 'PENDING_DISBURSEMENT', label: 'Loan Disbursement', icon: BanknotesIcon },
+																						{ status: 'ACTIVE', label: 'Loan Active', icon: CheckCircleIcon },
+																					].map((step, index, array) => {
+																						// Define the sequential order of statuses (actual backend flow)
+																						const statusOrder = [
+																							'INCOMPLETE', 'PENDING_APP_FEE', 
+																							'PENDING_APPROVAL', 'PENDING_FRESH_OFFER',
+																							'PENDING_ATTESTATION',
+																							'PENDING_PROFILE_CONFIRMATION', 'PENDING_KYC', 'PENDING_KYC_VERIFICATION', 'PENDING_CERTIFICATE_OTP',
+																							'PENDING_SIGNATURE', 'PENDING_PKI_SIGNING', 'PENDING_SIGNING_COMPANY_WITNESS',
+																							'PENDING_SIGNING_OTP_DS', 'PENDING_STAMPING', 'PENDING_DISBURSEMENT', 'ACTIVE'
+																						];
+																						
+																						const currentStatusIndex = statusOrder.indexOf(app.status);
+																						const stepIndex = statusOrder.indexOf(step.status);
+																						
+																						// Special handling for combined statuses
+																						let isCompleted = stepIndex < currentStatusIndex && stepIndex !== -1;
+																						let isCurrent = app.status === step.status;
+																						
+																						// Application Started step - show as current for INCOMPLETE or PENDING_APP_FEE
+																						if (step.status === 'INCOMPLETE') {
+																							isCurrent = app.status === 'INCOMPLETE' || app.status === 'PENDING_APP_FEE';
+																							isCompleted = !isCurrent && (currentStatusIndex > statusOrder.indexOf('PENDING_APP_FEE'));
+																						}
+																						
+																						// Pending Approval step - show as current for PENDING_APPROVAL or PENDING_FRESH_OFFER
+																						if (step.status === 'PENDING_APPROVAL') {
+																							isCurrent = app.status === 'PENDING_APPROVAL' || app.status === 'PENDING_FRESH_OFFER';
+																							isCompleted = !isCurrent && (currentStatusIndex > statusOrder.indexOf('PENDING_FRESH_OFFER'));
+																						}
+																						
+																						// KYC Verification step - show as current for PENDING_PROFILE_CONFIRMATION or PENDING_KYC
+																						if (step.status === 'PENDING_KYC') {
+																							isCurrent = app.status === 'PENDING_PROFILE_CONFIRMATION' || app.status === 'PENDING_KYC' || app.status === 'PENDING_KYC_VERIFICATION' || app.status === 'PENDING_CERTIFICATE_OTP';
+																							isCompleted = !isCurrent && (currentStatusIndex > statusOrder.indexOf('PENDING_CERTIFICATE_OTP'));
+																						}
+																						
+																						// Document Signing step - show as current for PENDING_SIGNATURE or PENDING_PKI_SIGNING
+																						if (step.status === 'PENDING_SIGNATURE') {
+																							isCurrent = app.status === 'PENDING_SIGNATURE' || app.status === 'PENDING_PKI_SIGNING';
+																							isCompleted = !isCurrent && (currentStatusIndex > statusOrder.indexOf('PENDING_PKI_SIGNING'));
+																						}
+																						
+																						const isPending = !isCompleted && !isCurrent;
+																						
+																						const StepIcon = step.icon;
+																						const isLastStep = index === array.length - 1;
+																						
+																						return (
+																							<div key={step.status} className="flex items-start relative">
+																								{/* Step indicator */}
+																								<div className="flex-shrink-0 mr-4 relative z-10">
+																									{isCompleted && (
+																										<div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
+																											<CheckIcon className="h-5 w-5 text-white stroke-2" />
+																										</div>
+																									)}
+																									{isCurrent && (
+																										<div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shadow-md ring-4 ring-purple-100">
+																											<StepIcon className="h-4 w-4 text-white" />
+																										</div>
+																									)}
+																									{isPending && (
+																										<div className="w-8 h-8 rounded-full border-2 border-gray-300 bg-white flex items-center justify-center">
+																											<div className="w-2.5 h-2.5 rounded-full bg-gray-300"></div>
+																										</div>
+																									)}
+																								</div>
+																								
+																								{/* Step content */}
+																								<div className="flex-1 min-w-0 pt-0.5">
+																									<div className={`text-sm font-medium transition-colors ${
+																										isCurrent ? 'text-purple-600 font-bold' : 
+																										isCompleted ? 'text-green-600 font-semibold' : 
+																										'text-gray-400'
+																									}`}>
+																										{step.label}
+																									</div>
+																									{isCurrent && (
+																										<div className="text-xs text-purple-500 mt-1">
+																											In Progress
+																										</div>
+																									)}
+																									{isCompleted && (
+																										<div className="text-xs text-green-500 mt-1">
+																											✓ Completed
+																										</div>
+																									)}
+																								</div>
+																							</div>
+																						);
+																					})}
+																				</div>
+																			</div>
+																			</div>
+																			)}
+																		</div>
+																	</div>
+
+
 																	{/* Fees and Net Disbursement Section */}
 																	{app.status === "PENDING_FRESH_OFFER" && (
 																		<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -4965,20 +5148,6 @@ function LoansPageContent() {
 																	)}
 
 																	{/* Status */}
-																	<div className="mb-4">
-																		<div className="flex items-center p-4 bg-purple-50 rounded-xl border border-purple-200">
-																			<DocumentTextIcon className="h-8 w-8 text-purple-600 mr-3" />
-																			<div className="flex-1">
-																				<p className="text-lg font-semibold text-purple-700">
-																					Application Status
-																				</p>
-																				<p className="text-sm text-gray-600">
-																					{getApplicationStatusLabel(app.status, app.attestationType)}
-																				</p>
-																			</div>
-																		</div>
-																	</div>
-
 																	{/* View Details Button - Centered to match other cards */}
 																	<div className="flex justify-center mt-6">
 																		<button

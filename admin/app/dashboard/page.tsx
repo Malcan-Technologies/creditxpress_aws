@@ -1401,40 +1401,40 @@ export default function AdminDashboardPage() {
 					</Link>
 					)}
 
-					{/* Pending Stamped Agreements - ADMIN only */}
-					{userRole === "ADMIN" && (
-					<Link
-						href="/dashboard/loans?filter=pending_stamped"
-						className="group bg-gradient-to-br from-teal-600/20 to-teal-800/20 backdrop-blur-md border border-teal-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-teal-400/50"
-					>
-						<div className="flex items-center justify-between mb-3">
-							<div className="p-2 bg-teal-500/30 rounded-lg">
-								<DocumentTextIcon className="h-6 w-6 text-teal-300" />
-							</div>
-							{workflowCounts.PENDING_STAMPED_AGREEMENTS > 0 && (
-								<span className="bg-teal-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-									{formatNumber(
-										workflowCounts.PENDING_STAMPED_AGREEMENTS
-									)}
-								</span>
-							)}
+				{/* Pending Stamp Certificates - ADMIN only */}
+				{userRole === "ADMIN" && (
+				<Link
+					href="/dashboard/applications?filter=pending-stamping"
+					className="group bg-gradient-to-br from-teal-600/20 to-teal-800/20 backdrop-blur-md border border-teal-500/30 rounded-xl shadow-lg p-5 transition-all hover:scale-[1.02] hover:border-teal-400/50"
+				>
+					<div className="flex items-center justify-between mb-3">
+						<div className="p-2 bg-teal-500/30 rounded-lg">
+							<DocumentTextIcon className="h-6 w-6 text-teal-300" />
 						</div>
-						<h3 className="text-white font-medium mb-1">
-							Pending Stamped Agreements
-						</h3>
-						<p className="text-sm text-teal-200 mb-3">
-							{workflowCounts.PENDING_STAMPED_AGREEMENTS > 0
-								? `${formatNumber(
-										workflowCounts.PENDING_STAMPED_AGREEMENTS
-								  )} agreements need stamping`
-								: "No pending stamped agreements"}
-						</p>
-						<div className="flex items-center text-teal-300 text-sm font-medium group-hover:text-teal-200">
-							Upload stamped
-							<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-						</div>
-					</Link>
-					)}
+						{workflowCounts.PENDING_STAMPED_AGREEMENTS > 0 && (
+							<span className="bg-teal-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+								{formatNumber(
+									workflowCounts.PENDING_STAMPED_AGREEMENTS
+								)}
+							</span>
+						)}
+					</div>
+					<h3 className="text-white font-medium mb-1">
+						Pending Stamp Certificates
+					</h3>
+					<p className="text-sm text-teal-200 mb-3">
+						{workflowCounts.PENDING_STAMPED_AGREEMENTS > 0
+							? `${formatNumber(
+									workflowCounts.PENDING_STAMPED_AGREEMENTS
+							  )} applications awaiting stamp certificate`
+							: "No pending stamp certificates"}
+					</p>
+					<div className="flex items-center text-teal-300 text-sm font-medium group-hover:text-teal-200">
+						Upload certificate
+						<ChevronRightIcon className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+					</div>
+				</Link>
+				)}
 
 				</div>
 			</div>
