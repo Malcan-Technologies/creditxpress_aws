@@ -1684,4 +1684,96 @@ router.get("/:loanId/download-stamp-certificate", authenticateAndVerifyPhone, as
 	}
 });
 
+/**
+ * @route GET /api/loans/:loanId/download-disbursement-slip
+ * @description Download payment slip for loan disbursement (user-facing)
+ */
+router.get("/:loanId/download-disbursement-slip", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
+	try {
+		const { loanId } = req.params;
+		const userId = req.user!.userId;
+
+		console.log(`📥 User ${userId} requesting disbursement slip for loan ${loanId}`);
+
+		// Verify the loan belongs to the authenticated user
+		const loan = await prisma.loan.findFirst({
+			where: {
+				id: loanId,
+				application: {
+					userId: userId
+				}
+			},
+			include: {
+				application: {
+					include: {
+						disbursement: {
+							select: {
+								paymentSlipUrl: true,
+								referenceNumber: true
+							}
+						}
+					}
+				}
+			}
+		});
+
+		if (!loan) {
+			console.error(`❌ Loan not found or access denied for user ${userId}, loan ${loanId}`);
+			return res.status(404).json({
+				success: false,
+				message: 'Loan not found or access denied'
+			});
+		}
+
+		// Check if disbursement exists and has payment slip
+		if (!loan.application.disbursement?.paymentSlipUrl) {
+			console.log(`⚠️ No payment slip available for loan ${loanId}`);
+			return res.status(404).json({
+				success: false,
+				message: 'Payment slip is not yet available for this loan'
+			});
+		}
+
+		// Read payment slip from local file system
+		const slipPath = path.join(__dirname, '../../', loan.application.disbursement.paymentSlipUrl);
+		console.log(`📁 Reading payment slip from: ${slipPath}`);
+
+		if (!fs.existsSync(slipPath)) {
+			console.error(`❌ Payment slip file not found at: ${slipPath}`);
+			return res.status(404).json({
+				success: false,
+				message: 'Payment slip file not found on server'
+			});
+		}
+
+		// Send the file
+		res.setHeader('Content-Type', 'application/pdf');
+		res.setHeader('Content-Disposition', `attachment; filename="payment-slip-${loan.application.disbursement.referenceNumber}.pdf"`);
+		
+		const fileStream = fs.createReadStream(slipPath);
+		fileStream.on('error', (error: Error) => {
+			console.error('❌ Error streaming payment slip file:', error);
+			if (!res.headersSent) {
+				res.status(500).json({
+					success: false,
+					message: "Error streaming payment slip file",
+					error: error.message
+				});
+			}
+		});
+		fileStream.pipe(res);
+		console.log(`✅ Payment slip sent successfully to user ${userId}`);
+		return;
+
+	} catch (error) {
+		console.error('❌ Error downloading payment slip:', error);
+
+		return res.status(500).json({
+			success: false,
+			message: 'Failed to download payment slip',
+			error: error instanceof Error ? error.message : 'Unknown error'
+		});
+	}
+});
+
 export default router;

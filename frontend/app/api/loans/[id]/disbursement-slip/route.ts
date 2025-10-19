@@ -16,45 +16,9 @@ export async function GET(
       );
     }
 
-    console.log(`📥 Fetching disbursement slip for loan: ${params.id}`);
-
-    // Get loan to find applicationId
-    const loanResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/loans/${params.id}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (!loanResponse.ok) {
-      console.error(`❌ Loan fetch failed: ${loanResponse.status}`);
-      return NextResponse.json(
-        { message: 'Loan not found' },
-        { status: 404 }
-      );
-    }
-
-    const loanData = await loanResponse.json();
-    
-    // Handle both wrapped and unwrapped responses
-    const loan = loanData.data || loanData;
-    const applicationId = loan.applicationId || loan.application?.id;
-
-    if (!applicationId) {
-      console.error('❌ No applicationId found in loan data:', loan);
-      return NextResponse.json(
-        { message: 'Application ID not found for this loan' },
-        { status: 404 }
-      );
-    }
-
-    console.log(`📋 Application ID: ${applicationId}`);
-
-    // Download disbursement slip from admin endpoint
+    // Call the user-facing backend endpoint directly
     const slipResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/admin/disbursements/${applicationId}/payment-slip`,
+      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/loans/${params.id}/download-disbursement-slip`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -63,29 +27,30 @@ export async function GET(
     );
 
     if (!slipResponse.ok) {
-      const errorText = await slipResponse.text();
-      console.error(`❌ Slip fetch failed: ${slipResponse.status}`, errorText);
+      const errorData = await slipResponse.json();
       return NextResponse.json(
-        { message: 'Payment slip not found' },
-        { status: 404 }
+        errorData,
+        { status: slipResponse.status }
       );
     }
 
+    // Forward the PDF blob
     const blob = await slipResponse.blob();
-    console.log(`✅ Disbursement slip downloaded successfully`);
+    const headers = new Headers(slipResponse.headers);
     
     return new NextResponse(blob, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="disbursement-slip-${applicationId}.pdf"`,
-      },
+      status: 200,
+      headers
     });
   } catch (error) {
     console.error('❌ Error downloading disbursement slip:', error);
     return NextResponse.json(
-      { message: 'Failed to download payment slip',  error: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        success: false,
+        message: 'Failed to download payment slip',
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     );
   }
 }
-
