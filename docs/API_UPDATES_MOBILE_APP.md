@@ -577,11 +577,354 @@ For questions or issues related to these API changes, contact:
 
 ---
 
+## Payment Slip Management
+
+### New Endpoints for Disbursement Payment Slips
+
+#### **POST** `/api/admin/applications/{applicationId}/upload-disbursement-slip` (Admin Only)
+Upload payment slip proof for loan disbursements.
+
+**Authentication:** Required (Admin Bearer token)
+
+**Request:**
+```http
+POST /api/admin/applications/{applicationId}/upload-disbursement-slip
+Authorization: Bearer {adminToken}
+Content-Type: multipart/form-data
+
+FormData:
+  paymentSlip: [PDF File]
+```
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "message": "Payment slip uploaded successfully",
+  "data": {
+    "paymentSlipUrl": "/uploads/disbursement-slips/disbursement-slip-{applicationId}-{timestamp}.pdf",
+    "applicationId": "{applicationId}",
+    "disbursementId": "{disbursementId}"
+  }
+}
+```
+
+**Response (Error - 404):**
+```json
+{
+  "success": false,
+  "message": "Disbursement not found"
+}
+```
+
+**Validation:**
+- File must be PDF format
+- Maximum file size: 10MB
+- Disbursement record must exist (loan must be disbursed)
+- Can replace existing payment slips
+
+**Storage Location:** `/uploads/disbursement-slips/`
+
+---
+
+#### **GET** `/api/admin/disbursements/{applicationId}/payment-slip` (Admin)
+Download payment slip for a specific disbursement.
+
+**Authentication:** Required (Admin or Attestor Bearer token)
+
+**Request:**
+```http
+GET /api/admin/disbursements/{applicationId}/payment-slip
+Authorization: Bearer {adminToken}
+```
+
+**Response (Success - 200):**
+```
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="disbursement-slip-{applicationId}.pdf"
+
+[PDF Binary Data]
+```
+
+**Response (Error - 404):**
+```json
+{
+  "success": false,
+  "message": "Payment slip not found"
+}
+```
+
+---
+
+#### **GET** `/api/admin/disbursements` (Admin)
+Fetch all loan disbursements with details.
+
+**Authentication:** Required (Admin Bearer token)
+
+**Request:**
+```http
+GET /api/admin/disbursements
+Authorization: Bearer {adminToken}
+```
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "disbursement_id",
+      "applicationId": "app_id",
+      "referenceNumber": "DISB-12345",
+      "amount": 50000.00,
+      "bankName": "Maybank",
+      "bankAccountNumber": "1234567890",
+      "disbursedAt": "2025-01-15T10:30:00Z",
+      "disbursedBy": "admin_user_id",
+      "paymentSlipUrl": "/uploads/disbursement-slips/...",
+      "application": {
+        "user": {
+          "fullName": "John Doe",
+          "email": "john@example.com",
+          "phoneNumber": "+60123456789",
+          "bankName": "Maybank",
+          "accountNumber": "1234567890"
+        },
+        "product": {
+          "name": "Personal Loan",
+          "code": "PL-001"
+        }
+      }
+    }
+  ]
+}
+```
+
+---
+
+#### **GET** `/api/loans/{loanId}/disbursement-slip` (User)
+Download payment slip for own loan disbursement.
+
+**Authentication:** Required (User Bearer token)
+
+**Request:**
+```http
+GET /api/loans/{loanId}/disbursement-slip
+Authorization: Bearer {userToken}
+```
+
+**Response (Success - 200):**
+```
+Content-Type: application/pdf
+Content-Disposition: attachment; filename="disbursement-slip-{applicationId}.pdf"
+
+[PDF Binary Data]
+```
+
+**Response (Error - 404):**
+```json
+{
+  "success": false,
+  "message": "Payment slip not found"
+}
+```
+
+**Usage Notes:**
+- User can only download payment slip for their own loans
+- Returns 401 if not authenticated
+- Returns 404 if no payment slip has been uploaded
+
+---
+
+### Database Schema Updates
+
+**LoanDisbursement Model:**
+```prisma
+model LoanDisbursement {
+  id                String          @id @default(cuid())
+  applicationId     String          @unique
+  referenceNumber   String
+  amount            Float
+  bankName          String?
+  bankAccountNumber String?
+  disbursedAt       DateTime        @default(now())
+  disbursedBy       String
+  notes             String?
+  status            String          @default("COMPLETED")
+  paymentSlipUrl    String?         // NEW: Path to payment slip PDF
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  application       LoanApplication @relation(fields: [applicationId], references: [id])
+
+  @@map("loan_disbursements")
+}
+```
+
+---
+
+### Audit Trail Integration
+
+All payment slip uploads and replacements are tracked in the `LoanApplicationHistory` table:
+
+**Upload Action:**
+```json
+{
+  "previousStatus": null,
+  "newStatus": "DISBURSEMENT_SLIP_UPLOADED",
+  "changedBy": "admin_user_id",
+  "changeReason": "Payment slip uploaded",
+  "notes": "Payment slip uploaded by Admin Name. File: disbursement-slip-app123-1234567890.pdf",
+  "metadata": {
+    "action": "uploaded",
+    "previousSlipUrl": null,
+    "newSlipUrl": "/uploads/disbursement-slips/...",
+    "fileName": "disbursement-slip-app123-1234567890.pdf",
+    "fileSize": 245678,
+    "uploadedBy": "admin_user_id",
+    "uploadedByName": "Admin Name",
+    "uploadedAt": "2025-01-15T10:30:00.000Z"
+  }
+}
+```
+
+**Replace Action:**
+```json
+{
+  "previousStatus": null,
+  "newStatus": "DISBURSEMENT_SLIP_REPLACED",
+  "changedBy": "admin_user_id",
+  "changeReason": "Payment slip replaced",
+  "notes": "Payment slip replaced by Admin Name. File: disbursement-slip-app123-1234567891.pdf",
+  "metadata": {
+    "action": "replaced",
+    "previousSlipUrl": "/uploads/disbursement-slips/old-file.pdf",
+    "newSlipUrl": "/uploads/disbursement-slips/new-file.pdf",
+    "fileName": "disbursement-slip-app123-1234567891.pdf",
+    "fileSize": 345678,
+    "uploadedBy": "admin_user_id",
+    "uploadedByName": "Admin Name",
+    "uploadedAt": "2025-01-15T11:45:00.000Z"
+  }
+}
+```
+
+Similarly, stamp certificate uploads are also tracked:
+
+**Stamp Certificate Upload/Replace:**
+```json
+{
+  "previousStatus": null,
+  "newStatus": "STAMP_CERTIFICATE_UPLOADED" | "STAMP_CERTIFICATE_REPLACED",
+  "changedBy": "admin_user_id",
+  "changeReason": "Stamp certificate uploaded" | "Stamp certificate replaced",
+  "notes": "Stamp certificate uploaded/replaced by Admin Name. File: stamp-cert-loan123-1234567890.pdf",
+  "metadata": {
+    "action": "uploaded" | "replaced",
+    "previousCertUrl": null | "/uploads/stamp-certificates/old-cert.pdf",
+    "newCertUrl": "/uploads/stamp-certificates/...",
+    "fileName": "stamp-cert-loan123-1234567890.pdf",
+    "fileSize": 156789,
+    "uploadedBy": "admin_user_id",
+    "uploadedByName": "Admin Name",
+    "uploadedAt": "2025-01-15T09:15:00.000Z",
+    "loanId": "loan_id"
+  }
+}
+```
+
+---
+
+### Mobile App Integration
+
+**Check Payment Slip Availability:**
+```javascript
+const loan = await fetchLoanDetails(loanId);
+const hasPaymentSlip = loan.application?.disbursement?.paymentSlipUrl != null;
+
+if (hasPaymentSlip) {
+  // Show download button
+}
+```
+
+**Download Payment Slip:**
+```javascript
+const downloadPaymentSlip = async (loanId) => {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/loans/${loanId}/disbursement-slip`,
+      {
+        headers: {
+          'Authorization': `Bearer ${userToken}`
+        }
+      }
+    );
+    
+    if (response.ok) {
+      const blob = await response.blob();
+      const path = `${RNFS.DocumentDirectoryPath}/payment-slip-${loanId}.pdf`;
+      await RNFS.writeFile(path, blob, 'base64');
+      FileViewer.open(path);
+    } else {
+      const error = await response.json();
+      Alert.alert('Error', error.message);
+    }
+  } catch (error) {
+    Alert.alert('Error', 'Failed to download payment slip');
+  }
+};
+```
+
+**Display Disbursement Information:**
+```javascript
+// In loan details screen
+{loan.application?.disbursement && (
+  <View>
+    <Text>Disbursement Information</Text>
+    <Text>Reference: {loan.application.disbursement.referenceNumber}</Text>
+    <Text>Amount: RM {loan.application.disbursement.amount.toFixed(2)}</Text>
+    <Text>Date: {formatDate(loan.application.disbursement.disbursedAt)}</Text>
+    
+    {loan.application.disbursement.paymentSlipUrl && (
+      <TouchableOpacity onPress={() => downloadPaymentSlip(loan.id)}>
+        <Text>Download Payment Slip</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+)}
+```
+
+---
+
+### Admin Dashboard Updates
+
+**New Dashboard Metric:**
+- `disbursementsWithoutSlips`: Count of disbursed loans missing payment slips
+- Displayed as a quick action card for admins
+
+**Disbursements Tab (Admin Loans Page):**
+- View all loan disbursements
+- Upload/replace payment slips
+- Download existing payment slips
+- See disbursement details (reference number, amount, bank details, disbursed by)
+
+---
+
 ## Changelog
 
 ### January 2025
+
+#### Payment Slip Management (Latest)
+- Added payment slip upload/replacement functionality for disbursements
+- New endpoints for admin upload and user download of payment slips
+- Payment slips stored in `/uploads/disbursement-slips/` subfolder
+- Integrated audit trail tracking for uploads and replacements
+- Added dashboard metric for missing payment slips
+- Admin disbursements tab for centralized payment slip management
+
+#### Document Signing & Stamping
 - Added document download endpoints for unsigned/signed agreements and stamp certificates
 - Implemented stamp certificate upload and confirmation flow
+- Integrated audit trail tracking for stamp certificate uploads
 - Simplified user-facing timeline (combined redundant statuses)
 - Updated status label mapping
 - Restricted document downloads to Loans tab only

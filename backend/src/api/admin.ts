@@ -13262,29 +13262,43 @@ router.get(
 				});
 			}
 
-			const filePath = path.join(process.cwd(), disbursement.paymentSlipUrl);
+			// Use __dirname like stamp certificate to ensure correct path in Docker
+			const filePath = path.join(__dirname, '../../', disbursement.paymentSlipUrl);
+			console.log(`📁 Reading payment slip from: ${filePath}`);
 			
 			if (!fs.existsSync(filePath)) {
+				console.error(`❌ Payment slip file not found at: ${filePath}`);
 				return res.status(404).json({
 					success: false,
 					message: 'File not found on server'
 				});
 			}
 
-		res.setHeader('Content-Type', 'application/pdf');
-		res.setHeader('Content-Disposition', `attachment; filename="disbursement-slip-${applicationId}.pdf"`);
-		
-		const fileStream = fs.createReadStream(filePath);
-		fileStream.pipe(res);
-		return;
-	} catch (error) {
-		console.error('Error downloading disbursement slip:', error);
-		return res.status(500).json({
-			success: false,
-			message: 'Failed to download payment slip'
-		});
+			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="disbursement-slip-${applicationId}.pdf"`);
+			
+			const fileStream = fs.createReadStream(filePath);
+			fileStream.on('error', (error: Error) => {
+				console.error('❌ Error streaming payment slip file:', error);
+				if (!res.headersSent) {
+					res.status(500).json({
+						success: false,
+						message: "Error streaming payment slip file",
+						error: error.message
+					});
+				}
+			});
+			fileStream.pipe(res);
+			return;
+		} catch (error) {
+			console.error('❌ Error downloading disbursement slip:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to download payment slip',
+				error: error instanceof Error ? error.message : 'Unknown error'
+			});
+		}
 	}
-}
 );
 
 /**
