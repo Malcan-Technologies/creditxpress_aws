@@ -776,24 +776,38 @@ function LoansPageContent() {
 
 	const downloadDisbursementSlip = async (loan: Loan) => {
 		try {
-			const response = await fetch(
-				`/api/loans/${loan.id}/disbursement-slip`,
-				{ method: 'GET' }
-			);
-
-			if (response.ok) {
-				const blob = await response.blob();
-				const url = window.URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = `disbursement-slip-${loan.id}.pdf`;
-				a.click();
-			} else {
-				alert('Payment slip not available');
+			// Check if payment slip is available
+			if (!loan.application?.disbursement?.paymentSlipUrl) {
+				throw new Error('Payment slip is not yet available for download');
 			}
+
+			// Use direct backend download endpoint with authentication
+			const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
+			const response = await fetch(`${backendUrl}/api/loans/${loan.id}/download-disbursement-slip`, {
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${TokenStorage.getAccessToken()}`,
+				},
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			// Get the PDF blob and create download link
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `payment-slip-${loan.id.substring(0, 8)}.pdf`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
 		} catch (error) {
-			console.error('Error downloading slip:', error);
-			alert('Failed to download payment slip');
+			console.error('Error downloading payment slip:', error);
+			alert(error instanceof Error ? error.message : 'Failed to download payment slip');
 		}
 	};
 
