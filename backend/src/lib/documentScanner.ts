@@ -58,6 +58,8 @@ async function scanDirectory(dirPath: string, baseDir: string): Promise<FileMeta
             documentType = 'STAMP_CERTIFICATE';
           } else if (relativePath.includes('default-letters')) {
             documentType = 'DEFAULT_LETTER';
+          } else if (relativePath.includes('receipts') || fileName.startsWith('RCP-')) {
+            documentType = 'PAYMENT_RECEIPT';
           }
 
           results.push({
@@ -189,6 +191,47 @@ async function matchFileToDatabase(file: FileMetadata): Promise<{
       userName: loan.user.fullName || undefined,
       loanId: loan.id,
       applicationId: loan.applicationId,
+      isOrphaned: false,
+    };
+  }
+
+  // Try to match via PaymentReceipt (payment receipts)
+  const receipt = await prisma.paymentReceipt.findFirst({
+    where: {
+      OR: [
+        { filePath: { contains: file.fileName } },
+        { receiptNumber: { contains: file.fileName.replace('.pdf', '') } },
+      ],
+    },
+    include: {
+      repayment: {
+        include: {
+          loan: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  fullName: true,
+                },
+              },
+              application: {
+                select: {
+                  id: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (receipt) {
+    return {
+      userId: receipt.repayment.loan.userId,
+      userName: receipt.repayment.loan.user.fullName || undefined,
+      loanId: receipt.repayment.loanId,
+      applicationId: receipt.repayment.loan.applicationId,
       isOrphaned: false,
     };
   }
@@ -433,6 +476,21 @@ export async function scanAndIndexDocuments(): Promise<ScanStats> {
       console.log(`Found ${vpsFiles.length} files in VPS uploads`);
     } catch (error) {
       const errorMsg = `Error scanning VPS uploads: ${error}`;
+      console.error(errorMsg);
+      stats.errors.push(errorMsg);
+    }
+
+    // Scan receipts folder
+    const receiptsDir = path.join(process.cwd(), 'receipts');
+    console.log(`Scanning receipts directory: ${receiptsDir}`);
+
+    try {
+      const receiptFiles = await scanDirectory(receiptsDir, receiptsDir);
+      vpsFiles.push(...receiptFiles);
+      stats.vpsFiles = vpsFiles.length;
+      console.log(`Found ${receiptFiles.length} files in receipts directory`);
+    } catch (error) {
+      const errorMsg = `Error scanning receipts: ${error}`;
       console.error(errorMsg);
       stats.errors.push(errorMsg);
     }

@@ -13274,24 +13274,35 @@ router.get(
 				select: { paymentSlipUrl: true }
 			});
 
-			if (!disbursement?.paymentSlipUrl) {
-				return res.status(404).json({
-					success: false,
-					message: 'Payment slip not found'
-				});
-			}
+		if (!disbursement?.paymentSlipUrl) {
+			return res.status(404).json({
+				success: false,
+				message: 'Payment slip not found'
+			});
+		}
 
-			// Use __dirname like stamp certificate to ensure correct path in Docker
-			const filePath = path.join(__dirname, '../../', disbursement.paymentSlipUrl);
-			console.log(`📁 Reading payment slip from: ${filePath}`);
+		// Try the correct path first (process.cwd() for new uploads)
+		let filePath = path.join(process.cwd(), disbursement.paymentSlipUrl);
+		console.log(`📁 Checking payment slip at: ${filePath}`);
+		
+		// Fall back to old path (__dirname) for legacy files uploaded before the fix
+		if (!fs.existsSync(filePath)) {
+			const legacyPath = path.join(__dirname, '../../', disbursement.paymentSlipUrl);
+			console.log(`📁 File not found, checking legacy path: ${legacyPath}`);
 			
-			if (!fs.existsSync(filePath)) {
-				console.error(`❌ Payment slip file not found at: ${filePath}`);
+			if (fs.existsSync(legacyPath)) {
+				filePath = legacyPath;
+				console.log(`✅ Found payment slip at legacy path`);
+			} else {
+				console.error(`❌ Payment slip file not found at either path`);
 				return res.status(404).json({
 					success: false,
 					message: 'File not found on server'
 				});
 			}
+		} else {
+			console.log(`✅ Found payment slip at current path`);
+		}
 
 			res.setHeader('Content-Type', 'application/pdf');
 			res.setHeader('Content-Disposition', `attachment; filename="disbursement-slip-${applicationId}.pdf"`);
