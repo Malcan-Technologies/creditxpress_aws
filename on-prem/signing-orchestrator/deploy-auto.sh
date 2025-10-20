@@ -43,9 +43,21 @@ echo -e "${YELLOW}💾 Creating backup on remote server...${NC}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ssh "$REMOTE_HOST" "
     mkdir -p ~/kapital-backups/$TIMESTAMP
+    
+    # Backup signed PDFs
     if [ -d ~/kapital/agreements/signed ]; then
         cp -r ~/kapital/agreements/signed ~/kapital-backups/$TIMESTAMP/ 2>/dev/null || true
     fi
+    
+    # Backup database before deployment
+    if docker ps --format '{{.Names}}' | grep -q 'agreements-postgres-prod'; then
+        echo 'Creating database backup...'
+        docker exec agreements-postgres-prod pg_dump -U agreements_user -d agreements_db > ~/kapital-backups/$TIMESTAMP/agreements_db_backup.sql 2>/dev/null || true
+        if [ -f ~/kapital-backups/$TIMESTAMP/agreements_db_backup.sql ]; then
+            echo 'Database backup created successfully'
+        fi
+    fi
+    
     echo 'Backup created at ~/kapital-backups/$TIMESTAMP'
 "
 
@@ -116,8 +128,10 @@ ssh "$REMOTE_HOST" "
     echo 'node_modules/' >> .dockerignore
     echo '.git/' >> .dockerignore
     
-    # Remove old volumes to avoid conflicts
-    docker volume ls -q | grep signing-orchestrator | xargs -r docker volume rm 2>/dev/null || true
+    # DO NOT REMOVE VOLUMES - CONTAINS PRODUCTION DATA
+    # The postgres volume contains all agreement data and should NEVER be deleted
+    # Commented out dangerous line that was deleting production database:
+    # docker volume ls -q | grep signing-orchestrator | xargs -r docker volume rm 2>/dev/null || true
     
     # Start services with timeout
     timeout 300 docker-compose --env-file env.production up -d --build
