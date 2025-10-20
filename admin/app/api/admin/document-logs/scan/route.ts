@@ -6,7 +6,11 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get("adminToken")?.value || "";
+    // Try to get token from cookies first, then from Authorization header
+    const cookieToken = request.cookies.get("adminToken")?.value || "";
+    const authHeader = request.headers.get("authorization") || "";
+    const headerToken = authHeader.replace("Bearer ", "");
+    const token = cookieToken || headerToken;
 
     const response = await fetch(
       `${API_URL}/api/admin/document-logs/scan`,

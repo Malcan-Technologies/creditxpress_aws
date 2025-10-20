@@ -6,7 +6,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get("adminToken")?.value || "";
+    // Try to get token from cookies first, then from Authorization header
+    const cookieToken = request.cookies.get("adminToken")?.value || "";
+    const authHeader = request.headers.get("authorization") || "";
+    const headerToken = authHeader.replace("Bearer ", "");
+    const token = cookieToken || headerToken;
+    
     const searchParams = request.nextUrl.searchParams;
 
     const response = await fetch(

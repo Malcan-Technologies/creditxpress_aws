@@ -611,6 +611,10 @@ jobs:
               docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/disbursement-slips
               docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/stamp-certificates
               docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/stamp-certificates
+              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/kyc
+              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/kyc
+              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/stamped-agreements
+              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/stamped-agreements
               
               # ReactPDF dependencies are handled in Dockerfile - skipping verification
               
