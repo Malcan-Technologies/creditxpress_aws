@@ -322,6 +322,24 @@ function ActiveLoansContent() {
 		fetchActiveLoans();
 	}, []);
 
+	// Handle loanId query parameter (from document audit logs)
+	useEffect(() => {
+		const loanIdParam = searchParams.get("loanId");
+		if (loanIdParam) {
+			// Set the search term to the loan ID so it filters the list
+			setSearchTerm(loanIdParam);
+			setStatusFilter("all"); // Show all statuses
+			
+			// If loans are loaded, try to auto-select the matching loan
+			if (loans.length > 0) {
+				const matchedLoan = loans.find((loan) => loan.id === loanIdParam);
+				if (matchedLoan) {
+					setSelectedLoan(matchedLoan);
+				}
+			}
+		}
+	}, [searchParams, loans]);
+
 	useEffect(() => {
 		if (viewMode === "disbursements") {
 			fetchDisbursements();

@@ -56,6 +56,7 @@ export default function AdminLayout({
 	const [paymentsOpen, setPaymentsOpen] = useState(false);
 	const [applicationsOpen, setApplicationsOpen] = useState(false);
 	const [loansOpen, setLoansOpen] = useState(false);
+	const [auditLogsOpen, setAuditLogsOpen] = useState(false);
 	const [allowAutoExpand, setAllowAutoExpand] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
@@ -252,6 +253,19 @@ export default function AdminLayout({
 		},
 	];
 
+	const auditLogsItems = [
+		{
+			name: "Admin Access Logs",
+			href: "/dashboard/audit-logs/access",
+			icon: ShieldCheckIcon,
+		},
+		{
+			name: "Document Storage Logs",
+			href: "/dashboard/audit-logs/documents",
+			icon: DocumentTextIcon,
+		},
+	];
+
 	// Function to check if any sub-item in a dropdown is active
 	const isDropdownActive = (items: any[]) => {
 		return items.some((item) => {
@@ -325,6 +339,9 @@ export default function AdminLayout({
 		const isPaymentsPath = paymentItems.some((item) =>
 			isActive(item.href)
 		);
+		const isAuditLogsPath = auditLogsItems.some((item) =>
+			isActive(item.href)
+		);
 
 		// Check for specific applications and loans paths
 		const isApplicationsPath = pathname.startsWith(
@@ -335,6 +352,7 @@ export default function AdminLayout({
 		setLoanWorkflowOpen(isLoanPath);
 		setManagementOpen(isManagementPath);
 		setPaymentsOpen(isPaymentsPath);
+		setAuditLogsOpen(isAuditLogsPath);
 		setApplicationsOpen(isApplicationsPath);
 		setLoansOpen(isLoansPath);
 
@@ -411,6 +429,7 @@ export default function AdminLayout({
 							setPaymentsOpen(!paymentsOpen);
 							setLoanWorkflowOpen(false);
 							setManagementOpen(false);
+							setAuditLogsOpen(false);
 						}}
 						className={getDropdownClasses(isDropdownActive(paymentItems))}
 					>
@@ -449,6 +468,7 @@ export default function AdminLayout({
 							setLoanWorkflowOpen(!loanWorkflowOpen);
 							setPaymentsOpen(false);
 							setManagementOpen(false);
+							setAuditLogsOpen(false);
 						}}
 						className={getDropdownClasses(isDropdownActive(loanWorkflowItems))}
 					>
@@ -488,6 +508,7 @@ export default function AdminLayout({
 							setManagementOpen(!managementOpen);
 							setPaymentsOpen(false);
 							setLoanWorkflowOpen(false);
+							setAuditLogsOpen(false);
 						}}
 						className={getDropdownClasses(isDropdownActive(managementItems))}
 					>
@@ -499,6 +520,45 @@ export default function AdminLayout({
 						<div className="absolute left-0 z-10 mt-2 w-48 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
 							<div className="py-1">
 								{managementItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
+									const active = isActive(item.href);
+									return (
+										<Link
+											key={item.name}
+											href={item.href}
+											className={getSubItemClasses(active)}
+											onClick={() => setAllowAutoExpand(true)}
+										>
+											<item.icon className="mr-2 h-4 w-4 inline" />
+											{item.name}
+										</Link>
+									);
+								})}
+							</div>
+						</div>
+					)}
+				</div>
+				)}
+
+				{/* Audit Logs Dropdown - only show for ADMIN users */}
+				{userRole === "ADMIN" && shouldShowSection(auditLogsItems) && (
+				<div className="relative">
+					<button
+						onClick={() => {
+							setAuditLogsOpen(!auditLogsOpen);
+							setManagementOpen(false);
+							setPaymentsOpen(false);
+							setLoanWorkflowOpen(false);
+						}}
+						className={getDropdownClasses(isDropdownActive(auditLogsItems))}
+					>
+						<ShieldCheckIcon className={getIconClasses(isDropdownActive(auditLogsItems))} />
+						Audit Logs
+						<ChevronDownIcon className="ml-1 h-4 w-4 text-gray-400" />
+					</button>
+					{auditLogsOpen && (
+						<div className="absolute left-0 z-10 mt-2 w-56 rounded-md bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5">
+							<div className="py-1">
+								{auditLogsItems.filter(item => canUserAccessRoute(item.href)).map((item) => {
 									const active = isActive(item.href);
 									return (
 										<Link
@@ -608,6 +668,7 @@ export default function AdminLayout({
 								setPaymentsOpen(!paymentsOpen);
 								setLoanWorkflowOpen(false);
 								setManagementOpen(false);
+								setAuditLogsOpen(false);
 							}}
 							className={getBaseClasses(isDropdownActive(paymentItems))}
 						>
@@ -651,6 +712,7 @@ export default function AdminLayout({
 							setLoanWorkflowOpen(!loanWorkflowOpen);
 							setPaymentsOpen(false);
 							setManagementOpen(false);
+							setAuditLogsOpen(false);
 						}}
 						className={getBaseClasses(isDropdownActive(loanWorkflowItems))}
 					>
@@ -695,6 +757,7 @@ export default function AdminLayout({
 							setManagementOpen(!managementOpen);
 							setPaymentsOpen(false);
 							setLoanWorkflowOpen(false);
+							setAuditLogsOpen(false);
 						}}
 						className={getBaseClasses(isDropdownActive(managementItems))}
 					>
@@ -709,6 +772,50 @@ export default function AdminLayout({
 					{managementOpen && (
 						<div className="mt-1 space-y-1">
 							{managementItems.map((item) => {
+								const active = isActive(item.href);
+								return (
+									<Link
+										key={item.name}
+										href={item.href}
+										className={getSubItemClasses(active)}
+										onClick={() => {
+											setMobileMenuOpen(false);
+											setAllowAutoExpand(true);
+										}}
+									>
+										<item.icon className={getSubIconClasses(active)} />
+										{item.name}
+									</Link>
+								);
+							})}
+						</div>
+					)}
+				</div>
+				)}
+
+					{/* Audit Logs Section - only show for ADMIN users */}
+					{userRole === "ADMIN" && shouldShowSection(auditLogsItems) && (
+				<div>
+					<button
+						onClick={() => {
+							setAuditLogsOpen(!auditLogsOpen);
+							setManagementOpen(false);
+							setPaymentsOpen(false);
+							setLoanWorkflowOpen(false);
+						}}
+						className={getBaseClasses(isDropdownActive(auditLogsItems))}
+					>
+						<ShieldCheckIcon className={getIconClasses(isDropdownActive(auditLogsItems))} />
+						Audit Logs
+						{auditLogsOpen ? (
+							<ChevronDownIcon className="ml-auto h-5 w-5 text-gray-400" />
+						) : (
+							<ChevronRightIcon className="ml-auto h-5 w-5 text-gray-400" />
+						)}
+					</button>
+					{auditLogsOpen && (
+						<div className="mt-1 space-y-1">
+							{auditLogsItems.map((item) => {
 								const active = isActive(item.href);
 								return (
 									<Link

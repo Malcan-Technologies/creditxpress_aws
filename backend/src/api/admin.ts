@@ -20,6 +20,8 @@ import receiptsRoutes from "./receipts";
 import earlySettlementRoutes from "./admin/early-settlement";
 import cronRoutes from "./admin/cron";
 import pdfLettersRoutes from "./admin/pdf-letters";
+import accessLogsRoutes from "./admin/access-logs";
+import documentLogsRoutes from "./admin/document-logs";
 import whatsappService from "../lib/whatsappService";
 import { processCSVFile } from "../lib/csvProcessor";
 import ReceiptService from "../lib/receiptService";
@@ -323,6 +325,8 @@ router.use("/receipts", receiptsRoutes);
 router.use("/early-settlement", earlySettlementRoutes);
 router.use("/cron", cronRoutes);
 router.use("/loans", pdfLettersRoutes);
+router.use("/access-logs", accessLogsRoutes);
+router.use("/document-logs", documentLogsRoutes);
 
 // Helper function to create a loan disbursement record
 async function createLoanDisbursementRecord(
@@ -612,6 +616,21 @@ router.post("/login", async (req: Request, res: Response) => {
 		);
 
 		console.log("Admin login successful:", phoneNumber);
+
+		// Log admin access for audit purposes
+		try {
+			const { logAdminAccess } = require("../lib/accessLogger");
+			await logAdminAccess(
+				user.id,
+				user.fullName || 'Unknown',
+				user.phoneNumber,
+				user.role,
+				req
+			);
+		} catch (logError) {
+			console.error("Failed to log admin access:", logError);
+			// Don't fail login if logging fails
+		}
 
 		// Return tokens and user data
 		return res.json({

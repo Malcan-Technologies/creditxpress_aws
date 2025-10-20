@@ -61,6 +61,10 @@ export const PERMISSIONS = {
   // Late fees
   VIEW_LATE_FEES: 'view_late_fees',
   MANAGE_LATE_FEES: 'manage_late_fees',
+  
+  // Audit logs
+  VIEW_AUDIT_LOGS: 'view_audit_logs',
+  EXPORT_AUDIT_LOGS: 'export_audit_logs',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -95,6 +99,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.MANAGE_NOTIFICATIONS,
     PERMISSIONS.VIEW_LATE_FEES,
     PERMISSIONS.MANAGE_LATE_FEES,
+    PERMISSIONS.VIEW_AUDIT_LOGS,
+    PERMISSIONS.EXPORT_AUDIT_LOGS,
   ],
   
   [ROLES.ATTESTOR]: [
@@ -146,6 +152,10 @@ export const ROUTE_PERMISSIONS: Record<string, Permission[]> = {
   
   // Late fees
   '/dashboard/late-fees': [PERMISSIONS.VIEW_LATE_FEES],
+  
+  // Audit logs
+  '/dashboard/audit-logs/access': [PERMISSIONS.VIEW_AUDIT_LOGS],
+  '/dashboard/audit-logs/documents': [PERMISSIONS.VIEW_AUDIT_LOGS],
 };
 
 /**

@@ -11,11 +11,30 @@ export async function POST(request: Request) {
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 		console.log("Admin API Route - Backend URL:", backendUrl);
 
+		// Forward User-Agent and IP from original request for audit logging
+		const headers: Record<string, string> = {
+			"Content-Type": "application/json",
+		};
+		
+		// Forward User-Agent from browser
+		const userAgent = request.headers.get("user-agent");
+		if (userAgent) {
+			headers["User-Agent"] = userAgent;
+		}
+		
+		// Forward X-Forwarded-For or use direct IP
+		const forwardedFor = request.headers.get("x-forwarded-for");
+		const realIp = request.headers.get("x-real-ip");
+		
+		if (forwardedFor) {
+			headers["X-Forwarded-For"] = forwardedFor;
+		} else if (realIp) {
+			headers["X-Forwarded-For"] = realIp;
+		}
+
 		const response = await fetch(`${backendUrl}/api/admin/login`, {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
+			headers,
 			body: JSON.stringify(body),
 		});
 

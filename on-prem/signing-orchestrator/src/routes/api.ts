@@ -1789,4 +1789,85 @@ router.get('/signed/:applicationId/download', verifyApiKey, async (req, res) => 
   }
 });
 
+/**
+ * List all agreements (Admin)
+ * GET /api/agreements
+ */
+router.get('/agreements', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+  
+  try {
+    const limit = parseInt(req.query.limit as string) || 1000;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const status = req.query.status as string;
+    
+    log.info('Fetching agreements list', { limit, offset, status });
+    
+    // Build where clause
+    const where: any = {};
+    if (status) {
+      where.status = status;
+    }
+    
+    // Fetch agreements with file metadata
+    const agreements = await prisma.signedAgreement.findMany({
+      where,
+      take: limit,
+      skip: offset,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        loanId: true,
+        userId: true,
+        agreementType: true,
+        status: true,
+        mtsaStatus: true,
+        mtsaSignedAt: true,
+        originalFilePath: true,
+        signedFilePath: true,
+        stampedFilePath: true,
+        certificateFilePath: true,
+        originalFileName: true,
+        signedFileName: true,
+        stampedFileName: true,
+        certificateFileName: true,
+        fileSizeBytes: true,
+        signedFileSizeBytes: true,
+        stampedFileSizeBytes: true,
+        certificateFileSizeBytes: true,
+        stampedUploadedAt: true,
+        certificateUploadedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        completedAt: true,
+      },
+    });
+    
+    const total = await prisma.signedAgreement.count({ where });
+    
+    res.status(200).json({
+      success: true,
+      agreements,
+      total,
+      limit,
+      offset,
+      hasMore: offset + agreements.length < total,
+      correlationId: req.correlationId,
+    });
+    
+  } catch (error) {
+    log.error('Failed to fetch agreements', { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to fetch agreements',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
 export default router;

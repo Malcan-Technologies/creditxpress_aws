@@ -635,3 +635,55 @@ enum PaymentScheduleType {
   EXACT_MONTHLY
   CUSTOM_DAY
 }
+
+/// Admin access log for audit purposes
+model AdminAccessLog {
+  id               String    @id @default(cuid())
+  userId           String
+  userName         String
+  phoneNumber      String
+  userRole         String
+  ipAddress        String?
+  userAgent        String?
+  loginTimestamp   DateTime  @default(now())
+  sessionDuration  Int?
+  logoutTimestamp  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userRole])
+  @@index([loginTimestamp])
+  @@index([phoneNumber])
+  @@map("admin_access_logs")
+}
+
+/// Document audit log for tracking file storage
+model DocumentAuditLog {
+  id              String    @id @default(cuid())
+  filePath        String
+  fileName        String
+  fileSize        Int
+  fileType        String
+  documentType    String
+  userId          String?
+  userName        String?
+  loanId          String?
+  applicationId   String?
+  uploadedAt      DateTime
+  discoveredAt    DateTime  @default(now())
+  isOrphaned      Boolean   @default(false)
+  source          String
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([loanId])
+  @@index([applicationId])
+  @@index([documentType])
+  @@index([uploadedAt])
+  @@index([source])
+  @@index([isOrphaned])
+  @@map("document_audit_logs")
+}
