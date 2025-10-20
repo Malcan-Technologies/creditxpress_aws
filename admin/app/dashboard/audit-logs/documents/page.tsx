@@ -198,12 +198,13 @@ export default function DocumentStorageLogsPage() {
   };
 
   const currentYear = new Date().getFullYear();
-  const years = ["all", currentYear.toString(), (currentYear - 1).toString(), (currentYear - 2).toString()];
+  const years = ["all", ...Array.from({ length: 8 }, (_, i) => (currentYear - i).toString())];
 
   const documentTypes = [
     "ALL",
     "KYC",
     "DISBURSEMENT_SLIP",
+    "PAYMENT_RECEIPT",
     "STAMPED_AGREEMENT",
     "STAMP_CERTIFICATE",
     "SIGNED_AGREEMENT",

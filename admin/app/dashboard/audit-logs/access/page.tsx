@@ -143,7 +143,7 @@ export default function AdminAccessLogsPage() {
   };
 
   const currentYear = new Date().getFullYear();
-  const years = ["all", currentYear.toString(), (currentYear - 1).toString(), (currentYear - 2).toString()];
+  const years = ["all", ...Array.from({ length: 8 }, (_, i) => (currentYear - i).toString())];
 
   return (
     <AdminLayout>
