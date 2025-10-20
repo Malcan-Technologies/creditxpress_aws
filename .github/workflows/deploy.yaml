@@ -528,6 +528,11 @@ jobs:
               docker stop backend-backend-1 backend-postgres-1 2>/dev/null || true
               docker rm backend-backend-1 backend-postgres-1 2>/dev/null || true
               
+              # Pre-pull base images to avoid Docker Hub rate limit issues during build
+              echo "📥 Pre-pulling base images..."
+              docker pull node:20-alpine 2>/dev/null || echo "⚠️ Could not pull node:20-alpine (using cached version)"
+              docker pull postgres:16-alpine 2>/dev/null || echo "⚠️ Could not pull postgres:16-alpine (using cached version)"
+              
               if ! docker compose -f docker-compose.prod.yml up -d --build; then
                 echo "❌ Backend build failed. Checking for Prisma client issues..."
                 
