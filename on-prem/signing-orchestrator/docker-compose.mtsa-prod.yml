@@ -70,6 +70,16 @@ services:
       - NOTIFICATION_WEBHOOK_URL=${NOTIFICATION_WEBHOOK_URL}
       - NOTIFICATION_WEBHOOK_SECRET=${NOTIFICATION_WEBHOOK_SECRET}
     
+    # DNS Configuration - Improve reliability for MTSA communication
+    dns:
+      - 8.8.8.8          # Google Public DNS (Primary)
+      - 8.8.4.4          # Google Public DNS (Secondary)
+      - 1.1.1.1          # Cloudflare DNS (Fallback)
+    dns_opt:
+      - ndots:1          # Reduce DNS query overhead
+      - timeout:5        # DNS timeout in seconds
+      - attempts:3       # Retry attempts for DNS queries
+    
     volumes:
       # Persistent storage for files
       - signed-pdfs:/data/signed
@@ -140,6 +150,21 @@ services:
       - "8080:8080"
     environment:
       - TZ=Asia/Kuala_Lumpur
+      # Java DNS caching settings - prevent stale DNS entries
+      - JAVA_OPTS=-Dsun.net.inetaddr.ttl=60 -Dsun.net.inetaddr.negative.ttl=10
+    
+    # DNS Configuration - Critical for MTSA to reach digitalid.msctrustgate.com
+    dns:
+      - 8.8.8.8          # Google Public DNS (Primary)
+      - 8.8.4.4          # Google Public DNS (Secondary)
+      - 1.1.1.1          # Cloudflare DNS (Fallback)
+    dns_search:
+      - msctrustgate.com # Help resolve MSC TrustGate domains
+    dns_opt:
+      - ndots:1          # Reduce DNS query overhead
+      - timeout:5        # DNS timeout in seconds
+      - attempts:3       # Retry attempts for DNS queries
+    
     networks:
       - mtsa-network
     restart: unless-stopped

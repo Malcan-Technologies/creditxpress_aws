@@ -8,8 +8,12 @@ import Footer from "@/components/Footer";
 import {
 	MdArrowForward,
 	MdCheck,
+	MdEmail,
+	MdPhone,
+	MdLocationOn,
+	MdExpandMore,
+	MdExpandLess,
 	MdSecurity,
-	MdSpeed,
 	MdVerifiedUser,
 	MdPeople,
 	MdAccountBalance,
@@ -17,11 +21,6 @@ import {
 	MdPercent,
 	MdHandshake,
 	MdDashboard,
-	MdEmail,
-	MdPhone,
-	MdLocationOn,
-	MdExpandMore,
-	MdExpandLess,
 } from "react-icons/md";
 
 export default function Home() {
@@ -717,37 +716,7 @@ export default function Home() {
 			</section>
 
 			{/* Footer */}
-			<footer className="bg-gray-900 text-white py-12">
-				<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16">
-					<div className="text-center space-y-6">
-						<div className="flex justify-center space-x-6">
-							{/* Social Media Icons Placeholder */}
-							<div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-purple-primary transition-colors cursor-pointer">
-								<span className="text-sm font-bold">f</span>
-							</div>
-							<div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-purple-primary transition-colors cursor-pointer">
-								<span className="text-sm font-bold">ig</span>
-								</div>
-							<div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center hover:bg-purple-primary transition-colors cursor-pointer">
-								<span className="text-sm font-bold">in</span>
-							</div>
-						</div>
-
-						<div className="space-y-2 text-sm text-gray-400">
-							<p>Licensed under Moneylenders Act 1951, KPKT license no: WL3337/07/01-9/020223</p>
-							<p>Company registration no: 202101043135 (1443435-P)</p>
-							<p>Business address: 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang</p>
-							<p className="font-semibold">Disclaimer: "Please borrow responsibly. Loans are subject to approval and terms."</p>
-							</div>
-							
-						<div className="border-t border-gray-700 pt-6">
-							<p className="text-sm text-gray-400">
-								© 2025 OPG Capital Holdings Sdn Bhd. All Rights Reserved.
-							</p>
-								</div>
-									</div>
-								</div>
-			</footer>
+			<Footer />
 		</div>
 	);
 }

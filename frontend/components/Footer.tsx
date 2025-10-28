@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { MdArrowForward, MdShield } from "react-icons/md";
-import { FaInstagram, FaFacebook, FaTiktok, FaLinkedin } from "react-icons/fa";
+import { MdShield } from "react-icons/md";
 import Logo from "./Logo";
 
 export default function Footer() {
@@ -32,252 +31,125 @@ export default function Footer() {
 
 			{/* Links Section */}
 			<div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 2xl:px-16 py-12">
-				<div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-					{/* Products */}
-					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
-							Products
-						</h3>
-						<ul className="space-y-3">
-							<li>
-								<Link
-									href="/pay-advance"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									PayAdvance™
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/equipment-financing"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Equipment Financing
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/sme-term-loan"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									SME Term Loan
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/products"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Borrow
-								</Link>
-							</li>
-						</ul>
-					</div>
+				<div className="max-w-4xl mx-auto">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+						{/* Products */}
+						<div className="text-left">
+							<h3 className="text-lg font-semibold mb-6 font-heading text-purple-400">
+								Products
+							</h3>
+							<ul className="space-y-3">
+								<li>
+									<Link
+										href="/login"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Loan Dashboard
+									</Link>
+								</li>
+								<li>
+									<Link
+										href="/signup"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Sign Up
+									</Link>
+								</li>
+							</ul>
+						</div>
 
-					{/* Company */}
-					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
-							Company
-						</h3>
-						<ul className="space-y-3">
-							<li>
-								<Link
-									href="/about"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									About Us
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/partners"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Partners
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/careers"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Careers
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/press"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Press
-								</Link>
-							</li>
-						</ul>
-					</div>
-
-					{/* Resources */}
-					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
-							Resources
-						</h3>
-						<ul className="space-y-3">
-							<li>
-								<Link
-									href="/blog"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Blog
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/help"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Help Center
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/guides"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Guides
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/calculator"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Loan Calculator
-								</Link>
-							</li>
-						</ul>
-					</div>
-
-					{/* Legal */}
-					<div>
-						<h3 className="text-lg font-semibold mb-4 font-heading text-purple-400">
-							Legal
-						</h3>
-						<ul className="space-y-3">
-							<li>
-								<Link
-									href="/privacy"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Privacy Policy
-								</Link>
-							</li>
-							<li>
-								<Link
-									href="/terms"
-									className="text-gray-300 hover:text-gray-200 transition-colors font-body"
-								>
-									Terms of Service
-								</Link>
-							</li>
-						</ul>
+						{/* Legal */}
+						<div className="text-left">
+							<h3 className="text-lg font-semibold mb-6 font-heading text-purple-400">
+								Legal
+							</h3>
+							<ul className="space-y-3">
+								<li>
+									<Link
+										href="/terms-of-service"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Terms of Service
+									</Link>
+								</li>
+								<li>
+									<Link
+										href="/terms-of-use"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Terms of Use
+									</Link>
+								</li>
+								<li>
+									<Link
+										href="/privacy-notice"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Privacy Notice
+									</Link>
+								</li>
+								<li>
+									<Link
+										href="/pdpa-policy"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										PDPA Policy
+									</Link>
+								</li>
+								<li>
+									<Link
+										href="/risk-disclosure"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Risk Disclosure
+									</Link>
+								</li>
+							</ul>
+						</div>
 					</div>
 				</div>
 
 				{/* Copyright */}
 				<div className="mt-12 pt-8 border-t border-purple-primary/20">
-					<div className="flex flex-col space-y-6">
-						{/* Logo, Social Media, and SSL Badge */}
-						<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-							<div className="flex flex-col sm:flex-row sm:items-center gap-6">
+					<div className="max-w-4xl mx-auto">
+						<div className="flex flex-col space-y-6">
+							{/* Logo and SSL Badge */}
+							<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
 								<Logo size="lg" variant="black" linkTo="/" />
-								
-								{/* Social Media Icons */}
-								<div className="flex items-center gap-4">
-									<Link
-										href="https://instagram.com/kapital.my"
-										target="_blank"
-										rel="noopener noreferrer"
-										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
-										aria-label="Follow us on Instagram"
-									>
-										<FaInstagram size={24} />
-									</Link>
-									<Link
-										href="https://facebook.com/kapital.my"
-										target="_blank"
-										rel="noopener noreferrer"
-										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
-										aria-label="Follow us on Facebook"
-									>
-										<FaFacebook size={24} />
-									</Link>
-									<Link
-										href="https://tiktok.com/@kapital.my"
-										target="_blank"
-										rel="noopener noreferrer"
-										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
-										aria-label="Follow us on TikTok"
-									>
-										<FaTiktok size={24} />
-									</Link>
-									<Link
-										href="https://linkedin.com/company/kapital-my"
-										target="_blank"
-										rel="noopener noreferrer"
-										className="text-gray-400 hover:text-purple-400 transition-colors duration-200"
-										aria-label="Follow us on LinkedIn"
-									>
-										<FaLinkedin size={24} />
-									</Link>
+
+								<div className="inline-flex items-center gap-2 bg-emerald-400/10 backdrop-blur-lg rounded-xl p-4 border border-emerald-400/30 w-fit">
+									<span className="text-emerald-400 flex-shrink-0">
+										<MdShield size={20} />
+									</span>
+									<div className="text-sm">
+										<p className="text-emerald-400 font-medium font-body">
+											SSL Secured
+										</p>
+										<p className="text-gray-400 text-xs font-body">
+											256-bit encryption
+										</p>
+									</div>
 								</div>
 							</div>
 
-							<div className="inline-flex items-center gap-2 bg-emerald-400/10 backdrop-blur-lg rounded-xl p-4 border border-emerald-400/30 w-fit">
-								<span className="text-emerald-400 flex-shrink-0">
-									<MdShield size={20} />
-								</span>
-								<div className="text-sm">
-									<p className="text-emerald-400 font-medium font-body">
-										SSL Secured
-									</p>
-									<p className="text-gray-400 text-xs font-body">
-										256-bit encryption
-									</p>
-								</div>
+							{/* Legal Text */}
+							<div className="text-gray-400 space-y-4 font-body text-left">
+								<p className="text-sm">
+									Licensed under Moneylenders Act 1951, KPKT license no: WL3337/07/01-11/020227
+								</p>
+								<p className="text-sm">
+									Company registration no: 202101043135 (1443435-P)
+								</p>
+								<p className="text-sm">
+									Business address: 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang
+								</p>
+								<p className="text-sm font-semibold">
+									Disclaimer: "Please borrow responsibly. Loans are subject to approval and terms."
+								</p>
+								<p className="text-sm pt-4">
+									© {new Date().getFullYear()} OPG Capital Holdings Sdn Bhd. All Rights Reserved.
+								</p>
 							</div>
-						</div>
-
-						{/* Legal Text */}
-						<div className="text-gray-400 space-y-4 font-body">
-							<p>
-								© {new Date().getFullYear()} Kapital. All rights
-								reserved.
-							</p>
-							<p>
-								Kapital is a financial technology platform and
-								is not a bank. It does not fall under the
-								jurisdiction of Bank Negara Malaysia. Therefore,
-								financing products of Kapital should not be
-								constructed as business loan, SME loan, micro
-								loan, term loan or any other loans offered by
-								banks in Malaysia and it is to be deemed as an
-								investment note as defined in the Guidelines on
-								Recognised Markets.
-							</p>
-							<p>
-								Registered in Malaysia as OPG Capital Holdings
-								Sdn. Bhd.
-								<br />
-								<i>KPKT License: WL3337/07/01-9/020223</i>
-								<br />
-								<i>
-									Business license number: 202101043135 (1443435-P)
-								</i>
-							</p>
-							<p>
-								Disclaimer: All third party trademarks, product
-								and company names are the property of their
-								respective holders.
-							</p>
 						</div>
 					</div>
 				</div>
