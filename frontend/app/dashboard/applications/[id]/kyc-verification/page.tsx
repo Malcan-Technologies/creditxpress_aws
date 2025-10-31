@@ -75,9 +75,12 @@ export default function KycVerificationPage() {
 		canRetry?: boolean;
 		hasKycSession?: boolean;
 		isAlreadyApproved?: boolean;
+		canResume?: boolean;
+		kycSessionId?: string;
 	} | null>(null);
 	const [kycInProgress, setKycInProgress] = useState(false);
 	const [kycCompleted, setKycCompleted] = useState(false);
+	const [startingKyc, setStartingKyc] = useState(false);
 	const [kycDocuments, setKycDocuments] = useState<{
 		id: string;
 		type: string;
@@ -135,6 +138,8 @@ export default function KycVerificationPage() {
 					rejectMessage?: string;
 					kycSessionId?: string;
 					isAlreadyApproved?: boolean;
+					canResume?: boolean;
+					resumeUrl?: string;
 				}>('/api/kyc/user-ctos-status');
 				
 				console.log('CTOS Status Data:', ctosData);
@@ -152,8 +157,17 @@ export default function KycVerificationPage() {
 						rejectMessage: ctosData.rejectMessage,
 						canRetry: ctosData.canRetry,
 						hasKycSession: true,
-						isAlreadyApproved: ctosData.isAlreadyApproved
+						isAlreadyApproved: ctosData.isAlreadyApproved,
+						canResume: ctosData.canResume,
+						kycSessionId: ctosData.kycSessionId
 					});
+					
+					// If there's a session that can be resumed, prepare resume state (but don't auto-start)
+					if (ctosData.canResume && ctosData.resumeUrl) {
+						setCtosOnboardingUrl(ctosData.resumeUrl);
+						setPollingKycId(ctosData.kycSessionId || null);
+						// Don't set kycInProgress = true here - let user click resume button
+					}
 					
 					// Set completed state if approved
 					if (ctosData.ctosResult === 1 || ctosData.isAlreadyApproved) {
@@ -219,6 +233,12 @@ export default function KycVerificationPage() {
 	};
 
 	const handleStartKyc = async (forceRedo: boolean = false) => {
+		// Prevent multiple simultaneous requests
+		if (startingKyc || kycInProgress) {
+			return;
+		}
+
+		setStartingKyc(true);
 		try {
 			setKycError(null); // Clear previous KYC errors
 			
@@ -242,7 +262,9 @@ export default function KycVerificationPage() {
 				onboardingId: string; 
 				expiredAt: string; 
 				kycToken: string; 
-				ttlMinutes: number; 
+				ttlMinutes: number;
+				resumed?: boolean;
+				message?: string;
 			}>(
 				`/api/kyc/start-ctos`,
 				{
@@ -272,6 +294,11 @@ export default function KycVerificationPage() {
 				
 				// Start lightweight database polling to detect webhook updates
 				startDatabasePolling(response.kycId);
+				
+				// Show message if resuming
+				if (response.resumed) {
+					console.log('Resumed existing KYC session:', response.message);
+				}
 			} else {
 				throw new Error('Failed to create CTOS eKYC session');
 			}
@@ -300,6 +327,8 @@ export default function KycVerificationPage() {
 			setKycError(displayMessage);
 			setKycInProgress(false);
 			setKycCompleted(false);
+		} finally {
+			setStartingKyc(false);
 		}
 	};
 
@@ -856,20 +885,56 @@ export default function KycVerificationPage() {
 								</div>
 							)}
 							
-							{/* Only show start button when not in progress, not completed, and no error */}
+							{/* Only show start/resume button when not in progress, not completed, and no error */}
 							{!kycInProgress && !kycCompleted && (
-								<button
-									onClick={() => handleStartKyc(false)}
-									className={`inline-flex items-center px-8 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 text-lg font-medium ${
-										kycError 
-											? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-											: 'bg-purple-primary text-white hover:bg-purple-700 focus:ring-purple-500'
-									}`}
-									disabled={!!kycError}
-								>
-									<ShieldCheckIcon className="w-6 h-6 mr-3" />
-									{kycError ? 'Fix Error Above' : 'Start CTOS KYC Verification'}
-								</button>
+								<div className="space-y-3">
+									{ctosStatus?.canResume && ctosStatus.hasKycSession && ctosOnboardingUrl ? (
+										<>
+											<button
+												onClick={() => {
+													setKycInProgress(true);
+													if (ctosStatus.kycSessionId) {
+														setPollingKycId(ctosStatus.kycSessionId);
+														startDatabasePolling(ctosStatus.kycSessionId);
+													}
+													window.open(ctosOnboardingUrl, '_blank');
+												}}
+												className="inline-flex items-center px-8 py-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 text-lg font-medium"
+											>
+												<svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+												</svg>
+												Resume KYC Verification
+											</button>
+											<p className="text-sm text-gray-600 text-center">
+												You have an in-progress KYC session. Click to resume where you left off.
+											</p>
+										</>
+									) : (
+										<button
+											onClick={() => handleStartKyc(false)}
+											className={`inline-flex items-center px-8 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 text-lg font-medium ${
+												(kycError || startingKyc || kycInProgress)
+													? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+													: 'bg-purple-primary text-white hover:bg-purple-700 focus:ring-purple-500'
+											}`}
+											disabled={!!kycError || startingKyc || kycInProgress}
+										>
+											{startingKyc ? (
+												<>
+													<div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+													Starting...
+												</>
+											) : (
+												<>
+													<ShieldCheckIcon className="w-6 h-6 mr-3" />
+													{kycError ? 'Fix Error Above' : 'Start CTOS KYC Verification'}
+												</>
+											)}
+										</button>
+									)}
+								</div>
 							)}
 						</div>
 					)}

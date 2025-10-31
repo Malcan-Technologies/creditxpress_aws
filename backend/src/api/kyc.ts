@@ -123,6 +123,62 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       });
     }
 
+    // Check for existing IN_PROGRESS session within last 24 hours
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const existingInProgressSession = await db.kycSession.findFirst({
+      where: {
+        OR: [
+          {
+            userId: req.user.userId,
+            status: 'IN_PROGRESS',
+            ctosOnboardingId: { not: null },
+            ctosOnboardingUrl: { not: null },
+            createdAt: { gte: twentyFourHoursAgo },
+            OR: [
+              { ctosStatus: 0 },  // Not opened
+              { ctosStatus: 1 }   // Processing
+            ]
+          },
+          {
+            userId: { endsWith: req.user.userId },
+            status: 'IN_PROGRESS',
+            ctosOnboardingId: { not: null },
+            ctosOnboardingUrl: { not: null },
+            createdAt: { gte: twentyFourHoursAgo },
+            OR: [
+              { ctosStatus: 0 },
+              { ctosStatus: 1 }
+            ]
+          }
+        ]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (existingInProgressSession && existingInProgressSession.ctosOnboardingUrl) {
+      console.log(`User ${req.user.userId} - Found existing in-progress session within 24 hours: ${existingInProgressSession.id}`);
+      
+      // Issue new token for existing session
+      const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
+      const kycToken = jwt.sign(
+        { userId: req.user.userId, kycId: existingInProgressSession.id },
+        process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
+        { expiresIn: `${ttlMinutes}m` }
+      );
+
+      return res.status(200).json({
+        success: true,
+        kycId: existingInProgressSession.id,
+        onboardingUrl: existingInProgressSession.ctosOnboardingUrl,
+        onboardingId: existingInProgressSession.ctosOnboardingId,
+        expiredAt: existingInProgressSession.ctosExpiredAt?.toISOString() || null,
+        kycToken,
+        ttlMinutes,
+        resumed: true,
+        message: "Resuming existing KYC session"
+      });
+    }
+
     // Create KYC session
     kycSession = await db.kycSession.create({
       data: {
@@ -1227,6 +1283,19 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
             }
           ]
         },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          ctosStatus: true,
+          ctosResult: true,
+          ctosOnboardingId: true,
+          ctosOnboardingUrl: true,
+          ctosExpiredAt: true,
+          createdAt: true,
+          completedAt: true,
+          ctosData: true
+        },
         orderBy: { createdAt: 'desc' }
       });
 
@@ -1418,6 +1487,13 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         });
       }
 
+      // Check if session is in progress and can be resumed
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const canResume = kycSession.status === 'IN_PROGRESS' && 
+                       kycSession.ctosOnboardingUrl && 
+                       (ctosStatus.status === 0 || ctosStatus.status === 1) &&
+                       kycSession.createdAt >= twentyFourHoursAgo;
+
       return res.json({
         success: true,
         hasKycSession: true,
@@ -1428,12 +1504,21 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         ctosData: ctosStatus,
         canRetry: ctosStatus.result === 0 || ctosStatus.result === 2, // Can retry if rejected or not available
         rejectMessage: ctosStatus.result === 0 ? (ctosStatus as any).reject_message : null,
-        isAlreadyApproved: ctosStatus.result === 1 || kycSession.ctosResult === 1 // Already approved if CTOS says so OR if our database says so
+        isAlreadyApproved: ctosStatus.result === 1 || kycSession.ctosResult === 1, // Already approved if CTOS says so OR if our database says so
+        canResume: canResume,
+        resumeUrl: canResume ? kycSession.ctosOnboardingUrl : null
       });
     } catch (ctosError) {
       console.error('Error fetching CTOS status:', ctosError);
       
       // Return the last known status from our database
+      // Check if session is in progress and can be resumed
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const canResume = kycSession.status === 'IN_PROGRESS' && 
+                       kycSession.ctosOnboardingUrl && 
+                       (kycSession.ctosStatus === 0 || kycSession.ctosStatus === 1) &&
+                       kycSession.createdAt >= twentyFourHoursAgo;
+
       return res.json({
         success: true,
         hasKycSession: true,
@@ -1445,6 +1530,8 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         canRetry: kycSession.ctosResult === 0 || kycSession.ctosResult === 2,
         rejectMessage: kycSession.ctosResult === 0 ? (kycSession.ctosData as any)?.reject_message : null,
         isAlreadyApproved: kycSession.ctosResult === 1,
+        canResume: canResume,
+        resumeUrl: canResume ? kycSession.ctosOnboardingUrl : null,
         error: 'Could not fetch latest status from CTOS, showing cached data'
       });
     }
