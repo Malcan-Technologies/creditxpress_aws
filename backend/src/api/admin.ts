@@ -13077,11 +13077,11 @@ router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (re
 				url: isProduction ? 'https://sign.creditxpress.com.my/' : `http://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
 				timeout: 5000
 			},
-			{
-				name: 'signingOrchestrator', 
-				url: isProduction ? 'https://sign.creditxpress.com.my/orchestrator/health' : `http://${baseHost}:4010/health`,
-				timeout: 5000
-			},
+		{
+			name: 'signingOrchestrator', 
+			url: isProduction ? 'https://sign.creditxpress.com.my/orchestrator/health' : `http://${baseHost}:4010/health`,
+			timeout: 10000  // Increased to 10s to account for Tailscale latency and internal DocuSeal check
+		},
 			{
 				name: 'mtsa',
 				url: isProduction ? 'https://sign.creditxpress.com.my/mtsa/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,

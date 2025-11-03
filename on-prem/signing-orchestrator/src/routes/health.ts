@@ -282,12 +282,18 @@ async function checkDocuSealReachability(correlationId: string): Promise<boolean
   const log = createCorrelatedLogger(correlationId);
   
   try {
+    // Use shorter timeout and connection reuse for faster health checks
     const response = await axios.get(`${config.docuseal.baseUrl}/api/templates`, {
-      timeout: 5000,
+      timeout: 3000,  // Reduced from 5s to 3s for faster failure detection
       headers: {
-        'X-Auth-Token': config.docuseal.apiToken
+        'X-Auth-Token': config.docuseal.apiToken,
+        'Connection': 'keep-alive'  // Reuse connections
       },
       validateStatus: (status) => status < 500, // Accept any status < 500 as reachable
+      // Use keep-alive for connection pooling (only if baseUrl is http, not https)
+      ...(config.docuseal.baseUrl.startsWith('http://') ? {
+        httpAgent: new (require('http').Agent)({ keepAlive: true, keepAliveMsecs: 1000, maxSockets: 5 })
+      } : {}),
     });
     
     const isReachable = response.status < 500;
@@ -298,9 +304,22 @@ async function checkDocuSealReachability(correlationId: string): Promise<boolean
     
     return isReachable;
   } catch (error) {
-    log.warn('DocuSeal reachability check failed', { 
-      error: error instanceof Error ? error.message : String(error) 
-    });
+    // Only log as warning if it's not a timeout - timeouts are expected occasionally
+    const isTimeout = error instanceof Error && (
+      error.message.includes('timeout') || 
+      error.message.includes('ETIMEDOUT') ||
+      error.code === 'ECONNABORTED'
+    );
+    
+    if (!isTimeout) {
+      log.warn('DocuSeal reachability check failed', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    } else {
+      log.debug('DocuSeal reachability check timed out (non-critical)', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+    }
     return false;
   }
 }

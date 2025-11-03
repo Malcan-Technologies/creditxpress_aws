@@ -3,6 +3,10 @@ FROM tomcat:9-jdk17-corretto
 USER root
 
 COPY webapps /usr/local/tomcat/webapps/
+
+# Copy mtsa directory (config files may be gitignored for security)
+# Directory structure is preserved via .gitkeep in repo
+# This will fail if mtsa/ directory doesn't exist - ensure it's tracked in git
 COPY mtsa /opt/mtsa
 
 EXPOSE 8080
