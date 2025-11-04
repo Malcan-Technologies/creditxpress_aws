@@ -580,14 +580,6 @@ export default function AttestationForm({
 												</p>
 											</div>
 										</div>
-										<div className="text-center py-4">
-											<button
-												onClick={handleVideoComplete}
-												className="bg-white text-purple-primary border-2 border-purple-primary px-6 py-3 rounded-xl hover:bg-purple-50 transition-colors font-body font-semibold"
-											>
-												I have finished watching the video
-											</button>
-										</div>
 									</div>
 								) : (
 									<div className="aspect-video flex items-center justify-center p-8">
