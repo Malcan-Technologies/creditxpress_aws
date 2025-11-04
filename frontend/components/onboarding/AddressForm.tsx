@@ -77,7 +77,7 @@ export default function AddressForm({
 					{/* Address Line 1 */}
 					<div>
 						<label htmlFor="address1" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
-							Address Line 1 *
+							Address Line 1 <span className="text-red-500">*</span>
 						</label>
 						<div className="relative">
 							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -132,7 +132,7 @@ export default function AddressForm({
 						{/* City */}
 						<div>
 							<label htmlFor="city" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
-								City *
+								City <span className="text-red-500">*</span>
 							</label>
 							<input
 								id="city"
@@ -158,7 +158,7 @@ export default function AddressForm({
 						{/* State */}
 						<div>
 							<label htmlFor="state" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
-								State *
+								State <span className="text-red-500">*</span>
 							</label>
 							<select
 								id="state"
@@ -201,7 +201,7 @@ export default function AddressForm({
 					{/* Postal Code */}
 					<div>
 						<label htmlFor="postalCode" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
-							Postal Code *
+							Postal Code <span className="text-red-500">*</span>
 						</label>
 						<div className="relative">
 							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
