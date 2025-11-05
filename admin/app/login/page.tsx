@@ -7,6 +7,7 @@ import Logo from "../components/Logo";
 import { AdminTokenStorage } from "../../lib/authUtils";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
+import AdminOTPVerification from "../../components/AdminOTPVerification";
 
 interface CountryData {
 	countryCode: string;
@@ -43,6 +44,13 @@ export default function AdminLoginPage() {
 	const [phoneNumber, setPhoneNumber] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 
+	// OTP verification states
+	const [showOTPVerification, setShowOTPVerification] = useState(false);
+	const [userDataForOTP, setUserDataForOTP] = useState<{
+		phoneNumber: string;
+		userId: string;
+	} | null>(null);
+
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
 		my: "1234 5678", // Malaysia
@@ -52,6 +60,39 @@ export default function AdminLoginPage() {
 	};
 
 	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
+
+	const handleOTPSuccess = (data: {
+		accessToken: string;
+		refreshToken: string;
+		userId: string;
+		phoneNumber: string;
+		isOnboardingComplete: boolean;
+		onboardingStep: number;
+		role?: string;
+	}) => {
+		// Verify admin privileges
+		if (data.role && data.role !== "ADMIN" && data.role !== "ATTESTOR") {
+			setError("Access denied. Admin or Attestor privileges required.");
+			setShowOTPVerification(false);
+			setUserDataForOTP(null);
+			return;
+		}
+
+		// Store tokens using AdminTokenStorage
+		AdminTokenStorage.setAccessToken(data.accessToken);
+		AdminTokenStorage.setRefreshToken(data.refreshToken);
+
+		console.log("Admin OTP - Verification successful, redirecting to dashboard");
+		
+		// Redirect to dashboard
+		router.push("/dashboard");
+	};
+
+	const handleBackToLogin = () => {
+		setShowOTPVerification(false);
+		setUserDataForOTP(null);
+		setError(null);
+	};
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -72,13 +113,26 @@ export default function AdminLoginPage() {
 				body: JSON.stringify({ phoneNumber, password }),
 			});
 
-			console.log("Admin Login - Response status:", response.status);
-			const data = await response.json();
-			console.log("Admin Login - Response data:", data);
+		console.log("Admin Login - Response status:", response.status);
+		const data = await response.json();
+		console.log("Admin Login - Response data:", data);
 
-			if (!response.ok) {
-				throw new Error(data.error || "Invalid credentials");
+		if (!response.ok) {
+			// Check if this is a phone verification required error
+			if (response.status === 403 && data.requiresPhoneVerification) {
+				console.log("Admin Login - Phone verification required, showing OTP verification");
+				
+				// Show OTP verification screen
+				setUserDataForOTP({
+					phoneNumber: data.phoneNumber || phoneNumber,
+					userId: data.userId
+				});
+				setShowOTPVerification(true);
+				return;
 			}
+			
+			throw new Error(data.error || "Invalid credentials");
+		}
 
 			// Check if user has admin panel access (ADMIN or ATTESTOR)
 			if (data.role !== "ADMIN" && data.role !== "ATTESTOR") {
@@ -121,6 +175,37 @@ export default function AdminLoginPage() {
 			setLoading(false);
 		}
 	};
+
+	// Show OTP verification if needed
+	if (showOTPVerification && userDataForOTP) {
+		return (
+			<div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+				{/* Background decorative elements */}
+				<div className="absolute inset-0 overflow-hidden">
+					<div className="absolute -top-40 -right-32 w-80 h-80 rounded-full bg-gradient-to-br from-blue-600/10 to-purple-600/10 blur-3xl"></div>
+					<div className="absolute -bottom-40 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-purple-600/10 to-blue-600/10 blur-3xl"></div>
+				</div>
+
+				<div className="max-w-md w-full relative z-10">
+					<div className="mb-6">
+						<Logo
+							size="lg"
+							variant="black"
+							linkTo={undefined}
+						/>
+					</div>
+
+					<AdminOTPVerification
+						phoneNumber={userDataForOTP.phoneNumber}
+						onVerificationSuccess={handleOTPSuccess}
+						onBack={handleBackToLogin}
+						title="Admin Verification Required"
+						description="For security, please verify your phone number. We've sent a verification code to your WhatsApp"
+					/>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<>

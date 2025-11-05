@@ -595,55 +595,52 @@ router.post("/login", async (req: Request, res: Response) => {
 				.json({ error: "Access denied. Admin or Attestor privileges required." });
 		}
 
-		// Verify password
-		const validPassword = await bcrypt.compare(password, user.password);
-		if (!validPassword) {
-			console.log("Invalid password for:", phoneNumber);
-			return res.status(401).json({ error: "Invalid credentials" });
+	// Verify password
+	const validPassword = await bcrypt.compare(password, user.password);
+	if (!validPassword) {
+		console.log("Invalid password for:", phoneNumber);
+		return res.status(401).json({ error: "Invalid credentials" });
+	}
+
+	// ALWAYS require OTP verification for admin logins (2FA security)
+	console.log("Admin password verified, sending OTP for 2FA verification");
+	
+	try {
+		// Import OTP utilities
+		const { OTPUtils } = require("../lib/otpUtils");
+		const whatsappService = require("../lib/whatsappService").default;
+		
+		// Check rate limiting first
+		const rateLimitCheck = await OTPUtils.canRequestNewOTP(normalizedPhone);
+		if (rateLimitCheck.canRequest) {
+			// Generate and send OTP
+			const otpResult = await OTPUtils.createOTP(user.id, normalizedPhone);
+			if (otpResult.success) {
+				// Send OTP via WhatsApp
+				const whatsappResult = await whatsappService.sendOTP({
+					to: normalizedPhone,
+					otp: otpResult.otp!,
+				});
+				
+				if (!whatsappResult.success) {
+					console.error("WhatsApp OTP send failed during admin login:", whatsappResult.error);
+				} else {
+					console.log("OTP sent successfully to admin:", normalizedPhone);
+				}
+			}
 		}
+	} catch (error) {
+		console.error("Failed to send OTP during admin login:", error);
+		// Continue anyway, user can request resend
+	}
 
-		// Generate tokens
-		const accessToken = jwt.sign(
-			{ userId: user.id, role: user.role },
-			process.env.JWT_SECRET!,
-			{ expiresIn: "1d" }
-		);
-
-		const refreshToken = jwt.sign(
-			{ userId: user.id, role: user.role },
-			process.env.JWT_REFRESH_SECRET!,
-			{ expiresIn: "90d" }
-		);
-
-		console.log("Admin login successful:", phoneNumber);
-
-		// Log admin access for audit purposes
-		try {
-			const { logAdminAccess } = require("../lib/accessLogger");
-			await logAdminAccess(
-				user.id,
-				user.fullName || 'Unknown',
-				user.phoneNumber,
-				user.role,
-				req
-			);
-		} catch (logError) {
-			console.error("Failed to log admin access:", logError);
-			// Don't fail login if logging fails
-		}
-
-		// Return tokens and user data
-		return res.json({
-			accessToken,
-			refreshToken,
-			role: user.role,
-			user: {
-				id: user.id,
-				phoneNumber: user.phoneNumber,
-				fullName: user.fullName,
-				email: user.email,
-			},
-		});
+	// Return 403 to trigger OTP verification flow
+	return res.status(403).json({ 
+		message: "Please verify your phone number to complete admin login. We've sent a verification code to your WhatsApp.",
+		requiresPhoneVerification: true,
+		phoneNumber: user.phoneNumber,
+		userId: user.id
+	});
 	} catch (error) {
 		console.error("Admin login error:", error);
 		return res.status(500).json({ error: "Internal server error" });

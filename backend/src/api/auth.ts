@@ -496,21 +496,28 @@ router.post("/verify-otp", async (req, res) => {
 			});
 		}
 
-		// Generate tokens for the verified user
-		const { accessToken, refreshToken } = generateTokens(user);
+	// Generate tokens for the verified user
+	const { accessToken, refreshToken } = generateTokens(user);
 
-		// Save refresh token
-		await user.updateRefreshToken(refreshToken);
+	// Save refresh token
+	await user.updateRefreshToken(refreshToken);
 
-		return res.json({
-			message: "Phone number verified successfully",
-			accessToken,
-			refreshToken,
-			userId: user.id,
-			phoneNumber: user.phoneNumber,
-			isOnboardingComplete: user.isOnboardingComplete,
-			onboardingStep: user.onboardingStep,
-		});
+	// Get user's role for admin verification
+	const userWithRole = await prisma.user.findUnique({
+		where: { id: user.id },
+		select: { role: true }
+	});
+
+	return res.json({
+		message: "Phone number verified successfully",
+		accessToken,
+		refreshToken,
+		userId: user.id,
+		phoneNumber: user.phoneNumber,
+		isOnboardingComplete: user.isOnboardingComplete,
+		onboardingStep: user.onboardingStep,
+		role: userWithRole?.role || "USER", // Include role for admin verification
+	});
 	} catch (error) {
 		console.error("OTP verification error:", error);
 		return res.status(500).json({ message: "Error verifying OTP" });

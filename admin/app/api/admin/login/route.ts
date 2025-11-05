@@ -38,14 +38,20 @@ export async function POST(request: Request) {
 			body: JSON.stringify(body),
 		});
 
-		const data = await response.json();
+	const data = await response.json();
 
-		if (!response.ok) {
-			return NextResponse.json(
-				{ error: data.error || "Failed to authenticate" },
-				{ status: response.status }
-			);
+	if (!response.ok) {
+		// If it's an OTP requirement (403 with requiresPhoneVerification), forward full response
+		if (response.status === 403 && data.requiresPhoneVerification) {
+			return NextResponse.json(data, { status: response.status });
 		}
+		
+		// For other errors, return error message
+		return NextResponse.json(
+			{ error: data.error || data.message || "Failed to authenticate" },
+			{ status: response.status }
+		);
+	}
 
 		// Create response with tokens
 		const jsonResponse = NextResponse.json(data);
