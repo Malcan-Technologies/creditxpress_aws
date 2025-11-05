@@ -53,10 +53,10 @@ export default function AdminLoginPage() {
 
 	// Example placeholders for different countries
 	const placeholders: { [key: string]: string } = {
-		my: "1234 5678", // Malaysia
-		sg: "8123 4567", // Singapore
-		id: "812 345 678", // Indonesia
-		th: "81 234 5678", // Thailand
+		my: "+60", // Malaysia
+		sg: "+65", // Singapore
+		id: "+62", // Indonesia
+		th: "+66", // Thailand
 	};
 
 	const [placeholder, setPlaceholder] = useState(placeholders["my"]);
