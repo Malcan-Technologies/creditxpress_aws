@@ -46,6 +46,7 @@ interface PersonalInfoFormProps {
 		nameMatches?: boolean;
 		expectedName?: string;
 	};
+	error?: string | null;
 }
 
 export default function PersonalInfoForm({
@@ -55,6 +56,7 @@ export default function PersonalInfoForm({
 	showBackButton,
 	isLastStep,
 	certificateStatus,
+	error,
 }: PersonalInfoFormProps) {
 	const [formData, setFormData] = useState<PersonalInfo>({
 		fullName: initialValues.fullName || "",
@@ -83,6 +85,11 @@ export default function PersonalInfoForm({
 		// Clear error when user starts typing
 		if (errors[name]) {
 			setErrors(prev => ({ ...prev, [name]: "" }));
+		}
+		
+		// Clear external error if it's email-related and user is typing in email field
+		if (name === "email" && error && error.toLowerCase().includes("email")) {
+			// Error will be cleared by parent component on next submit attempt
 		}
 	};
 
@@ -244,6 +251,17 @@ export default function PersonalInfoForm({
 				</div>
 
 				<form onSubmit={handleSubmit} className="space-y-6">
+					{/* General Error Banner */}
+					{error && !error.toLowerCase().includes("email") && (
+						<div className="bg-red-50 border border-red-200 rounded-xl p-4">
+							<div className="flex items-start space-x-3">
+								<div className="flex-1">
+									<p className="text-sm text-red-700 font-body">{error}</p>
+								</div>
+							</div>
+						</div>
+					)}
+					
 					{/* Certificate Warning */}
 					{shouldDisableNameAndIC && (
 						<div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
@@ -406,7 +424,7 @@ export default function PersonalInfoForm({
 								value={formData.email}
 								onChange={handleInputChange}
 								className={`w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl font-body text-sm lg:text-base text-gray-900 bg-white transition-all duration-200 ${
-									errors.email
+									errors.email || (error && error.toLowerCase().includes("email"))
 										? "border-red-300 focus:border-red-500 focus:ring-red-500"
 										: "border-gray-300 focus:border-purple-primary focus:ring-purple-primary hover:border-gray-400"
 								} focus:outline-none focus:ring-2 focus:ring-opacity-50`}
@@ -415,6 +433,9 @@ export default function PersonalInfoForm({
 						</div>
 						{errors.email && (
 							<p className="mt-2 text-sm text-red-600 font-medium">{errors.email}</p>
+						)}
+						{error && error.toLowerCase().includes("email") && !errors.email && (
+							<p className="mt-2 text-sm text-red-600 font-medium">{error}</p>
 						)}
 					</div>
 

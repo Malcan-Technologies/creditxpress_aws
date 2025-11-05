@@ -46,6 +46,7 @@ function OnboardingPageContent() {
 	const [activeStep, setActiveStep] = useState(0);
 	const [formData, setFormData] = useState<Partial<OnboardingFormData>>({});
 	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	
 	// Certificate status state
 	const [certificateStatus, setCertificateStatus] = useState<{
@@ -211,6 +212,9 @@ function OnboardingPageContent() {
 
 	const handleNext = async (values: Partial<OnboardingFormData>) => {
 		try {
+			// Clear any previous errors
+			setError(null);
+			
 			console.log("Onboarding - Submitting values:", values);
 
 			// Merge current form data with new values
@@ -267,9 +271,11 @@ function OnboardingPageContent() {
 				// Move to next step
 				setActiveStep(nextStep);
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.error("Onboarding - Error submitting form:", error);
-			// Handle error appropriately
+			// Extract error message from the error object
+			const errorMessage = error?.message || "Failed to update onboarding data. Please try again.";
+			setError(errorMessage);
 		}
 	};
 
@@ -292,6 +298,7 @@ function OnboardingPageContent() {
 						showBackButton={false}
 						isLastStep={false}
 						certificateStatus={certificateStatus}
+						error={error}
 					/>
 				);
 			case 1:

@@ -85,8 +85,9 @@ export async function POST(request: Request) {
 				"Onboarding POST - Error response from backend:",
 				response.status
 			);
+			const errorData = await response.json().catch(() => ({}));
 			return NextResponse.json(
-				{ error: "Failed to update onboarding data" },
+				{ error: errorData.error || "Failed to update onboarding data" },
 				{ status: response.status }
 			);
 		}

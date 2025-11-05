@@ -213,8 +213,19 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 
 		console.log("Onboarding POST - Updated user:", response);
 		return res.json(response);
-	} catch (error) {
+	} catch (error: any) {
 		console.error("Error updating onboarding data:", error);
+		
+		// Check for Prisma unique constraint violation (duplicate email)
+		if (error?.code === 'P2002') {
+			const target = error?.meta?.target;
+			if (Array.isArray(target) && target.includes('email')) {
+				return res.status(409).json({ 
+					error: "This email address is already registered. Please use a different email address." 
+				});
+			}
+		}
+		
 		return res
 			.status(500)
 			.json({ error: "Failed to update onboarding data" });
