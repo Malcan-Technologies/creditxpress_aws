@@ -14,17 +14,49 @@ export async function POST(request: Request) {
 		const body = await request.json();
 		const { phoneNumber, password } = body;
 
+		// Fetch login token first
+		let loginToken: string | null = null;
+		try {
+			const tokenResponse = await fetch(`${BACKEND_URL}/api/auth/login-token`, {
+				method: "GET",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				cache: "no-store",
+			});
+
+			if (tokenResponse.ok) {
+				const tokenData = await tokenResponse.json();
+				loginToken = tokenData.loginToken || tokenResponse.headers.get("X-Login-Token");
+			} else {
+				console.warn("[Login Route] Failed to fetch login token, proceeding without token");
+			}
+		} catch (tokenError) {
+			console.error("[Login Route] Error fetching login token:", tokenError);
+			// Continue without token - backend will reject if required
+		}
+
 		console.log(
 			`[Login Route] Forwarding login request for phone: ${phoneNumber}`
 		);
 
-		// Forward the request to the backend API
+		// Forward the request to the backend API with token
+		const loginBody: { phoneNumber: string; password: string; loginToken?: string } = {
+			phoneNumber,
+			password,
+		};
+
+		if (loginToken) {
+			loginBody.loginToken = loginToken;
+		}
+
 		const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
+				...(loginToken && { "X-Login-Token": loginToken }),
 			},
-			body: JSON.stringify({ phoneNumber, password }),
+			body: JSON.stringify(loginBody),
 			cache: "no-store",
 			next: { revalidate: 0 },
 		});

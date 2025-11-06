@@ -12,6 +12,8 @@ import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
 import { OTPUtils, OTPType } from "../lib/otpUtils";
 import whatsappService from "../lib/whatsappService";
 import crypto from "crypto";
+import { loginRateLimiter } from "../middleware/rateLimiter";
+import { generateLoginToken, validateLoginToken } from "../middleware/loginToken";
 
 const router = Router();
 
@@ -21,6 +23,44 @@ const router = Router();
  *   name: Auth
  *   description: API endpoints for managing user authentication
  */
+
+/**
+ * @swagger
+ * /api/auth/login-token:
+ *   get:
+ *     summary: Get a one-time login token required for login
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Login token generated successfully
+ *         headers:
+ *           X-Login-Token:
+ *             description: One-time login token (also in response body)
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 loginToken:
+ *                   type: string
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: Server error
+ */
+router.get("/login-token", generateLoginToken as any, (_req, res): void => {
+	const token = res.locals.loginToken;
+	if (token) {
+		res.json({
+			loginToken: token,
+			message: "Login token generated successfully",
+		});
+		return;
+	}
+	res.status(500).json({ message: "Failed to generate login token" });
+});
 
 /**
  * @swagger
@@ -69,9 +109,35 @@ const router = Router();
  *       500:
  *         description: Server error
  */
-router.post("/login", async (req, res) => {
+router.post("/login", loginRateLimiter, validateLoginToken as any, async (req, res) => {
 	try {
 		const { phoneNumber, password } = req.body;
+
+		// Enhanced validation: Check if phoneNumber and password are strings
+		if (!phoneNumber || typeof phoneNumber !== 'string') {
+			return res.status(400).json({ 
+				message: "Phone number is required and must be a string" 
+			});
+		}
+
+		if (!password || typeof password !== 'string') {
+			return res.status(400).json({ 
+				message: "Password is required and must be a string" 
+			});
+		}
+
+		// Enforce max length limits to prevent DoS attacks
+		if (phoneNumber.length > 20) {
+			return res.status(400).json({ 
+				message: "Invalid phone number format" 
+			});
+		}
+
+		if (password.length > 128) {
+			return res.status(400).json({ 
+				message: "Invalid password" 
+			});
+		}
 
 		// Validate phone number format
 		const phoneValidation = validatePhoneNumber(phoneNumber, {

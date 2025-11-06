@@ -3,13 +3,35 @@ import { NextResponse } from "next/server";
 // Force dynamic rendering for this route
 export const dynamic = "force-dynamic";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
+
 export async function POST(request: Request) {
 	try {
 		const body = await request.json();
 		console.log("Admin API Route - Attempting login with:", body);
 
-		const backendUrl = process.env.NEXT_PUBLIC_API_URL;
-		console.log("Admin API Route - Backend URL:", backendUrl);
+		console.log("Admin API Route - Backend URL:", BACKEND_URL);
+
+		// Fetch login token first
+		let loginToken: string | null = null;
+		try {
+			const tokenResponse = await fetch(`${BACKEND_URL}/api/admin/login-token`, {
+				method: "GET",
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+
+			if (tokenResponse.ok) {
+				const tokenData = await tokenResponse.json();
+				loginToken = tokenData.loginToken || tokenResponse.headers.get("X-Login-Token");
+			} else {
+				console.warn("Admin API Route - Failed to fetch login token, proceeding without token");
+			}
+		} catch (tokenError) {
+			console.error("Admin API Route - Error fetching login token:", tokenError);
+			// Continue without token - backend will reject if required
+		}
 
 		// Forward User-Agent and IP from original request for audit logging
 		const headers: Record<string, string> = {
@@ -32,10 +54,23 @@ export async function POST(request: Request) {
 			headers["X-Forwarded-For"] = realIp;
 		}
 
-		const response = await fetch(`${backendUrl}/api/admin/login`, {
+		// Include login token in headers if available
+		if (loginToken) {
+			headers["X-Login-Token"] = loginToken;
+		}
+
+		// Include login token in body as well
+		const loginBody: { phoneNumber: string; password: string; loginToken?: string } = {
+			...body,
+		};
+		if (loginToken) {
+			loginBody.loginToken = loginToken;
+		}
+
+		const response = await fetch(`${BACKEND_URL}/api/admin/login`, {
 			method: "POST",
 			headers,
-			body: JSON.stringify(body),
+			body: JSON.stringify(loginBody),
 		});
 
 	const data = await response.json();

@@ -12,6 +12,8 @@ import path from "path";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import { requireAdminOrAttestor } from "../lib/permissions";
+import { adminLoginRateLimiter } from "../middleware/rateLimiter";
+import { generateLoginToken, validateLoginToken } from "../middleware/loginToken";
 import lateFeeRoutes from "./admin/late-fees";
 import mtsaAdminRoutes from "./admin/mtsa";
 import kycAdminRoutes from "./admin/kyc";
@@ -531,12 +533,51 @@ const isAdmin = requireAdmin;
  *       500:
  *         description: Server error
  */
+// Admin login token endpoint
+router.get("/login-token", generateLoginToken as any, ((_req: Request, res: Response): void => {
+	const token = res.locals.loginToken;
+	if (token) {
+		res.json({
+			loginToken: token,
+			message: "Login token generated successfully",
+		});
+		return;
+	}
+	res.status(500).json({ error: "Failed to generate login token" });
+}) as any);
+
 // Admin login endpoint
 // @ts-ignore
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", adminLoginRateLimiter, validateLoginToken as any, async (req: Request, res: Response) => {
 	try {
 		console.log("Admin login attempt:", req.body);
 		const { phoneNumber, password } = req.body;
+
+		// Enhanced validation: Check if phoneNumber and password are strings
+		if (!phoneNumber || typeof phoneNumber !== 'string') {
+			return res.status(400).json({ 
+				error: "Phone number is required and must be a string" 
+			});
+		}
+
+		if (!password || typeof password !== 'string') {
+			return res.status(400).json({ 
+				error: "Password is required and must be a string" 
+			});
+		}
+
+		// Enforce max length limits to prevent DoS attacks
+		if (phoneNumber.length > 20) {
+			return res.status(400).json({ 
+				error: "Invalid phone number format" 
+			});
+		}
+
+		if (password.length > 128) {
+			return res.status(400).json({ 
+				error: "Invalid password" 
+			});
+		}
 
 		// Validate and normalize phone number
 		const { validatePhoneNumber, normalizePhoneNumber } = require("../lib/phoneUtils");
