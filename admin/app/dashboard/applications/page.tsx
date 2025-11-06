@@ -296,6 +296,7 @@ function AdminApplicationsPageContent() {
 	const [uploadingStampCertificate, setUploadingStampCertificate] = useState(false);
 	const [stampCertificateUploaded, setStampCertificateUploaded] = useState(false);
 	const [confirmingStamping, setConfirmingStamping] = useState(false);
+	const [replacingStampCertificate, setReplacingStampCertificate] = useState(false);
 
 	// Generate disbursement reference when application is selected for disbursement
 	useEffect(() => {
@@ -867,10 +868,13 @@ function AdminApplicationsPageContent() {
 			setStampCertificateUploaded(true);
 			// Clear the file input state since we don't need it anymore
 			setStampCertificateFile(null);
+			// Reset replacing state
+			setReplacingStampCertificate(false);
 		} else {
 			// Reset state when switching to an application without a certificate
 			setStampCertificateUploaded(false);
 			setStampCertificateFile(null);
+			setReplacingStampCertificate(false);
 		}
 	}, [selectedApplication?.id, selectedApplication?.loan?.pkiStampCertificateUrl]);
 
@@ -4132,113 +4136,146 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 											</div>
 										</div>
 
-										{/* Stamp Certificate Upload */}
-										<div className="mb-6">
-											<label className="block text-sm font-medium text-gray-300 mb-2">
-												Upload Stamp Certificate (PDF)
-											</label>
-											<input
-												type="file"
-												accept=".pdf,application/pdf"
-												onChange={(e) => setStampCertificateFile(e.target.files?.[0] || null)}
-												className="block w-full text-sm text-gray-300
-													file:mr-4 file:py-2 file:px-4
-													file:rounded-lg file:border-0
-													file:text-sm file:font-semibold
-													file:bg-teal-600 file:text-white
-													hover:file:bg-teal-700
-													cursor-pointer"
-												disabled={uploadingStampCertificate || stampCertificateUploaded || !!selectedApplication.loan?.pkiStampCertificateUrl}
-											/>
-											{stampCertificateFile && (
-												<p className="mt-2 text-sm text-gray-400">
-													Selected: {stampCertificateFile.name} ({(stampCertificateFile.size / 1024 / 1024).toFixed(2)} MB)
-												</p>
-											)}
-											{selectedApplication.loan?.pkiStampCertificateUrl && (
-												<p className="mt-2 text-sm text-green-400">
+									{/* Stamp Certificate Upload */}
+									<div className="mb-6">
+										<label className="block text-sm font-medium text-gray-300 mb-2">
+											Upload Stamp Certificate (PDF)
+										</label>
+										<input
+											type="file"
+											accept=".pdf,application/pdf"
+											onChange={(e) => setStampCertificateFile(e.target.files?.[0] || null)}
+											className="block w-full text-sm text-gray-300
+												file:mr-4 file:py-2 file:px-4
+												file:rounded-lg file:border-0
+												file:text-sm file:font-semibold
+												file:bg-teal-600 file:text-white
+												hover:file:bg-teal-700
+												cursor-pointer"
+											disabled={uploadingStampCertificate || (!!selectedApplication.loan?.pkiStampCertificateUrl && !replacingStampCertificate)}
+										/>
+										{stampCertificateFile && (
+											<p className="mt-2 text-sm text-gray-400">
+												Selected: {stampCertificateFile.name} ({(stampCertificateFile.size / 1024 / 1024).toFixed(2)} MB)
+											</p>
+										)}
+										{selectedApplication.loan?.pkiStampCertificateUrl && !replacingStampCertificate && (
+											<div className="mt-2 flex items-center space-x-3">
+												<p className="text-sm text-green-400">
 													✓ Stamp certificate already uploaded
 												</p>
-											)}
-										</div>
-
-										{/* Upload Button */}
-										{!selectedApplication.loan?.pkiStampCertificateUrl && (
-											<div className="flex space-x-4 mb-6">
 												<button
-													onClick={async () => {
-														if (!stampCertificateFile) {
-															alert('Please select a stamp certificate file');
-															return;
-														}
-
-														setUploadingStampCertificate(true);
-														try {
-															const formData = new FormData();
-															formData.append('stampCertificate', stampCertificateFile);
-
-															const response = await fetch(
-																`/api/admin/applications/${selectedApplication.id}/upload-stamp-certificate`,
-																{
-																	method: 'POST',
-																	headers: {
-																		'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-																	},
-																	body: formData
-																}
-															);
-
-															if (!response.ok) {
-																const error = await response.json();
-																throw new Error(error.message || 'Upload failed');
-															}
-
-													const data = await response.json();
-													console.log('✅ Stamp certificate uploaded:', data);
-													
-													// Update selected application immediately with the new certificate URL
-													const updatedSelectedApp = {
-														...selectedApplication,
-														loan: {
-															...selectedApplication.loan,
-															pkiStampCertificateUrl: data.data.certificateUrl
-														}
-													};
-													setSelectedApplication(updatedSelectedApp as any);
-													setStampCertificateUploaded(true);
-													
-													// Refresh application data
-													await fetchApplications();
-													
-													console.log('✅ Certificate URL set, Confirm button should now appear');
-													alert('Stamp certificate uploaded successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.');
-														} catch (error) {
-															console.error('Error uploading stamp certificate:', error);
-															alert(`Failed to upload stamp certificate: ${error instanceof Error ? error.message : 'Unknown error'}`);
-														} finally {
-															setUploadingStampCertificate(false);
+													onClick={() => {
+														if (window.confirm('Are you sure you want to replace the existing stamp certificate? The current certificate will be overwritten.')) {
+															setReplacingStampCertificate(true);
+															setStampCertificateFile(null);
 														}
 													}}
-													disabled={uploadingStampCertificate || !stampCertificateFile}
-													className="flex items-center px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600/50 text-white font-medium rounded-lg transition-colors"
+													className="text-xs px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md transition-colors"
 												>
-													{uploadingStampCertificate ? 'Uploading...' : 'Upload Stamp Certificate'}
+													Replace Certificate
 												</button>
 											</div>
 										)}
-
-										{/* Confirm Stamping Button */}
-										{selectedApplication.loan?.pkiStampCertificateUrl && (
-											<div className="flex space-x-4">
+										{replacingStampCertificate && (
+											<div className="mt-2 flex items-center space-x-3">
+												<p className="text-sm text-yellow-400">
+													⚠ Replacing certificate - select new file above
+												</p>
 												<button
-													onClick={async () => {
-														const confirmMessage = `Are you sure you want to confirm stamping for ${selectedApplication.user?.fullName}?\n\nThis will move the application to PENDING_DISBURSEMENT status and allow loan disbursement.`;
-														
-														if (!window.confirm(confirmMessage)) {
-															return;
+													onClick={() => {
+														setReplacingStampCertificate(false);
+														setStampCertificateFile(null);
+													}}
+													className="text-xs px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+												>
+													Cancel
+												</button>
+											</div>
+										)}
+									</div>
+
+									{/* Upload Button */}
+									{(!selectedApplication.loan?.pkiStampCertificateUrl || replacingStampCertificate) && (
+										<div className="flex space-x-4 mb-6">
+											<button
+												onClick={async () => {
+													if (!stampCertificateFile) {
+														alert('Please select a stamp certificate file');
+														return;
+													}
+
+													setUploadingStampCertificate(true);
+													try {
+														const formData = new FormData();
+														formData.append('stampCertificate', stampCertificateFile);
+
+														const response = await fetch(
+															`/api/admin/applications/${selectedApplication.id}/upload-stamp-certificate`,
+															{
+																method: 'POST',
+																headers: {
+																	'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+																},
+																body: formData
+															}
+														);
+
+														if (!response.ok) {
+															const error = await response.json();
+															throw new Error(error.message || 'Upload failed');
 														}
 
-													setConfirmingStamping(true);
+												const data = await response.json();
+												console.log('✅ Stamp certificate uploaded:', data);
+												
+												// Update selected application immediately with the new certificate URL
+												const updatedSelectedApp = {
+													...selectedApplication,
+													loan: {
+														...selectedApplication.loan,
+														pkiStampCertificateUrl: data.data.certificateUrl
+													}
+												};
+												setSelectedApplication(updatedSelectedApp as any);
+												setStampCertificateUploaded(true);
+												setReplacingStampCertificate(false);
+												
+												// Refresh application data
+												await fetchApplications();
+												
+												console.log('✅ Certificate URL set, Confirm button should now appear');
+												const message = replacingStampCertificate 
+													? 'Stamp certificate replaced successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.'
+													: 'Stamp certificate uploaded successfully!\n\nNow click the GREEN "Confirm Stamping & Proceed to Disbursement" button below to change status to PENDING_DISBURSEMENT.';
+												alert(message);
+													} catch (error) {
+														console.error('Error uploading stamp certificate:', error);
+														alert(`Failed to upload stamp certificate: ${error instanceof Error ? error.message : 'Unknown error'}`);
+													} finally {
+														setUploadingStampCertificate(false);
+													}
+												}}
+												disabled={uploadingStampCertificate || !stampCertificateFile}
+												className="flex items-center px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600/50 text-white font-medium rounded-lg transition-colors"
+											>
+												{uploadingStampCertificate ? 'Uploading...' : (replacingStampCertificate ? 'Replace Stamp Certificate' : 'Upload Stamp Certificate')}
+											</button>
+										</div>
+									)}
+
+									{/* Confirm Stamping Button */}
+									{selectedApplication.loan?.pkiStampCertificateUrl && !replacingStampCertificate && (
+										<div className="flex space-x-4">
+											<button
+												onClick={async () => {
+													const confirmMessage = `Are you sure you want to confirm stamping for ${selectedApplication.user?.fullName}?\n\nThis will move the application to PENDING_DISBURSEMENT status and allow loan disbursement.`;
+													
+													if (!window.confirm(confirmMessage)) {
+														return;
+													}
+
+												setConfirmingStamping(true);
 													try {
 														console.log('🔄 Confirming stamping for application:', selectedApplication.id);
 														console.log('Current status:', selectedApplication.status);
