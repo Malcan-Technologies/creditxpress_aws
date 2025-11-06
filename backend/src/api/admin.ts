@@ -3402,6 +3402,7 @@ router.get(
 							id: true,
 							status: true,
 							agreementStatus: true,
+							pkiStampCertificateUrl: true,
 							signatories: {
 								select: {
 									id: true,
