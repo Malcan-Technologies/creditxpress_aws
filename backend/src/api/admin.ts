@@ -3361,11 +3361,6 @@ router.get(
 							id: true,
 							status: true,
 							agreementStatus: true,
-							pkiStampCertificateUrl: true,
-							pkiSignedPdfUrl: true,
-							pkiStampedPdfUrl: true,
-							docusealSignUrl: true,
-							docusealSubmissionId: true,
 							signatories: {
 								select: {
 									id: true,
