@@ -1630,30 +1630,74 @@ router.get("/:loanId/download-stamp-certificate", authenticateAndVerifyPhone, as
 		}
 
 	// Check if certificate exists
-	if (!loan.pkiStampCertificateUrl) {
+	const certificateUrl = loan.pkiStampCertificateUrl;
+
+	if (!certificateUrl) {
 		return res.status(400).json({
 			success: false,
 			message: 'Stamp certificate is not yet available for download'
 		});
 	}
 
-	// Read certificate from local file system
-	const certificatePath = path.join(__dirname, '../../', loan.pkiStampCertificateUrl);
+	const downloadFileName = `stamp-certificate-${loanId.substring(0, 8)}.pdf`;
+
+	if (certificateUrl.startsWith('http://') || certificateUrl.startsWith('https://')) {
+		const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
+
+		try {
+			const downloadResponse = await fetch(certificateUrl, {
+				headers: {
+					'X-API-Key': orchestratorApiKey,
+				}
+			});
+
+			if (!downloadResponse.ok) {
+				const errorText = await downloadResponse.text();
+				throw new Error(`Certificate download failed: ${downloadResponse.status} - ${errorText}`);
+			}
+
+			const pdfArrayBuffer = await downloadResponse.arrayBuffer();
+			const pdfBuffer = Buffer.from(pdfArrayBuffer);
+
+			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+			res.setHeader('Content-Length', pdfBuffer.length.toString());
+
+			res.send(pdfBuffer);
+			return;
+		} catch (remoteError) {
+			console.error('❌ Error downloading stamp certificate from orchestrator:', remoteError);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to download stamp certificate from signing orchestrator',
+				error: remoteError instanceof Error ? remoteError.message : 'Unknown error'
+			});
+		}
+	}
+
+	// Legacy/local storage handling
+	let certificatePath = path.join(process.cwd(), certificateUrl);
 	console.log(`📁 Reading stamp certificate from: ${certificatePath}`);
 
 	if (!fs.existsSync(certificatePath)) {
-		console.error(`❌ Stamp certificate file not found at: ${certificatePath}`);
-		return res.status(404).json({
-			success: false,
-			message: 'Stamp certificate file not found on server'
-		});
+		const legacyPath = path.join(__dirname, '../../', certificateUrl);
+		console.log(`📁 Certificate not found, checking legacy path: ${legacyPath}`);
+
+		if (!fs.existsSync(legacyPath)) {
+			console.error('❌ Stamp certificate file not found on server');
+			return res.status(404).json({
+				success: false,
+				message: 'Stamp certificate file not found on server'
+			});
+		}
+
+		certificatePath = legacyPath;
 	}
 
 	try {
-		// Send the file
 		res.setHeader('Content-Type', 'application/pdf');
-		res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${loanId.substring(0, 8)}.pdf"`);
-		
+		res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+
 		const fileStream = fs.createReadStream(certificatePath);
 		fileStream.on('error', (error: Error) => {
 			console.error('❌ Error streaming file:', error);
@@ -1667,7 +1711,6 @@ router.get("/:loanId/download-stamp-certificate", authenticateAndVerifyPhone, as
 		});
 		fileStream.pipe(res);
 		return;
-
 	} catch (fileError) {
 		console.error('❌ Error reading certificate file:', fileError);
 		throw new Error(`Failed to read certificate file: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
