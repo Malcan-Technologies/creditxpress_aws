@@ -4211,7 +4211,7 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 														formData.append('stampCertificate', stampCertificateFile);
 
 														const response = await fetch(
-															`/api/admin/loans/${selectedApplication.id}/upload-stamp-certificate`,
+															`/api/admin/applications/${selectedApplication.id}/upload-stamp-certificate`,
 															{
 																method: 'POST',
 																headers: {
