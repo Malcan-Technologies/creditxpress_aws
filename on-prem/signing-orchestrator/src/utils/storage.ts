@@ -164,6 +164,30 @@ export class StorageManager {
     }
   }
 
+  async deleteFile(filePath: string, correlationId?: string): Promise<boolean> {
+    const log = correlationId ? createCorrelatedLogger(correlationId) : logger;
+
+    try {
+      const exists = await fs.pathExists(filePath);
+
+      if (!exists) {
+        log.warn('Attempted to delete non-existent file', { filePath });
+        return false;
+      }
+
+      await fs.remove(filePath);
+
+      log.info('File deleted successfully', { filePath });
+      return true;
+    } catch (error) {
+      log.error('Failed to delete file', {
+        error: error instanceof Error ? error.message : String(error),
+        filePath
+      });
+      throw error;
+    }
+  }
+
   /**
    * Read file as buffer
    */

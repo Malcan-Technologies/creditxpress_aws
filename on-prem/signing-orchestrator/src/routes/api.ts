@@ -1283,6 +1283,25 @@ router.post('/admin/agreements/:applicationId/upload/certificate', verifyApiKey,
       return;
     }
     
+    if (existingAgreement.certificateFilePath) {
+      try {
+        const deleted = await storageManager.deleteFile(existingAgreement.certificateFilePath, req.correlationId);
+
+        if (deleted) {
+          log.info('Deleted existing certificate before upload', {
+            applicationId,
+            filePath: existingAgreement.certificateFilePath
+          });
+        }
+      } catch (deleteError) {
+        log.warn('Failed to delete existing certificate file', {
+          applicationId,
+          filePath: existingAgreement.certificateFilePath,
+          error: deleteError instanceof Error ? deleteError.message : String(deleteError)
+        });
+      }
+    }
+
     // Generate certificate file path
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const certificateFileName = `certificate_${applicationId}_${timestamp}.pdf`;
