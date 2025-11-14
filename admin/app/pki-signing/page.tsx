@@ -103,14 +103,23 @@ function AdminPKISigningContent() {
       });
 
       if (response?.success) {
-        setStep('complete');
-        setSuccessMessage(response.message || 'Document signed successfully!');
-        
-        // Auto-redirect after 3 seconds
-        setTimeout(() => {
-          router.push('/dashboard/applications?tab=signatures');
-        }, 3000);
-      } else {
+		setStep('complete');
+		setSuccessMessage(response.message || 'Document signed successfully!');
+		
+		// Auto-redirect after 3 seconds
+		setTimeout(() => {
+		  // Determine appropriate tab and filter based on the new status
+		  const isAllSigned = response.allSigned;
+		  const newStatus = response.newStatus;
+		  
+		  // If all signatures are done, redirect to stamping tab, otherwise stay on signatures
+		  if (isAllSigned || newStatus === 'PENDING_STAMPING') {
+			router.push(`/dashboard/applications?application=${applicationId}&tab=stamping&filter=pending-stamping`);
+		  } else {
+			router.push(`/dashboard/applications?application=${applicationId}&tab=signatures`);
+		  }
+		}, 3000);
+	  } else {
         setError(response?.message || 'Failed to sign document');
         setStep('pin_input');
       }

@@ -778,20 +778,21 @@ function AdminApplicationsPageContent() {
     setSelectedTab(getInitialTab());
   }, [tabParam, filterParam]);
 
-  // Fetch signature status when signatures tab is selected
-  useEffect(() => {
-    if (
-      selectedTab === "signatures" &&
-      selectedApplication &&
-      [
-        "PENDING_SIGNATURE",
-        "PENDING_PKI_SIGNING",
-        "PENDING_SIGNING_COMPANY_WITNESS",
-        "PENDING_SIGNING_OTP_DS",
-      ].includes(selectedApplication.status)
-    ) {
-      fetchSignatureStatus(selectedApplication.id);
-    }
+ 	// Fetch signature status when signatures tab is selected OR for stamping tab
+	useEffect(() => {
+	if (
+	  (selectedTab === "signatures" || selectedTab === "stamping") &&
+	  selectedApplication &&
+	  [
+		"PENDING_SIGNATURE",
+		"PENDING_PKI_SIGNING",
+		"PENDING_SIGNING_COMPANY_WITNESS",
+		"PENDING_SIGNING_OTP_DS",
+		"PENDING_STAMPING", // Add this status
+	  ].includes(selectedApplication.status)
+	) {
+	  fetchSignatureStatus(selectedApplication.id);
+	}
   }, [selectedTab, selectedApplication?.id, selectedApplication?.status]);
 
   // Redirect ATTESTOR users from restricted tabs
@@ -884,27 +885,29 @@ function AdminApplicationsPageContent() {
 
       // Auto-switch to appropriate tab based on status (unless tab is explicitly set via URL)
       if (!tabParam) {
-        if (firstApp.status === "PENDING_APPROVAL") {
-          setSelectedTab("approval");
-        } else if (firstApp.status === "PENDING_ATTESTATION") {
-          setSelectedTab("attestation");
-        } else if (
-          [
-            "PENDING_SIGNATURE",
-            "PENDING_PKI_SIGNING",
-            "PENDING_SIGNING_COMPANY_WITNESS",
-            "PENDING_SIGNING_OTP_DS",
-          ].includes(firstApp.status)
-        ) {
-          setSelectedTab("signatures");
-        } else if (firstApp.status === "PENDING_DISBURSEMENT") {
-          setSelectedTab("disbursement");
-        } else if (firstApp.status === "COLLATERAL_REVIEW") {
-          setSelectedTab("collateral");
-        } else {
-          setSelectedTab(getInitialTab());
-        }
-      }
+		if (firstApp.status === "PENDING_APPROVAL") {
+		  setSelectedTab("approval");
+		} else if (firstApp.status === "PENDING_ATTESTATION") {
+		  setSelectedTab("attestation");
+		} else if (
+		  [
+			"PENDING_SIGNATURE",
+			"PENDING_PKI_SIGNING",
+			"PENDING_SIGNING_COMPANY_WITNESS",
+			"PENDING_SIGNING_OTP_DS",
+		  ].includes(firstApp.status)
+		) {
+		  setSelectedTab("signatures");
+		} else if (firstApp.status === "PENDING_STAMPING") {
+		  setSelectedTab("stamping");
+		} else if (firstApp.status === "PENDING_DISBURSEMENT") {
+		  setSelectedTab("disbursement");
+		} else if (firstApp.status === "COLLATERAL_REVIEW") {
+		  setSelectedTab("collateral");
+		} else {
+		  setSelectedTab(getInitialTab());
+		}
+	  }
     }
     // Clear selection if no results
     else if (filteredApplications.length === 0) {
