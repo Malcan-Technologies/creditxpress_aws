@@ -1525,7 +1525,7 @@ function PaymentsContent() {
 											Legacy formats (Maybank, CIMB, Public Bank) are still supported for backward compatibility.
 										</p>
 										<a
-											href={`${process.env.NEXT_PUBLIC_API_URL}/Cleaned_Bank_CSV_Data_Example.csv`}
+											href={`/Cleaned_Bank_CSV_Data_Example.csv`}
 											download="CSV_Template_Example.csv"
 											className="text-xs text-purple-400 hover:text-purple-300 underline flex items-center"
 										>

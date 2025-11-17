@@ -869,7 +869,10 @@ function AdminApplicationsPageContent() {
     if (applicationParam && filteredApplications.length > 0) {
       const appFromUrl = filteredApplications.find((app) => app.id === applicationParam);
       if (appFromUrl) {
-        setSelectedApplication(appFromUrl);
+        // Only update if the selected application is different from the URL parameter
+        if (!selectedApplication || selectedApplication.id !== applicationParam) {
+          setSelectedApplication(appFromUrl);
+        }
         return;
       }
     }
@@ -913,7 +916,7 @@ function AdminApplicationsPageContent() {
     else if (filteredApplications.length === 0) {
       setSelectedApplication(null);
     }
-  }, [filteredApplications, selectedApplication]);
+  }, [filteredApplications, selectedApplication, applicationParam, tabParam]);
 
   // Sync stamp certificate state when selected application changes
   useEffect(() => {
@@ -956,11 +959,14 @@ function AdminApplicationsPageContent() {
   const handleViewClick = (application: LoanApplication) => {
     setSelectedApplication(application);
 
-    // Auto-switch to appropriate tab based on status (unless tab is explicitly set via URL)
+    // Determine the appropriate tab based on status (unless tab is explicitly set via URL)
+    let newTab = tabParam;
     if (!tabParam) {
       if (application.status === "PENDING_APPROVAL") {
+        newTab = "approval";
         setSelectedTab("approval");
       } else if (application.status === "PENDING_ATTESTATION") {
+        newTab = "attestation";
         setSelectedTab("attestation");
       } else if (
         [
@@ -970,15 +976,35 @@ function AdminApplicationsPageContent() {
           "PENDING_SIGNING_OTP_DS",
         ].includes(application.status)
       ) {
+        newTab = "signatures";
         setSelectedTab("signatures");
+      } else if (application.status === "PENDING_STAMPING") {
+        newTab = "stamping";
+        setSelectedTab("stamping");
       } else if (application.status === "PENDING_DISBURSEMENT") {
+        newTab = "disbursement";
         setSelectedTab("disbursement");
       } else if (application.status === "COLLATERAL_REVIEW") {
+        newTab = "collateral";
         setSelectedTab("collateral");
       } else {
+        newTab = getInitialTab();
         setSelectedTab(getInitialTab());
       }
     }
+
+    // Update URL to reflect the selected application, preserving filter and tab
+    const params = new URLSearchParams();
+    if (filterParam) {
+      params.set("filter", filterParam);
+    }
+    if (newTab) {
+      params.set("tab", newTab);
+    }
+    params.set("application", application.id);
+    
+    // Use router.push to update URL without causing a full page reload
+    router.push(`/dashboard/applications?${params.toString()}`, { scroll: false });
 
     fetchApplicationHistory(application.id);
   };
