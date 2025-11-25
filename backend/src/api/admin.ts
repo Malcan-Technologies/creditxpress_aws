@@ -14255,7 +14255,9 @@ router.get(
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { userId } = req.params;
-			console.log(`[CACHE] Attempting to fetch cached report for userId: ${userId}`);
+			console.log(`[CTOS CACHE] ========================================`);
+			console.log(`[CTOS CACHE] Fetching cached report for userId: ${userId}`);
+			console.log(`[CTOS CACHE] Request timestamp: ${new Date().toISOString()}`);
 
 			// First, let's check if ANY reports exist for this user
 			const allReports = await prisma.creditReport.findMany({
@@ -14265,24 +14267,40 @@ router.get(
 					requestStatus: true,
 					fetchedAt: true,
 					ctosRequestId: true,
+					hasDataError: true,
+					creditScore: true,
 				},
 				orderBy: { fetchedAt: 'desc' },
 			});
-			console.log(`[CACHE] Total reports found for user: ${allReports.length}`);
-			console.log('[CACHE] All reports:', JSON.stringify(allReports, null, 2));
+			console.log(`[CTOS CACHE] Total reports found for user: ${allReports.length}`);
+			if (allReports.length > 0) {
+				console.log('[CTOS CACHE] All reports summary:');
+				allReports.forEach((report, index) => {
+					console.log(`[CTOS CACHE]   Report ${index + 1}:`, {
+						id: report.id,
+						requestStatus: report.requestStatus,
+						hasDataError: report.hasDataError,
+						creditScore: report.creditScore,
+						fetchedAt: report.fetchedAt,
+					});
+				});
+			}
 
 		// Try a direct SQL query to bypass any Prisma caching (excluding error reports)
+		console.log('[CTOS CACHE] Executing direct SQL query for successful reports...');
 		const directQueryResult = await prisma.$queryRaw`
-			SELECT * FROM credit_reports 
+			SELECT id, "userId", "requestStatus", "hasDataError", "creditScore", "fetchedAt"
+			FROM credit_reports 
 			WHERE "userId" = ${userId} 
 			AND "requestStatus" = 'COMPLETED'
 			AND ("hasDataError" = false OR "hasDataError" IS NULL)
 			ORDER BY "fetchedAt" DESC
 			LIMIT 1
-		`;
-		console.log('[CACHE] Direct SQL query result:', directQueryResult);
+		` as Array<any>;
+		console.log('[CTOS CACHE] Direct SQL query returned:', directQueryResult.length > 0 ? directQueryResult[0] : 'NO RESULTS');
 
 		// Query for successful reports first (without data errors)
+		console.log('[CTOS CACHE] Attempting Prisma query for successful reports...');
 		let creditReport = await prisma.creditReport.findFirst({
 			where: {
 				userId,
@@ -14296,11 +14314,25 @@ router.get(
 				fetchedAt: 'desc',
 			},
 		});
+		
+
+		if (creditReport) {
+			console.log('[CTOS CACHE] ✓ SUCCESS: Found successful report via Prisma query');
+			console.log('[CTOS CACHE] Report details:', {
+				id: creditReport.id,
+				requestStatus: creditReport.requestStatus,
+				hasDataError: creditReport.hasDataError,
+				creditScore: creditReport.creditScore,
+				fetchedAt: creditReport.fetchedAt,
+			});
+		} else {
+			console.log('[CTOS CACHE] ✗ No successful report found via Prisma query');
+		}
 
 		// If no successful report found, try to get the most recent one (even if error)
 		// This is for cases where the user only has error reports
 		if (!creditReport) {
-			console.log('[CACHE] No successful report found, checking for any completed report (including errors)');
+			console.log('[CTOS CACHE] Attempting to fetch ANY completed report (including errors)...');
 			creditReport = await prisma.creditReport.findFirst({
 				where: {
 					userId,
@@ -14310,40 +14342,45 @@ router.get(
 					fetchedAt: 'desc',
 				},
 			});
-		}
-
-		console.log(`[CACHE] Query result: ${creditReport ? 'FOUND' : 'NOT FOUND'}`);
-		if (creditReport) {
-			console.log('[CACHE] Report details:', {
-				id: creditReport.id,
-				requestStatus: creditReport.requestStatus,
-				fetchedAt: creditReport.fetchedAt,
-				ctosRequestId: creditReport.ctosRequestId,
-				hasDataError: creditReport.hasDataError,
-			});
+			
+			if (creditReport) {
+				console.log('[CTOS CACHE] ⚠ WARNING: Only error reports found');
+				console.log('[CTOS CACHE] Error report details:', {
+					id: creditReport.id,
+					hasDataError: creditReport.hasDataError,
+					errorMessage: creditReport.errorMessage,
+					fetchedAt: creditReport.fetchedAt,
+				});
+			}
 		}
 
 			if (!creditReport) {
-				console.log('[CACHE] No COMPLETED report found, returning 404');
+				console.log('[CTOS CACHE] ✗ FINAL: No completed reports found at all');
+				console.log('[CTOS CACHE] Returning 404 response');
+				console.log(`[CTOS CACHE] ========================================`);
 				return res.status(404).json({
 					success: false,
 					message: 'No cached credit report found for this user',
 					debug: {
 						totalReports: allReports.length,
 						reportStatuses: allReports.map(r => r.requestStatus),
-						directQueryFound: Array.isArray(directQueryResult) ? directQueryResult.length : 0,
+						directQueryFound: directQueryResult.length,
 					},
 				});
 			}
 
-			console.log('[CACHE] Returning report successfully');
+			console.log('[CTOS CACHE] ✓ FINAL: Returning report to client');
+			console.log('[CTOS CACHE] Final report ID:', creditReport.id);
+			console.log('[CTOS CACHE] Final report hasDataError:', creditReport.hasDataError);
+			console.log(`[CTOS CACHE] ========================================`);
 			return res.json({
 				success: true,
 				data: creditReport,
 			});
 		} catch (error) {
-			console.error('[CACHE] Error fetching cached credit report:', error);
-			console.error('[CACHE] Error stack:', error instanceof Error ? error.stack : 'No stack');
+			console.error('[CTOS CACHE] ✗ ERROR: Exception occurred:', error);
+			console.error('[CTOS CACHE] Error stack:', error instanceof Error ? error.stack : 'No stack');
+			console.log(`[CTOS CACHE] ========================================`);
 			return res.status(500).json({
 				success: false,
 				message: 'Failed to fetch cached credit report',
