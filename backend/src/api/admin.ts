@@ -14293,22 +14293,22 @@ router.get(
 			FROM credit_reports 
 			WHERE "userId" = ${userId} 
 			AND "requestStatus" = 'COMPLETED'
-			AND ("hasDataError" = false OR "hasDataError" IS NULL)
+			AND "hasDataError" IS NOT true
 			ORDER BY "fetchedAt" DESC
 			LIMIT 1
 		` as Array<any>;
 		console.log('[CTOS CACHE] Direct SQL query returned:', directQueryResult.length > 0 ? directQueryResult[0] : 'NO RESULTS');
 
 		// Query for successful reports first (without data errors)
-		console.log('[CTOS CACHE] Attempting Prisma query for successful reports...');
+		// Using NOT operator is more reliable than OR for this case
+		console.log('[CTOS CACHE] Attempting Prisma query for successful reports (hasDataError NOT true)...');
 		let creditReport = await prisma.creditReport.findFirst({
 			where: {
 				userId,
 				requestStatus: 'COMPLETED',
-				OR: [
-					{ hasDataError: false },
-					{ hasDataError: null }
-				]
+				NOT: {
+					hasDataError: true  // This will match records where hasDataError is false or null
+				}
 			},
 			orderBy: {
 				fetchedAt: 'desc',
