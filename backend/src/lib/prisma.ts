@@ -1,9 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
-// Enable query logging only in development or when DEBUG_PRISMA is set
-const enableQueryLogging = process.env.NODE_ENV === 'development' || process.env.DEBUG_PRISMA === 'true';
 
-// Create a single Prisma client instance with conditional logging
+// Create a single Prisma client instance with logging enabled
 export const prisma = new PrismaClient({
   log: [
     {
