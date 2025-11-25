@@ -3,7 +3,7 @@ import express, {
 	Response,
 	RequestHandler,
 } from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/prisma";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -316,7 +316,6 @@ function formatPKIErrorMessage(rawError: string): {
 }
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Register sub-routes
 router.use("/late-fees", lateFeeRoutes);
@@ -14256,7 +14255,33 @@ router.get(
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { userId } = req.params;
+			console.log(`[CACHE] Attempting to fetch cached report for userId: ${userId}`);
 
+			// First, let's check if ANY reports exist for this user
+			const allReports = await prisma.creditReport.findMany({
+				where: { userId },
+				select: {
+					id: true,
+					requestStatus: true,
+					fetchedAt: true,
+					ctosRequestId: true,
+				},
+				orderBy: { fetchedAt: 'desc' },
+			});
+			console.log(`[CACHE] Total reports found for user: ${allReports.length}`);
+			console.log('[CACHE] All reports:', JSON.stringify(allReports, null, 2));
+
+			// Try a direct SQL query to bypass any Prisma caching
+			const directQueryResult = await prisma.$queryRaw`
+				SELECT * FROM credit_reports 
+				WHERE "userId" = ${userId} 
+				AND "requestStatus" = 'COMPLETED'
+				ORDER BY "fetchedAt" DESC
+				LIMIT 1
+			`;
+			console.log('[CACHE] Direct SQL query result:', directQueryResult);
+
+			// Now try the specific query
 			const creditReport = await prisma.creditReport.findFirst({
 				where: {
 					userId,
@@ -14267,22 +14292,41 @@ router.get(
 				},
 			});
 
-			if (!creditReport) {
-				return res.status(404).json({
-					success: false,
-					message: 'No cached credit report found for this user',
+			console.log(`[CACHE] Query result: ${creditReport ? 'FOUND' : 'NOT FOUND'}`);
+			if (creditReport) {
+				console.log('[CACHE] Report details:', {
+					id: creditReport.id,
+					requestStatus: creditReport.requestStatus,
+					fetchedAt: creditReport.fetchedAt,
+					ctosRequestId: creditReport.ctosRequestId,
 				});
 			}
 
+			if (!creditReport) {
+				console.log('[CACHE] No COMPLETED report found, returning 404');
+				return res.status(404).json({
+					success: false,
+					message: 'No cached credit report found for this user',
+					debug: {
+						totalReports: allReports.length,
+						reportStatuses: allReports.map(r => r.requestStatus),
+						directQueryFound: Array.isArray(directQueryResult) ? directQueryResult.length : 0,
+					},
+				});
+			}
+
+			console.log('[CACHE] Returning report successfully');
 			return res.json({
 				success: true,
 				data: creditReport,
 			});
 		} catch (error) {
-			console.error('Error fetching cached credit report:', error);
+			console.error('[CACHE] Error fetching cached credit report:', error);
+			console.error('[CACHE] Error stack:', error instanceof Error ? error.stack : 'No stack');
 			return res.status(500).json({
 				success: false,
 				message: 'Failed to fetch cached credit report',
+				error: error instanceof Error ? error.message : 'Unknown error',
 			});
 		}
 	}
