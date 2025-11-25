@@ -5,30 +5,52 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
 	request: Request,
-	{ params }: { params: { reportId: string } }
+	{ params }: { params: Promise<{ reportId: string }> }
 ) {
 	try {
-		const { reportId } = params;
+		const { reportId } = await params;
 		const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
-		const token = request.headers.get("authorization")?.split(" ")[1];
+		const authHeader = request.headers.get("authorization");
+		const token = authHeader?.replace(/^Bearer\s+/i, "").trim() || authHeader?.split(" ")[1];
 
 		if (!token) {
+			console.error("PDF request: No token provided");
 			return NextResponse.json(
-				{ success: false, message: "Unauthorized" },
+				{ success: false, message: "Unauthorized: No token provided" },
 				{ status: 401 }
 			);
 		}
 
+		if (!backendUrl) {
+			console.error("PDF request: Backend URL not configured");
+			return NextResponse.json(
+				{ success: false, message: "Server configuration error: Backend URL not set" },
+				{ status: 500 }
+			);
+		}
+
+		const backendEndpoint = `${backendUrl}/api/admin/credit-reports/${reportId}/pdf`;
+		console.log(`PDF request: Forwarding to ${backendEndpoint}`);
+
 		// Forward request to backend
-		const response = await fetch(
-			`${backendUrl}/api/admin/credit-reports/${reportId}/pdf`,
-			{
+		let response: Response;
+		try {
+			response = await fetch(backendEndpoint, {
 				method: "GET",
 				headers: {
 					Authorization: `Bearer ${token}`,
 				},
-			}
-		);
+			});
+		} catch (fetchError) {
+			console.error("PDF request: Network error connecting to backend:", fetchError);
+			return NextResponse.json(
+				{
+					success: false,
+					message: `Failed to connect to backend: ${fetchError instanceof Error ? fetchError.message : "Unknown error"}`,
+				},
+				{ status: 503 }
+			);
+		}
 
 		if (!response.ok) {
 			const data = await response.json().catch(() => ({}));
