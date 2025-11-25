@@ -90,12 +90,6 @@ jobs:
     #     run: |
     #       docker compose --env-file .env.backend -f docker-compose.prod.yml up -d --build
 
-    #   - name: Deploy backend
-    #     env:
-    #       CTOS_B2B_PRIVATE_KEY: ${{ secrets.CTOS_B2B_PRIVATE_KEY }}
-    #     run: |
-    #       docker compose --env-file .env.backend -f docker-compose.prod.yml up -d --build
-
       - name: Setup environment files
         run: |
           # Create environment files from secrets
@@ -104,20 +98,11 @@ jobs:
           echo "${{ secrets.BACKEND_ENV }}" > backend/.env
 
           # Add CTOS_B2B_PRIVATE_KEY to backend .env if it doesn't exist
-          # Remove existing CTOS_B2B_PRIVATE_KEY line first to avoid duplicates
-          if grep -q "^CTOS_B2B_PRIVATE_KEY" backend/.env; then
-            echo "Removing existing CTOS_B2B_PRIVATE_KEY from backend/.env"
-            sed -i '/^CTOS_B2B_PRIVATE_KEY/d' backend/.env
-          fi
-          
-          # Add CTOS_B2B_PRIVATE_KEY - handle multi-line private keys properly
-          # Store as single line with escaped newlines for .env file compatibility
-          # The ctosB2BService will handle the \n replacement
-          {
-            echo -n 'CTOS_B2B_PRIVATE_KEY='
-            echo -n "${{ secrets.CTOS_B2B_PRIVATE_KEY }}" | sed ':a;N;$!ba;s/\n/\\n/g'
-            echo
-          } >> backend/.env
+          # Use heredoc to properly handle multi-line private key
+          # The double quotes ensure the entire multi-line value is treated as a single string
+          cat >> backend/.env << DEPLOY_CTOS_KEY_EOF
+          CTOS_B2B_PRIVATE_KEY="${{ secrets.CTOS_B2B_PRIVATE_KEY }}"
+          DEPLOY_CTOS_KEY_EOF
 
           # Make sure CORS_ALLOWED_ORIGINS is set in the backend .env file
           if ! grep -q "CORS_ALLOWED_ORIGINS" backend/.env; then
@@ -514,18 +499,11 @@ jobs:
             ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'mkdir -p /var/www/growkapital/backend'
             scp -i ~/.ssh/deploy_key backend/.env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/growkapital/backend/
             
-            # Ensure CORS_ALLOWED_ORIGINS and CTOS_B2B_PRIVATE_KEY are set on the server
+            # Ensure CORS_ALLOWED_ORIGINS is set on the server
             ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
               if ! grep -q "CORS_ALLOWED_ORIGINS" /var/www/growkapital/backend/.env; then
                 echo "Adding CORS_ALLOWED_ORIGINS to backend .env on server"
                 echo "CORS_ALLOWED_ORIGINS=https://creditxpress.com.my,https://admin.creditxpress.com.my,https://api.creditxpress.com.my" >> /var/www/growkapital/backend/.env
-              fi
-              
-              # Verify CTOS_B2B_PRIVATE_KEY is set (should be from the copied .env file)
-              if ! grep -q "^CTOS_B2B_PRIVATE_KEY" /var/www/growkapital/backend/.env; then
-                echo "⚠️ WARNING: CTOS_B2B_PRIVATE_KEY not found in backend .env file on server"
-              else
-                echo "✅ CTOS_B2B_PRIVATE_KEY found in backend .env file"
               fi
             '
             
@@ -548,7 +526,6 @@ jobs:
               
               # Stop existing containers
               docker compose -f docker-compose.prod.yml down || true
-              docker compose -f docker-compose.prod.yml down || true
               
               # Build with cache and start containers
               echo "🔨 Building backend containers with cache..."
@@ -557,7 +534,6 @@ jobs:
               
               # Stop and remove existing containers to avoid name conflicts
               echo "🛑 Stopping existing backend containers..."
-              docker compose -f docker-compose.prod.yml down || true
               docker compose -f docker-compose.prod.yml down || true
               
               # Ensure containers are fully removed if compose down fails
@@ -571,21 +547,17 @@ jobs:
               docker pull postgres:16-alpine 2>/dev/null || echo "⚠️ Could not pull postgres:16-alpine (using cached version)"
               
               if ! docker compose -f docker-compose.prod.yml up -d --build; then
-              if ! docker compose -f docker-compose.prod.yml up -d --build; then
                 echo "❌ Backend build failed. Checking for Prisma client issues..."
                 
                 # Try to fix Prisma client issues and rebuild
                 echo "🔧 Attempting to fix Prisma client issues..."
                 docker compose -f docker-compose.prod.yml exec backend npm run prisma:fix || true
-                docker compose -f docker-compose.prod.yml exec backend npm run prisma:fix || true
                 
                 echo "🔄 Retrying backend build..."
                 # Stop containers again before retry
                 docker compose -f docker-compose.prod.yml down || true
-                docker compose -f docker-compose.prod.yml down || true
                 docker stop backend-backend-1 backend-postgres-1 2>/dev/null || true
                 docker rm backend-backend-1 backend-postgres-1 2>/dev/null || true
-                if ! docker compose -f docker-compose.prod.yml up -d --build; then
                 if ! docker compose -f docker-compose.prod.yml up -d --build; then
                   echo "❌ Backend build failed again. Showing logs:"
                   docker compose -f docker-compose.prod.yml logs backend
@@ -598,10 +570,7 @@ jobs:
               # Quick Prisma client verification (reduced timeout)
               echo "🔍 Quick Prisma client verification..."
               if ! timeout 30 docker compose -f docker-compose.prod.yml exec backend npm run prisma:verify; then
-              if ! timeout 30 docker compose -f docker-compose.prod.yml exec backend npm run prisma:verify; then
                 echo "⚠️ Prisma client verification failed. Attempting fix..."
-                docker compose -f docker-compose.prod.yml exec backend npm run prisma:fix
-                docker compose -f docker-compose.prod.yml restart backend
                 docker compose -f docker-compose.prod.yml exec backend npm run prisma:fix
                 docker compose -f docker-compose.prod.yml restart backend
               fi
@@ -611,14 +580,12 @@ jobs:
               # Check if containers are actually running
               echo "🔍 Checking container status..."
               docker compose -f docker-compose.prod.yml ps
-              docker compose -f docker-compose.prod.yml ps
               
               # Wait for backend to be ready
               echo "⏳ Waiting for backend to be ready..."
               MAX_WAIT=60
               WAIT_COUNT=0
               while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-                if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
                 if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
                   echo "✅ Backend is ready"
                   break
@@ -628,7 +595,6 @@ jobs:
                 if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
                   echo "❌ Backend failed to start within $MAX_WAIT seconds"
                   echo "Container logs:"
-                  docker compose -f docker-compose.prod.yml logs backend --tail 50
                   docker compose -f docker-compose.prod.yml logs backend --tail 50
                   exit 1
                 fi
@@ -642,28 +608,14 @@ jobs:
               else
                 echo "⚠️ Migration script not found, running migrations directly..."
                 docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
-                docker compose -f docker-compose.prod.yml exec backend npx prisma migrate deploy
               fi
               
               # Run database seed to ensure default settings exist
               echo "🌱 Running database seed to ensure default settings..."
               docker compose -f docker-compose.prod.yml exec backend npx prisma db seed
-              docker compose -f docker-compose.prod.yml exec backend npx prisma db seed
               
               # Ensure receipts and uploads directories exist with proper permissions
               echo "📁 Setting up receipts and uploads directories..."
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p receipts
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 receipts
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/default-letters
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/default-letters
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/disbursement-slips
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/disbursement-slips
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/stamp-certificates
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/stamp-certificates
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/kyc
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/kyc
-              docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/stamped-agreements
-              docker compose -f docker-compose.prod.yml exec backend chmod 777 uploads/stamped-agreements
               docker compose -f docker-compose.prod.yml exec backend mkdir -p receipts
               docker compose -f docker-compose.prod.yml exec backend chmod 777 receipts
               docker compose -f docker-compose.prod.yml exec backend mkdir -p uploads/default-letters
@@ -681,7 +633,6 @@ jobs:
               
               # Test receipt generation functionality
               echo "🧾 Testing receipt generation functionality..."
-              if docker compose -f docker-compose.prod.yml exec backend node -e "
               if docker compose -f docker-compose.prod.yml exec backend node -e "
                 try {
                   console.log('Testing Prisma client...');
@@ -708,7 +659,6 @@ jobs:
               else
                 echo "⚠️ Receipt service test failed, checking build artifacts..."
                 docker compose -f docker-compose.prod.yml exec backend ls -la dist/src/lib/
-                docker compose -f docker-compose.prod.yml exec backend ls -la dist/src/lib/
                 echo "Continuing deployment despite test failure..."
               fi
               
@@ -718,15 +668,12 @@ jobs:
               # Final verification that containers are running
               echo "🔍 Final container status check..."
               docker compose -f docker-compose.prod.yml ps
-              docker compose -f docker-compose.prod.yml ps
               
               # Verify backend is still responsive
-              if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
               if docker compose -f docker-compose.prod.yml exec backend wget --quiet --tries=1 --spider http://localhost:4001/api/health; then
                 echo "✅ Backend is healthy and ready"
               else
                 echo "❌ Backend health check failed at end of deployment"
-                docker compose -f docker-compose.prod.yml logs backend --tail 20
                 docker compose -f docker-compose.prod.yml logs backend --tail 20
                 exit 1
               fi
