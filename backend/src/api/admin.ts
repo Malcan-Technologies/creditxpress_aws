@@ -14286,72 +14286,35 @@ router.get(
 				});
 			}
 
-		// Try a direct SQL query to bypass any Prisma caching (excluding error reports)
-		console.log('[CTOS CACHE] Executing direct SQL query for successful reports...');
-		const directQueryResult = await prisma.$queryRaw`
-			SELECT id, "userId", "requestStatus", "hasDataError", "creditScore", "fetchedAt"
-			FROM credit_reports 
-			WHERE "userId" = ${userId} 
-			AND "requestStatus" = 'COMPLETED'
-			AND "hasDataError" IS NOT true
-			ORDER BY "fetchedAt" DESC
-			LIMIT 1
-		` as Array<any>;
-		console.log('[CTOS CACHE] Direct SQL query returned:', directQueryResult.length > 0 ? directQueryResult[0] : 'NO RESULTS');
-
-		// Query for successful reports first (without data errors)
-		// Using NOT operator is more reliable than OR for this case
-		console.log('[CTOS CACHE] Attempting Prisma query for successful reports (hasDataError NOT true)...');
+		// Query for the most recent COMPLETED report regardless of error status
+		// This ensures we always get the latest timeline from the database
+		console.log('[CTOS CACHE] Fetching the most recent COMPLETED report (including errors)...');
 		let creditReport = await prisma.creditReport.findFirst({
 			where: {
 				userId,
 				requestStatus: 'COMPLETED',
-				NOT: {
-					hasDataError: true  // This will match records where hasDataError is false or null
-				}
 			},
 			orderBy: {
 				fetchedAt: 'desc',
 			},
 		});
 		
-
 		if (creditReport) {
-			console.log('[CTOS CACHE] ✓ SUCCESS: Found successful report via Prisma query');
+			console.log('[CTOS CACHE] ✓ SUCCESS: Found report');
 			console.log('[CTOS CACHE] Report details:', {
 				id: creditReport.id,
 				requestStatus: creditReport.requestStatus,
 				hasDataError: creditReport.hasDataError,
 				creditScore: creditReport.creditScore,
+				errorMessage: creditReport.errorMessage,
 				fetchedAt: creditReport.fetchedAt,
 			});
-		} else {
-			console.log('[CTOS CACHE] ✗ No successful report found via Prisma query');
-		}
-
-		// If no successful report found, try to get the most recent one (even if error)
-		// This is for cases where the user only has error reports
-		if (!creditReport) {
-			console.log('[CTOS CACHE] Attempting to fetch ANY completed report (including errors)...');
-			creditReport = await prisma.creditReport.findFirst({
-				where: {
-					userId,
-					requestStatus: 'COMPLETED',
-				},
-				orderBy: {
-					fetchedAt: 'desc',
-				},
-			});
 			
-			if (creditReport) {
-				console.log('[CTOS CACHE] ⚠ WARNING: Only error reports found');
-				console.log('[CTOS CACHE] Error report details:', {
-					id: creditReport.id,
-					hasDataError: creditReport.hasDataError,
-					errorMessage: creditReport.errorMessage,
-					fetchedAt: creditReport.fetchedAt,
-				});
+			if (creditReport.hasDataError) {
+				console.log('[CTOS CACHE] ⚠ WARNING: Latest report has data error');
 			}
+		} else {
+			console.log('[CTOS CACHE] ✗ No completed reports found');
 		}
 
 			if (!creditReport) {
@@ -14369,14 +14332,20 @@ router.get(
 				});
 			}
 
-			console.log('[CTOS CACHE] ✓ FINAL: Returning report to client');
-			console.log('[CTOS CACHE] Final report ID:', creditReport.id);
-			console.log('[CTOS CACHE] Final report hasDataError:', creditReport.hasDataError);
-			console.log(`[CTOS CACHE] ========================================`);
-			return res.json({
-				success: true,
-				data: creditReport,
-			});
+		console.log('[CTOS CACHE] ✓ FINAL: Returning report to client');
+		console.log('[CTOS CACHE] Final report ID:', creditReport.id);
+		console.log('[CTOS CACHE] Final report hasDataError:', creditReport.hasDataError);
+		console.log(`[CTOS CACHE] ========================================`);
+		
+		// Set cache-busting headers to prevent stale data
+		res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+		res.setHeader('Pragma', 'no-cache');
+		res.setHeader('Expires', '0');
+		
+		return res.json({
+			success: true,
+			data: creditReport,
+		});
 		} catch (error) {
 			console.error('[CTOS CACHE] ✗ ERROR: Exception occurred:', error);
 			console.error('[CTOS CACHE] Error stack:', error instanceof Error ? error.stack : 'No stack');
