@@ -80,7 +80,7 @@ export default function DashboardLayout({
 	// Update document title when title prop changes
 	useEffect(() => {
 		if (typeof document !== "undefined") {
-			document.title = `${title} | Kredit.my`;
+			document.title = `${title} | CreditXpress`;
 		}
 	}, [title]);
 

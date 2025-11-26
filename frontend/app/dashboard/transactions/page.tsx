@@ -36,7 +36,7 @@ export default function TransactionsPage() {
 	useEffect(() => {
 		const urlParams = new URLSearchParams(window.location.search);
 		const filterParam = urlParams.get('filter');
-		if (filterParam && ['DEPOSIT', 'WITHDRAWAL', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT'].includes(filterParam)) {
+		if (filterParam && ['LOAN_DISBURSEMENT', 'LOAN_REPAYMENT'].includes(filterParam)) {
 			setTransactionFilter(filterParam);
 		}
 	}, []);
@@ -268,8 +268,6 @@ export default function TransactionsPage() {
 									<div className="flex flex-wrap gap-2 sm:gap-3">
 										{[
 											"ALL",
-											"DEPOSIT",
-											"WITHDRAWAL", 
 											"LOAN_DISBURSEMENT",
 											"LOAN_REPAYMENT",
 										].map((type) => (

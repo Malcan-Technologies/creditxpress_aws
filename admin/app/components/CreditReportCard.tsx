@@ -91,9 +91,6 @@ export default function CreditReportCard({
 	const handleAutoLoadCachedReport = async () => {
 		if (autoLoaded) return; // Prevent multiple auto-loads
 		
-		console.log(`[CTOS FRONTEND] ========================================`);
-		console.log(`[CTOS FRONTEND] Auto-loading cached report for userId: ${userId}`);
-		
 		setLoadingCache(true);
 		setError(null);
 
@@ -105,46 +102,30 @@ export default function CreditReportCard({
 				method: "GET",
 			});
 
-			console.log(`[CTOS FRONTEND] API Response received:`, {
-				success: result.success,
-				hasData: !!result.data,
-				reportId: result.data?.id,
-				hasDataError: result.data?.hasDataError,
-				creditScore: result.data?.creditScore,
-				requestStatus: result.data?.requestStatus,
-			});
-
 		if (result.success && result.data) {
-			console.log(`[CTOS FRONTEND] ✓ Setting report state with received data`);
 			setReport(result.data);
 			setRequestStatus(result.data.requestStatus || null);
 			if (onReportFetched) {
 				onReportFetched(result.data);
 			}
 		} else {
-			// No cached report - stay silent on initial load
-			console.log(`[CTOS FRONTEND] No cached report found (staying silent)`);
 			setReport(null);
 			setError(null);
 		}
-		console.log(`[CTOS FRONTEND] ========================================`);
 	} catch (err: any) {
 		console.error("[CTOS FRONTEND] ✗ Error fetching cached credit report:", err);
 		// Handle 404 as expected case (no cached report) - stay silent
 		if (err?.response?.status === 404 || err?.status === 404) {
-			console.log(`[CTOS FRONTEND] 404 response - no cached report (staying silent)`);
 			setReport(null);
 			setError(null);
 		} else {
 			// Only show error for actual failures (not 404)
-			console.error(`[CTOS FRONTEND] ✗ Non-404 error occurred`);
 			setError(
 				err instanceof Error
 					? err.message
 					: "Error loading cached report"
 			);
 		}
-		console.log(`[CTOS FRONTEND] ========================================`);
 	} finally {
 		setLoadingCache(false);
 		setAutoLoaded(true);
@@ -152,8 +133,6 @@ export default function CreditReportCard({
 	};
 
 	const handleReloadReport = async () => {
-		console.log(`[CTOS FRONTEND] ========================================`);
-		console.log(`[CTOS FRONTEND] Reloading cached report for userId: ${userId}`);
 		
 		setLoadingCache(true);
 			setError(null);
@@ -166,42 +145,27 @@ export default function CreditReportCard({
 				method: "GET",
 				});
 
-				console.log(`[CTOS FRONTEND] Reload API Response:`, {
-					success: result.success,
-					hasData: !!result.data,
-					reportId: result.data?.id,
-					hasDataError: result.data?.hasDataError,
-					creditScore: result.data?.creditScore,
-					requestStatus: result.data?.requestStatus,
-				});
-
 				if (result.success && result.data) {
-					console.log(`[CTOS FRONTEND] ✓ Updating report state with reloaded data`);
 					setReport(result.data);
 				setRequestStatus(result.data.requestStatus || null);
 				if (onReportFetched) {
 					onReportFetched(result.data);
 				}
 				} else {
-					console.log(`[CTOS FRONTEND] ✗ No data in response, showing error`);
 				setError("No cached report available for this user");
 			}
-			console.log(`[CTOS FRONTEND] ========================================`);
 		} catch (err: any) {
 			console.error("[CTOS FRONTEND] ✗ Error reloading credit report:", err);
 			// Handle 404 as expected case (no cached report)
 			if (err?.response?.status === 404 || err?.status === 404) {
-				console.log(`[CTOS FRONTEND] 404 response on reload`);
 				setError("No cached report available for this user");
 			} else {
-				console.error(`[CTOS FRONTEND] ✗ Non-404 error on reload`);
 				setError(
 					err instanceof Error
 						? err.message
 						: "Failed to reload report"
 				);
 			}
-			console.log(`[CTOS FRONTEND] ========================================`);
 			} finally {
 			setLoadingCache(false);
 			}
