@@ -14347,20 +14347,6 @@ router.get(
 				success: true,
 				data: creditReport,
 			});
-			console.log('[CTOS CACHE] ✓ FINAL: Returning report to client');
-			console.log('[CTOS CACHE] Final report ID:', creditReport.id);
-			console.log('[CTOS CACHE] Final report hasDataError:', creditReport.hasDataError);
-			console.log(`[CTOS CACHE] ========================================`);
-			
-			// Set cache-busting headers to prevent stale data
-			res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-			res.setHeader('Pragma', 'no-cache');
-			res.setHeader('Expires', '0');
-			
-			return res.json({
-				success: true,
-				data: creditReport,
-			});
 		} catch (error) {
 			console.error('[CTOS CACHE] ✗ ERROR: Exception occurred:', error);
 			console.error('[CTOS CACHE] Error stack:', error instanceof Error ? error.stack : 'No stack');
