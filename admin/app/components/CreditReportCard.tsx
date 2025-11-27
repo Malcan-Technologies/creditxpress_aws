@@ -635,14 +635,16 @@ export default function CreditReportCard({
 										{(report.rawResponse as any).extractedData.creditInfoAtGlance.bankruptcyStatus && (
 											<div>
 												<p className="text-gray-400 text-xs mb-1">Bankruptcy Status</p>
-												<p className={`font-medium ${
-													(report.rawResponse as any).extractedData.creditInfoAtGlance.bankruptcyRecords === 1 
-														? 'text-green-400' 
-														: 'text-red-400'
-												}`}>
+												<p
+													className={`font-medium ${
+														(report.rawResponse as any).extractedData.creditInfoAtGlance.bankruptcyRecords
+															? 'text-red-400'
+															: 'text-green-400'
+													}`}
+												>
 													{(report.rawResponse as any).extractedData.creditInfoAtGlance.bankruptcyStatus}
-								</p>
-							</div>
+												</p>
+											</div>
 										)}
 										{(report.rawResponse as any).extractedData.creditInfoAtGlance.activeLegalRecordsPersonal && (
 											<div>
