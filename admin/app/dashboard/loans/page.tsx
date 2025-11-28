@@ -4503,9 +4503,12 @@ function ActiveLoansContent() {
 																					{signature.type === 'COMPANY' && '🏢 Company'}
 																					{signature.type === 'WITNESS' && '⚖️ Witness'}
 																				</h5>
-																				<p className="text-gray-400 text-sm">
-																					{signature.name} ({signature.email})
-																				</p>
+																				{/* Only show name/email subtext for borrower */}
+																				{signature.type === 'USER' && (
+																					<p className="text-gray-400 text-sm">
+																						{signature.name} ({signature.email})
+																					</p>
+																				)}
 																			</div>
 																			<div className="flex items-center">
 																				{signature.status === 'SIGNED' ? (
