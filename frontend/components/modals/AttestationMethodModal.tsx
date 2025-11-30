@@ -124,12 +124,12 @@ export default function AttestationMethodModal({
 						className="w-full border border-purple-primary bg-purple-50 rounded-xl p-6 hover:border-purple-600 hover:bg-purple-100 transition-all text-left shadow-sm hover:shadow-md relative group"
 					>
 						{/* Recommended Badge */}
-						<div className="absolute -top-3 -right-3">
+						{/* <div className="absolute -top-3 -right-3">
 							<span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-primary text-white shadow-sm">
 								<SparklesIcon className="h-3 w-3 mr-1" />
 								Recommended
 							</span>
-						</div>
+						</div> */}
 
 						<div className="flex items-center justify-between mb-6">
 							<div className="flex items-center space-x-4">

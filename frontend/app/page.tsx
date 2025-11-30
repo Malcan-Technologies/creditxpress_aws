@@ -385,7 +385,7 @@ export default function Home() {
 									</div>
 									<div className="flex items-center justify-between py-3 border-b border-gray-100">
 										<span className="text-gray-600 font-medium">Tenure</span>
-										<span className="text-xl font-bold text-gray-700">6 to 36 months</span>
+										<span className="text-xl font-bold text-gray-700">6 to 24 months</span>
 									</div>
 								</div>
 
