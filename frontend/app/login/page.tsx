@@ -818,7 +818,7 @@ function LoginPageContent() {
 								Welcome back
 							</h2>
 							<p className="mt-2 text-center text-sm text-gray-600 font-body">
-								New to Kapital?{" "}
+								New to CreditXpress?{" "}
 								<Link
 									href="/signup"
 									className="font-medium text-purple-primary hover:text-purple-600 transition-colors"
