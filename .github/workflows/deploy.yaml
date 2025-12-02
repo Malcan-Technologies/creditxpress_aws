@@ -8,6 +8,7 @@ name: Deploy to Production
 # - ADMIN_ENV: Admin environment variables (.env.local)
 #   Must include: PORT, NODE_ENV, NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SITE_URL
 # - BACKEND_ENV: Backend environment variables (.env)
+#   Must include: RESEND_API_KEY (for email notifications), RESEND_FROM_EMAIL (sender email address)
 
 on:
   push:

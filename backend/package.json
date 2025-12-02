@@ -44,6 +44,7 @@
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
     "pdfkit": "^0.15.0",
+    "resend": "^4.0.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "ua-parser-js": "^1.0.35",

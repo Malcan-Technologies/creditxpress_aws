@@ -27,6 +27,7 @@ import documentLogsRoutes from "./admin/document-logs";
 import whatsappService from "../lib/whatsappService";
 import { processCSVFile } from "../lib/csvProcessor";
 import ReceiptService from "../lib/receiptService";
+import { emailService } from "../lib/emailService";
 
 import { CronScheduler } from "../lib/cronScheduler";
 import { createLoanOnPendingSignature } from "../lib/loanCreationUtils";
@@ -11791,6 +11792,24 @@ router.post(
 			}
 
 			console.log(`All parties signed - Loan ${application.loan.id} and Application ${applicationId} set to PENDING_STAMPING`);
+
+			// Send email notification to borrower
+			try {
+				console.log(`📧 Sending email notification to borrower after all parties signed`);
+				const emailResult = await emailService.sendAllPartiesSignedNotification(
+					application.userId,
+					application.loan.id,
+					applicationId
+				);
+				if (emailResult.success) {
+					console.log('✅ Email notification sent successfully to borrower');
+				} else {
+					console.warn(`⚠️ Failed to send email notification: ${emailResult.error}`);
+				}
+			} catch (emailError) {
+				console.error('❌ Error sending email notification:', emailError);
+				// Don't fail the signing process if email fails
+			}
 			}
 
 		return res.json({

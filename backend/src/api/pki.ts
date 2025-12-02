@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
+import { emailService } from '../lib/emailService';
 
 const router = express.Router();
 
@@ -339,6 +340,24 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
         }
 
         console.log(`VPS database updated after PKI signing: loan ${loan.id}, application ${applicationId}`);
+
+        // Send email notification to user
+        try {
+          console.log(`📧 Sending email notification to user after PKI signing`);
+          const emailResult = await emailService.sendUserSignedNotification(
+            requestUserId!,
+            loan.id,
+            applicationId
+          );
+          if (emailResult.success) {
+            console.log('✅ Email notification sent successfully to user');
+          } else {
+            console.warn(`⚠️ Failed to send email notification: ${emailResult.error}`);
+          }
+        } catch (emailError) {
+          console.error('❌ Error sending email notification:', emailError);
+          // Don't fail the signing process if email fails
+        }
       } catch (dbError) {
         console.error('Failed to update VPS database after PKI signing:', dbError);
         // Don't fail the signing process if VPS database update fails
