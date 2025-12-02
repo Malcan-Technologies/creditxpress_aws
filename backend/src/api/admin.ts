@@ -1203,7 +1203,9 @@ router.get(
 				ROUND(SUM(
 					COALESCE(la."applicationFee", 0) + 
 					COALESCE(la."originationFee", 0) + 
-					COALESCE(la."legalFee", 0)
+					COALESCE(la."legalFee", 0) +
+					COALESCE(la."stampingFee", 0) +
+					COALESCE(la."legalFeeFixed", 0)
 				)::numeric, 2) as total_fees
 			FROM "loan_applications" la
 			WHERE la.status IN ('ACTIVE', 'DISBURSED', 'PENDING_DISCHARGE', 'DISCHARGED')
@@ -2099,7 +2101,9 @@ router.get(
 					ROUND(SUM(
 						COALESCE(la."applicationFee", 0) + 
 						COALESCE(la."originationFee", 0) + 
-						COALESCE(la."legalFee", 0)
+						COALESCE(la."legalFee", 0) +
+						COALESCE(la."stampingFee", 0) +
+						COALESCE(la."legalFeeFixed", 0)
 					)::numeric, 2) as fees_earned
 				FROM "loan_applications" la
 				WHERE la.status IN ('ACTIVE', 'DISBURSED', 'PENDING_DISCHARGE', 'DISCHARGED')
@@ -4648,13 +4652,16 @@ router.post(
 	async (req: AuthRequest, res: Response) => {
 		try {
 			const { id } = req.params;
-			const { amount, term, interestRate, monthlyRepayment, netDisbursement, originationFee, legalFee, applicationFee, productId, notes } = req.body;
+			const { amount, term, interestRate, monthlyRepayment, netDisbursement, stampingFee, legalFeeFixed, originationFee, legalFee, applicationFee, productId, notes } = req.body;
 			const adminUserId = req.user?.userId;
 
-			// Validate required fields
-			if (!amount || !term || !interestRate || !monthlyRepayment || !netDisbursement || originationFee === undefined || legalFee === undefined || applicationFee === undefined) {
+			// Validate required fields - support both old and new fee structure
+			const hasNewFees = stampingFee !== undefined && legalFeeFixed !== undefined;
+			const hasOldFees = originationFee !== undefined && legalFee !== undefined && applicationFee !== undefined;
+			
+			if (!amount || !term || !interestRate || !monthlyRepayment || !netDisbursement || (!hasNewFees && !hasOldFees)) {
 				return res.status(400).json({ 
-					message: "All offer fields are required: amount, term, interestRate, monthlyRepayment, netDisbursement, originationFee, legalFee, applicationFee" 
+					message: "All offer fields are required: amount, term, interestRate, monthlyRepayment, netDisbursement, and either (stampingFee, legalFeeFixed) or (originationFee, legalFee, applicationFee)" 
 				});
 			}
 
@@ -4706,9 +4713,6 @@ router.post(
 				freshOfferInterestRate: interestRate,
 				freshOfferMonthlyRepayment: monthlyRepayment,
 				freshOfferNetDisbursement: netDisbursement,
-				freshOfferOriginationFee: originationFee,
-				freshOfferLegalFee: legalFee,
-				freshOfferApplicationFee: applicationFee,
 				freshOfferNotes: notes,
 				freshOfferSubmittedAt: new Date(),
 				freshOfferSubmittedBy: adminUserId,
@@ -4719,6 +4723,23 @@ router.post(
 				originalOfferMonthlyRepayment: originalOfferMonthlyRepayment,
 				originalOfferNetDisbursement: originalOfferNetDisbursement,
 			};
+			
+			// Add new fee structure if provided, otherwise use old fees
+			if (hasNewFees) {
+				updateData.freshOfferStampingFee = stampingFee;
+				updateData.freshOfferLegalFeeFixed = legalFeeFixed;
+				// Set old fees to 0 for clarity
+				updateData.freshOfferOriginationFee = 0;
+				updateData.freshOfferLegalFee = 0;
+				updateData.freshOfferApplicationFee = 0;
+			} else {
+				updateData.freshOfferOriginationFee = originationFee;
+				updateData.freshOfferLegalFee = legalFee;
+				updateData.freshOfferApplicationFee = applicationFee;
+				// Set new fees to 0 for clarity
+				updateData.freshOfferStampingFee = 0;
+				updateData.freshOfferLegalFeeFixed = 0;
+			}
 
 			// Update productId if provided
 			if (productId) {
@@ -4748,6 +4769,24 @@ router.post(
 			});
 
 			// Track the status change in history
+			const freshOfferMetadata: any = {
+				amount,
+				term,
+				interestRate,
+				monthlyRepayment,
+				netDisbursement,
+			};
+			
+			// Add fee data based on structure used
+			if (hasNewFees) {
+				freshOfferMetadata.stampingFee = stampingFee;
+				freshOfferMetadata.legalFeeFixed = legalFeeFixed;
+			} else {
+				freshOfferMetadata.originationFee = originationFee;
+				freshOfferMetadata.legalFee = legalFee;
+				freshOfferMetadata.applicationFee = applicationFee;
+			}
+			
 			await trackApplicationStatusChange(
 				prisma,
 				id,
@@ -4757,16 +4796,7 @@ router.post(
 				"Fresh offer submitted",
 				notes || "Admin submitted a fresh offer with revised terms",
 				{
-					freshOffer: {
-						amount,
-						term,
-						interestRate,
-						monthlyRepayment,
-						netDisbursement,
-						originationFee,
-						legalFee,
-						applicationFee,
-					},
+					freshOffer: freshOfferMetadata,
 					originalOffer: {
 						amount: originalOfferAmount,
 						term: originalOfferTerm,

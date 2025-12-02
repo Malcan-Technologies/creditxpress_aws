@@ -12,9 +12,11 @@ interface Product {
 	loanTypes?: string[];
 	repaymentTerms: number[]; // Array of months
 	interestRate: number; // Monthly interest rate in percentage
-	legalFee: number; // Legal fee in percentage
-	originationFee: number; // Origination fee in percentage
-	applicationFee: number; // Application fee as fixed amount
+	legalFee: number; // Legal fee in percentage (old)
+	originationFee: number; // Origination fee in percentage (old)
+	applicationFee: number; // Application fee as fixed amount (old)
+	stampingFee: number; // Stamping fee in percentage (new)
+	legalFeeFixed: number; // Legal fee as fixed amount (new)
 }
 
 interface ApplicationDetails {
@@ -23,8 +25,10 @@ interface ApplicationDetails {
 	loanTerm: string;
 	monthlyRepayment: string;
 	interestRate: string;
-	legalFee: string;
-	originationFee: string;
+	legalFee: string; // Keep for backward compatibility
+	originationFee: string; // Keep for backward compatibility
+	stampingFee: string;
+	legalFeeFixed: string;
 	netDisbursement: string;
 }
 
@@ -49,6 +53,8 @@ function ApplicationDetailsFormContent({
 		interestRate: "",
 		legalFee: "",
 		originationFee: "",
+		stampingFee: "",
+		legalFeeFixed: "",
 		netDisbursement: "",
 	});
 	const [errors, setErrors] = useState<Partial<ApplicationDetails>>({});
@@ -92,23 +98,25 @@ function ApplicationDetailsFormContent({
 
 				const applicationData = await applicationResponse.json();
 
-				// Set form values from application data if available
-				if (applicationData) {
-					setFormValues({
-						loanAmount: applicationData.amount?.toString() || "",
-						loanPurpose: applicationData.purpose && applicationData.purpose.trim() !== "" ? applicationData.purpose : "",
-						loanTerm: applicationData.term?.toString() || "",
-						monthlyRepayment:
-							applicationData.monthlyRepayment?.toString() || "",
-						interestRate:
-							applicationData.interestRate?.toString() || "",
-						legalFee: applicationData.legalFee?.toString() || "",
-						originationFee:
-							applicationData.originationFee?.toString() || "",
-						netDisbursement:
-							applicationData.netDisbursement?.toString() || "",
-					});
-				}
+			// Set form values from application data if available
+			if (applicationData) {
+				setFormValues({
+					loanAmount: applicationData.amount?.toString() || "",
+					loanPurpose: applicationData.purpose && applicationData.purpose.trim() !== "" ? applicationData.purpose : "",
+					loanTerm: applicationData.term?.toString() || "",
+					monthlyRepayment:
+						applicationData.monthlyRepayment?.toString() || "",
+					interestRate:
+						applicationData.interestRate?.toString() || "",
+					legalFee: applicationData.legalFee?.toString() || "",
+					originationFee:
+						applicationData.originationFee?.toString() || "",
+					stampingFee: applicationData.stampingFee?.toString() || "",
+					legalFeeFixed: applicationData.legalFeeFixed?.toString() || "",
+					netDisbursement:
+						applicationData.netDisbursement?.toString() || "",
+				});
+			}
 			} catch (err) {
 				setError(
 					err instanceof Error ? err.message : "An error occurred"
@@ -186,24 +194,23 @@ function ApplicationDetailsFormContent({
 				termInMonths
 			);
 
-			// Calculate exact legal fee value (not percentage)
-			const legalFeeValue = (loanAmount * selectedProduct.legalFee) / 100;
+			// Calculate new fee structure
+			const legalFeeFixedValue = selectedProduct.legalFeeFixed || 0;
+			const stampingFeeValue = (loanAmount * (selectedProduct.stampingFee || 0)) / 100;
 
-			// Calculate exact origination fee value (not percentage)
-			const originationFeeValue =
-				(loanAmount * selectedProduct.originationFee) / 100;
-
-			// Calculate net disbursement (including application fee)
-			const applicationFeeValue = selectedProduct.applicationFee;
-			const netDisbursementValue =
-				loanAmount - legalFeeValue - originationFeeValue - applicationFeeValue;
+			// Calculate net disbursement with new fees
+			const netDisbursementValue = loanAmount - legalFeeFixedValue - stampingFeeValue;
 
 			const submissionValues = {
 				...formValues,
 				monthlyRepayment: monthlyRepayment.toFixed(2),
 				interestRate: selectedProduct.interestRate.toString(), // Keep as percentage
-				legalFee: legalFeeValue.toFixed(2),
-				originationFee: originationFeeValue.toFixed(2),
+				// New fee structure
+				stampingFee: stampingFeeValue.toFixed(2),
+				legalFeeFixed: legalFeeFixedValue.toFixed(2),
+				// Old fees set to 0 for backward compatibility
+				legalFee: "0",
+				originationFee: "0",
 				netDisbursement: netDisbursementValue.toFixed(2),
 				loanPurpose:
 					getValidLoanTypes().length > 0

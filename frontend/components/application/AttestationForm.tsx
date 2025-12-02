@@ -24,6 +24,8 @@ interface LoanApplication {
 	netDisbursement: number;
 	applicationFee?: number;
 	originationFee?: number;
+	stampingFee?: number;
+	legalFeeFixed?: number;
 	product: {
 		name: string;
 		code: string;
@@ -61,7 +63,10 @@ interface AttestationFormProps {
 		netDisbursement: number;
 		originationFee: number;
 		applicationFee: number;
+		stampingFee: number;
+		legalFeeFixed: number;
 		totalFees: number;
+		isNewFeeStructure: boolean;
 	};
 	formatCurrency: (amount: number) => string;
 }
@@ -278,98 +283,102 @@ export default function AttestationForm({
 							</div>
 						</div>
 
-						{/* Fee Breakdown */}
-						<div className="pt-4 border-t border-gray-200">
-							<div className="space-y-4">
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<span className="text-gray-600 font-body">Origination Fee</span>
-										<Tooltip.Provider>
-											<Tooltip.Root
-												open={openTooltip === "origination"}
-												onOpenChange={() => handleTooltipClick("origination")}
-											>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-														onClick={() => handleTooltipClick("origination")}
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content
-														className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-														sideOffset={5}
-													>
-														A one-time fee charged by the lender for processing your loan application.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
+					{/* Fee Breakdown */}
+					<div className="pt-4 border-t border-gray-200">
+						<div className="space-y-4">
+							{fees.isNewFeeStructure ? (
+								<>
+									{/* New Fee Structure */}
+									<div className="flex justify-between">
+										<div className="flex items-center gap-1">
+											<span className="text-gray-600 font-body">Legal Fee</span>
+											<Tooltip.Provider>
+												<Tooltip.Root
+													open={openTooltip === "legalFixed"}
+													onOpenChange={() => handleTooltipClick("legalFixed")}
+												>
+													<Tooltip.Trigger asChild>
+														<InfoIcon
+															className="text-gray-400 cursor-pointer"
+															fontSize="small"
+															onClick={() => handleTooltipClick("legalFixed")}
+														/>
+													</Tooltip.Trigger>
+													<Tooltip.Portal>
+														<Tooltip.Content
+															className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+															sideOffset={5}
+														>
+															A fixed fee paid to lawyers to cover legal costs for attestation and processing your loan documents.
+															<Tooltip.Arrow className="fill-gray-800" />
+														</Tooltip.Content>
+													</Tooltip.Portal>
+												</Tooltip.Root>
+											</Tooltip.Provider>
+										</div>
+										<span className="text-red-600 font-body">({formatCurrency(fees.legalFeeFixed)})</span>
 									</div>
-									<span className="text-red-600 font-body">({formatCurrency(fees.originationFee)})</span>
-								</div>
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<span className="text-gray-600 font-body">Legal Fee</span>
-										<Tooltip.Provider>
-											<Tooltip.Root
-												open={openTooltip === "legal"}
-												onOpenChange={() => handleTooltipClick("legal")}
-											>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-														onClick={() => handleTooltipClick("legal")}
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content
-														className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-														sideOffset={5}
-													>
-														A fee charged to cover the legal costs associated with preparing and processing your loan documents.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
+									<div className="flex justify-between">
+										<div className="flex items-center gap-1">
+											<span className="text-gray-600 font-body">Stamping Fee</span>
+											<Tooltip.Provider>
+												<Tooltip.Root
+													open={openTooltip === "stamping"}
+													onOpenChange={() => handleTooltipClick("stamping")}
+												>
+													<Tooltip.Trigger asChild>
+														<InfoIcon
+															className="text-gray-400 cursor-pointer"
+															fontSize="small"
+															onClick={() => handleTooltipClick("stamping")}
+														/>
+													</Tooltip.Trigger>
+													<Tooltip.Portal>
+														<Tooltip.Content
+															className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+															sideOffset={5}
+														>
+															A fee paid to LHDN for stamping and certifying your loan agreement documents.
+															<Tooltip.Arrow className="fill-gray-800" />
+														</Tooltip.Content>
+													</Tooltip.Portal>
+												</Tooltip.Root>
+											</Tooltip.Provider>
+										</div>
+										<span className="text-red-600 font-body">({formatCurrency(fees.stampingFee)})</span>
 									</div>
-									<span className="text-red-600 font-body">({formatCurrency(fees.legalFee)})</span>
-								</div>
-								<div className="flex justify-between">
-									<div className="flex items-center gap-1">
-										<span className="text-gray-600 font-body">Application Fee</span>
-										<Tooltip.Provider>
-											<Tooltip.Root
-												open={openTooltip === "application"}
-												onOpenChange={() => handleTooltipClick("application")}
-											>
-												<Tooltip.Trigger asChild>
-													<InfoIcon
-														className="text-gray-400 cursor-pointer"
-														fontSize="small"
-														onClick={() => handleTooltipClick("application")}
-													/>
-												</Tooltip.Trigger>
-												<Tooltip.Portal>
-													<Tooltip.Content
-														className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-														sideOffset={5}
-													>
-														A non-refundable fee charged when you submit your loan application. This fee is deducted from your loan disbursement.
-														<Tooltip.Arrow className="fill-gray-800" />
-													</Tooltip.Content>
-												</Tooltip.Portal>
-											</Tooltip.Root>
-										</Tooltip.Provider>
-									</div>
-									<span className="text-red-600 font-body">({formatCurrency(fees.applicationFee)})</span>
-								</div>
-							</div>
+								</>
+							) : (
+								<>
+									{/* Old Fee Structure - for backward compatibility */}
+									{fees.originationFee > 0 && (
+										<div className="flex justify-between">
+											<div className="flex items-center gap-1">
+												<span className="text-gray-600 font-body">Origination Fee</span>
+											</div>
+											<span className="text-red-600 font-body">({formatCurrency(fees.originationFee)})</span>
+										</div>
+									)}
+									{fees.legalFee > 0 && (
+										<div className="flex justify-between">
+											<div className="flex items-center gap-1">
+												<span className="text-gray-600 font-body">Legal Fee</span>
+											</div>
+											<span className="text-red-600 font-body">({formatCurrency(fees.legalFee)})</span>
+										</div>
+									)}
+									{fees.applicationFee > 0 && (
+										<div className="flex justify-between">
+											<div className="flex items-center gap-1">
+												<span className="text-gray-600 font-body">Application Fee</span>
+											</div>
+											<span className="text-red-600 font-body">({formatCurrency(fees.applicationFee)})</span>
+										</div>
+									)}
+								</>
+							)}
 						</div>
+					</div>
 
 						{/* Highlighted Values */}
 						<div className="pt-4 border-t border-gray-200">
@@ -393,15 +402,15 @@ export default function AttestationForm({
 															onClick={() => handleTooltipClick("disbursement")}
 														/>
 													</Tooltip.Trigger>
-													<Tooltip.Portal>
-														<Tooltip.Content
-															className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-															sideOffset={5}
-														>
-															The actual amount you will receive after deducting the origination fee, legal fee, and application fee from your loan amount.
-															<Tooltip.Arrow className="fill-gray-800" />
-														</Tooltip.Content>
-													</Tooltip.Portal>
+												<Tooltip.Portal>
+													<Tooltip.Content
+														className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+														sideOffset={5}
+													>
+														The actual amount you will receive after deducting legal and stamping fees from your loan amount.
+														<Tooltip.Arrow className="fill-gray-800" />
+													</Tooltip.Content>
+												</Tooltip.Portal>
 												</Tooltip.Root>
 											</Tooltip.Provider>
 										</div>

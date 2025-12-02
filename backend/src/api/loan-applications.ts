@@ -110,31 +110,28 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 			return res.status(404).json({ message: "Product not found" });
 		}
 
-		// Create the loan application with optional fields
-		const loanApplicationData: any = {
-			userId,
-			productId,
-			appStep: appStep || 0,
-			// Include product fees from database, not request body to prevent tampering
-			interestRate: productDetails.interestRate,
-			lateFee: productDetails.lateFeeRate,
-			originationFee: productDetails.originationFee,
-			legalFee: productDetails.legalFee,
-			applicationFee: productDetails.applicationFee,
-		};
+	// Create the loan application with optional fields
+	const loanApplicationData: any = {
+		userId,
+		productId,
+		appStep: appStep || 0,
+		// Include product fees from database, not request body to prevent tampering
+		interestRate: productDetails.interestRate,
+		lateFee: productDetails.lateFeeRate,
+	};
 
-		// Only add optional fields if they are provided
-		if (amount !== undefined) {
-			loanApplicationData.amount = amount;
-		}
+	// Only add optional fields if they are provided
+	if (amount !== undefined) {
+		loanApplicationData.amount = amount;
+	}
 
-		if (term !== undefined) {
-			loanApplicationData.term = term;
-		}
+	if (term !== undefined) {
+		loanApplicationData.term = term;
+	}
 
-		if (purpose !== undefined) {
-			loanApplicationData.purpose = purpose;
-		}
+	if (purpose !== undefined) {
+		loanApplicationData.purpose = purpose;
+	}
 
 		// Generate a unique URL link
 		const urlLink = nanoid(10);
@@ -2021,9 +2018,13 @@ router.post(
 						interestRate: existingApplication.freshOfferInterestRate,
 						monthlyRepayment: existingApplication.freshOfferMonthlyRepayment,
 						netDisbursement: existingApplication.freshOfferNetDisbursement,
+						// Copy old fee structure
 						originationFee: existingApplication.freshOfferOriginationFee,
 						legalFee: existingApplication.freshOfferLegalFee,
 						applicationFee: existingApplication.freshOfferApplicationFee,
+						// Copy new fee structure
+						stampingFee: existingApplication.freshOfferStampingFee,
+						legalFeeFixed: existingApplication.freshOfferLegalFeeFixed,
 						// Clear fresh offer fields since they're now accepted
 						freshOfferAmount: null,
 						freshOfferTerm: null,
@@ -2033,6 +2034,8 @@ router.post(
 						freshOfferOriginationFee: null,
 						freshOfferLegalFee: null,
 						freshOfferApplicationFee: null,
+						freshOfferStampingFee: null,
+						freshOfferLegalFeeFixed: null,
 						freshOfferNotes: null,
 						freshOfferSubmittedAt: null,
 						freshOfferSubmittedBy: null,

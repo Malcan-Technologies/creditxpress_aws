@@ -3103,69 +3103,33 @@ function LoansPageContent() {
 																			const lateFees = loan.overdueInfo?.totalLateFees || 0;
 																			const totalDue = hasOverduePayments ? (overdueAmount + lateFees) : nextPayment.amount;
 																			
-																			// Check if any overdue repayments are in grace period
-																			const overdueRepayments = loan.overdueInfo?.overdueRepayments || [];
-																			// Use grace period from late_fees table if available, otherwise fall back to backend setting or default
-																			const gracePeriod = loan.gracePeriodInfo?.gracePeriodDays ?? loan.gracePeriodDays ?? 3;
-																			const hasGracePeriodPayments = (loan.gracePeriodInfo?.gracePeriodRepayments ?? 0) > 0 || 
-																				overdueRepayments.some(rep => {
-																					// Calculate if this repayment is in grace period using Malaysia timezone logic (matching backend)
-																					const dueDate = new Date(rep.dueDate);
-																					const now = new Date();
-																					
-																					// Convert both dates to Malaysia timezone (UTC+8) and normalize to start of day
-																					const getMalaysiaStartOfDay = (date: Date) => {
-																						const malaysiaTime = new Date(date.getTime() + (8 * 60 * 60 * 1000));
-																						const startOfDay = new Date(malaysiaTime);
-																						startOfDay.setUTCHours(0, 0, 0, 0);
-																						return new Date(startOfDay.getTime() - (8 * 60 * 60 * 1000)); // Convert back to UTC
-																					};
-																					
-																					const todayMalaysiaStart = getMalaysiaStartOfDay(now);
-																					const dueDateMalaysiaStart = getMalaysiaStartOfDay(dueDate);
-																					const daysOverdue = Math.floor((todayMalaysiaStart.getTime() - dueDateMalaysiaStart.getTime()) / (24 * 60 * 60 * 1000));
-																					
-																					return daysOverdue > 0 && daysOverdue <= gracePeriod;
-																				});
-																			
-																			// Use different themes based on payment status
-																			const isOverdue = hasOverduePayments || nextPayment.isOverdue;
-																			
-																			// Determine card styling based on grace period status
-																			let cardColors, iconColor, textColor, amountColor, cardTitle;
-																			if (hasGracePeriodPayments) {
-																				// Orange theme for grace period
-																				cardColors = "from-orange-50 to-orange-100 border-orange-200";
-																				iconColor = "bg-orange-400";
-																				textColor = "text-orange-700";
-																				amountColor = "text-orange-600";
-																				cardTitle = "Amount Due (Grace Period)";
-																			} else if (isOverdue) {
-																				// Red theme for truly overdue
-																				cardColors = "from-red-50 to-red-100 border-red-200";
-																				iconColor = "bg-red-400";
-																				textColor = "text-red-700";
-																				amountColor = "text-red-600";
-																				cardTitle = "Total Amount Due";
-																			} else {
-																				// Blue theme for regular payments
-																				cardColors = "from-blue-50 to-blue-100 border-blue-200";
-																				iconColor = "bg-blue-400";
-																				textColor = "text-blue-700";
-																				amountColor = "text-blue-700";
-																				cardTitle = "Next Payment";
-																			}
+													// Use different themes based on payment status (grace period UI removed)
+													const isOverdue = hasOverduePayments || nextPayment.isOverdue;
+													
+													// Determine card styling based on payment status
+													let cardColors, iconColor, textColor, amountColor, cardTitle;
+													if (isOverdue) {
+														// Red theme for overdue payments
+														cardColors = "from-red-50 to-red-100 border-red-200";
+														iconColor = "bg-red-400";
+														textColor = "text-red-700";
+														amountColor = "text-red-600";
+														cardTitle = "Total Amount Due";
+													} else {
+														// Blue theme for regular payments
+														cardColors = "from-blue-50 to-blue-100 border-blue-200";
+														iconColor = "bg-blue-400";
+														textColor = "text-blue-700";
+														amountColor = "text-blue-700";
+														cardTitle = "Next Payment";
+													}
 																			
 																			return (
-																				<>
-																					<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
-																						<div className="flex items-center mb-4">
-																							<div className={`w-12 h-12 lg:w-14 lg:h-14 ${hasGracePeriodPayments ? 'bg-orange-600/10' : (isOverdue ? 'bg-red-600/10' : 'bg-blue-600/10')} rounded-xl flex items-center justify-center mr-3`}>
-																								{hasGracePeriodPayments ? (
-																									<svg className="h-6 w-6 lg:h-7 lg:w-7 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-																										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-																									</svg>
-																								) : isOverdue ? (
+																<>
+																	<div className="bg-white rounded-xl border border-gray-200 h-full flex flex-col p-6">
+																		<div className="flex items-center mb-4">
+																			<div className={`w-12 h-12 lg:w-14 lg:h-14 ${isOverdue ? 'bg-red-600/10' : 'bg-blue-600/10'} rounded-xl flex items-center justify-center mr-3`}>
+																				{isOverdue ? (
 																									<svg className="h-6 w-6 lg:h-7 lg:w-7 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 																										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.982 16.5c-.77.833.192 2.5 1.732 2.5z" />
 																									</svg>
@@ -3187,25 +3151,10 @@ function LoansPageContent() {
 																									{totalDue > 0 ? formatCurrency(totalDue) : "Fully Paid"}
 																								</p>
 																							</div>
-																							<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
-																								{hasOverduePayments && (
-																									<div className="space-y-2">
-																										{hasGracePeriodPayments && (
-																											<div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-2">
-																												<div className="flex items-center">
-																													<svg className="h-4 w-4 text-orange-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-																														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-																													</svg>
-																													<p className="text-sm font-medium text-orange-800">
-																														Grace Period Active
-																													</p>
-																												</div>
-																												<p className="text-xs text-orange-700 mt-1">
-																													Your payment is overdue but you're still within the grace period. Late fees are accumulating but won't be charged yet.
-																												</p>
-																											</div>
-																										)}
-																										<div className="space-y-1">
+															<div className="text-base lg:text-lg text-gray-600 font-body leading-relaxed">
+																{hasOverduePayments && (
+																	<div className="space-y-2">
+																		<div className="space-y-1">
 																											<p className="text-sm text-red-600 font-body">
 																												Overdue: {formatCurrency(overdueAmount)}
 																											</p>
@@ -3653,17 +3602,10 @@ function LoansPageContent() {
 																														return (
 																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
 																																<XMarkIcon className="h-3 w-3 mr-1" />
-																																Cancelled
-																															</span>
-																														);
-																													} else if (repayment.graceStatus === "GRACE_PERIOD") {
-																														return (
-																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">
-																																<ClockIcon className="h-3 w-3 mr-1" />
-																																Grace Period ({repayment.daysIntoGracePeriod}d)
-																															</span>
-																														);
-																													} else if (repayment.graceStatus === "OVERDUE" || isOverdue) {
+																										Cancelled
+																									</span>
+																								);
+																							} else if (isOverdue) {
 																														return (
 																															<span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
 																																<ExclamationTriangleIcon className="h-3 w-3 mr-1" />

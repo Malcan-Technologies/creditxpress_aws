@@ -114,10 +114,12 @@ interface ApplicationData {
 	loanTerm: string;
 	monthlyRepayment: string;
 	interestRate: string;
-	legalFee: string;
+	legalFee: string; // Old
 	netDisbursement: string;
-	applicationFee?: string;
-	originationFee?: string;
+	applicationFee?: string; // Old
+	originationFee?: string; // Old
+	stampingFee?: string; // New
+	legalFeeFixed?: string; // New
 	documents: Array<{
 		id: string;
 		name: string;
@@ -249,24 +251,26 @@ function ReviewAndSubmitFormContent({
 					);
 				}
 
-				// Transform the data to match our expected format
-				const transformedData: ApplicationData = {
-					productId: data.productId,
-					loanAmount: data.amount.toString(),
-					loanPurpose: data.purpose && data.purpose.trim() !== "" ? data.purpose : null,
-					loanTerm: data.term.toString(),
-					monthlyRepayment: data.monthlyRepayment.toString(),
-					interestRate: data.interestRate.toString(),
-					legalFee: data.legalFee.toString(),
-					netDisbursement: data.netDisbursement.toString(),
-					applicationFee: data.applicationFee?.toString(),
-					originationFee: data.originationFee?.toString(),
-					documents: data.documents || [],
-					product: {
-						code: data.product?.code || "",
-						name: data.product?.name || "",
-					},
-				};
+			// Transform the data to match our expected format
+			const transformedData: ApplicationData = {
+				productId: data.productId,
+				loanAmount: data.amount.toString(),
+				loanPurpose: data.purpose && data.purpose.trim() !== "" ? data.purpose : null,
+				loanTerm: data.term.toString(),
+				monthlyRepayment: data.monthlyRepayment.toString(),
+				interestRate: data.interestRate.toString(),
+				legalFee: data.legalFee.toString(),
+				netDisbursement: data.netDisbursement.toString(),
+				applicationFee: data.applicationFee?.toString(),
+				originationFee: data.originationFee?.toString(),
+				stampingFee: data.stampingFee?.toString(),
+				legalFeeFixed: data.legalFeeFixed?.toString(),
+				documents: data.documents || [],
+				product: {
+					code: data.product?.code || "",
+					name: data.product?.name || "",
+				},
+			};
 
 				setApplicationData(transformedData);
 
@@ -442,18 +446,35 @@ function ReviewAndSubmitFormContent({
 
 		// Use the fees stored in the database instead of calculating them
 		const interestRate = parseFloat(applicationData.interestRate);
-		const legalFee = parseFloat(applicationData.legalFee);
 		const netDisbursement = parseFloat(applicationData.netDisbursement);
+		
+		// Check if new fee structure is used - only if values are actually present (not null/undefined)
+		const hasStampingFee = applicationData.stampingFee !== undefined && applicationData.stampingFee !== null && applicationData.stampingFee !== "";
+		const hasLegalFeeFixed = applicationData.legalFeeFixed !== undefined && applicationData.legalFeeFixed !== null && applicationData.legalFeeFixed !== "";
+		
+		const stampingFee = hasStampingFee ? parseFloat(applicationData.stampingFee!) : 0;
+		const legalFeeFixed = hasLegalFeeFixed ? parseFloat(applicationData.legalFeeFixed!) : 0;
+		
+		// Old fees for backward compatibility
+		const legalFee = parseFloat(applicationData.legalFee || "0");
 		const applicationFee = parseFloat(applicationData.applicationFee || "0");
 		const originationFee = parseFloat(applicationData.originationFee || "0");
+		
+		// Determine which fee structure is being used - check if new fees actually exist
+		const isNewFeeStructure = hasStampingFee || hasLegalFeeFixed;
 
 		return {
 			interestRate,
-			legalFee,
+			legalFee: isNewFeeStructure ? 0 : legalFee,
 			netDisbursement,
-			originationFee,
-			applicationFee,
-			totalFees: originationFee + legalFee + applicationFee,
+			originationFee: isNewFeeStructure ? 0 : originationFee,
+			applicationFee: isNewFeeStructure ? 0 : applicationFee,
+			stampingFee,
+			legalFeeFixed,
+			totalFees: isNewFeeStructure 
+				? (stampingFee + legalFeeFixed) 
+				: (originationFee + legalFee + applicationFee),
+			isNewFeeStructure,
 		};
 	};
 
@@ -657,196 +678,117 @@ function ReviewAndSubmitFormContent({
 								<>
 									<div className="pt-4 border-t border-gray-200">
 										<div className="space-y-4">
-											<div className="flex justify-between">
-												<div className="flex items-center gap-1">
-													<Typography className="text-gray-600">
-														Origination Fee (
-														{
-															productDetails.originationFee
-														}
-														%)
-													</Typography>
-													<Tooltip.Provider>
-														<Tooltip.Root
-															open={
-																openTooltip ===
-																"origination"
-															}
-															onOpenChange={() =>
-																handleTooltipClick(
-																	"origination"
-																)
-															}
-														>
-															<Tooltip.Trigger
-																asChild
-															>
-																<InfoIcon
-																	className="text-gray-400 cursor-pointer"
-																	fontSize="small"
-																	onClick={() =>
-																		handleTooltipClick(
-																			"origination"
-																		)
-																	}
-																/>
-															</Tooltip.Trigger>
-															<Tooltip.Portal>
-																<Tooltip.Content
-																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																	sideOffset={
-																		5
-																	}
+											{fees.isNewFeeStructure ? (
+												<>
+													{/* New Fee Structure */}
+													<div className="flex justify-between">
+														<div className="flex items-center gap-1">
+															<Typography className="text-gray-600">
+																Legal Fee
+															</Typography>
+															<Tooltip.Provider>
+																<Tooltip.Root
+																	open={openTooltip === "legalFixed"}
+																	onOpenChange={() => handleTooltipClick("legalFixed")}
 																>
-																	A one-time
-																	fee charged
-																	by the
-																	lender for
-																	processing
-																	your loan
-																	application.
-																	<Tooltip.Arrow className="fill-gray-800" />
-																</Tooltip.Content>
-															</Tooltip.Portal>
-														</Tooltip.Root>
-													</Tooltip.Provider>
-												</div>
-												<Typography className="text-red-600">
-													(
-													{formatCurrency(
-														fees.originationFee
-													)}
-													)
-												</Typography>
-											</div>
-											<div className="flex justify-between">
-												<div className="flex items-center gap-1">
-													<Typography className="text-gray-600">
-														Legal Fee (
-														{
-															productDetails.legalFee
-														}
-														%)
-													</Typography>
-													<Tooltip.Provider>
-														<Tooltip.Root
-															open={
-																openTooltip ===
-																"legal"
-															}
-															onOpenChange={() =>
-																handleTooltipClick(
-																	"legal"
-																)
-															}
-														>
-															<Tooltip.Trigger
-																asChild
-															>
-																<InfoIcon
-																	className="text-gray-400 cursor-pointer"
-																	fontSize="small"
-																	onClick={() =>
-																		handleTooltipClick(
-																			"legal"
-																		)
-																	}
-																/>
-															</Tooltip.Trigger>
-															<Tooltip.Portal>
-																<Tooltip.Content
-																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																	sideOffset={
-																		5
-																	}
+																	<Tooltip.Trigger asChild>
+																		<InfoIcon
+																			className="text-gray-400 cursor-pointer"
+																			fontSize="small"
+																			onClick={() => handleTooltipClick("legalFixed")}
+																		/>
+																	</Tooltip.Trigger>
+																	<Tooltip.Portal>
+																		<Tooltip.Content
+																			className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																			sideOffset={5}
+																		>
+																			A fixed fee paid to lawyers to cover legal costs for attestation and processing your loan documents.
+																			<Tooltip.Arrow className="fill-gray-800" />
+																		</Tooltip.Content>
+																	</Tooltip.Portal>
+																</Tooltip.Root>
+															</Tooltip.Provider>
+														</div>
+														<Typography className="text-red-600">
+															({formatCurrency(fees.legalFeeFixed)})
+														</Typography>
+													</div>
+													<div className="flex justify-between">
+														<div className="flex items-center gap-1">
+															<Typography className="text-gray-600">
+																Stamping Fee
+															</Typography>
+															<Tooltip.Provider>
+																<Tooltip.Root
+																	open={openTooltip === "stamping"}
+																	onOpenChange={() => handleTooltipClick("stamping")}
 																>
-																	A fee
-																	charged to
-																	cover the
-																	legal costs
-																	associated
-																	with
-																	preparing
-																	and
-																	processing
-																	your loan
-																	documents.
-																	<Tooltip.Arrow className="fill-gray-800" />
-																</Tooltip.Content>
-															</Tooltip.Portal>
-														</Tooltip.Root>
-													</Tooltip.Provider>
-												</div>
-												<Typography className="text-red-600">
-													(
-													{formatCurrency(
-														fees.legalFee
+																	<Tooltip.Trigger asChild>
+																		<InfoIcon
+																			className="text-gray-400 cursor-pointer"
+																			fontSize="small"
+																			onClick={() => handleTooltipClick("stamping")}
+																		/>
+																	</Tooltip.Trigger>
+																	<Tooltip.Portal>
+																		<Tooltip.Content
+																			className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
+																			sideOffset={5}
+																		>
+																			A fee paid to LHDN for stamping and certifying your loan agreement documents.
+																			<Tooltip.Arrow className="fill-gray-800" />
+																		</Tooltip.Content>
+																	</Tooltip.Portal>
+																</Tooltip.Root>
+															</Tooltip.Provider>
+														</div>
+														<Typography className="text-red-600">
+															({formatCurrency(fees.stampingFee)})
+														</Typography>
+													</div>
+												</>
+											) : (
+												<>
+													{/* Old Fee Structure - for backward compatibility */}
+													{fees.originationFee > 0 && (
+														<div className="flex justify-between">
+															<div className="flex items-center gap-1">
+																<Typography className="text-gray-600">
+																	Origination Fee
+																</Typography>
+															</div>
+															<Typography className="text-red-600">
+																({formatCurrency(fees.originationFee)})
+															</Typography>
+														</div>
 													)}
-													)
-												</Typography>
-											</div>
-											<div className="flex justify-between">
-												<div className="flex items-center gap-1">
-													<Typography className="text-gray-600">
-														Application Fee
-													</Typography>
-													<Tooltip.Provider>
-														<Tooltip.Root
-															open={
-																openTooltip ===
-																"application"
-															}
-															onOpenChange={() =>
-																handleTooltipClick(
-																	"application"
-																)
-															}
-														>
-															<Tooltip.Trigger
-																asChild
-															>
-																<InfoIcon
-																	className="text-gray-400 cursor-pointer"
-																	fontSize="small"
-																	onClick={() =>
-																		handleTooltipClick(
-																			"application"
-																		)
-																	}
-																/>
-															</Tooltip.Trigger>
-															<Tooltip.Portal>
-																<Tooltip.Content
-																	className="bg-gray-800 text-white px-3 py-2 rounded-md text-sm max-w-xs"
-																	sideOffset={
-																		5
-																	}
-																>
-																	A
-																	non-refundable
-																	fee charged
-																	when you
-																	submit your
-																	loan
-																	application.
-																	This fee is
-																	deducted from
-																	your loan
-																	disbursement.
-																	<Tooltip.Arrow className="fill-gray-800" />
-																</Tooltip.Content>
-															</Tooltip.Portal>
-														</Tooltip.Root>
-													</Tooltip.Provider>
-												</div>
-												<Typography className="text-red-600">
-													(
-													{formatCurrency(
-														fees.applicationFee
+													{fees.legalFee > 0 && (
+														<div className="flex justify-between">
+															<div className="flex items-center gap-1">
+																<Typography className="text-gray-600">
+																	Legal Fee
+																</Typography>
+															</div>
+															<Typography className="text-red-600">
+																({formatCurrency(fees.legalFee)})
+															</Typography>
+														</div>
 													)}
-													)
-												</Typography>
-											</div>
+													{fees.applicationFee > 0 && (
+														<div className="flex justify-between">
+															<div className="flex items-center gap-1">
+																<Typography className="text-gray-600">
+																	Application Fee
+																</Typography>
+															</div>
+															<Typography className="text-red-600">
+																({formatCurrency(fees.applicationFee)})
+															</Typography>
+														</div>
+													)}
+												</>
+											)}
 										</div>
 									</div>
 
@@ -899,13 +841,11 @@ function ReviewAndSubmitFormContent({
 																		receive
 																		after
 																		deducting
-																		the
-																		origination
-																		fee,
+																		
 																		legal
-																		fee, and
-																		application
-																		fee from
+																	 and
+																		stamping
+																		fees from
 																		your
 																		loan
 																		amount.

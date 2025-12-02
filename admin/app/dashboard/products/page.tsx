@@ -30,6 +30,8 @@ interface Product {
 	originationFee: number;
 	legalFee: number;
 	applicationFee: number;
+	stampingFee: number;
+	legalFeeFixed: number;
 	requiredDocuments: string[];
 	features: string[];
 	loanTypes: string[];
@@ -114,6 +116,8 @@ export default function AdminProductsPage() {
 			originationFee: 0,
 			legalFee: 0,
 			applicationFee: 0,
+			stampingFee: 0,
+			legalFeeFixed: 0,
 			requiredDocuments: [],
 			features: [],
 			loanTypes: [],
@@ -170,6 +174,12 @@ export default function AdminProductsPage() {
 			if (formData.applicationFee === undefined || formData.applicationFee === null || formData.applicationFee < 0) {
 				validationErrors.push("Application Fee must be a valid positive number or 0");
 			}
+			if (formData.stampingFee === undefined || formData.stampingFee === null || formData.stampingFee < 0) {
+				validationErrors.push("Stamping Fee must be a valid positive number or 0");
+			}
+			if (formData.legalFeeFixed === undefined || formData.legalFeeFixed === null || formData.legalFeeFixed < 0) {
+				validationErrors.push("Legal Fee (Fixed) must be a valid positive number or 0");
+			}
 			
 			// Validate repayment terms
 			const validTerms = formData.repaymentTerms
@@ -202,6 +212,8 @@ export default function AdminProductsPage() {
 				originationFee: formData.originationFee ?? 0,
 				legalFee: formData.legalFee ?? 0,
 				applicationFee: formData.applicationFee ?? 0,
+				stampingFee: formData.stampingFee ?? 0,
+				legalFeeFixed: formData.legalFeeFixed ?? 0,
 				repaymentTerms: validTerms,
 			};
 
@@ -571,14 +583,11 @@ export default function AdminProductsPage() {
 											<div className="text-xs">
 												{(() => {
 													const fees = [];
-													if (product.applicationFee > 0) {
-														fees.push(`RM ${product.applicationFee}`);
+													if (product.legalFeeFixed > 0) {
+														fees.push(`RM ${product.legalFeeFixed} (Legal)`);
 													}
-													if (product.originationFee > 0) {
-														fees.push(`${product.originationFee}%`);
-													}
-													if (product.legalFee > 0) {
-														fees.push(`${product.legalFee}%`);
+													if (product.stampingFee > 0) {
+														fees.push(`${product.stampingFee}% (Stamping)`);
 													}
 													return fees.length > 0 ? fees.join(' + ') : 'No fees';
 												})()}
@@ -842,56 +851,40 @@ export default function AdminProductsPage() {
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Origination Fee (%)
+										Legal Fee (MYR)
 									</label>
 									<input
 										type="number"
 										step="0.01"
-										value={formData.originationFee ?? ""}
+										value={formData.legalFeeFixed ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												originationFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
+												legalFeeFixed: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
 										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+										placeholder="Fixed amount in MYR"
 									/>
 								</div>
 								<div>
 									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Legal Fee (%)
+										Stamping Fee (%)
 									</label>
 									<input
 										type="number"
 										step="0.01"
-										value={formData.legalFee ?? ""}
+										value={formData.stampingFee ?? ""}
 										onChange={(e) =>
 											setFormData({
 												...formData,
-												legalFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
+												stampingFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
 											})
 										}
 										onKeyDown={(e) => handleNumericKeyDown(e, true)}
 										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Application Fee (MYR)
-									</label>
-									<input
-										type="number"
-										step="0.01"
-										value={formData.applicationFee ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												applicationFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+										placeholder="Percentage of loan amount"
 									/>
 								</div>
 								<div>

@@ -19,6 +19,8 @@ interface ProductInput {
 	originationFee: number;
 	legalFee: number;
 	applicationFee: number;
+	stampingFee: number;
+	legalFeeFixed: number;
 	requiredDocuments: string[];
 	features: string[];
 	loanTypes: string[];
@@ -103,6 +105,8 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 					originationFee: true,
 					legalFee: true,
 					applicationFee: true,
+					stampingFee: true,
+					legalFeeFixed: true,
 					requiredDocuments: true,
 					features: true,
 					loanTypes: true,
@@ -142,6 +146,8 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 				originationFee: true,
 				legalFee: true,
 				applicationFee: true,
+				stampingFee: true,
+				legalFeeFixed: true,
 				requiredDocuments: true,
 				features: true,
 				loanTypes: true,
@@ -202,9 +208,11 @@ const createProduct: RequestHandler<{}, any, ProductInput> = async (
 				lateFeeRate: data.lateFeeRate,
 				lateFeeFixedAmount: data.lateFeeFixedAmount,
 				lateFeeFrequencyDays: data.lateFeeFrequencyDays,
-				originationFee: data.originationFee,
-				legalFee: data.legalFee,
-				applicationFee: data.applicationFee,
+				originationFee: data.originationFee || 0,
+				legalFee: data.legalFee || 0,
+				applicationFee: data.applicationFee || 0,
+				stampingFee: data.stampingFee || 0,
+				legalFeeFixed: data.legalFeeFixed || 0,
 				requiredDocuments: data.requiredDocuments,
 				features: data.features,
 				loanTypes: data.loanTypes,
@@ -283,9 +291,11 @@ const updateProduct: RequestHandler<ProductParams, any, ProductInput> = async (
 				lateFeeRate: data.lateFeeRate,
 				lateFeeFixedAmount: data.lateFeeFixedAmount,
 				lateFeeFrequencyDays: data.lateFeeFrequencyDays,
-				originationFee: data.originationFee,
-				legalFee: data.legalFee,
-				applicationFee: data.applicationFee,
+				originationFee: data.originationFee !== undefined ? data.originationFee : 0,
+				legalFee: data.legalFee !== undefined ? data.legalFee : 0,
+				applicationFee: data.applicationFee !== undefined ? data.applicationFee : 0,
+				stampingFee: data.stampingFee !== undefined ? data.stampingFee : 0,
+				legalFeeFixed: data.legalFeeFixed !== undefined ? data.legalFeeFixed : 0,
 				requiredDocuments: data.requiredDocuments,
 				features: data.features,
 				loanTypes: data.loanTypes,
@@ -402,6 +412,8 @@ const getProductById: RequestHandler<ProductParams> = async (req, res) => {
 				originationFee: true,
 				legalFee: true,
 				applicationFee: true,
+				stampingFee: true,
+				legalFeeFixed: true,
 				requiredDocuments: true,
 				features: true,
 				loanTypes: true,

@@ -488,6 +488,8 @@ function ApplyPageContent() {
 		interestRate: string;
 		legalFee: string;
 		originationFee: string;
+		stampingFee?: string;
+		legalFeeFixed?: string;
 		netDisbursement: string;
 	}) => {
 		const applicationId = searchParams.get("applicationId");
@@ -513,6 +515,8 @@ function ApplyPageContent() {
 						interestRate: parseFloat(details.interestRate),
 						legalFee: parseFloat(details.legalFee),
 						originationFee: parseFloat(details.originationFee),
+						stampingFee: details.stampingFee ? parseFloat(details.stampingFee) : undefined,
+						legalFeeFixed: details.legalFeeFixed ? parseFloat(details.legalFeeFixed) : undefined,
 						netDisbursement: parseFloat(details.netDisbursement),
 						appStep: 3, // This is correct as it's 1-based
 					}),

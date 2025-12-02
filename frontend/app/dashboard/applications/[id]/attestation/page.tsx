@@ -22,6 +22,8 @@ interface LoanApplication {
 	netDisbursement: number;
 	applicationFee?: number;
 	originationFee?: number;
+	stampingFee?: number;
+	legalFeeFixed?: number;
 	product: {
 		name: string;
 		code: string;
@@ -186,18 +188,35 @@ export default function AttestationPage() {
 
 	const calculateFees = (application: LoanApplication) => {
 		// Use the fees stored in the database instead of calculating them
-		const legalFee = application.legalFee;
 		const netDisbursement = application.netDisbursement;
+		
+		// Check if new fee structure is used - only if values are actually present (not null/undefined)
+		const hasStampingFee = application.stampingFee !== undefined && application.stampingFee !== null;
+		const hasLegalFeeFixed = application.legalFeeFixed !== undefined && application.legalFeeFixed !== null;
+		
+		const stampingFee = hasStampingFee ? application.stampingFee! : 0;
+		const legalFeeFixed = hasLegalFeeFixed ? application.legalFeeFixed! : 0;
+		
+		// Old fees for backward compatibility
+		const legalFee = application.legalFee || 0;
 		const applicationFee = application.applicationFee || 0;
 		const originationFee = application.originationFee || 0;
+		
+		// Determine which fee structure is being used - check if new fees actually exist
+		const isNewFeeStructure = hasStampingFee || hasLegalFeeFixed;
 
 		return {
 			interestRate: application.interestRate,
-			legalFee,
+			legalFee: isNewFeeStructure ? 0 : legalFee,
 			netDisbursement,
-			originationFee,
-			applicationFee,
-			totalFees: originationFee + legalFee + applicationFee,
+			originationFee: isNewFeeStructure ? 0 : originationFee,
+			applicationFee: isNewFeeStructure ? 0 : applicationFee,
+			stampingFee,
+			legalFeeFixed,
+			totalFees: isNewFeeStructure 
+				? (stampingFee + legalFeeFixed) 
+				: (originationFee + legalFee + applicationFee),
+			isNewFeeStructure,
 		};
 	};
 
