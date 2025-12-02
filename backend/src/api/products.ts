@@ -121,10 +121,15 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 
 			return res.json({
 				...product,
-				// Convert fees to proper format
-				originationFee: Number(product.originationFee), // Percentage
-				legalFee: Number(product.legalFee), // Fixed amount
-				applicationFee: Number(product.applicationFee), // Fixed amount
+				// Convert Decimal fields to numbers for proper JSON serialization
+				originationFee: Number(product.originationFee),
+				legalFee: Number(product.legalFee),
+				applicationFee: Number(product.applicationFee),
+				stampingFee: Number(product.stampingFee),
+				legalFeeFixed: Number(product.legalFeeFixed),
+				interestRate: Number(product.interestRate),
+				lateFeeRate: Number(product.lateFeeRate),
+				lateFeeFixedAmount: Number(product.lateFeeFixedAmount),
 			});
 		}
 
@@ -159,7 +164,20 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 			},
 		});
 
-		return res.json(products);
+		// Convert Decimal fields to numbers for proper JSON serialization
+		const productsWithNumbers = products.map(product => ({
+			...product,
+			originationFee: Number(product.originationFee),
+			legalFee: Number(product.legalFee),
+			applicationFee: Number(product.applicationFee),
+			stampingFee: Number(product.stampingFee),
+			legalFeeFixed: Number(product.legalFeeFixed),
+			interestRate: Number(product.interestRate),
+			lateFeeRate: Number(product.lateFeeRate),
+			lateFeeFixedAmount: Number(product.lateFeeFixedAmount),
+		}));
+
+		return res.json(productsWithNumbers);
 	} catch (error) {
 		console.error("Error fetching products:", error);
 		return res.status(500).json({ message: "Error fetching products" });

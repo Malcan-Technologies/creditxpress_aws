@@ -295,9 +295,8 @@ function AdminApplicationsPageContent() {
     useState("");
   const [freshOfferNetDisbursement, setFreshOfferNetDisbursement] =
     useState("");
-  const [freshOfferOriginationFee, setFreshOfferOriginationFee] = useState("");
-  const [freshOfferLegalFee, setFreshOfferLegalFee] = useState("");
-  const [freshOfferApplicationFee, setFreshOfferApplicationFee] = useState("");
+  const [freshOfferStampingFee, setFreshOfferStampingFee] = useState("");
+  const [freshOfferLegalFeeFixed, setFreshOfferLegalFeeFixed] = useState("");
   const [freshOfferNotes, setFreshOfferNotes] = useState("");
   const [freshOfferProductId, setFreshOfferProductId] = useState("");
   const [feeEditMode, setFeeEditMode] = useState(false);
@@ -1667,9 +1666,8 @@ function AdminApplicationsPageContent() {
       !freshOfferInterestRate ||
       !freshOfferMonthlyRepayment ||
       !freshOfferNetDisbursement ||
-      !freshOfferOriginationFee ||
-      !freshOfferLegalFee ||
-      !freshOfferApplicationFee ||
+      !freshOfferStampingFee ||
+      !freshOfferLegalFeeFixed ||
       !freshOfferProductId
     ) {
       setError(
@@ -1679,25 +1677,33 @@ function AdminApplicationsPageContent() {
     }
 
     // Show confirmation dialog with fee breakdown
-    const legalFeeValue = parseFloat(freshOfferLegalFee) || 0;
-    const originationFeeValue = parseFloat(freshOfferOriginationFee) || 0;
-    const applicationFeeValue = parseFloat(freshOfferApplicationFee) || 0;
-    const totalFees = legalFeeValue + originationFeeValue + applicationFeeValue;
+    const legalFeeValue = parseFloat(freshOfferLegalFeeFixed) || 0;
+    const stampingFeeValue = parseFloat(freshOfferStampingFee) || 0;
+    const totalFees = legalFeeValue + stampingFeeValue;
+    const loanAmount = parseFloat(freshOfferAmount) || 0;
+
+    // Get product info to show stamping fee percentage
+    const selectedProduct = products.find((p) => p.id === freshOfferProductId);
+    const productStampingFeePercentage = selectedProduct?.stampingFee || 0;
+    const calculatedStampingFee = (loanAmount * productStampingFeePercentage) / 100;
+    
+    // Calculate actual percentage being charged (reverse-calculate from amount)
+    const actualStampingFeePercentage = loanAmount > 0 ? (stampingFeeValue / loanAmount) * 100 : 0;
+    const isManuallyAdjusted = Math.abs(stampingFeeValue - calculatedStampingFee) > 0.01;
 
     const confirmMessage = `Are you sure you want to submit a fresh offer to ${
       selectedApplication.user?.fullName
     }?
 
 LOAN TERMS:
-• Loan Amount: RM${parseFloat(freshOfferAmount).toFixed(2)}
+• Loan Amount: RM${loanAmount.toFixed(2)}
 • Term: ${freshOfferTerm} months
 • Interest Rate: ${freshOfferInterestRate}% monthly
 • Monthly Repayment: RM${parseFloat(freshOfferMonthlyRepayment).toFixed(2)}
 
 FEES:
-• Origination Fee: RM${originationFeeValue.toFixed(2)}
-• Legal Fee: RM${legalFeeValue.toFixed(2)}
-• Application Fee: RM${applicationFeeValue.toFixed(2)}
+• Legal Fee (Fixed): RM${legalFeeValue.toFixed(2)}
+• Stamping Fee${isManuallyAdjusted ? ` (${actualStampingFeePercentage.toFixed(2)}% - manually adjusted)` : ` (${productStampingFeePercentage}%)`}: RM${stampingFeeValue.toFixed(2)}
 • Total Fees: RM${totalFees.toFixed(2)}
 
 NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
@@ -1721,9 +1727,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
             interestRate: parseFloat(freshOfferInterestRate),
             monthlyRepayment: parseFloat(freshOfferMonthlyRepayment),
             netDisbursement: parseFloat(freshOfferNetDisbursement),
-            originationFee: parseFloat(freshOfferOriginationFee),
-            legalFee: parseFloat(freshOfferLegalFee),
-            applicationFee: parseFloat(freshOfferApplicationFee),
+            stampingFee: parseFloat(freshOfferStampingFee),
+            legalFeeFixed: parseFloat(freshOfferLegalFeeFixed),
             productId: freshOfferProductId,
             notes: freshOfferNotes,
           }),
@@ -1737,9 +1742,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       setFreshOfferInterestRate("");
       setFreshOfferMonthlyRepayment("");
       setFreshOfferNetDisbursement("");
-      setFreshOfferOriginationFee("");
-      setFreshOfferLegalFee("");
-      setFreshOfferApplicationFee("");
+      setFreshOfferStampingFee("");
+      setFreshOfferLegalFeeFixed("");
       setFreshOfferProductId("");
       setFreshOfferNotes("");
       setFeeEditMode(false); // Reset edit mode after successful submission
@@ -1814,34 +1818,36 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       const selectedProduct = products.find(
         (p) => p.id === freshOfferProductId
       );
+      
       if (selectedProduct) {
-        // Always auto-calculate fees (percentage is stored as whole number, e.g., 3 = 3%)
-        const legalFeeValue = (amount * selectedProduct.legalFee) / 100;
-        const originationFeeValue =
-          (amount * selectedProduct.originationFee) / 100;
-        const applicationFeeValue = selectedProduct.applicationFee;
+        // Calculate new fee structure: legal fee (fixed) and stamping fee (%)
+        const legalFeeValue = selectedProduct.legalFeeFixed || 0;
+        const stampingFeeValue = (amount * (selectedProduct.stampingFee || 0)) / 100;
 
-        // Only update fee inputs if not in edit mode and fees haven't been manually saved
         if (!feeEditMode && !feesSavedManually) {
-          setFreshOfferLegalFee(legalFeeValue.toFixed(2));
-          setFreshOfferOriginationFee(originationFeeValue.toFixed(2));
-          setFreshOfferApplicationFee(applicationFeeValue.toFixed(2));
+          // Auto-mode: Set both legal fee (fixed) and stamping fee (calculated)
+          setFreshOfferLegalFeeFixed(legalFeeValue.toFixed(2));
+          setFreshOfferStampingFee(stampingFeeValue.toFixed(2));
 
-          // Calculate net disbursement with auto-calculated values
-          const netDisbursement =
-            amount - legalFeeValue - originationFeeValue - applicationFeeValue;
+          // Calculate net disbursement
+          const netDisbursement = amount - legalFeeValue - stampingFeeValue;
+          setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
+        } else {
+          // Manual mode: Only recalculate stamping fee (based on percentage), keep legal fee as-is
+          setFreshOfferStampingFee(stampingFeeValue.toFixed(2));
+          
+          // Recalculate net disbursement with current legal fee and new stamping fee
+          const currentLegalFee = parseFloat(freshOfferLegalFeeFixed) || 0;
+          const netDisbursement = amount - currentLegalFee - stampingFeeValue;
           setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
         }
-        // If in edit mode or fees were manually saved, don't touch the net disbursement
-        // It will be calculated by handleFeeChange or handleSaveFees
       }
     } else if (!amount) {
       // Clear all calculated fields if amount is empty
       setFreshOfferMonthlyRepayment("");
       setFreshOfferNetDisbursement("");
-      setFreshOfferLegalFee("");
-      setFreshOfferOriginationFee("");
-      setFreshOfferApplicationFee("");
+      setFreshOfferLegalFeeFixed("");
+      setFreshOfferStampingFee("");
       setFeeEditMode(false); // Reset edit mode when clearing
       setFeesSavedManually(false); // Reset manual flag when clearing
     }
@@ -1854,16 +1860,14 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
 
   // Handle manual fee changes during edit mode
   const handleFeeChange = (
-    feeType: "legal" | "origination" | "application",
+    feeType: "legalFixed" | "stamping",
     value: string
   ) => {
     // Update the specific fee state
-    if (feeType === "legal") {
-      setFreshOfferLegalFee(value);
-    } else if (feeType === "origination") {
-      setFreshOfferOriginationFee(value);
-    } else if (feeType === "application") {
-      setFreshOfferApplicationFee(value);
+    if (feeType === "legalFixed") {
+      setFreshOfferLegalFeeFixed(value);
+    } else if (feeType === "stamping") {
+      setFreshOfferStampingFee(value);
     }
 
     // Immediately update net disbursement if we have amount and are in edit mode
@@ -1876,19 +1880,14 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
         return isNaN(parsed) ? 0 : parsed;
       };
 
-      const legalFee =
-        feeType === "legal" ? getValue(value) : getValue(freshOfferLegalFee);
-      const originationFee =
-        feeType === "origination"
+      const legalFeeFixed =
+        feeType === "legalFixed" ? getValue(value) : getValue(freshOfferLegalFeeFixed);
+      const stampingFee =
+        feeType === "stamping"
           ? getValue(value)
-          : getValue(freshOfferOriginationFee);
-      const applicationFee =
-        feeType === "application"
-          ? getValue(value)
-          : getValue(freshOfferApplicationFee);
+          : getValue(freshOfferStampingFee);
 
-      const netDisbursement =
-        amount - legalFee - originationFee - applicationFee;
+      const netDisbursement = amount - legalFeeFixed - stampingFee;
       setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
     }
   };
@@ -1903,12 +1902,10 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
         return isNaN(parsed) ? 0 : parsed;
       };
 
-      const legalFeeValue = getValue(freshOfferLegalFee);
-      const originationFeeValue = getValue(freshOfferOriginationFee);
-      const applicationFeeValue = getValue(freshOfferApplicationFee);
+      const legalFeeValue = getValue(freshOfferLegalFeeFixed);
+      const stampingFeeValue = getValue(freshOfferStampingFee);
 
-      const netDisbursement =
-        amount - legalFeeValue - originationFeeValue - applicationFeeValue;
+      const netDisbursement = amount - legalFeeValue - stampingFeeValue;
       setFreshOfferNetDisbursement(netDisbursement.toFixed(2));
     }
 
@@ -1936,24 +1933,36 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       setFreshOfferNetDisbursement(
         selectedApplication.netDisbursement?.toString() || ""
       );
-      setFreshOfferOriginationFee(
-        (selectedApplication as any).originationFee?.toString() || ""
+      
+      // Populate fees from existing application data
+      const existingStampingFee = (selectedApplication as any).stampingFee;
+      const existingLegalFeeFixed = (selectedApplication as any).legalFeeFixed;
+      
+      setFreshOfferStampingFee(
+        existingStampingFee?.toString() || ""
       );
-      setFreshOfferLegalFee(
-        (selectedApplication as any).legalFee?.toString() || ""
+      setFreshOfferLegalFeeFixed(
+        existingLegalFeeFixed?.toString() || ""
       );
-      setFreshOfferApplicationFee(
-        (selectedApplication as any).applicationFee?.toString() || ""
-      );
+      
       setFreshOfferProductId(selectedApplication.productId || "");
       setFreshOfferNotes("");
       setFeeEditMode(false); // Reset edit mode when populating form
-      setFeesSavedManually(false); // Reset manual flag when populating form
+      
+      // Mark fees as manually saved only if they exist AND have meaningful values (not 0)
+      // This prevents auto-calculation from overwriting actual existing fees
+      // but allows recalculation if fees were 0 or null
+      if (existingStampingFee > 0 || existingLegalFeeFixed > 0) {
+        setFeesSavedManually(true);
+      } else {
+        setFeesSavedManually(false);
+      }
+      
       setShowFreshOfferForm(true);
     }
   };
 
-  // Auto-calculate when fresh offer values change (exclude feeEditMode to prevent race conditions)
+  // Auto-calculate when fresh offer values change
   useEffect(() => {
     if (showFreshOfferForm) {
       updateCalculatedFields();
@@ -1964,17 +1973,8 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
     freshOfferInterestRate,
     freshOfferProductId,
     products,
+    showFreshOfferForm,
   ]);
-
-  // Reset edit mode and manual flag when amount changes, then recalculate
-  useEffect(() => {
-    if (freshOfferAmount && (feeEditMode || feesSavedManually)) {
-      setFeeEditMode(false);
-      setFeesSavedManually(false); // Reset manual flag to allow auto-calculation
-      // Trigger recalculation after resetting flags
-      setTimeout(() => updateCalculatedFields(), 0);
-    }
-  }, [freshOfferAmount]);
 
   if (loading) {
     return (
@@ -3513,79 +3513,10 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   </button>
                                 )}
                               </div>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <label className="block text-sm font-medium text-gray-300 mb-1">
-                                    Origination Fee (RM)
-                                  </label>
-                                  {products.find(
-                                    (p) => p.id === freshOfferProductId
-                                  ) && (
-                                    <p className="text-xs text-gray-400 mb-2">
-                                      Auto:{" "}
-                                      {
-                                        products.find(
-                                          (p) => p.id === freshOfferProductId
-                                        )?.originationFee
-                                      }
-                                      % of loan amount
-                                    </p>
-                                  )}
-                                  <input
-                                    type="number"
-                                    value={freshOfferOriginationFee}
-                                    onChange={(e) =>
-                                      handleFeeChange(
-                                        "origination",
-                                        e.target.value
-                                      )
-                                    }
-                                    disabled={!feeEditMode}
-                                    placeholder="Auto-calculated"
-                                    className={`w-full px-3 py-2 border rounded-lg transition-colors step-0.01 ${
-                                      feeEditMode
-                                        ? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                        : "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
-                                    }`}
-                                    step="0.01"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                                    Legal Fee (RM)
-                                  </label>
-                                  {products.find(
-                                    (p) => p.id === freshOfferProductId
-                                  ) && (
-                                    <p className="text-xs text-gray-400 mb-2">
-                                      Auto:{" "}
-                                      {
-                                        products.find(
-                                          (p) => p.id === freshOfferProductId
-                                        )?.legalFee
-                                      }
-                                      % of loan amount
-                                    </p>
-                                  )}
-                                  <input
-                                    type="number"
-                                    value={freshOfferLegalFee}
-                                    onChange={(e) =>
-                                      handleFeeChange("legal", e.target.value)
-                                    }
-                                    disabled={!feeEditMode}
-                                    placeholder="Auto-calculated"
-                                    className={`w-full px-3 py-2 border rounded-lg transition-colors ${
-                                      feeEditMode
-                                        ? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                        : "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
-                                    }`}
-                                    step="0.01"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                                    Application Fee (RM)
+                                    Legal Fee (Fixed Amount - RM)
                                   </label>
                                   {products.find(
                                     (p) => p.id === freshOfferProductId
@@ -3595,23 +3526,54 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                       {
                                         products.find(
                                           (p) => p.id === freshOfferProductId
-                                        )?.applicationFee
+                                        )?.legalFeeFixed
                                       }{" "}
                                       fixed
                                     </p>
                                   )}
                                   <input
                                     type="number"
-                                    value={freshOfferApplicationFee}
+                                    value={freshOfferLegalFeeFixed}
+                                    onChange={(e) =>
+                                      handleFeeChange("legalFixed", e.target.value)
+                                    }
+                                    disabled={!feeEditMode}
+                                    placeholder="Auto-calculated"
+                                    className={`w-full px-3 py-2 border rounded-lg transition-colors ${
+                                      feeEditMode
+                                        ? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                        : "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
+                                    }`}
+                                    step="0.01"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                                    Stamping Fee (RM)
+                                  </label>
+                                  {products.find(
+                                    (p) => p.id === freshOfferProductId
+                                  ) && (
+                                    <p className="text-xs text-gray-400 mb-2">
+                                      Auto: {
+                                        products.find(
+                                          (p) => p.id === freshOfferProductId
+                                        )?.stampingFee
+                                      }% of loan amount (calculated)
+                                    </p>
+                                  )}
+                                  <input
+                                    type="number"
+                                    value={freshOfferStampingFee}
                                     onChange={(e) =>
                                       handleFeeChange(
-                                        "application",
+                                        "stamping",
                                         e.target.value
                                       )
                                     }
                                     disabled={!feeEditMode}
                                     placeholder="Auto-calculated"
-                                    className={`w-full px-3 py-2 border rounded-lg transition-colors ${
+                                    className={`w-full px-3 py-2 border rounded-lg transition-colors step-0.01 ${
                                       feeEditMode
                                         ? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         : "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"

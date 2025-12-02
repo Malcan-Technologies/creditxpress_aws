@@ -209,10 +209,14 @@ interface LoanApplication {
 	monthlyRepayment?: number;
 	interestRate?: number;
 	netDisbursement?: number;
+	// Old fee structure (kept for backward compatibility)
 	applicationFee?: number;
 	originationFee?: number;
 	legalFee?: number;
-	// Fresh offer fields
+	// New fee structure
+	stampingFee?: number;
+	legalFeeFixed?: number;
+	// Fresh offer fields - old structure
 	freshOfferAmount?: number;
 	freshOfferTerm?: number;
 	freshOfferInterestRate?: number;
@@ -221,6 +225,9 @@ interface LoanApplication {
 	freshOfferOriginationFee?: number;
 	freshOfferLegalFee?: number;
 	freshOfferApplicationFee?: number;
+	// Fresh offer fields - new structure
+	freshOfferStampingFee?: number;
+	freshOfferLegalFeeFixed?: number;
 	freshOfferNotes?: string;
 	freshOfferSubmittedAt?: string;
 	createdAt: string;
@@ -1241,6 +1248,7 @@ function LoansPageContent() {
 	};
 
 	// Helper functions to get fee values (fresh offer or original) with null handling
+	// Old fee structure helpers (for backward compatibility)
 	const getDisplayOriginationFee = (app: LoanApplication) => {
 		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferOriginationFee !== undefined) {
 			return app.freshOfferOriginationFee;
@@ -1260,6 +1268,31 @@ function LoansPageContent() {
 			return app.freshOfferApplicationFee;
 		}
 		return app.applicationFee || 0; // Default to 0 if null/undefined
+	};
+
+	// New fee structure helpers
+	const getDisplayStampingFee = (app: LoanApplication) => {
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferStampingFee !== undefined) {
+			return app.freshOfferStampingFee;
+		}
+		return app.stampingFee || 0; // Default to 0 if null/undefined
+	};
+
+	const getDisplayLegalFeeFixed = (app: LoanApplication) => {
+		if (app.status === "PENDING_FRESH_OFFER" && app.freshOfferLegalFeeFixed !== undefined) {
+			return app.freshOfferLegalFeeFixed;
+		}
+		return app.legalFeeFixed || 0; // Default to 0 if null/undefined
+	};
+
+	// Helper to check if application uses new fee structure
+	const usesNewFeeStructure = (app: LoanApplication) => {
+		// Check if fresh offer has new fees
+		if (app.status === "PENDING_FRESH_OFFER") {
+			return app.freshOfferStampingFee !== undefined || app.freshOfferLegalFeeFixed !== undefined;
+		}
+		// Check if application has new fees
+		return app.stampingFee !== undefined || app.legalFeeFixed !== undefined;
 	};
 
 	// Helper function to check if any value has changed
@@ -5063,83 +5096,143 @@ function LoansPageContent() {
 																						</div>
 																					</div>
 																					<div className="space-y-4">
-																						{/* Origination Fee */}
-																						<div className="flex justify-between items-center">
-																							<span className="text-sm text-gray-600">Origination Fee</span>
-																							<div className="text-right">
-																								{hasValueChanged(app.originationFee, app.freshOfferOriginationFee) ? (
-																									<div className="space-y-1">
-																										<span className="text-sm font-medium text-gray-700">
-																											{formatCurrency(app.freshOfferOriginationFee || 0)}
-																										</span>
-																										<div className="text-xs text-gray-400">
-																											Previously: {formatCurrency(app.originationFee || 0)}
-																										</div>
+																						{/* Show new fee structure if available, otherwise show old */}
+																						{usesNewFeeStructure(app) ? (
+																							<>
+																								{/* Legal Fee (Fixed) */}
+																								<div className="flex justify-between items-center">
+																									<span className="text-sm text-gray-600">Legal Fee (Fixed)</span>
+																									<div className="text-right">
+																										{hasValueChanged(app.legalFeeFixed, app.freshOfferLegalFeeFixed) ? (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(app.freshOfferLegalFeeFixed || 0)}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													Previously: {formatCurrency(app.legalFeeFixed || 0)}
+																												</div>
+																											</div>
+																										) : (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(getDisplayLegalFeeFixed(app))}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													No change
+																												</div>
+																											</div>
+																										)}
 																									</div>
-																								) : (
-																									<div className="space-y-1">
-																										<span className="text-sm font-medium text-gray-700">
-																											{formatCurrency(getDisplayOriginationFee(app))}
-																										</span>
-																										<div className="text-xs text-gray-400">
-																											No change
-																										</div>
-																									</div>
-																								)}
-																							</div>
-																						</div>
+																								</div>
 
-																						{/* Legal Fee */}
-																						<div className="flex justify-between items-center">
-																							<span className="text-sm text-gray-600">Legal Fee</span>
-																							<div className="text-right">
-																								{hasValueChanged(app.legalFee, app.freshOfferLegalFee) ? (
-																									<div className="space-y-1">
-																										<span className="text-sm font-medium text-gray-700">
-																											{formatCurrency(app.freshOfferLegalFee || 0)}
-																										</span>
-																										<div className="text-xs text-gray-400">
-																											Previously: {formatCurrency(app.legalFee || 0)}
-																										</div>
+																								{/* Stamping Fee */}
+																								<div className="flex justify-between items-center">
+																									<span className="text-sm text-gray-600">Stamping Fee</span>
+																									<div className="text-right">
+																										{hasValueChanged(app.stampingFee, app.freshOfferStampingFee) ? (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(app.freshOfferStampingFee || 0)}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													Previously: {formatCurrency(app.stampingFee || 0)}
+																												</div>
+																											</div>
+																										) : (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(getDisplayStampingFee(app))}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													No change
+																												</div>
+																											</div>
+																										)}
 																									</div>
-																								) : (
-																									<div className="space-y-1">
-																										<span className="text-sm font-medium text-gray-700">
-																											{formatCurrency(getDisplayLegalFee(app))}
-																										</span>
-																										<div className="text-xs text-gray-400">
-																											No change
-																										</div>
+																								</div>
+																							</>
+																						) : (
+																							<>
+																								{/* Old fee structure */}
+																								{/* Origination Fee */}
+																								<div className="flex justify-between items-center">
+																									<span className="text-sm text-gray-600">Origination Fee</span>
+																									<div className="text-right">
+																										{hasValueChanged(app.originationFee, app.freshOfferOriginationFee) ? (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(app.freshOfferOriginationFee || 0)}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													Previously: {formatCurrency(app.originationFee || 0)}
+																												</div>
+																											</div>
+																										) : (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(getDisplayOriginationFee(app))}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													No change
+																												</div>
+																											</div>
+																										)}
 																									</div>
-																								)}
-																							</div>
-																						</div>
+																								</div>
 
-																						{/* Application Fee */}
-																						<div className="flex justify-between items-center">
-																							<span className="text-sm text-gray-600">Application Fee</span>
-																							<div className="text-right">
-																								{hasValueChanged(app.applicationFee, app.freshOfferApplicationFee) ? (
-																									<div className="space-y-1">
-																										<span className="text-sm font-medium text-gray-700">
-																											{formatCurrency(app.freshOfferApplicationFee || 0)}
-																										</span>
-																										<div className="text-xs text-gray-400">
-																											Previously: {formatCurrency(app.applicationFee || 0)}
-																										</div>
+																								{/* Legal Fee */}
+																								<div className="flex justify-between items-center">
+																									<span className="text-sm text-gray-600">Legal Fee</span>
+																									<div className="text-right">
+																										{hasValueChanged(app.legalFee, app.freshOfferLegalFee) ? (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(app.freshOfferLegalFee || 0)}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													Previously: {formatCurrency(app.legalFee || 0)}
+																												</div>
+																											</div>
+																										) : (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(getDisplayLegalFee(app))}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													No change
+																												</div>
+																											</div>
+																										)}
 																									</div>
-																								) : (
-																									<div className="space-y-1">
-																										<span className="text-sm font-medium text-gray-700">
-																											{formatCurrency(getDisplayApplicationFee(app))}
-																										</span>
-																										<div className="text-xs text-gray-400">
-																											No change
-																										</div>
+																								</div>
+
+																								{/* Application Fee */}
+																								<div className="flex justify-between items-center">
+																									<span className="text-sm text-gray-600">Application Fee</span>
+																									<div className="text-right">
+																										{hasValueChanged(app.applicationFee, app.freshOfferApplicationFee) ? (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(app.freshOfferApplicationFee || 0)}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													Previously: {formatCurrency(app.applicationFee || 0)}
+																												</div>
+																											</div>
+																										) : (
+																											<div className="space-y-1">
+																												<span className="text-sm font-medium text-gray-700">
+																													{formatCurrency(getDisplayApplicationFee(app))}
+																												</span>
+																												<div className="text-xs text-gray-400">
+																													No change
+																												</div>
+																											</div>
+																										)}
 																									</div>
-																								)}
-																							</div>
-																						</div>
+																								</div>
+																							</>
+																						)}
 																					</div>
 																				</div>
 																			</div>

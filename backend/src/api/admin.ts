@@ -11241,6 +11241,8 @@ router.get(
 					originationFee: true,
 					legalFee: true,
 					applicationFee: true,
+					stampingFee: true,
+					legalFeeFixed: true,
 					requiredDocuments: true,
 					features: true,
 					loanTypes: true,
@@ -11252,7 +11254,20 @@ router.get(
 				},
 			});
 
-			return res.json(products);
+			// Convert Decimal fields to numbers for proper JSON serialization
+			const productsWithNumbers = products.map(product => ({
+				...product,
+				originationFee: Number(product.originationFee),
+				legalFee: Number(product.legalFee),
+				applicationFee: Number(product.applicationFee),
+				stampingFee: Number(product.stampingFee),
+				legalFeeFixed: Number(product.legalFeeFixed),
+				interestRate: Number(product.interestRate),
+				lateFeeRate: Number(product.lateFeeRate),
+				lateFeeFixedAmount: Number(product.lateFeeFixedAmount),
+			}));
+
+			return res.json(productsWithNumbers);
 		} catch (error) {
 			console.error("Error fetching products:", error);
 			return res.status(500).json({ message: "Internal server error" });
