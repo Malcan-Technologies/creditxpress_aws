@@ -14,13 +14,25 @@ All endpoints should use: `{NEXT_PUBLIC_API_URL}/api/auth/`
 
 **Endpoint:** `POST /api/auth/signup`
 
+**Request Headers:**
+```
+Content-Type: application/json
+```
+
 **Request Body:**
 ```json
 {
-  "phoneNumber": "60123456789",  // E.164 format (country code + number, no spaces/special chars)
+  "phoneNumber": "60123456789",  // E.164 format WITHOUT + symbol (country code + number, no spaces/special chars)
   "password": "YourPassword123!"  // Min 8 chars, 1 uppercase, 1 special char, no spaces
 }
 ```
+
+**IMPORTANT:** Phone number must be in E.164 format **without the `+` symbol**. Examples:
+- ✅ Correct: `"60123456789"` (Malaysia)
+- ✅ Correct: `"6598765432"` (Singapore)
+- ❌ Wrong: `"+60123456789"` (has + symbol)
+- ❌ Wrong: `"60 12 345 6789"` (has spaces)
+- ❌ Wrong: `"012-345-6789"` (has dashes, missing country code)
 
 **Success Response (200):**
 ```json
