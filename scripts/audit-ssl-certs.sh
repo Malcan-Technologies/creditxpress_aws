@@ -28,6 +28,7 @@ DOMAINS=(
     "creditxpress.com.my:443"
     "www.creditxpress.com.my:443"
     "admin.creditxpress.com.my:443"
+    "api.creditxpress.com.my:443"
     "sign.creditxpress.com.my:443"
 )
 
@@ -281,7 +282,7 @@ download_server_cert() {
 
 # Main menu
 echo -e "${YELLOW}Select audit scope:${NC}"
-echo "1) Check all public domains (kredit.my, api.kredit.my, etc.)"
+echo "1) Check all public domains (creditxpress.com.my, api.creditxpress.com.my, etc.)"
 echo "2) Audit VPS server certificates"
 echo "3) Audit On-Prem server certificates"
 echo "4) Download specific certificate from server"

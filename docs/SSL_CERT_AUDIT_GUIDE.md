@@ -125,7 +125,7 @@ bash scripts/audit-ssl-certs.sh
 
 **View certificate details:**
 ```bash
-openssl x509 -in ssl_certs_*/kredit.my.crt -text -noout
+openssl x509 -in ssl_certs_*/creditxpress.com.my.crt -text -noout
 ```
 
 ### Audit Report
@@ -263,7 +263,7 @@ bash scripts/audit-ssl-certs.sh
 bash scripts/audit-ssl-certs.sh
 
 # Or manually
-openssl x509 -in ssl_certs_*/kredit.my.crt -noout -fingerprint -sha256
+openssl x509 -in ssl_certs_*/creditxpress.com.my.crt -noout -fingerprint -sha256
 ```
 
 ---
@@ -287,12 +287,12 @@ openssl x509 -in certificate.crt -noout -fingerprint -sha256
 
 ### View Certificate from Remote Server
 ```bash
-echo | openssl s_client -servername kredit.my -connect kredit.my:443 2>/dev/null | openssl x509 -noout -text
+echo | openssl s_client -servername creditxpress.com.my -connect creditxpress.com.my:443 2>/dev/null | openssl x509 -noout -text
 ```
 
 ### Check Certificate Chain
 ```bash
-openssl s_client -showcerts -servername kredit.my -connect kredit.my:443 < /dev/null
+openssl s_client -showcerts -servername creditxpress.com.my -connect creditxpress.com.my:443 < /dev/null
 ```
 
 ### Verify Certificate Against Private Key
@@ -331,7 +331,7 @@ sudo certbot renew --dry-run
 **Renew specific domain:**
 ```bash
 ssh root@100.85.61.82
-sudo certbot renew --cert-name kredit.my
+sudo certbot renew --cert-name creditxpress.com.my
 ```
 
 ### After Renewal
@@ -370,14 +370,14 @@ bash scripts/audit-ssl-certs.sh  # Option 4
 openssl x509 -in downloaded_cert.crt -text -noout
 
 # Check if intermediate certificates are included
-openssl s_client -showcerts -connect kredit.my:443 < /dev/null | grep -c "BEGIN CERTIFICATE"
+openssl s_client -showcerts -connect creditxpress.com.my:443 < /dev/null | grep -c "BEGIN CERTIFICATE"
 # Should be 2 or more (server cert + intermediates)
 ```
 
 ### Wrong Certificate Served
 ```bash
 # Check SNI (Server Name Indication)
-openssl s_client -servername kredit.my -connect kredit.my:443 < /dev/null | openssl x509 -noout -subject
+openssl s_client -servername creditxpress.com.my -connect creditxpress.com.my:443 < /dev/null | openssl x509 -noout -subject
 
 # Check nginx configuration
 ssh root@100.85.61.82
@@ -388,8 +388,8 @@ sudo grep -r "ssl_certificate" /etc/nginx/sites-enabled/
 ```bash
 # Verify certificate matches private key
 ssh root@100.85.61.82
-sudo openssl x509 -in /etc/letsencrypt/live/kredit.my/cert.pem -noout -modulus | openssl md5
-sudo openssl rsa -in /etc/letsencrypt/live/kredit.my/privkey.pem -noout -modulus | openssl md5
+sudo openssl x509 -in /etc/letsencrypt/live/creditxpress.com.my/cert.pem -noout -modulus | openssl md5
+sudo openssl rsa -in /etc/letsencrypt/live/creditxpress.com.my/privkey.pem -noout -modulus | openssl md5
 # MD5 hashes should match
 ```
 
