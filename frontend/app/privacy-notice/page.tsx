@@ -40,7 +40,7 @@ export default function PrivacyNotice() {
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">1. Data Controller & Contact</h2>
 							<p className="mb-2"><strong>OPG Capital Holdings Sdn Bhd (202101043135)</strong></p>
 							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia</p>
-							<p><strong>Email:</strong> opgcapital3@gmail.com (Office hours: 9:00 AM – 5:00 PM, Mon–Fri)</p>
+							<p><strong>Email:</strong> hello@creditxpress.com.my (Office hours: 9:00 AM – 5:00 PM, Mon–Fri)</p>
 						</section>
 
 						<section className="mb-8">
@@ -120,16 +120,33 @@ export default function PrivacyNotice() {
 						</section>
 
 						<section className="mb-8">
-							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">10. Your Rights</h2>
-							<p className="mb-2">Subject to PDPA and lawful exceptions, you may:</p>
-							<ul className="list-disc pl-6 space-y-2">
-								<li><strong>Access</strong> your personal data;</li>
-								<li><strong>Request correction</strong> of inaccurate/incomplete data;</li>
-								<li><strong>Withdraw consent</strong> (where applicable); withdrawal may affect our ability to provide Services;</li>
-								<li><strong>Object to</strong> or <strong>restrict</strong> certain processing where provided by law.</li>
+							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">10. Account Closure and Personal Data Deletion</h2>
+							<p className="mb-4">
+								You may request the closure of your CreditXpress account and/or the deletion of your personal data, 
+								subject to applicable laws and regulatory requirements.
+							</p>
+							<p className="mb-4">
+								Account closure is not available for accounts with active or outstanding loan obligations.
+							</p>
+							<p className="mb-4">
+								Details on eligibility, procedures, and data retention are set out in:
+							</p>
+							<ul className="list-disc pl-6 space-y-2 mb-4">
+								<li>
+									<strong>Account & Personal Data Deletion:</strong><br />
+									<a href="https://creditxpress.com.my/account-and-data-deletion" className="text-purple-primary hover:text-purple-700">
+										https://creditxpress.com.my/account-and-data-deletion
+									</a>
+								</li>
+								<li>
+									<strong>Privacy Policy:</strong><br />
+									<a href="https://creditxpress.com.my/privacy-policy" className="text-purple-primary hover:text-purple-700">
+										https://creditxpress.com.my/privacy-policy
+									</a>
+								</li>
 							</ul>
-							<p className="mt-4">
-								Requests: <strong>opgcapital3@gmail.com</strong>.
+							<p>
+								Requests may be submitted via the channels specified in the links above.
 							</p>
 						</section>
 
@@ -142,7 +159,7 @@ export default function PrivacyNotice() {
 						</section>
 
 						<section className="mb-8">
-							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">12. Children's Data</h2>
+							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">12. Children&apos;s Data</h2>
 							<p>
 								Our Services are not intended for individuals under 18. We do not knowingly collect such data.
 							</p>
@@ -151,7 +168,7 @@ export default function PrivacyNotice() {
 						<section className="mb-8">
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">13. Updates</h2>
 							<p>
-								We may update this Notice and will post the revised version with a new "Last updated" date.
+								We may update this Notice and will post the revised version with a new &quot;Last updated&quot; date.
 							</p>
 						</section>
 					</div>
