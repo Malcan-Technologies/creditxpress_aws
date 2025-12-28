@@ -104,6 +104,22 @@ export default function Footer() {
 										Risk Disclosure
 									</Link>
 								</li>
+								<li>
+									<Link
+										href="/privacy-policy"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Privacy Policy
+									</Link>
+								</li>
+								<li>
+									<Link
+										href="/account-and-data-deletion"
+										className="text-gray-300 hover:text-purple-400 transition-colors font-body"
+									>
+										Account & Data Deletion
+									</Link>
+								</li>
 							</ul>
 						</div>
 					</div>
