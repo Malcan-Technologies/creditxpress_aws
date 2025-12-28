@@ -25,7 +25,7 @@ export default function AccountAndDataDeletion() {
 							Account & Personal Data Deletion
 						</h1>
 						<p className="text-sm text-gray-500 font-body">
-							Last updated: 28 December 2024
+							Last updated: 28 December 2025
 						</p>
 					</div>
 

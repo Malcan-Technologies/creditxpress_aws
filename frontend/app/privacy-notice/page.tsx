@@ -25,7 +25,7 @@ export default function PrivacyNotice() {
 							Privacy Notice
 						</h1>
 						<p className="text-sm text-gray-500 font-body">
-							Last updated: 28 October 2025
+							Last updated: 28 December 2025
 						</p>
 					</div>
 
