@@ -57,8 +57,12 @@ Thumbs.db
 
 # Environment files
 .env
-.env.*
-!.env.example
+.env.local
+.env.development
+.env.production
+.env.*.local
+# Allow .env.example templates to be committed
+!**/.env.example
 
 # Logs
 *.log
