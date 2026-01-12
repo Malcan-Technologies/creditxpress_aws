@@ -8,6 +8,7 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import Cookies from "js-cookie";
 import PhoneInput from "react-phone-input-2";
 import "react-phone-input-2/lib/style.css";
+import "@/styles/phone-input.css";
 import { TokenStorage } from "@/lib/authUtils";
 import { validatePhoneNumber } from "@/lib/phoneUtils";
 
@@ -242,64 +243,7 @@ export default function SignupPage() {
 	};
 
 	return (
-		<>
-			<style jsx global>{`
-				/* Style the container wrapper */
-				.phone-input-wrapper {
-					border-radius: 0;
-					transition: all 0.2s;
-					position: relative;
-				}
-				.phone-input-wrapper:focus-within {
-					box-shadow: 0 0 0 2px #7c3aed;
-				}
-				.phone-input-wrapper:focus-within
-					.react-tel-input
-					.flag-dropdown,
-				.phone-input-wrapper:focus-within
-					.react-tel-input
-					.form-control {
-					border-color: #7c3aed !important;
-				}
-
-				/* Remove all border radius from phone input */
-				.react-tel-input,
-				.react-tel-input > div,
-				.react-tel-input .flag-dropdown,
-				.react-tel-input .form-control {
-					border-radius: 0 !important;
-				}
-
-				.react-tel-input .flag-dropdown {
-					background-color: white !important;
-					border-color: rgb(209, 213, 219) !important;
-				}
-				.react-tel-input .flag-dropdown:hover {
-					background-color: rgb(249, 250, 251) !important;
-				}
-				.react-tel-input .selected-flag {
-					background-color: transparent !important;
-					width: 100% !important;
-					height: 100% !important;
-					display: flex !important;
-					align-items: center !important;
-					justify-content: center !important;
-					padding: 0 !important;
-					border: none !important;
-				}
-				.react-tel-input .selected-flag:hover {
-					background-color: transparent !important;
-				}
-				.react-tel-input .country-list .country:hover {
-					background-color: rgba(124, 58, 237, 0.1) !important;
-					color: #7c3aed !important;
-				}
-				.react-tel-input .country-list .country.highlight {
-					background-color: rgba(124, 58, 237, 0.2) !important;
-					color: #7c3aed !important;
-				}
-			`}</style>
-			<div className="min-h-screen flex flex-col items-center justify-center bg-offwhite py-12 px-4 sm:px-6 lg:px-8">
+		<div className="min-h-screen flex flex-col items-center justify-center bg-offwhite py-12 px-4 sm:px-6 lg:px-8">
 				<div className="max-w-md w-full">
 					<button
 						onClick={() => router.back()}
@@ -726,7 +670,6 @@ export default function SignupPage() {
 					)}
 					</div>
 				</div>
-			</div>
-		</>
+		</div>
 	);
 }
