@@ -202,25 +202,67 @@ jobs:
           CLUSTER: ${{ steps.config.outputs.CLUSTER }}
           SERVICE: ${{ steps.config.outputs.SERVICE }}
         run: |
-          echo "🔍 Finding running task..."
+          echo "🔍 Waiting for running task..."
           
-          # Wait a moment for the new task to be running
-          sleep 10
+          # ECS Fargate tasks can take 2-5 minutes to start
+          # Retry for up to 5 minutes (15 attempts x 20 seconds)
+          MAX_ATTEMPTS=15
+          ATTEMPT=0
+          TASK_ARN=""
           
-          TASK_ARN=$(aws ecs list-tasks \
-            --cluster $CLUSTER \
-            --service-name $SERVICE \
-            --desired-status RUNNING \
-            --query 'taskArns[0]' \
-            --output text)
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "📊 Attempt $ATTEMPT/$MAX_ATTEMPTS - Looking for running task..."
+            
+            TASK_ARN=$(aws ecs list-tasks \
+              --cluster $CLUSTER \
+              --service-name $SERVICE \
+              --desired-status RUNNING \
+              --query 'taskArns[0]' \
+              --output text)
+            
+            if [ "$TASK_ARN" != "None" ] && [ -n "$TASK_ARN" ]; then
+              # Verify task is actually in RUNNING state (not just PENDING)
+              TASK_STATUS=$(aws ecs describe-tasks \
+                --cluster $CLUSTER \
+                --tasks $TASK_ARN \
+                --query 'tasks[0].lastStatus' \
+                --output text)
+              
+              if [ "$TASK_STATUS" = "RUNNING" ]; then
+                echo "✅ Found running task: $TASK_ARN"
+                echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
+                exit 0
+              else
+                echo "   Task found but status is $TASK_STATUS, waiting..."
+              fi
+            else
+              echo "   No running task found yet, waiting..."
+            fi
+            
+            sleep 20
+          done
           
-          if [ "$TASK_ARN" = "None" ] || [ -z "$TASK_ARN" ]; then
-            echo "❌ No running task found"
-            exit 1
-          fi
+          echo "❌ No running task found after $MAX_ATTEMPTS attempts"
+          echo ""
+          echo "🔍 Debugging: Checking all recent tasks..."
           
-          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
-          echo "✅ Found task: $TASK_ARN"
+          # List all tasks (including stopped) for debugging
+          echo "All tasks in service:"
+          aws ecs list-tasks --cluster $CLUSTER --service-name $SERVICE --query 'taskArns[]' --output text || true
+          
+          echo ""
+          echo "Stopped tasks:"
+          aws ecs list-tasks --cluster $CLUSTER --service-name $SERVICE --desired-status STOPPED --query 'taskArns[]' --output text || true
+          
+          echo ""
+          echo "Service events (last 5):"
+          aws ecs describe-services --cluster $CLUSTER --services $SERVICE \
+            --query 'services[0].events[:5].[createdAt,message]' --output table || true
+          
+          echo ""
+          echo "💡 Check CloudWatch logs for crash details: /ecs/creditxpress/backend"
+          exit 1
 
       - name: Run database migrations
         if: steps.should_migrate.outputs.run_migrations == 'true'

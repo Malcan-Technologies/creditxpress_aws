@@ -85,19 +85,37 @@ export class CTOSService {
   private config: CTOSConfig;
 
   constructor() {
+    // Support both individual env vars and JSON-formatted CTOS_CREDENTIALS (for AWS ECS)
+    let ctosCredentials: Record<string, string> = {};
+    if (process.env.CTOS_CREDENTIALS) {
+      try {
+        ctosCredentials = JSON.parse(process.env.CTOS_CREDENTIALS);
+      } catch {
+        console.warn('Failed to parse CTOS_CREDENTIALS JSON, falling back to individual env vars');
+      }
+    }
+
     this.config = {
-      apiKey: process.env.CTOS_API_KEY || '',
-      packageName: process.env.CTOS_PACKAGE_NAME || '',
-      securityKey: process.env.CTOS_SECURITY_KEY || '',
-      baseUrl: process.env.CTOS_BASE_URL || '',
-      webhookUrl: process.env.CTOS_WEBHOOK_URL || '',
-      ciphertext: process.env.CTOS_CIPHERTEXT || 'default16bytesiv', // 16 bytes for AES
-      cipher: process.env.CTOS_CIPHER || 'aes-256-cbc'
+      apiKey: process.env.CTOS_API_KEY || ctosCredentials.api_key || '',
+      packageName: process.env.CTOS_PACKAGE_NAME || ctosCredentials.package_name || '',
+      securityKey: process.env.CTOS_SECURITY_KEY || ctosCredentials.security_key || '',
+      baseUrl: process.env.CTOS_BASE_URL || ctosCredentials.base_url || '',
+      webhookUrl: process.env.CTOS_WEBHOOK_URL || ctosCredentials.webhook_url || '',
+      ciphertext: process.env.CTOS_CIPHERTEXT || ctosCredentials.ciphertext || 'default16bytesiv', // 16 bytes for AES
+      cipher: process.env.CTOS_CIPHER || ctosCredentials.cipher || 'aes-256-cbc'
     };
 
-    if (!this.config.apiKey || !this.config.packageName || !this.config.securityKey || !this.config.baseUrl) {
-      throw new Error('Missing required CTOS configuration');
+    // Log warning if CTOS config is incomplete
+    if (!this.isConfigured()) {
+      console.warn('CTOS configuration incomplete - CTOS features will be disabled. Set CTOS_CREDENTIALS or individual CTOS_* env vars.');
     }
+  }
+
+  /**
+   * Check if CTOS is properly configured
+   */
+  isConfigured(): boolean {
+    return !!(this.config.apiKey && this.config.packageName && this.config.securityKey && this.config.baseUrl);
   }
 
   /**
