@@ -8,10 +8,11 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files
+# Copy package files and scripts needed for postinstall
 COPY package.json package-lock.json* ./
+COPY scripts ./scripts/
 
-# Install dependencies
+# Install dependencies (postinstall script will run but skip SWC changes on Alpine/musl)
 RUN npm ci
 
 # Rebuild the source code only when needed
