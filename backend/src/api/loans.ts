@@ -2,8 +2,8 @@ import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateAndVerifyPhone, AuthRequest } from "../middleware/auth";
 import { TimeUtils, SafeMath } from "../lib/precisionUtils";
-import fs from "fs";
-import path from "path";
+import { signingConfig } from "../lib/config";
+import { getS3ObjectStream } from "../lib/storage";
 
 // Import grace period function from late fee processor
 async function getLateFeeGraceSettings(prismaClient: any = prisma) {
@@ -1452,15 +1452,14 @@ router.get("/:loanId/download-agreement", authenticateAndVerifyPhone, async (req
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-			const signedPdfUrl = `${orchestratorUrl}/api/signed/${loan.applicationId}/download`;
+			const signedPdfUrl = `${signingConfig.url}/api/signed/${loan.applicationId}/download`;
 			
 			console.log('User downloading PKI PDF from:', signedPdfUrl);
 			
 			const response = await fetch(signedPdfUrl, {
 				method: 'GET',
 				headers: {
-					'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+					'X-API-Key': signingConfig.apiKey
 				}
 			});
 
@@ -1549,15 +1548,14 @@ router.get("/:loanId/download-stamped-agreement", authenticateAndVerifyPhone, as
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-			const stampedPdfUrl = `${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/stamped`;
+			const stampedPdfUrl = `${signingConfig.url}/api/admin/agreements/${loan.applicationId}/download/stamped`;
 			
 			console.log('User downloading stamped PDF from:', stampedPdfUrl);
 			
 			const response = await fetch(stampedPdfUrl, {
 				method: 'GET',
 				headers: {
-					'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+					'X-API-Key': signingConfig.apiKey
 				}
 			});
 
@@ -1642,12 +1640,10 @@ router.get("/:loanId/download-stamp-certificate", authenticateAndVerifyPhone, as
 	const downloadFileName = `stamp-certificate-${loanId.substring(0, 8)}.pdf`;
 
 	if (certificateUrl.startsWith('http://') || certificateUrl.startsWith('https://')) {
-		const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
-
 		try {
 			const downloadResponse = await fetch(certificateUrl, {
 				headers: {
-					'X-API-Key': orchestratorApiKey,
+					'X-API-Key': signingConfig.apiKey,
 				}
 			});
 
@@ -1675,32 +1671,19 @@ router.get("/:loanId/download-stamp-certificate", authenticateAndVerifyPhone, as
 		}
 	}
 
-	// Legacy/local storage handling
-	let certificatePath = path.join(process.cwd(), certificateUrl);
-	console.log(`📁 Reading stamp certificate from: ${certificatePath}`);
+	// Stream from S3
+	try {
+		console.log(`📁 Streaming stamp certificate from S3: ${certificateUrl}`);
+		const { stream, contentType, contentLength } = await getS3ObjectStream(certificateUrl);
 
-	if (!fs.existsSync(certificatePath)) {
-		const legacyPath = path.join(__dirname, '../../', certificateUrl);
-		console.log(`📁 Certificate not found, checking legacy path: ${legacyPath}`);
-
-		if (!fs.existsSync(legacyPath)) {
-			console.error('❌ Stamp certificate file not found on server');
-			return res.status(404).json({
-				success: false,
-				message: 'Stamp certificate file not found on server'
-			});
+		res.setHeader('Content-Type', contentType || 'application/pdf');
+		res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+		if (contentLength) {
+			res.setHeader('Content-Length', contentLength);
 		}
 
-		certificatePath = legacyPath;
-	}
-
-	try {
-		res.setHeader('Content-Type', 'application/pdf');
-		res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
-
-		const fileStream = fs.createReadStream(certificatePath);
-		fileStream.on('error', (error: Error) => {
-			console.error('❌ Error streaming file:', error);
+		stream.on('error', (error: Error) => {
+			console.error('❌ Error streaming file from S3:', error);
 			if (!res.headersSent) {
 				res.status(500).json({
 					success: false,
@@ -1709,11 +1692,14 @@ router.get("/:loanId/download-stamp-certificate", authenticateAndVerifyPhone, as
 				});
 			}
 		});
-		fileStream.pipe(res);
+		stream.pipe(res);
 		return;
-	} catch (fileError) {
-		console.error('❌ Error reading certificate file:', fileError);
-		throw new Error(`Failed to read certificate file: ${fileError instanceof Error ? fileError.message : 'Unknown error'}`);
+	} catch (s3Error) {
+		console.error(`❌ Stamp certificate not found in S3: ${certificateUrl}`, s3Error);
+		return res.status(404).json({
+			success: false,
+			message: 'Stamp certificate file not found in storage'
+		});
 	}
 
 	} catch (error) {
@@ -1777,36 +1763,19 @@ router.get("/:loanId/download-disbursement-slip", authenticateAndVerifyPhone, as
 		});
 	}
 
-	// Try the correct path first (process.cwd() for new uploads)
-	let slipPath = path.join(process.cwd(), loan.application.disbursement.paymentSlipUrl);
-	console.log(`📁 Checking payment slip at: ${slipPath}`);
+	// Stream from S3
+	try {
+		console.log(`📁 Streaming payment slip from S3: ${loan.application.disbursement.paymentSlipUrl}`);
+		const { stream, contentType, contentLength } = await getS3ObjectStream(loan.application.disbursement.paymentSlipUrl);
 
-	// Fall back to old path (__dirname) for legacy files uploaded before the fix
-	if (!fs.existsSync(slipPath)) {
-		const legacyPath = path.join(__dirname, '../../', loan.application.disbursement.paymentSlipUrl);
-		console.log(`📁 File not found, checking legacy path: ${legacyPath}`);
-		
-		if (fs.existsSync(legacyPath)) {
-			slipPath = legacyPath;
-			console.log(`✅ Found payment slip at legacy path`);
-		} else {
-			console.error(`❌ Payment slip file not found at either path`);
-			return res.status(404).json({
-				success: false,
-				message: 'Payment slip file not found on server'
-			});
-		}
-	} else {
-		console.log(`✅ Found payment slip at current path`);
-	}
-
-		// Send the file
-		res.setHeader('Content-Type', 'application/pdf');
+		res.setHeader('Content-Type', contentType || 'application/pdf');
 		res.setHeader('Content-Disposition', `attachment; filename="payment-slip-${loan.application.disbursement.referenceNumber}.pdf"`);
-		
-		const fileStream = fs.createReadStream(slipPath);
-		fileStream.on('error', (error: Error) => {
-			console.error('❌ Error streaming payment slip file:', error);
+		if (contentLength) {
+			res.setHeader('Content-Length', contentLength);
+		}
+
+		stream.on('error', (error: Error) => {
+			console.error('❌ Error streaming payment slip from S3:', error);
 			if (!res.headersSent) {
 				res.status(500).json({
 					success: false,
@@ -1815,9 +1784,16 @@ router.get("/:loanId/download-disbursement-slip", authenticateAndVerifyPhone, as
 				});
 			}
 		});
-		fileStream.pipe(res);
+		stream.pipe(res);
 		console.log(`✅ Payment slip sent successfully to user ${userId}`);
 		return;
+	} catch (s3Error) {
+		console.error(`❌ Payment slip not found in S3: ${loan.application.disbursement.paymentSlipUrl}`, s3Error);
+		return res.status(404).json({
+			success: false,
+			message: 'Payment slip file not found in storage'
+		});
+	}
 
 	} catch (error) {
 		console.error('❌ Error downloading payment slip:', error);

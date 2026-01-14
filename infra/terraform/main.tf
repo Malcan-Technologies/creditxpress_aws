@@ -117,7 +117,14 @@ module "ecs" {
     app   = local.config.domains.app
     admin = local.config.domains.admin
     api   = local.config.domains.api
+    sign  = local.config.domains.sign
   }
+
+  # DocuSeal and Signing Configuration
+  docuseal_template_id  = local.config.docuseal.template_id
+  company_signing_email = local.config.docuseal.company_signing_email
+  witness_email         = local.config.docuseal.witness_email
+  witness_name          = local.config.docuseal.witness_name
 
   # Minimum Fargate specs: 256 CPU (.25 vCPU) with 512MB memory
   # Cost-optimized for small deployments
@@ -155,15 +162,20 @@ module "ecs" {
     jwt_secret          = module.secrets.secret_arns.jwt_secret
     jwt_refresh_secret  = module.secrets.secret_arns.jwt_refresh_secret
     signing_api_key     = module.secrets.secret_arns.signing_api_key
-    docuseal_token      = module.secrets.secret_arns.docuseal_token
-    whatsapp_token      = module.secrets.secret_arns.whatsapp_token
-    resend_api_key      = module.secrets.secret_arns.resend_api_key
-    ctos_credentials    = module.secrets.secret_arns.ctos_credentials
+    docuseal_token       = module.secrets.secret_arns.docuseal_token
+    whatsapp_token       = module.secrets.secret_arns.whatsapp_token
+    resend_api_key       = module.secrets.secret_arns.resend_api_key
+    ctos_credentials     = module.secrets.secret_arns.ctos_credentials
+    kyc_credentials      = module.secrets.secret_arns.kyc_credentials
+    ctos_b2b_credentials = module.secrets.secret_arns.ctos_b2b_credentials
   }
 
   # RDS endpoint for backend DATABASE_URL construction
   rds_endpoint = module.rds.endpoint
   rds_database = local.config.rds.database
+
+  # S3 bucket for file storage
+  s3_bucket = module.s3.bucket_name
 }
 
 # ==============================================

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ctosService } from '../lib/ctosService';
 import { prisma } from '../lib/prisma';
 import crypto from 'crypto';
+import { ctosConfig } from '../lib/config';
 
 const router = express.Router();
 
@@ -57,7 +58,7 @@ router.post('/create-transaction', async (req, res) => {
         document_number: documentNumber,
         platform,
         response_url: responseUrl,
-        backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
+        backend_url: ctosConfig.webhookUrl,
         callback_mode: 2 // Detailed callback
       });
     } catch (ctosError) {

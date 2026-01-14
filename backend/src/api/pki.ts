@@ -3,6 +3,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { prisma } from '../lib/prisma';
 import { emailService } from '../lib/emailService';
 import whatsappService from '../lib/whatsappService';
+import { signingConfig } from '../lib/config';
 
 const router = express.Router();
 
@@ -34,12 +35,11 @@ router.post('/check-certificate', authenticateToken, async (req: AuthRequest, re
     console.log('Checking PKI certificate status:', { userId, submissionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-    const response = await fetch(`${orchestratorUrl}/api/pki/cert-status/${userId}`, {
+    const response = await fetch(`${signingConfig.url}/api/pki/cert-status/${userId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+        'X-API-Key': signingConfig.apiKey
       }
     });
 
@@ -86,12 +86,11 @@ router.post('/request-otp', authenticateToken, async (req: AuthRequest, res) => 
     console.log('Requesting PKI OTP:', { userId, email, submissionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-    const response = await fetch(`${orchestratorUrl}/api/pki/request-otp`, {
+    const response = await fetch(`${signingConfig.url}/api/pki/request-otp`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+        'X-API-Key': signingConfig.apiKey
       },
       body: JSON.stringify({ userId, email, submissionId })
     });
@@ -144,12 +143,11 @@ router.post('/complete-signing', authenticateToken, async (req: AuthRequest, res
     console.log('Completing PKI signing:', { sessionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-    const response = await fetch(`${orchestratorUrl}/api/pki/complete-signing`, {
+    const response = await fetch(`${signingConfig.url}/api/pki/complete-signing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+        'X-API-Key': signingConfig.apiKey
       },
       body: JSON.stringify({ sessionId, otp })
     });
@@ -260,12 +258,11 @@ router.post('/sign-pdf', authenticateToken, async (req: AuthRequest, res) => {
     });
 
     // Forward request to signing orchestrator with correct DocuSeal IDs
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-    const response = await fetch(`${orchestratorUrl}/api/pki/sign-pdf`, {
+    const response = await fetch(`${signingConfig.url}/api/pki/sign-pdf`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+        'X-API-Key': signingConfig.apiKey
       },
       body: JSON.stringify({ 
         userId, // IC number for MTSA
@@ -433,12 +430,11 @@ router.get('/session/:sessionId', authenticateToken, async (req: AuthRequest, re
     console.log('Getting PKI session status:', { sessionId });
 
     // Forward request to signing orchestrator
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-    const response = await fetch(`${orchestratorUrl}/api/pki/session/${sessionId}`, {
+    const response = await fetch(`${signingConfig.url}/api/pki/session/${sessionId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+        'X-API-Key': signingConfig.apiKey
       }
     });
 

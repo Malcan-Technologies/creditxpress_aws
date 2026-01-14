@@ -87,8 +87,8 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     }
 
     if (source && source !== 'ALL') {
-      if (source === 'VPS') {
-        where.source = 'VPS_UPLOADS';
+      if (source === 'S3') {
+        where.source = 'S3';
       } else if (source === 'ONPREM') {
         where.source = 'ONPREM';
       }
@@ -176,8 +176,8 @@ router.get('/export', authenticateToken, async (req: AuthRequest, res: Response)
     }
 
     if (source && source !== 'ALL') {
-      if (source === 'VPS') {
-        where.source = 'VPS_UPLOADS';
+      if (source === 'S3') {
+        where.source = 'S3';
       } else if (source === 'ONPREM') {
         where.source = 'ONPREM';
       }

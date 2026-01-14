@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { authenticateToken, AuthRequest } from '../../middleware/auth';
 import { prisma } from '../../lib/prisma';
 import { ctosService } from '../../lib/ctosService';
+import { urlConfig, ctosConfig } from '../../lib/config';
 
 const router = Router();
 
@@ -235,9 +236,8 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
         callback_mode: 2
       });
 
-      // Build completion URL from BASE_URL environment variable  
-      const baseUrl = process.env.BASE_URL || 'https://creditxpress.com.my';
-      const completionUrl = `${baseUrl}/kyc-complete`;
+      // Build completion URL from centralized config  
+      const completionUrl = `${urlConfig.api}/kyc-complete`;
 
       const ctosResponse = await ctosService.createTransaction({
         ref_id: kycSession.id, // Use kycSession.id as ref_id
@@ -245,7 +245,7 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
         document_number: documentNumber,
         platform,
         response_url: completionUrl, // Use admin KYC completion page
-        backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
+        backend_url: ctosConfig.webhookUrl,
         callback_mode: 2, // Detailed callback
         response_mode: 0, // No queries - should make webhook work without URL parameters
         document_type: '1' // 1 = NRIC (default for Malaysian users)

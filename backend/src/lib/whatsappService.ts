@@ -1,23 +1,13 @@
 import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
+import { whatsappConfig } from './config';
 
 const prisma = new PrismaClient();
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v22.0';
-
-// Support both individual env vars and JSON-formatted WHATSAPP_CREDENTIALS (for AWS ECS)
-let whatsappCredentials: Record<string, string> = {};
-if (process.env.WHATSAPP_CREDENTIALS) {
-	try {
-		whatsappCredentials = JSON.parse(process.env.WHATSAPP_CREDENTIALS);
-	} catch {
-		console.warn('Failed to parse WHATSAPP_CREDENTIALS JSON, falling back to individual env vars');
-	}
-}
-
-const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || whatsappCredentials.access_token || '';
-const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || whatsappCredentials.phone_number_id || '';
-const USE_OTP_TEMPLATE = process.env.WHATSAPP_USE_OTP_TEMPLATE === 'true';
+const WHATSAPP_ACCESS_TOKEN = whatsappConfig.accessToken;
+const WHATSAPP_PHONE_NUMBER_ID = whatsappConfig.phoneNumberId;
+const USE_OTP_TEMPLATE = whatsappConfig.useOtpTemplate;
 
 interface WhatsAppOTPRequest {
 	to: string;

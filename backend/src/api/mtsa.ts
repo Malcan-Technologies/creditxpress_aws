@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticateAndVerifyPhone, AuthRequest } from '../middleware/auth';
 import { Response } from 'express';
+import { signingConfig } from '../lib/config';
 
 const router = Router();
 
@@ -48,10 +49,10 @@ router.get('/cert-info/:userId', authenticateAndVerifyPhone, async (req: AuthReq
     console.log('Getting certificate info for user:', { userId });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/cert/${userId}`, {
+    const response = await fetch(`${signingConfig.url}/api/cert/${userId}`, {
       method: 'GET',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
     });
@@ -143,10 +144,10 @@ router.post('/request-otp', authenticateAndVerifyPhone, async (req: AuthRequest,
     console.log('Requesting OTP for user:', { userId, usage, hasEmail: !!emailAddress });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/otp`, {
+    const response = await fetch(`${signingConfig.url}/api/otp`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -226,10 +227,10 @@ router.post('/verify-otp', authenticateAndVerifyPhone, async (req: AuthRequest, 
     console.log('Verifying OTP for user:', { userId, otpLength: otp.length });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/verify-pin`, {
+    const response = await fetch(`${signingConfig.url}/api/verify-pin`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -394,10 +395,10 @@ router.post('/request-certificate', authenticateAndVerifyPhone, async (req: Auth
     });
 
     // Make request to signing orchestrator with correct field names
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/certificate`, {
+    const response = await fetch(`${signingConfig.url}/api/certificate`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

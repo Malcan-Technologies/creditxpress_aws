@@ -1,13 +1,13 @@
 import { Router, Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
-import path from "path";
-import fs from "fs";
 
 import * as jwt from "jsonwebtoken";
 import { authenticateAndVerifyPhone, authenticateKycOrAuth, AuthRequest, FileAuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { ctosService } from "../lib/ctosService";
+import { kycConfig, urlConfig, ctosConfig } from "../lib/config";
+import { uploadToS3Organized, getS3ObjectStream, deleteFromS3, S3_FOLDERS } from "../lib/storage";
 
 const router = Router();
 const db: any = prisma as any;
@@ -46,22 +46,10 @@ async function userHasAllKycDocuments(userId: string): Promise<boolean> {
   }
 }
 
-// Local disk storage (can be swapped for S3/MinIO integration)
-const storage = (multer as any).diskStorage({
-  destination: (_req: any, _file: Express.Multer.File, cb: (err: Error | null, dest: string) => void) => {
-    const dir = path.join("uploads", "kyc");
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (_req: any, file: Express.Multer.File, cb: (err: Error | null, filename: string) => void) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-  }
-});
-
+// Memory storage for S3 uploads
 const upload = multer({
-  storage,
-  limits: { fieldSize: 50 * 1024 * 1024 }
+  storage: (multer as any).memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
 });
 
 function sha256(buffer: Buffer): string {
@@ -159,11 +147,10 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       console.log(`User ${req.user.userId} - Found existing in-progress session within 24 hours: ${existingInProgressSession.id}`);
       
       // Issue new token for existing session
-      const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
       const kycToken = jwt.sign(
         { userId: req.user.userId, kycId: existingInProgressSession.id },
-        process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
-        { expiresIn: `${ttlMinutes}m` }
+        kycConfig.jwtSecret,
+        { expiresIn: `${kycConfig.tokenTtlMinutes}m` }
       );
 
       return res.status(200).json({
@@ -173,7 +160,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         onboardingId: existingInProgressSession.ctosOnboardingId,
         expiredAt: existingInProgressSession.ctosExpiredAt?.toISOString() || null,
         kycToken,
-        ttlMinutes,
+        ttlMinutes: kycConfig.tokenTtlMinutes,
         resumed: true,
         message: "Resuming existing KYC session"
       });
@@ -198,9 +185,8 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         callback_mode: 2
       });
 
-      // Build completion URL from BASE_URL environment variable  
-      const baseUrl = process.env.BASE_URL || 'https://creditxpress.com.my';
-      const completionUrl = `${baseUrl}/kyc-complete`;
+      // Build completion URL from centralized config  
+      const completionUrl = `${urlConfig.api}/kyc-complete`;
 
       const ctosResponse = await ctosService.createTransaction({
         ref_id: kycSession.id, // Use kycSession.id as ref_id
@@ -208,7 +194,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         document_number: documentNumber,
         platform,
         response_url: completionUrl, // Use KYC completion page instead of frontend callback
-        backend_url: process.env.CTOS_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:4001'}/api/ctos/webhook`,
+        backend_url: ctosConfig.webhookUrl,
         callback_mode: 2, // Detailed callback
         response_mode: 0, // No queries - should make webhook work without URL parameters
         document_type: '1' // 1 = NRIC (default for Malaysian users)
@@ -288,11 +274,10 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       console.log(`Created CTOS transaction for user ${req.user.userId}, KYC session ${kycSession.id}, onboarding ID: ${ctosResponse.onboarding_id}`);
 
       // Issue short-lived KYC token
-      const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
       const kycToken = jwt.sign(
         { userId: req.user.userId, kycId: kycSession.id },
-        process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
-        { expiresIn: `${ttlMinutes}m` }
+        kycConfig.jwtSecret,
+        { expiresIn: `${kycConfig.tokenTtlMinutes}m` }
       );
 
       return res.status(201).json({
@@ -302,7 +287,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         onboardingId: ctosResponse.onboarding_id,
         expiredAt: ctosResponse.expired_at,
         kycToken,
-        ttlMinutes
+        ttlMinutes: kycConfig.tokenTtlMinutes
       });
 
     } catch (ctosError) {
@@ -439,13 +424,12 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
         }
       }
       // Return approved session (existing behavior when not redoing)
-      const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
       const kycToken = jwt.sign(
         { userId: req.user.userId, kycId: existingSession.id },
-        process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
-        { expiresIn: `${ttlMinutes}m` }
+        kycConfig.jwtSecret,
+        { expiresIn: `${kycConfig.tokenTtlMinutes}m` }
       );
-      return res.json({ reused: true, kycId: existingSession.id, status: "APPROVED", kycToken, ttlMinutes });
+      return res.json({ reused: true, kycId: existingSession.id, status: "APPROVED", kycToken, ttlMinutes: kycConfig.tokenTtlMinutes });
     }
     
     // If redoing KYC and there's an existing session, create a NEW session instead of deleting the old one
@@ -470,13 +454,12 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
       console.log(`Created new KYC session ${newSession.id} for redo`);
       
       // Return the new session
-      const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
       const kycToken = jwt.sign(
         { userId: req.user.userId, kycId: newSession.id },
-        process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
-        { expiresIn: `${ttlMinutes}m` }
+        kycConfig.jwtSecret,
+        { expiresIn: `${kycConfig.tokenTtlMinutes}m` }
       );
-      return res.json({ reused: false, kycId: newSession.id, status: "PENDING", kycToken, ttlMinutes });
+      return res.json({ reused: false, kycId: newSession.id, status: "PENDING", kycToken, ttlMinutes: kycConfig.tokenTtlMinutes });
     }
 
     let session = null as any;
@@ -501,13 +484,12 @@ router.post("/start", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
     }
 
     // Issue short-lived one-time KYC token (default 15 minutes)
-    const ttlMinutes = Number(process.env.KYC_TOKEN_TTL_MINUTES || 15);
     const kycToken = jwt.sign(
       { userId: req.user.userId, kycId: session.id },
-      process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key"),
-      { expiresIn: `${ttlMinutes}m` }
+      kycConfig.jwtSecret,
+      { expiresIn: `${kycConfig.tokenTtlMinutes}m` }
     );
-    return res.json({ reused: false, kycId: session.id, status: session.status, kycToken, ttlMinutes });
+    return res.json({ reused: false, kycId: session.id, status: session.status, kycToken, ttlMinutes: kycConfig.tokenTtlMinutes });
   } catch (err) {
     console.error("KYC start error", err);
     return res.status(500).json({ message: "Failed to start KYC" });
@@ -546,9 +528,31 @@ router.post("/:kycId/upload", authenticateKycOrAuth, upload.fields([
       const file = filesMap?.[key]?.[0];
       if (!file) continue; // allow partial upload & retry
       
-      const buffer = fs.readFileSync(file.path);
-      const hash = sha256(buffer);
-      const storageUrl = `/uploads/kyc/${file.filename}`;
+      // Map KYC type to S3 folder
+      const folderMap = {
+        front: S3_FOLDERS.KYC_FRONT,
+        back: S3_FOLDERS.KYC_BACK,
+        selfie: S3_FOLDERS.KYC_SELFIE,
+      } as const;
+      
+      // Upload to S3 with organized folder structure
+      const uploadResult = await uploadToS3Organized(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        {
+          folder: folderMap[key],
+          userId: session.userId,
+        }
+      );
+      
+      if (!uploadResult.success || !uploadResult.key) {
+        console.error(`Failed to upload ${key} to S3:`, uploadResult.error);
+        return res.status(500).json({ message: `Failed to upload ${key}: ${uploadResult.error}` });
+      }
+      
+      const hash = sha256(file.buffer);
+      const storageUrl = uploadResult.key; // S3 key
       
       // Check if document of this type already exists for this KYC session
       const existingDoc = session.documents.find((doc: any) => doc.type === key);
@@ -556,16 +560,13 @@ router.post("/:kycId/upload", authenticateKycOrAuth, upload.fields([
       if (existingDoc) {
         console.log(`Overwriting existing ${key} image for KYC session ${kycId}`);
         
-        // Delete the old file from disk to save space
-        const oldFilePath = path.join(process.cwd(), existingDoc.storageUrl);
-        if (fs.existsSync(oldFilePath)) {
-          try {
-            fs.unlinkSync(oldFilePath);
-            console.log(`Deleted old file: ${oldFilePath}`);
-          } catch (deleteErr) {
-            console.warn(`Failed to delete old file ${oldFilePath}:`, deleteErr);
-            // Continue anyway - we'll update the database record
-          }
+        // Delete the old file from S3
+        try {
+          await deleteFromS3(existingDoc.storageUrl);
+          console.log(`Deleted old S3 file: ${existingDoc.storageUrl}`);
+        } catch (deleteErr) {
+          console.warn(`Failed to delete old S3 file ${existingDoc.storageUrl}:`, deleteErr);
+          // Continue anyway - we'll update the database record
         }
         
         // Update existing document record
@@ -914,13 +915,33 @@ router.get("/images/:imageId", authenticateAndVerifyPhone, async (req: AuthReque
       return res.status(403).json({ message: "Forbidden" });
     }
     
-    // Serve the file
-    const filePath = path.join(process.cwd(), document.storageUrl);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "File not found on disk" });
+    // Handle base64 data URLs (from CTOS)
+    if (document.storageUrl.startsWith('data:')) {
+      // Extract base64 data and send as image
+      const matches = document.storageUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (matches) {
+        const mimeType = matches[1];
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Length', buffer.length);
+        return res.send(buffer);
+      }
+      return res.status(400).json({ message: "Invalid data URL format" });
     }
     
-    return res.sendFile(filePath);
+    // Stream from S3
+    try {
+      const { stream, contentType, contentLength } = await getS3ObjectStream(document.storageUrl);
+      res.setHeader('Content-Type', contentType);
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+      return stream.pipe(res);
+    } catch (s3Error) {
+      console.error("Error streaming from S3:", s3Error);
+      return res.status(404).json({ message: "File not found in storage" });
+    }
   } catch (err) {
     console.error("Error serving KYC image:", err);
     return res.status(500).json({ message: "Failed to serve image" });
@@ -956,15 +977,14 @@ router.post("/:kycId/accept", authenticateKycOrAuth, async (req: AuthRequest, re
     for (const oldSession of olderSessions) {
       console.log(`Cleaning up old KYC session ${oldSession.id} after accepting new session ${kycId}`);
       
-      // Delete old files from disk
+      // Delete old files from S3 (skip data URLs which are inline base64)
       for (const doc of oldSession.documents) {
-        const oldFilePath = path.join(process.cwd(), doc.storageUrl);
-        if (fs.existsSync(oldFilePath)) {
+        if (!doc.storageUrl.startsWith('data:')) {
           try {
-            fs.unlinkSync(oldFilePath);
-            console.log(`Deleted old file during cleanup: ${oldFilePath}`);
+            await deleteFromS3(doc.storageUrl);
+            console.log(`Deleted old S3 file during cleanup: ${doc.storageUrl}`);
           } catch (deleteErr) {
-            console.warn(`Failed to delete old file ${oldFilePath}:`, deleteErr);
+            console.warn(`Failed to delete old S3 file ${doc.storageUrl}:`, deleteErr);
           }
         }
       }

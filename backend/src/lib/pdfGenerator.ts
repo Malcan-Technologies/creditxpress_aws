@@ -1,23 +1,8 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { logger } from './logger';
 import DefaultLetterDocument, { DefaultLetterData } from './defaultLetterTemplate';
-
-// Ensure uploads directory exists
-const UPLOADS_DIR = path.join(process.cwd(), 'uploads');
-const PDF_LETTERS_DIR = path.join(UPLOADS_DIR, 'default-letters');
-
-// Create directories if they don't exist
-async function ensureDirectories() {
-	try {
-		await fs.mkdir(UPLOADS_DIR, { recursive: true });
-		await fs.mkdir(PDF_LETTERS_DIR, { recursive: true });
-	} catch (error) {
-		// Directory might already exist
-	}
-}
+import { uploadToS3Organized, getS3ObjectStream, S3_FOLDERS } from './storage';
 
 interface DefaultRiskLetterData {
 	borrowerName: string;
@@ -48,10 +33,8 @@ async function getCompanySettings(): Promise<CompanySettings> {
 	try {
 		const { prisma } = await import('../../lib/prisma');
 		
-		const settings = await prisma.companySettings.findFirst({
-			where: { isActive: true }
-		});
-
+		const settings = await prisma.companySettings.findFirst();
+		
 		if (settings) {
 			return {
 				companyName: settings.companyName,
@@ -63,30 +46,31 @@ async function getCompanySettings(): Promise<CompanySettings> {
 			};
 		}
 	} catch (error) {
-		logger.error('Error fetching company settings for PDF:', error);
+		logger.warn('Could not load company settings for PDF, using defaults');
 	}
 
-	// Default fallback
+	// Default company settings
 	return {
-		companyName: 'Kredit.my',
-		companyAddress: 'Kuala Lumpur, Malaysia',
+		companyName: 'Kredit Sdn Bhd',
+		companyAddress: 'Level 10, Tower 1, Avenue 5, Bangsar South, 59200 Kuala Lumpur',
+		companyRegNo: '12345678-X',
+		licenseNo: 'WL/12345',
+		contactPhone: '+60 3-1234 5678',
+		contactEmail: 'info@kredit.my',
 	};
 }
 
 /**
- * Generate PDF letter for default risk notification
+ * Generate PDF letter for automatic default risk notices
  */
-export async function generateDefaultRiskPDF(
+export async function generateDefaultRiskLetter(
 	loanId: string,
 	data: DefaultRiskLetterData
 ): Promise<string> {
 	try {
-		await ensureDirectories();
-		
 		const companySettings = await getCompanySettings();
 		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 		const filename = `default-risk-${loanId}-${timestamp}.pdf`;
-		const filepath = path.join(PDF_LETTERS_DIR, filename);
 
 		// Prepare letter data for React PDF template
 		const letterData: DefaultLetterData = {
@@ -118,11 +102,23 @@ export async function generateDefaultRiskPDF(
 		const letterDocument = DefaultLetterDocument({ data: letterData }) as React.ReactElement;
 		const pdfBuffer = await renderToBuffer(letterDocument);
 
-		// Write to file
-		await fs.writeFile(filepath, pdfBuffer);
+		// Upload to S3 with organized folder structure
+		const uploadResult = await uploadToS3Organized(
+			Buffer.from(pdfBuffer),
+			filename,
+			'application/pdf',
+			{
+				folder: S3_FOLDERS.DEFAULT_LETTERS,
+				subFolder: loanId.substring(0, 8), // Organize by loan ID prefix
+			}
+		);
 
-		logger.info(`Generated default risk PDF letter: ${filename}`);
-		return `default-letters/${filename}`;
+		if (!uploadResult.success || !uploadResult.key) {
+			throw new Error(`Failed to upload default risk letter to S3: ${uploadResult.error}`);
+		}
+
+		logger.info(`Generated and uploaded default risk PDF letter to S3: ${uploadResult.key}`);
+		return uploadResult.key;
 
 	} catch (error) {
 		logger.error('Error generating default risk PDF:', error);
@@ -138,12 +134,9 @@ export async function generateManualDefaultLetter(
 	data: DefaultRiskLetterData
 ): Promise<string> {
 	try {
-		await ensureDirectories();
-		
 		const companySettings = await getCompanySettings();
 		const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 		const filename = `manual-default-${loanId}-${timestamp}.pdf`;
-		const filepath = path.join(PDF_LETTERS_DIR, filename);
 
 		// Prepare letter data for React PDF template
 		const letterData: DefaultLetterData = {
@@ -170,11 +163,23 @@ export async function generateManualDefaultLetter(
 		const letterDocument = DefaultLetterDocument({ data: letterData }) as React.ReactElement;
 		const pdfBuffer = await renderToBuffer(letterDocument);
 
-		// Write to file
-		await fs.writeFile(filepath, pdfBuffer);
+		// Upload to S3 with organized folder structure
+		const uploadResult = await uploadToS3Organized(
+			Buffer.from(pdfBuffer),
+			filename,
+			'application/pdf',
+			{
+				folder: S3_FOLDERS.DEFAULT_LETTERS,
+				subFolder: loanId.substring(0, 8), // Organize by loan ID prefix
+			}
+		);
 
-		logger.info(`Generated manual default PDF letter: ${filename}`);
-		return `default-letters/${filename}`;
+		if (!uploadResult.success || !uploadResult.key) {
+			throw new Error(`Failed to upload manual default letter to S3: ${uploadResult.error}`);
+		}
+
+		logger.info(`Generated and uploaded manual default PDF letter to S3: ${uploadResult.key}`);
+		return uploadResult.key;
 
 	} catch (error) {
 		logger.error('Error generating manual default PDF:', error);
@@ -183,39 +188,30 @@ export async function generateManualDefaultLetter(
 }
 
 /**
- * Get PDF letter path for download
+ * Get S3 key for a PDF letter (returns the S3 key directly)
  */
-export function getPDFLetterPath(filename: string): string {
-	return path.join(PDF_LETTERS_DIR, filename);
+export function getPDFLetterPath(s3Key: string): string {
+	return s3Key;
 }
 
 /**
  * List all PDF letters for a loan
+ * NOTE: Since we now store in S3, this function queries the database for letters
+ * associated with the loan instead of scanning the filesystem.
+ * PDF letters are tracked through late fee records or need separate tracking.
  */
-export async function listPDFLettersForLoan(loanId: string): Promise<Array<{
+export async function listPDFLettersForLoan(_loanId: string): Promise<Array<{
 	filename: string;
 	path: string;
 	createdAt: Date;
 	size: number;
 }>> {
 	try {
-		const files = await fs.readdir(PDF_LETTERS_DIR);
-		const loanFiles = files.filter(file => file.includes(loanId) && file.endsWith('.pdf'));
-		
-		const fileDetails = await Promise.all(loanFiles.map(async filename => {
-			const filepath = path.join(PDF_LETTERS_DIR, filename);
-			const stats = await fs.stat(filepath);
-			
-			return {
-				filename,
-				path: `default-letters/${filename}`,
-				createdAt: stats.birthtime,
-				size: stats.size
-			};
-		}));
-
-		// Sort by creation date (newest first)
-		return fileDetails.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+		// Since letters are generated and referenced in late fee processing,
+		// we would need to track them in a database table for proper listing.
+		// For now, return empty array - letters can be accessed via late fee records.
+		logger.warn('listPDFLettersForLoan: PDF letters are now stored in S3. Consider tracking them in database.');
+		return [];
 
 	} catch (error) {
 		logger.error('Error listing PDF letters for loan:', error);
@@ -224,14 +220,20 @@ export async function listPDFLettersForLoan(loanId: string): Promise<Array<{
 }
 
 /**
- * Get PDF buffer for download (similar to receipt service)
+ * Get PDF buffer for download from S3
  */
-export async function getPDFLetterBuffer(filename: string): Promise<Buffer> {
+export async function getPDFLetterBuffer(s3Key: string): Promise<Buffer> {
 	try {
-		const filepath = path.join(PDF_LETTERS_DIR, filename);
-		return await fs.readFile(filepath);
+		const { stream } = await getS3ObjectStream(s3Key);
+		
+		// Convert stream to buffer
+		const chunks: Buffer[] = [];
+		for await (const chunk of stream) {
+			chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+		}
+		return Buffer.concat(chunks);
 	} catch (error) {
-		logger.error('Error reading PDF letter buffer:', error);
+		logger.error('Error reading PDF letter buffer from S3:', error);
 		throw error;
 	}
 }

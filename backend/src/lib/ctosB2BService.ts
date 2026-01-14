@@ -2,6 +2,7 @@ import * as jwt from 'jsonwebtoken';
 import * as crypto from 'crypto';
 import axios from 'axios';
 import { XMLParser } from 'fast-xml-parser';
+import { ctosB2BConfig } from './config';
 
 interface CTOSB2BConfig {
   companyCode: string;
@@ -47,20 +48,17 @@ export class CTOSB2BService {
 
   constructor() {
     this.config = {
-      companyCode: process.env.CTOS_B2B_COMPANY_CODE || '',
-      accountNo: process.env.CTOS_B2B_ACCOUNT_NO || '',
-      userId: process.env.CTOS_B2B_USER_ID || '',
-      clientId: process.env.CTOS_B2B_CLIENT_ID || '',
-      ssoPassword: process.env.CTOS_B2B_SSO_PASSWORD || '',
-      ssoUrl: process.env.CTOS_B2B_SSO_URL || 'https://uat-sso.ctos.com.my',
-      // API URL should point to uat-integration for SOAP Proxy endpoint
-      apiUrl: process.env.CTOS_B2B_API_URL || 'https://uat-integration.ctos.com.my',
+      companyCode: ctosB2BConfig.companyCode,
+      accountNo: ctosB2BConfig.accountNo,
+      userId: ctosB2BConfig.userId,
+      clientId: ctosB2BConfig.clientId,
+      ssoPassword: ctosB2BConfig.ssoPassword,
+      ssoUrl: ctosB2BConfig.ssoUrl,
+      apiUrl: ctosB2BConfig.apiUrl,
     };
 
     // Check if mock mode is enabled
-    const mockMode = process.env.CTOS_B2B_MOCK_MODE === 'true' || process.env.CTOS_B2B_MOCK_MODE === '1';
-    
-    if (mockMode) {
+    if (ctosB2BConfig.mockMode) {
       console.log('⚠️  CTOS B2B: Running in MOCK MODE - returning test data instead of calling real API');
       // Skip validation and key loading in mock mode
       return;
@@ -82,8 +80,8 @@ export class CTOSB2BService {
    */
   private loadPrivateKey(): void {
     try {
-      const privateKeyEnv = process.env.CTOS_B2B_PRIVATE_KEY;
-      
+      const privateKeyEnv = ctosB2BConfig.privateKey;
+
       if (!privateKeyEnv) {
         throw new Error('CTOS_B2B_PRIVATE_KEY environment variable is not set');
       }
@@ -339,12 +337,9 @@ export class CTOSB2BService {
     }
 
     // Check if mock mode is enabled
-    const mockMode = process.env.CTOS_B2B_MOCK_MODE === 'true';
+	console.log('CTOS B2B: Mock mode:', ctosB2BConfig.mockMode);
 
-	console.log('CTOS B2B: Mock mode:', mockMode);
-	console.log('CTOS B2B: Process.env.CTOS_B2B_MOCK_MODE:', process.env.CTOS_B2B_MOCK_MODE);
-    
-    if (mockMode) {
+    if (ctosB2BConfig.mockMode) {
       // Return mock request ID
       const mockRequestId = `MOCK_REQ_${Date.now()}`;
       console.log('CTOS B2B: Mock mode - returning request ID:', mockRequestId);
@@ -510,9 +505,7 @@ export class CTOSB2BService {
     }
 
     // Check if mock mode is enabled
-    const mockMode = process.env.CTOS_B2B_MOCK_MODE === 'true';
-    
-    if (mockMode) {
+    if (ctosB2BConfig.mockMode) {
       // Return mock report data
       console.log('CTOS B2B: Mock mode - confirming request and returning mock report');
       return this.generateMockCreditReport(icNumber, fullName);

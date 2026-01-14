@@ -1,9 +1,8 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { prisma } from './prisma';
 import PaymentReceiptDocument, { ReceiptData } from './receiptTemplate';
+import { uploadToS3Organized, getS3ObjectStream, deleteFromS3, S3_FOLDERS } from './storage';
 
 interface GenerateReceiptParams {
   repaymentId: string;
@@ -41,18 +40,6 @@ interface RepaymentWithDetails {
 }
 
 export class ReceiptService {
-  private static readonly RECEIPTS_DIR = path.join(process.cwd(), 'receipts');
-
-  /**
-   * Ensure receipts directory exists
-   */
-  private static async ensureReceiptsDirectory(): Promise<void> {
-    try {
-      await fs.access(this.RECEIPTS_DIR);
-    } catch {
-      await fs.mkdir(this.RECEIPTS_DIR, { recursive: true });
-    }
-  }
 
   /**
    * Generate sequential receipt number
@@ -175,9 +162,6 @@ export class ReceiptService {
     filePath: string;
   }> {
     try {
-      // Ensure receipts directory exists
-      await this.ensureReceiptsDirectory();
-
       // Check if receipt already exists for this specific transaction
       // Allow multiple receipts for the same repayment if they're from different transactions
       const existingReceipt = await prisma.paymentReceipt.findFirst({
@@ -263,17 +247,30 @@ export class ReceiptService {
       const receiptDocument = PaymentReceiptDocument({ data: receiptData }) as React.ReactElement;
       const pdfBuffer = await renderToBuffer(receiptDocument);
 
-      // Save PDF to file
+      // Upload PDF to S3 with organized folder structure
       const fileName = `${receiptNumber}.pdf`;
-      const filePath = path.join(this.RECEIPTS_DIR, fileName);
-      await fs.writeFile(filePath, pdfBuffer);
+      const uploadResult = await uploadToS3Organized(
+        Buffer.from(pdfBuffer),
+        fileName,
+        'application/pdf',
+        {
+          folder: S3_FOLDERS.RECEIPTS,
+          subFolder: repayment.loan.id.substring(0, 8), // Organize by loan ID prefix
+        }
+      );
+
+      if (!uploadResult.success || !uploadResult.key) {
+        throw new Error(`Failed to upload receipt to S3: ${uploadResult.error}`);
+      }
+
+      const s3Key = uploadResult.key;
 
       // Save receipt record to database
       const receiptRecord = await prisma.paymentReceipt.create({
         data: {
           repaymentId: params.repaymentId,
           receiptNumber,
-          filePath,
+          filePath: s3Key,
           generatedBy: params.generatedBy,
           metadata: {
             transactionId: params.transactionId, // Store transaction ID for duplicate prevention
@@ -319,10 +316,16 @@ export class ReceiptService {
     }
 
     try {
-      const buffer = await fs.readFile(receipt.filePath);
-      return buffer;
+      const { stream } = await getS3ObjectStream(receipt.filePath);
+      
+      // Convert stream to buffer
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
     } catch (error) {
-      throw new Error(`Failed to read receipt file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to read receipt file from S3: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -389,9 +392,6 @@ export class ReceiptService {
     filePath: string;
   }> {
     try {
-      // Ensure receipts directory exists
-      await this.ensureReceiptsDirectory();
-
       // Get transaction details
       const transaction = await prisma.walletTransaction.findUnique({
         where: { id: transactionId },
@@ -486,10 +486,23 @@ export class ReceiptService {
       const receiptDocument = PaymentReceiptDocument({ data: receiptData }) as React.ReactElement;
       const pdfBuffer = await renderToBuffer(receiptDocument);
       
-      // Save PDF file
+      // Upload PDF to S3 with organized folder structure
       const fileName = `early-settlement-${receiptNumber}.pdf`;
-      const filePath = path.join(this.RECEIPTS_DIR, fileName);
-      await fs.writeFile(filePath, pdfBuffer);
+      const uploadResult = await uploadToS3Organized(
+        Buffer.from(pdfBuffer),
+        fileName,
+        'application/pdf',
+        {
+          folder: S3_FOLDERS.RECEIPTS,
+          subFolder: transaction.loanId!.substring(0, 8), // Organize by loan ID prefix
+        }
+      );
+
+      if (!uploadResult.success || !uploadResult.key) {
+        throw new Error(`Failed to upload early settlement receipt to S3: ${uploadResult.error}`);
+      }
+
+      const s3Key = uploadResult.key;
 
       // Create database record (create a dummy repayment record for early settlement)
       const dummyRepayment = await prisma.loanRepayment.create({
@@ -516,7 +529,7 @@ export class ReceiptService {
         data: {
           repaymentId: dummyRepayment.id,
           receiptNumber,
-          filePath,
+          filePath: s3Key,
           generatedBy,
           metadata: {
             earlySettlementTransactionId: transactionId,
@@ -553,11 +566,11 @@ export class ReceiptService {
       throw new Error(`Receipt with ID ${receiptId} not found`);
     }
 
-    // Delete the physical file
+    // Delete the file from S3
     try {
-      await fs.unlink(receipt.filePath);
+      await deleteFromS3(receipt.filePath);
     } catch (error) {
-      console.warn(`Failed to delete receipt file: ${error}`);
+      console.warn(`Failed to delete receipt file from S3: ${error}`);
     }
 
     // Delete the database record

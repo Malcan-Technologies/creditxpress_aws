@@ -1,8 +1,8 @@
 import { Router, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken, AuthRequest } from "../middleware/auth";
-import fs from "fs";
-import path from "path";
+import { docusealConfig, signingConfig } from "../lib/config";
+import { getS3ObjectStream } from "../lib/storage";
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -52,16 +52,14 @@ router.get("/:applicationId/unsigned-agreement", authenticateToken, async (req: 
 		});
 	}
 
-	// Build the DocuSeal URL from environment variable and slug
-	const docusealBaseUrl = process.env.DOCUSEAL_BASE_URL || 'https://sign.kredit.my';
+	// Build the DocuSeal URL from centralized config and slug
 	const docusealSlug = application.loan.docusealSignUrl;
-	const docusealUrl = `${docusealBaseUrl}/s/${docusealSlug}`;
+	const docusealUrl = `${docusealConfig.baseUrl}/s/${docusealSlug}`;
 	
 	console.log('🔗 Building DocuSeal URL:', {
-		baseUrl: docusealBaseUrl,
+		baseUrl: docusealConfig.baseUrl,
 		slug: docusealSlug,
-		fullUrl: docusealUrl,
-		envVarSet: !!process.env.DOCUSEAL_BASE_URL
+		fullUrl: docusealUrl
 	});
 	
 	// Return the URL for the frontend to open
@@ -126,17 +124,14 @@ router.get("/:applicationId/signed-agreement", authenticateToken, async (req: Au
 		}
 
 		// Get signed agreement from signing orchestrator
-		const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL;
-		const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY;
-
-		if (!orchestratorUrl || !orchestratorApiKey) {
+		if (!signingConfig.url || !signingConfig.apiKey) {
 			throw new Error('Signing orchestrator configuration missing');
 		}
 
-		const response = await fetch(`${orchestratorUrl}/api/signed/${applicationId}/download`, {
+		const response = await fetch(`${signingConfig.url}/api/signed/${applicationId}/download`, {
 			method: 'GET',
 			headers: {
-				'X-API-Key': orchestratorApiKey,
+				'X-API-Key': signingConfig.apiKey,
 			},
 		});
 
@@ -212,41 +207,36 @@ router.get("/:applicationId/stamp-certificate", authenticateToken, async (req: A
 
 		console.log(`📄 Stamp certificate URL: ${application.loan.pkiStampCertificateUrl}`);
 
-		// Read the certificate file from disk
-		const certificatePath = path.join(__dirname, '../../', application.loan.pkiStampCertificateUrl);
-		console.log(`📁 Full certificate path: ${certificatePath}`);
+		// Stream from S3
+		try {
+			console.log(`📁 Streaming stamp certificate from S3: ${application.loan.pkiStampCertificateUrl}`);
+			const { stream, contentType, contentLength } = await getS3ObjectStream(application.loan.pkiStampCertificateUrl);
 
-		if (!fs.existsSync(certificatePath)) {
-			console.error(`❌ Stamp certificate file not found at: ${certificatePath}`);
-			return res.status(404).json({
-				success: false,
-				message: "Stamp certificate file not found on server",
-				debug: {
-					expectedPath: certificatePath,
-					relativePath: application.loan.pkiStampCertificateUrl
+			res.setHeader('Content-Type', contentType || 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${applicationId.substring(0, 8)}.pdf"`);
+			if (contentLength) {
+				res.setHeader('Content-Length', contentLength);
+			}
+
+			stream.on('error', (error) => {
+				console.error('❌ Error streaming file from S3:', error);
+				if (!res.headersSent) {
+					res.status(500).json({
+						success: false,
+						message: "Error streaming certificate file",
+						error: error.message
+					});
 				}
 			});
+			stream.pipe(res);
+			return;
+		} catch (s3Error) {
+			console.error(`❌ Stamp certificate not found in S3: ${application.loan.pkiStampCertificateUrl}`, s3Error);
+			return res.status(404).json({
+				success: false,
+				message: "Stamp certificate file not found in storage"
+			});
 		}
-
-		console.log(`✅ Sending stamp certificate file: ${certificatePath}`);
-
-		// Send the file
-		res.setHeader('Content-Type', 'application/pdf');
-		res.setHeader('Content-Disposition', `attachment; filename="stamp-certificate-${applicationId.substring(0, 8)}.pdf"`);
-		
-		const fileStream = fs.createReadStream(certificatePath);
-		fileStream.on('error', (error) => {
-			console.error('❌ Error streaming file:', error);
-			if (!res.headersSent) {
-				res.status(500).json({
-					success: false,
-					message: "Error streaming certificate file",
-					error: error.message
-				});
-			}
-		});
-		fileStream.pipe(res);
-		return;
 
 	} catch (error) {
 		console.error('❌ Error downloading stamp certificate:', error);

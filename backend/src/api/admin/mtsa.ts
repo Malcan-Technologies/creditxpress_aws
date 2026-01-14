@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { authenticateToken, AuthRequest } from '../../middleware/auth';
+import { signingConfig } from '../../lib/config';
 
 const router = Router();
 
@@ -48,10 +49,10 @@ router.get('/cert-info/:userId', authenticateToken, adminOrAttestorMiddleware, a
     console.log('Admin getting certificate info for user:', { userId, adminUserId: req.user?.userId });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/cert/${userId}`, {
+    const response = await fetch(`${signingConfig.url}/api/cert/${userId}`, {
       method: 'GET',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
     });
@@ -141,10 +142,10 @@ router.post('/verify-cert-pin', authenticateToken, adminOrAttestorMiddleware, as
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/verify-cert-pin`, {
+    const response = await fetch(`${signingConfig.url}/api/verify-cert-pin`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -235,10 +236,10 @@ router.post('/request-otp', authenticateToken, adminOrAttestorMiddleware, async 
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/otp`, {
+    const response = await fetch(`${signingConfig.url}/api/otp`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -420,10 +421,10 @@ router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware
     });
 
     // Make request to signing orchestrator with userType = 2 for internal users
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/certificate`, {
+    const response = await fetch(`${signingConfig.url}/api/certificate`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -646,10 +647,10 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
     });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my'}/api/revoke`, {
+    const response = await fetch(`${signingConfig.url}/api/revoke`, {
       method: 'POST',
       headers: {
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'test-token',
+        'X-API-Key': signingConfig.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(revocationData),

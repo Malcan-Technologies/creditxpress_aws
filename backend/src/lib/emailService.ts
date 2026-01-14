@@ -1,20 +1,11 @@
 import { Resend } from 'resend';
 import { prisma } from './prisma';
+import { resendConfig, signingConfig } from './config';
 
-// Support both individual env vars and JSON-formatted RESEND_CREDENTIALS (for AWS ECS)
-let resendCredentials: Record<string, string> = {};
-if (process.env.RESEND_CREDENTIALS) {
-  try {
-    resendCredentials = JSON.parse(process.env.RESEND_CREDENTIALS);
-  } catch {
-    console.warn('Failed to parse RESEND_CREDENTIALS JSON, falling back to individual env vars');
-  }
-}
-
-const RESEND_API_KEY = process.env.RESEND_API_KEY || resendCredentials.api_key || '';
-const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || resendCredentials.from_email || 'noreply@creditxpress.com.my';
-const SIGNING_ORCHESTRATOR_URL = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-const SIGNING_ORCHESTRATOR_API_KEY = process.env.SIGNING_ORCHESTRATOR_API_KEY || '';
+const RESEND_API_KEY = resendConfig.apiKey;
+const RESEND_FROM_EMAIL = resendConfig.fromEmail;
+const SIGNING_ORCHESTRATOR_URL = signingConfig.url;
+const SIGNING_ORCHESTRATOR_API_KEY = signingConfig.apiKey;
 
 class EmailService {
   private resend: Resend | null = null;

@@ -58,7 +58,33 @@ variable "domains" {
     app   = string
     admin = string
     api   = string
+    sign  = string
   })
+}
+
+# DocuSeal and Signing Configuration
+variable "docuseal_template_id" {
+  description = "DocuSeal loan agreement template ID"
+  type        = string
+  default     = ""
+}
+
+variable "company_signing_email" {
+  description = "Company signer email for DocuSeal"
+  type        = string
+  default     = "admin@creditxpress.com.my"
+}
+
+variable "witness_email" {
+  description = "Witness email for DocuSeal"
+  type        = string
+  default     = "legal@creditxpress.com.my"
+}
+
+variable "witness_name" {
+  description = "Witness name for DocuSeal"
+  type        = string
+  default     = "Legal Representative"
 }
 
 variable "rds_endpoint" {
@@ -71,6 +97,11 @@ variable "rds_database" {
   description = "RDS database name"
   type        = string
   default     = ""
+}
+
+variable "s3_bucket" {
+  description = "S3 bucket name for file storage"
+  type        = string
 }
 
 # Data source for current AWS region
@@ -258,10 +289,25 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "NODE_ENV", value = "production" },
         { name = "PORT", value = tostring(var.services["backend"].port) },
         { name = "TZ", value = "Asia/Kuala_Lumpur" },
-        { name = "DOCUSEAL_URL", value = "https://${var.domains.api}/docuseal" },
-        { name = "SIGNING_ORCHESTRATOR_URL", value = "https://${var.domains.api}/signing" },
+        # URLs
         { name = "FRONTEND_URL", value = "https://${var.domains.app}" },
+        { name = "ADMIN_BASE_URL", value = "https://${var.domains.admin}" },
         { name = "ADMIN_URL", value = "https://${var.domains.admin}" },
+        # DocuSeal Configuration
+        { name = "DOCUSEAL_BASE_URL", value = "https://${var.domains.sign}" },
+        { name = "DOCUSEAL_API_URL", value = "https://${var.domains.sign}" },
+        { name = "DOCUSEAL_LOAN_AGREEMENT_TEMPLATE_ID", value = var.docuseal_template_id },
+        # Signing Orchestrator
+        { name = "SIGNING_ORCHESTRATOR_URL", value = "https://${var.domains.sign}" },
+        # Document Signing Configuration
+        { name = "COMPANY_SIGNING_EMAIL", value = var.company_signing_email },
+        { name = "WITNESS_EMAIL", value = var.witness_email },
+        { name = "WITNESS_NAME", value = var.witness_name },
+        # CORS
+        { name = "CORS_ALLOWED_ORIGINS", value = "https://${var.domains.app},https://${var.domains.admin}" },
+        # S3 Storage
+        { name = "S3_BUCKET", value = var.s3_bucket },
+        { name = "AWS_REGION", value = data.aws_region.current.name },
       ]
 
       secrets = [
@@ -273,6 +319,8 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "WHATSAPP_CREDENTIALS", valueFrom = var.secrets_arns["whatsapp_token"] },
         { name = "RESEND_CREDENTIALS", valueFrom = var.secrets_arns["resend_api_key"] },
         { name = "CTOS_CREDENTIALS", valueFrom = var.secrets_arns["ctos_credentials"] },
+        { name = "KYC_CREDENTIALS", valueFrom = var.secrets_arns["kyc_credentials"] },
+        { name = "CTOS_B2B_CREDENTIALS", valueFrom = var.secrets_arns["ctos_b2b_credentials"] },
       ]
 
       logConfiguration = {

@@ -7,17 +7,17 @@ import { prisma } from "../lib/prisma";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import multer from "multer";
-import fs from "fs";
-import path from "path";
 import { authenticateToken } from "../middleware/auth";
 import { AuthRequest } from "../middleware/auth";
 import { requireAdminOrAttestor } from "../lib/permissions";
+import { uploadToS3Organized, getS3ObjectStream, deleteFromS3, S3_FOLDERS } from "../lib/storage";
 import { adminLoginRateLimiter } from "../middleware/rateLimiter";
 import { generateLoginToken, validateLoginToken } from "../middleware/loginToken";
 import lateFeeRoutes from "./admin/late-fees";
 import mtsaAdminRoutes from "./admin/mtsa";
 import kycAdminRoutes from "./admin/kyc";
 import companySettingsRoutes from "./companySettings";
+import { jwtConfig, signingConfig, docusealConfig, serverConfig, ctosConfig } from "../lib/config";
 import receiptsRoutes from "./receipts";
 import earlySettlementRoutes from "./admin/early-settlement";
 import cronRoutes from "./admin/cron";
@@ -2763,7 +2763,7 @@ router.post("/refresh", async (req: Request, res: Response) => {
 		// Verify refresh token
 		const decoded = jwt.verify(
 			refreshToken,
-			process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key"
+			jwtConfig.refreshSecret
 		) as { userId: string; role?: string };
 
 		// Get user
@@ -2785,13 +2785,13 @@ router.post("/refresh", async (req: Request, res: Response) => {
 		// Generate new tokens
 		const accessToken = jwt.sign(
 			{ userId: user.id, role: user.role },
-			process.env.JWT_SECRET || "your-secret-key",
+			jwtConfig.secret,
 			{ expiresIn: "15m" }
 		);
 
 		const newRefreshToken = jwt.sign(
 			{ userId: user.id, role: user.role },
-			process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key",
+			jwtConfig.refreshSecret,
 			{ expiresIn: "90d" }
 		);
 
@@ -11640,8 +11640,6 @@ router.post(
 			console.log(`PIN signing attempt for ${normalizedSignatoryType} with PIN: ${pin}`);
 
 			// Call signing orchestrator for PKI signing
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-			
 			// Get the IC number and full name of the currently logged-in admin user
 			const adminUserId = req.user?.userId;
 			const adminUser = await prisma.user.findUnique({
@@ -11672,11 +11670,11 @@ router.post(
 			};
 
 			try {
-				const orchestratorResponse = await fetch(`${orchestratorUrl}/api/pki/sign-pdf-pin`, {
+				const orchestratorResponse = await fetch(`${signingConfig.url}/api/pki/sign-pdf-pin`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+						'X-API-Key': signingConfig.apiKey
 					},
 					body: JSON.stringify({
 						userId: userInfo?.userId || `${normalizedSignatoryType}_DEFAULT`, // IC number for MTSA
@@ -11765,8 +11763,7 @@ router.post(
 			// If all parties have signed, update loan and application status to PENDING_DISBURSEMENT
 			if (allSigned) {
 				// Construct the signed PDF URL from the signing orchestrator
-				const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-				const signedPdfUrl = `${orchestratorUrl}/api/signed/${applicationId}/download`;
+				const signedPdfUrl = `${signingConfig.url}/api/signed/${applicationId}/download`;
 				
 			await prisma.$transaction([
 				// Update loan status to PENDING_STAMPING and record signed agreement details
@@ -11943,15 +11940,14 @@ router.get("/loans/:loanId/download-agreement", authenticateToken, requireAdminO
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-			const signedPdfUrl = `${orchestratorUrl}/api/signed/${loan.applicationId}/download`;
+			const signedPdfUrl = `${signingConfig.url}/api/signed/${loan.applicationId}/download`;
 			
 			console.log('Admin downloading PKI PDF from:', signedPdfUrl);
 			
 			const response = await fetch(signedPdfUrl, {
 				method: 'GET',
 				headers: {
-					'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+					'X-API-Key': signingConfig.apiKey
 				}
 			});
 
@@ -12034,15 +12030,14 @@ router.get("/loans/:loanId/download-stamped-agreement", authenticateToken, requi
 		}
 
 		try {
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-			const stampedPdfUrl = `${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/stamped`;
+			const stampedPdfUrl = `${signingConfig.url}/api/admin/agreements/${loan.applicationId}/download/stamped`;
 			
 			console.log('Admin downloading stamped PDF from:', stampedPdfUrl);
 			
 			const response = await fetch(stampedPdfUrl, {
 				method: 'GET',
 				headers: {
-					'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+					'X-API-Key': signingConfig.apiKey
 				}
 			});
 
@@ -12096,22 +12091,9 @@ const stampedPdfUpload = multer({
 	}
 });
 
-// Configure multer for stamp certificate uploads (persistent storage)
+// Configure multer for stamp certificate uploads (memory storage for S3)
 const stampCertUpload = multer({
-	storage: (multer as any).diskStorage({
-		destination: (_req: any, _file: any, cb: any) => {
-			const uploadDir = path.join(__dirname, '../../uploads/stamp-certificates');
-			if (!fs.existsSync(uploadDir)) {
-				fs.mkdirSync(uploadDir, { recursive: true });
-			}
-			cb(null, uploadDir);
-		},
-		filename: (req: any, _file: any, cb: any) => {
-			const applicationId = req.params.id;
-			const timestamp = Date.now();
-			cb(null, `stamp-cert-${applicationId}-${timestamp}.pdf`);
-		}
-	}),
+	storage: (multer as any).memoryStorage(),
 	fileFilter: (_req: any, file: any, cb: any) => {
 		if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
 			cb(null, true);
@@ -12122,22 +12104,9 @@ const stampCertUpload = multer({
 	limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
-// Configure multer for disbursement slip uploads (persistent storage)
+// Configure multer for disbursement slip uploads (memory storage for S3)
 const disbursementSlipUpload = multer({
-	storage: (multer as any).diskStorage({
-		destination: (_req: any, _file: any, cb: any) => {
-			const uploadDir = path.join(process.cwd(), 'uploads/disbursement-slips');
-			if (!fs.existsSync(uploadDir)) {
-				fs.mkdirSync(uploadDir, { recursive: true });
-			}
-			cb(null, uploadDir);
-		},
-		filename: (req: any, _file: any, cb: any) => {
-			const applicationId = req.params.id;
-			const timestamp = Date.now();
-			cb(null, `disbursement-slip-${applicationId}-${timestamp}.pdf`);
-		}
-	}),
+	storage: (multer as any).memoryStorage(),
 	fileFilter: (_req: any, file: any, cb: any) => {
 		if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
 			cb(null, true);
@@ -12248,18 +12217,15 @@ router.post(
 			}
 
 			// Upload to signing orchestrator
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
-			
 			// Generate URLs pointing to orchestrator
-			const stampedPdfUrl = `${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/stamped`;
+			const stampedPdfUrl = `${signingConfig.url}/api/admin/agreements/${loan.applicationId}/download/stamped`;
 			
 			try {
 				// Upload stamped PDF to signing orchestrator
-				const stampedUploadResponse = await fetch(`${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/upload/stamped`, {
+				const stampedUploadResponse = await fetch(`${signingConfig.url}/api/admin/agreements/${loan.applicationId}/upload/stamped`, {
 					method: 'POST',
 					headers: {
-						'X-API-Key': orchestratorApiKey,
+						'X-API-Key': signingConfig.apiKey,
 						'Content-Type': 'application/pdf',
 						'X-Original-Filename': file.originalname,
 						'X-Uploaded-By': adminUser?.fullName || 'Unknown Admin',
@@ -12427,18 +12393,15 @@ router.post(
 			}
 
 			// Upload to signing orchestrator
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
-			
 			// Generate the certificate URL pointing to orchestrator
-			const stampCertificateUrl = `${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/download/certificate`;
-			
+			const stampCertificateUrl = `${signingConfig.url}/api/admin/agreements/${loan.applicationId}/download/certificate`;
+
 			try {
 				// Upload certificate to signing orchestrator
-				const uploadResponse = await fetch(`${orchestratorUrl}/api/admin/agreements/${loan.applicationId}/upload/certificate`, {
+				const uploadResponse = await fetch(`${signingConfig.url}/api/admin/agreements/${loan.applicationId}/upload/certificate`, {
 					method: 'POST',
 					headers: {
-						'X-API-Key': orchestratorApiKey,
+						'X-API-Key': signingConfig.apiKey,
 						'Content-Type': 'application/pdf',
 						'X-Original-Filename': file.originalname,
 						'X-Uploaded-By': adminUser?.fullName || 'Unknown Admin',
@@ -12604,12 +12567,10 @@ router.get(
 		const downloadFileName = `stamp-certificate-${loanId.substring(0, 8)}.pdf`;
 
 		if (certificateUrl.startsWith('http://') || certificateUrl.startsWith('https://')) {
-			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
-
 			try {
 				const downloadResponse = await fetch(certificateUrl, {
 					headers: {
-						'X-API-Key': orchestratorApiKey,
+						'X-API-Key': signingConfig.apiKey,
 					}
 				});
 
@@ -12637,40 +12598,36 @@ router.get(
 			}
 		}
 
-		let certificatePath = path.join(process.cwd(), certificateUrl);
-		console.log(`📁 Reading stamp certificate from: ${certificatePath}`);
+		// Stream from S3
+		try {
+			console.log(`📁 Streaming stamp certificate from S3: ${certificateUrl}`);
+			const { stream, contentType, contentLength } = await getS3ObjectStream(certificateUrl);
 
-		if (!fs.existsSync(certificatePath)) {
-			const legacyPath = path.join(__dirname, '../../', certificateUrl);
-			console.log(`📁 Certificate not found, checking legacy path: ${legacyPath}`);
-
-			if (!fs.existsSync(legacyPath)) {
-				console.error(`❌ Stamp certificate file not found at: ${certificatePath} or ${legacyPath}`);
-				return res.status(404).json({
-					success: false,
-					message: 'Stamp certificate file not found on server'
-				});
+			res.setHeader('Content-Type', contentType || 'application/pdf');
+			res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+			if (contentLength) {
+				res.setHeader('Content-Length', contentLength);
 			}
 
-			certificatePath = legacyPath;
+			stream.on('error', (error: Error) => {
+				console.error('❌ Error streaming file from S3:', error);
+				if (!res.headersSent) {
+					res.status(500).json({
+						success: false,
+						message: "Error streaming certificate file",
+						error: error.message
+					});
+				}
+			});
+			stream.pipe(res);
+			return;
+		} catch (s3Error) {
+			console.error(`❌ Stamp certificate not found in S3: ${certificateUrl}`, s3Error);
+			return res.status(404).json({
+				success: false,
+				message: 'Stamp certificate file not found in storage'
+			});
 		}
-
-		res.setHeader('Content-Type', 'application/pdf');
-		res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
-
-		const fileStream = fs.createReadStream(certificatePath);
-		fileStream.on('error', (error: Error) => {
-			console.error('❌ Error streaming file:', error);
-			if (!res.headersSent) {
-				res.status(500).json({
-					success: false,
-					message: "Error streaming certificate file",
-					error: error.message
-				});
-			}
-		});
-		fileStream.pipe(res);
-		return;
 
 		} catch (error) {
 			console.error('❌ Error downloading stamp certificate:', error);
@@ -12775,8 +12732,25 @@ router.post(
 				});
 			}
 
-		// File has been saved to disk by multer, get the relative path
-		const relativePath = `uploads/stamp-certificates/${file.filename}`;
+		// Upload to S3 with organized folder structure
+		const uploadResult = await uploadToS3Organized(
+			file.buffer,
+			file.originalname,
+			'application/pdf',
+			{
+				folder: S3_FOLDERS.STAMP_CERTIFICATES,
+				subFolder: application.loan.id.substring(0, 8), // Organize by loan ID prefix
+			}
+		);
+
+		if (!uploadResult.success || !uploadResult.key) {
+			return res.status(500).json({
+				success: false,
+				message: `Failed to upload stamp certificate: ${uploadResult.error}`
+			});
+		}
+
+		const s3Key = uploadResult.key;
 
 		// Check if certificate already exists (replacement scenario)
 		const existingCertUrl = application.loan.pkiStampCertificateUrl;
@@ -12784,11 +12758,20 @@ router.post(
 		const action = isReplacement ? 'replaced' : 'uploaded';
 		const adminName = adminUser?.fullName || `admin_${adminUser?.userId}`;
 
+		// Delete old certificate from S3 if replacing
+		if (isReplacement && existingCertUrl) {
+			try {
+				await deleteFromS3(existingCertUrl);
+			} catch (deleteErr) {
+				console.warn(`Failed to delete old S3 certificate: ${existingCertUrl}`, deleteErr);
+			}
+		}
+
 		// Update loan with certificate URL
 		await prisma.loan.update({
 			where: { id: application.loan.id },
 			data: {
-				pkiStampCertificateUrl: relativePath,
+				pkiStampCertificateUrl: s3Key,
 				updatedAt: new Date()
 			}
 		});
@@ -12801,29 +12784,29 @@ router.post(
 				newStatus: `STAMP_CERTIFICATE_${action.toUpperCase()}`,
 				changedBy: adminName,
 				changeReason: `Stamp certificate ${action}`,
-				notes: `Stamp certificate ${action} by ${adminName}. File: ${file.filename}`,
+				notes: `Stamp certificate ${action} by ${adminName}. File: ${file.originalname}`,
 				metadata: {
 					action,
 					previousCertUrl: existingCertUrl,
-					newCertUrl: relativePath,
-				fileName: file.filename,
-				fileSize: file.size,
-				uploadedBy: adminUser?.userId,
-				uploadedByName: adminName,
-				uploadedAt: new Date().toISOString(),
+					newCertUrl: s3Key,
+					fileName: file.originalname,
+					fileSize: file.size,
+					uploadedBy: adminUser?.userId,
+					uploadedByName: adminName,
+					uploadedAt: new Date().toISOString(),
 					loanId: application.loan.id
 				}
 			}
 		});
 
-			console.log(`✅ Stamp certificate uploaded for application ${applicationId}: ${file.filename}`);
+			console.log(`✅ Stamp certificate uploaded to S3 for application ${applicationId}: ${s3Key}`);
 
 			return res.json({
 				success: true,
 				message: "Stamp certificate uploaded successfully",
 				data: {
-					certificateUrl: relativePath,
-					fileName: file.filename,
+					certificateUrl: s3Key,
+					fileName: file.originalname,
 					applicationId: applicationId,
 					loanId: application.loan.id
 				}
@@ -13069,9 +13052,8 @@ router.get(
 		});
 	}
 
-	// Build the DocuSeal URL from environment variable and slug
-	const docusealBaseUrl = process.env.DOCUSEAL_BASE_URL || 'https://sign.creditxpress.com.my';
-	const docusealUrl = `${docusealBaseUrl}/s/${application.loan.docusealSignUrl}`;
+	// Build the DocuSeal URL from centralized config and slug
+	const docusealUrl = `${docusealConfig.baseUrl}/s/${application.loan.docusealSignUrl}`;
 	
 	// Return the URL for the frontend to open
 	return res.json({
@@ -13159,17 +13141,14 @@ router.get(
 			}
 
 			// Get signed agreement from signing orchestrator
-			const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL;
-			const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY;
-
-			if (!orchestratorUrl || !orchestratorApiKey) {
+			if (!signingConfig.url || !signingConfig.apiKey) {
 				throw new Error('Signing orchestrator configuration missing');
 			}
 
-			const response = await fetch(`${orchestratorUrl}/api/signed/${applicationId}/download`, {
+			const response = await fetch(`${signingConfig.url}/api/signed/${applicationId}/download`, {
 				method: 'GET',
 				headers: {
-					'X-API-Key': orchestratorApiKey,
+					'X-API-Key': signingConfig.apiKey,
 				},
 			});
 
@@ -13271,12 +13250,10 @@ router.get(
 			const downloadFileName = `stamp-certificate-${applicationId.substring(0, 8)}.pdf`;
 
 			if (certificateUrl.startsWith('http://') || certificateUrl.startsWith('https://')) {
-				const orchestratorApiKey = process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key';
-
 				try {
 					const downloadResponse = await fetch(certificateUrl, {
 						headers: {
-							'X-API-Key': orchestratorApiKey,
+							'X-API-Key': signingConfig.apiKey,
 						}
 					});
 
@@ -13304,21 +13281,26 @@ router.get(
 				}
 			}
 
-			// Legacy disk-based storage
-			const certificatePath = path.join(__dirname, '../../', certificateUrl);
+			// Stream from S3
+			try {
+				console.log(`📁 Streaming stamp certificate from S3: ${certificateUrl}`);
+				const { stream, contentType, contentLength } = await getS3ObjectStream(certificateUrl);
 
-			if (!fs.existsSync(certificatePath)) {
+				res.setHeader('Content-Type', contentType || 'application/pdf');
+				res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
+				if (contentLength) {
+					res.setHeader('Content-Length', contentLength);
+				}
+
+				stream.pipe(res);
+				return;
+			} catch (s3Error) {
+				console.error(`❌ Stamp certificate not found in S3: ${certificateUrl}`, s3Error);
 				return res.status(404).json({
 					success: false,
-					message: "Stamp certificate file not found on server"
+					message: "Stamp certificate file not found in storage"
 				});
 			}
-
-			res.setHeader('Content-Type', 'application/pdf');
-			res.setHeader('Content-Disposition', `attachment; filename="${downloadFileName}"`);
-			const fileStream = fs.createReadStream(certificatePath);
-			fileStream.pipe(res);
-			return;
 
 	} catch (error) {
 			console.error('❌ Error downloading stamp certificate:', error);
@@ -13347,23 +13329,22 @@ router.get("/health-check", authenticateToken, requireAdminOrAttestor, async (re
 		};
 
 		// Define service URLs - these are configurable based on environment
-		const isProduction = process.env.NODE_ENV === 'production';
-		const baseHost = isProduction ? 'sign.creditxpress.com.my' : 'host.docker.internal';
+		const baseHost = serverConfig.isProduction ? 'sign.creditxpress.com.my' : 'host.docker.internal';
 		
 		const services = [
 			{
 				name: 'docuseal',
-				url: isProduction ? 'https://sign.creditxpress.com.my/' : `http://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
+				url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/' : `http://${baseHost}:3001/`, // DocuSeal doesn't have /health, use root
 				timeout: 5000
 			},
 		{
 			name: 'signingOrchestrator', 
-			url: isProduction ? 'https://sign.creditxpress.com.my/orchestrator/health' : `http://${baseHost}:4010/health`,
+			url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/orchestrator/health' : `http://${baseHost}:4010/health`,
 			timeout: 10000  // Increased to 10s to account for Tailscale latency and internal DocuSeal check
 		},
 			{
 				name: 'mtsa',
-				url: isProduction ? 'https://sign.creditxpress.com.my/mtsa/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
+				url: serverConfig.isProduction ? 'https://sign.creditxpress.com.my/mtsa/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl' : `http://${baseHost}:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`,
 				timeout: 5000
 			}
 		];
@@ -13493,15 +13474,42 @@ router.post(
 				return res.status(404).json({ success: false, message: 'Disbursement not found' });
 			}
 
+			// Upload to S3 with organized folder structure
+			const uploadResult = await uploadToS3Organized(
+				file.buffer,
+				file.originalname,
+				'application/pdf',
+				{
+					folder: S3_FOLDERS.DISBURSEMENT_SLIPS,
+					subFolder: applicationId.substring(0, 8), // Organize by application ID prefix
+				}
+			);
+
+			if (!uploadResult.success || !uploadResult.key) {
+				return res.status(500).json({
+					success: false,
+					message: `Failed to upload payment slip: ${uploadResult.error}`
+				});
+			}
+
+			const s3Key = uploadResult.key;
 			const previousSlipUrl = disbursement.paymentSlipUrl;
 			const action = previousSlipUrl ? 'replaced' : 'uploaded';
-			const newSlipUrl = `/uploads/disbursement-slips/${file.filename}`;
+
+			// Delete old slip from S3 if replacing
+			if (previousSlipUrl) {
+				try {
+					await deleteFromS3(previousSlipUrl);
+				} catch (deleteErr) {
+					console.warn(`Failed to delete old S3 disbursement slip: ${previousSlipUrl}`, deleteErr);
+				}
+			}
 
 			// Update with payment slip URL
 			const updatedDisbursement = await prisma.loanDisbursement.update({
 				where: { applicationId },
 				data: {
-					paymentSlipUrl: newSlipUrl
+					paymentSlipUrl: s3Key
 				}
 			});
 
@@ -13514,14 +13522,14 @@ router.post(
 					changedBy: adminName,
 					notes: `Payment slip ${action} by ${adminName}`,
 					metadata: {
-					action,
-					previousSlipUrl,
-					newSlipUrl,
-					fileName: file.filename,
-					fileSize: file.size,
-					uploadedBy: req.user?.userId,
-					uploadedByName: adminName,
-					uploadedAt: new Date().toISOString()
+						action,
+						previousSlipUrl,
+						newSlipUrl: s3Key,
+						fileName: file.originalname,
+						fileSize: file.size,
+						uploadedBy: req.user?.userId,
+						uploadedByName: adminName,
+						uploadedAt: new Date().toISOString()
 					}
 				}
 			});
@@ -13584,35 +13592,19 @@ router.get(
 			});
 		}
 
-		// Try the correct path first (process.cwd() for new uploads)
-		let filePath = path.join(process.cwd(), disbursement.paymentSlipUrl);
-		console.log(`📁 Checking payment slip at: ${filePath}`);
-		
-		// Fall back to old path (__dirname) for legacy files uploaded before the fix
-		if (!fs.existsSync(filePath)) {
-			const legacyPath = path.join(__dirname, '../../', disbursement.paymentSlipUrl);
-			console.log(`📁 File not found, checking legacy path: ${legacyPath}`);
-			
-			if (fs.existsSync(legacyPath)) {
-				filePath = legacyPath;
-				console.log(`✅ Found payment slip at legacy path`);
-			} else {
-				console.error(`❌ Payment slip file not found at either path`);
-				return res.status(404).json({
-					success: false,
-					message: 'File not found on server'
-				});
-			}
-		} else {
-			console.log(`✅ Found payment slip at current path`);
-		}
+		// Stream from S3
+		try {
+			console.log(`📁 Streaming payment slip from S3: ${disbursement.paymentSlipUrl}`);
+			const { stream, contentType, contentLength } = await getS3ObjectStream(disbursement.paymentSlipUrl);
 
-			res.setHeader('Content-Type', 'application/pdf');
+			res.setHeader('Content-Type', contentType || 'application/pdf');
 			res.setHeader('Content-Disposition', `attachment; filename="disbursement-slip-${applicationId}.pdf"`);
-			
-			const fileStream = fs.createReadStream(filePath);
-			fileStream.on('error', (error: Error) => {
-				console.error('❌ Error streaming payment slip file:', error);
+			if (contentLength) {
+				res.setHeader('Content-Length', contentLength);
+			}
+
+			stream.on('error', (error: Error) => {
+				console.error('❌ Error streaming payment slip from S3:', error);
 				if (!res.headersSent) {
 					res.status(500).json({
 						success: false,
@@ -13621,8 +13613,15 @@ router.get(
 					});
 				}
 			});
-			fileStream.pipe(res);
+			stream.pipe(res);
 			return;
+		} catch (s3Error) {
+			console.error(`❌ Payment slip not found in S3: ${disbursement.paymentSlipUrl}`, s3Error);
+			return res.status(404).json({
+				success: false,
+				message: 'Payment slip file not found in storage'
+			});
+		}
 		} catch (error) {
 			console.error('❌ Error downloading disbursement slip:', error);
 			return res.status(500).json({
@@ -13772,11 +13771,10 @@ router.post(
 		try {
 			const { applicationId, userId, icNumber, fullName } = req.body;
 			const adminUserId = req.user?.userId;
-			const isMockMode =
-				process.env.CTOS_B2B_MOCK_MODE === "true"
+			const isMockMode = ctosConfig.b2bMockMode;
 
 			console.log("Mock Mode 2:", isMockMode);
-			console.log("CTOS_B2B_MOCK_MODE 2:", process.env.CTOS_B2B_MOCK_MODE);
+			console.log("CTOS_B2B_MOCK_MODE 2:", ctosConfig.b2bMockMode);
 
 			if (!adminUserId) {
 				return res.status(401).json({

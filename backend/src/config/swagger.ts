@@ -1,11 +1,9 @@
 import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
+import { serverConfig, urlConfig } from "../lib/config";
 
-// Get base URL from environment or use the port-based localhost as fallback
-const port = process.env.PORT || 3001;
-export const baseUrl = (
-	process.env.BASE_URL || `http://localhost:${port}`
-).replace(/\/$/, "");
+// Get base URL from centralized config
+export const baseUrl = urlConfig.api.replace(/\/$/, "");
 
 const options = {
 	definition: {
@@ -18,10 +16,9 @@ const options = {
 		servers: [
 			{
 				url: baseUrl,
-				description:
-					process.env.NODE_ENV === "production"
-						? "Production server"
-						: "Local development server",
+				description: serverConfig.isProduction
+					? "Production server"
+					: "Local development server",
 			},
 		],
 		components: {

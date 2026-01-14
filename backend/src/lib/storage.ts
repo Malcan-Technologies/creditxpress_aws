@@ -6,44 +6,139 @@
  * Required dependencies (add to package.json):
  *   npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
  * 
- * Required environment variables:
- *   AWS_REGION - AWS region (e.g., ap-southeast-1)
- *   S3_BUCKET - S3 bucket name
- *   S3_UPLOAD_PREFIX - Optional prefix for uploads (default: "uploads")
+ * Configuration is loaded from centralized config module.
  */
 
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import path from "path";
 import crypto from "crypto";
+import { Readable } from "stream";
+import { s3Config } from "./config";
 
 // S3 Client configuration
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "ap-southeast-1",
+  region: s3Config.region,
 });
 
-const BUCKET = process.env.S3_BUCKET || "";
-const UPLOAD_PREFIX = process.env.S3_UPLOAD_PREFIX || "uploads";
+const BUCKET = s3Config.bucket;
+const UPLOAD_PREFIX = s3Config.uploadPrefix;
 
 // Check if S3 is configured
 function isS3Configured(): boolean {
-  return Boolean(BUCKET && process.env.AWS_REGION);
+  return s3Config.isConfigured;
 }
 
-// Generate unique filename
+/**
+ * S3 Folder Structure:
+ * 
+ * uploads/
+ * ├── kyc/
+ * │   └── 2025/01/
+ * │       ├── front/
+ * │       ├── back/
+ * │       └── selfie/
+ * ├── documents/
+ * │   └── 2025/01/
+ * │       ├── income-proof/
+ * │       ├── bank-statement/
+ * │       └── other/
+ * ├── stamp-certificates/
+ * │   └── 2025/01/
+ * ├── disbursement-slips/
+ * │   └── 2025/01/
+ * ├── receipts/
+ * │   └── 2025/01/
+ * └── default-letters/
+ *     └── 2025/01/
+ */
+
+// Document type categories for folder organization
+export const S3_FOLDERS = {
+  KYC: 'kyc',
+  KYC_FRONT: 'kyc/front',
+  KYC_BACK: 'kyc/back',
+  KYC_SELFIE: 'kyc/selfie',
+  DOCUMENTS: 'documents',
+  STAMP_CERTIFICATES: 'stamp-certificates',
+  DISBURSEMENT_SLIPS: 'disbursement-slips',
+  RECEIPTS: 'receipts',
+  DEFAULT_LETTERS: 'default-letters',
+  SIGNED_AGREEMENTS: 'signed-agreements',
+  STAMPED_AGREEMENTS: 'stamped-agreements',
+} as const;
+
+export type S3FolderType = typeof S3_FOLDERS[keyof typeof S3_FOLDERS];
+
+// Generate unique filename with original name preserved for reference
 function generateUniqueFilename(originalFilename: string): string {
   const ext = path.extname(originalFilename);
+  const baseName = path.basename(originalFilename, ext)
+    .replace(/[^a-zA-Z0-9-_]/g, '_') // Sanitize filename
+    .substring(0, 50); // Limit base name length
   const timestamp = Date.now();
-  const randomHash = crypto.randomBytes(8).toString("hex");
-  return `${timestamp}-${randomHash}${ext}`;
+  const randomHash = crypto.randomBytes(4).toString("hex");
+  return `${timestamp}-${randomHash}-${baseName}${ext}`;
 }
 
-// Build S3 key with prefix and optional subfolder
+// Get current date folder (YYYY/MM format)
+function getDateFolder(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}/${month}`;
+}
+
+// Build S3 key with proper folder structure
+// Format: uploads/{category}/{YYYY}/{MM}/{filename}
 function buildS3Key(filename: string, subfolder?: string): string {
   const parts = [UPLOAD_PREFIX];
+  
   if (subfolder) {
     parts.push(subfolder);
   }
+  
+  // Add date-based subfolder for organization
+  parts.push(getDateFolder());
+  
+  parts.push(filename);
+  return parts.join("/");
+}
+
+/**
+ * Build S3 key with custom organization options
+ * 
+ * @param filename - The filename to use
+ * @param options - Organization options
+ * @returns Full S3 key
+ */
+export function buildOrganizedS3Key(
+  filename: string,
+  options: {
+    folder: S3FolderType;
+    subFolder?: string;
+    includeDate?: boolean;
+    userId?: string;
+  }
+): string {
+  const parts = [UPLOAD_PREFIX, options.folder];
+  
+  // Add date folder by default
+  if (options.includeDate !== false) {
+    parts.push(getDateFolder());
+  }
+  
+  // Add user-specific subfolder if provided (for better organization)
+  if (options.userId) {
+    // Use first 8 chars of user ID for privacy
+    parts.push(options.userId.substring(0, 8));
+  }
+  
+  // Add custom subfolder if provided
+  if (options.subFolder) {
+    parts.push(options.subFolder);
+  }
+  
   parts.push(filename);
   return parts.join("/");
 }
@@ -93,6 +188,74 @@ export async function uploadToS3(
       Body: buffer,
       ContentType: contentType,
       // Server-side encryption
+      ServerSideEncryption: "AES256",
+    });
+
+    await s3Client.send(command);
+
+    return {
+      success: true,
+      key,
+      url: `s3://${BUCKET}/${key}`,
+    };
+  } catch (error) {
+    console.error("S3 upload error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown upload error",
+    };
+  }
+}
+
+/**
+ * Upload options for organized file storage
+ */
+export interface OrganizedUploadOptions {
+  folder: S3FolderType;
+  subFolder?: string;
+  userId?: string;
+  includeDate?: boolean;
+}
+
+/**
+ * Upload a file buffer to S3 with organized folder structure
+ * 
+ * @param buffer - File buffer to upload
+ * @param originalFilename - Original filename (used for extension)
+ * @param contentType - MIME type of the file
+ * @param options - Organization options for folder structure
+ * @returns Upload result with S3 key
+ * 
+ * @example
+ * // Upload KYC front image
+ * await uploadToS3Organized(buffer, 'id-front.jpg', 'image/jpeg', {
+ *   folder: S3_FOLDERS.KYC_FRONT,
+ *   userId: 'user123'
+ * });
+ * // Result: uploads/kyc/front/2025/01/user123/1234567890-abc123-id-front.jpg
+ */
+export async function uploadToS3Organized(
+  buffer: Buffer,
+  originalFilename: string,
+  contentType: string,
+  options: OrganizedUploadOptions
+): Promise<UploadResult> {
+  if (!isS3Configured()) {
+    return {
+      success: false,
+      error: "S3 is not configured. Set AWS_REGION and S3_BUCKET environment variables.",
+    };
+  }
+
+  try {
+    const filename = generateUniqueFilename(originalFilename);
+    const key = buildOrganizedS3Key(filename, options);
+
+    const command = new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
       ServerSideEncryption: "AES256",
     });
 
@@ -259,6 +422,64 @@ export async function fileExistsInS3(key: string): Promise<boolean> {
   } catch (error) {
     return false;
   }
+}
+
+/**
+ * Get a readable stream from S3 for proxying file downloads
+ * 
+ * @param key - S3 object key
+ * @returns Object containing the stream, content type, and content length
+ */
+export async function getS3ObjectStream(key: string): Promise<{
+  stream: Readable;
+  contentType: string;
+  contentLength: number;
+}> {
+  if (!isS3Configured()) {
+    throw new Error("S3 is not configured. Set AWS_REGION and S3_BUCKET environment variables.");
+  }
+
+  const command = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+
+  if (!response.Body) {
+    throw new Error(`No body returned for S3 object: ${key}`);
+  }
+
+  return {
+    stream: response.Body as Readable,
+    contentType: response.ContentType || "application/octet-stream",
+    contentLength: response.ContentLength || 0,
+  };
+}
+
+/**
+ * Get content type based on file extension
+ * 
+ * @param filename - Filename or path with extension
+ * @returns MIME type string
+ */
+export function getContentType(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+  };
+  return mimeTypes[ext] || "application/octet-stream";
 }
 
 /**

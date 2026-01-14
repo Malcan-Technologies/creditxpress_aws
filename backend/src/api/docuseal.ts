@@ -2,6 +2,7 @@ import express from 'express';
 import { docusealService } from '../lib/docusealService';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
+import { docusealConfig, signingConfig } from '../lib/config';
 
 const router = express.Router();
 
@@ -128,9 +129,9 @@ router.post('/initiate-application-signing', authenticateToken, async (req: Auth
       
       try {
         // Try to get submission details from DocuSeal to get the correct signing URL
-        const submissionResponse = await fetch(`${process.env.DOCUSEAL_API_URL || 'http://host.docker.internal:3001'}/api/submissions/${existingLoan.docusealSubmissionId}`, {
+        const submissionResponse = await fetch(`${docusealConfig.apiUrl}/api/submissions/${existingLoan.docusealSubmissionId}`, {
           headers: {
-            'Authorization': `Bearer ${process.env.DOCUSEAL_API_KEY}`,
+            'Authorization': `Bearer ${docusealConfig.apiKey}`,
             'Content-Type': 'application/json'
           }
         });
@@ -138,7 +139,7 @@ router.post('/initiate-application-signing', authenticateToken, async (req: Auth
         if (submissionResponse.ok) {
           const submissionData = await submissionResponse.json();
           const borrowerSubmitter = submissionData.submitters?.find((s: any) => s.role === 'Borrower');
-          const signUrl = borrowerSubmitter?.embed_src || borrowerSubmitter?.sign_url || `${process.env.DOCUSEAL_BASE_URL || 'http://192.168.0.100:3001'}/s/${borrowerSubmitter?.slug}`;
+          const signUrl = borrowerSubmitter?.embed_src || borrowerSubmitter?.sign_url || `${docusealConfig.baseUrl}/s/${borrowerSubmitter?.slug}`;
           
           return res.json({
             success: true,
@@ -157,7 +158,7 @@ router.post('/initiate-application-signing', authenticateToken, async (req: Auth
       }
       
       // Fallback: construct basic signing URL
-      const signUrl = `${process.env.DOCUSEAL_BASE_URL || 'http://192.168.0.100:3001'}/s/${existingLoan.docusealSubmissionId}`;
+      const signUrl = `${docusealConfig.baseUrl}/s/${existingLoan.docusealSubmissionId}`;
       
       return res.json({
         success: true,
@@ -308,7 +309,7 @@ router.post('/webhook', async (req, res) => {
     console.log('POST /api/docuseal/webhook - Headers:', JSON.stringify(req.headers, null, 2));
     
     // Verify webhook signature (optional but recommended)
-    const webhookSecret = process.env.DOCUSEAL_WEBHOOK_SECRET;
+    const webhookSecret = docusealConfig.webhookSecret;
     
     if (webhookSecret) {
       const signature = req.headers['x-docuseal-signature'] as string;
@@ -383,9 +384,9 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
     }
 
     // Get submission ID from DocuSeal API
-    const submissionResponse = await fetch(`${process.env.DOCUSEAL_API_URL || 'http://host.docker.internal:3001'}/api/submitters/${submitterId}`, {
+    const submissionResponse = await fetch(`${docusealConfig.apiUrl}/api/submitters/${submitterId}`, {
       headers: {
-        'X-Auth-Token': process.env.DOCUSEAL_API_TOKEN || '',
+        'X-Auth-Token': docusealConfig.apiToken,
         'Accept': 'application/json'
       }
     });
@@ -479,8 +480,7 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
  */
 async function forwardToSigningOrchestrator(payload: any): Promise<void> {
   try {
-    const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-    const webhookUrl = `${orchestratorUrl}/webhooks/docuseal`;
+    const webhookUrl = `${signingConfig.url}/webhooks/docuseal`;
     
     console.log('Forwarding to signing orchestrator:', webhookUrl);
     
@@ -488,7 +488,7 @@ async function forwardToSigningOrchestrator(payload: any): Promise<void> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+        'X-API-Key': signingConfig.apiKey
       },
       body: JSON.stringify(payload)
     });
@@ -710,7 +710,7 @@ router.post('/test-connection-simple', async (_req: any, res) => {
       message: 'DocuSeal connection successful',
       data: {
         templatesCount: templates.length,
-        baseUrl: process.env.DOCUSEAL_BASE_URL
+        baseUrl: docusealConfig.baseUrl
       }
     });
 

@@ -67,9 +67,27 @@ resource "aws_secretsmanager_secret" "resend_api_key" {
   }
 }
 
-# CTOS API credentials
+# CTOS eKYC API credentials (JSON: api_key, package_name, security_key, base_url, webhook_url, ciphertext, cipher)
 resource "aws_secretsmanager_secret" "ctos_credentials" {
   name = "${var.secrets_prefix}/ctos-credentials"
+
+  tags = {
+    Client = var.client_slug
+  }
+}
+
+# KYC Service credentials (JSON: jwt_secret, token_ttl_minutes, ocr_url, face_url, liveness_url, disable_liveness)
+resource "aws_secretsmanager_secret" "kyc_credentials" {
+  name = "${var.secrets_prefix}/kyc-credentials"
+
+  tags = {
+    Client = var.client_slug
+  }
+}
+
+# CTOS B2B Credit Report credentials (JSON: company_code, account_no, user_id, client_id, sso_password, sso_url, api_url, private_key)
+resource "aws_secretsmanager_secret" "ctos_b2b_credentials" {
+  name = "${var.secrets_prefix}/ctos-b2b-credentials"
 
   tags = {
     Client = var.client_slug
@@ -95,6 +113,8 @@ output "secret_arns" {
     whatsapp_token           = aws_secretsmanager_secret.whatsapp_token.arn
     resend_api_key           = aws_secretsmanager_secret.resend_api_key.arn
     ctos_credentials         = aws_secretsmanager_secret.ctos_credentials.arn
+    kyc_credentials          = aws_secretsmanager_secret.kyc_credentials.arn
+    ctos_b2b_credentials     = aws_secretsmanager_secret.ctos_b2b_credentials.arn
     cloudflare_tunnel_token  = aws_secretsmanager_secret.cloudflare_tunnel_token.arn
   }
 }

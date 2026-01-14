@@ -7,41 +7,22 @@ import {
 } from "../middleware/auth";
 import { nanoid } from "nanoid";
 import multer from "multer";
-import path from "path";
-import fs from "fs";
 import { RequestHandler } from "express";
 import { trackApplicationStatusChange } from "./admin";
 import { userHasAllKycDocuments } from "./kyc";
 import { docusealService } from "../lib/docusealService";
 import whatsappService from "../lib/whatsappService";
+import { docusealConfig, signingConfig } from "../lib/config";
+import { uploadToS3Organized, getS3ObjectStream, deleteFromS3, S3_FOLDERS } from "../lib/storage";
 
 const router = Router();
 const prisma = new PrismaClient();
 
-// Configure multer for file uploads
-const storage = (multer as any).diskStorage({
-	destination: (
-		_req: Request,
-		_file: Express.Multer.File,
-		cb: (error: Error | null, destination: string) => void
-	) => {
-		cb(null, "uploads/");
-	},
-	filename: (
-		_req: Request,
-		file: Express.Multer.File,
-		cb: (error: Error | null, filename: string) => void
-	) => {
-		const ext = path.extname(file.originalname);
-		cb(null, `${Date.now()}${ext}`);
-	},
-});
-
-// Set max file size to 50MB
+// Configure multer with memory storage for S3 uploads
 const upload = multer({
-	storage,
+	storage: (multer as any).memoryStorage(),
 	limits: {
-		fieldSize: 50 * 1024 * 1024, // 50MB in bytes
+		fileSize: 50 * 1024 * 1024, // 50MB in bytes
 	},
 });
 
@@ -764,15 +745,31 @@ router.post(
 					.json({ message: "Loan application not found" });
 			}
 
-			// Create document records
+			// Upload files to S3 and create document records
 			const documents = await Promise.all(
 				files.map(async (file, index) => {
+					// Upload to S3 with organized folder structure
+					const uploadResult = await uploadToS3Organized(
+						file.buffer,
+						file.originalname,
+						file.mimetype,
+						{
+							folder: S3_FOLDERS.DOCUMENTS,
+							subFolder: documentTypes[index]?.toLowerCase().replace(/\s+/g, '-') || 'other',
+							userId,
+						}
+					);
+					
+					if (!uploadResult.success || !uploadResult.key) {
+						throw new Error(`Failed to upload ${file.originalname}: ${uploadResult.error}`);
+					}
+					
 					return prisma.userDocument.create({
 						data: {
 							userId,
 							applicationId: id,
 							type: documentTypes[index],
-							fileUrl: `/uploads/${file.filename}`,
+							fileUrl: uploadResult.key, // S3 key
 							status: "PENDING",
 						},
 					});
@@ -1001,15 +998,11 @@ router.delete(
 				return res.status(404).json({ message: "Document not found" });
 			}
 
-			// Delete the document from storage and database
-			const filePath = path.join(process.cwd(), document.fileUrl);
-
+			// Delete the document from S3 and database
 			try {
-				if (fs.existsSync(filePath)) {
-					fs.unlinkSync(filePath);
-				}
+				await deleteFromS3(document.fileUrl);
 			} catch (err) {
-				console.error("Error deleting file from storage:", err);
+				console.error("Error deleting file from S3:", err);
 			}
 
 			await prisma.userDocument.delete({
@@ -1085,15 +1078,12 @@ router.delete("/:id", authenticateAndVerifyPhone, async (req: AuthRequest, res: 
 
 		// Delete associated documents first
 		if (existingApplication.documents.length > 0) {
-			// Delete files from storage
+			// Delete files from S3
 			for (const document of existingApplication.documents) {
-				const filePath = path.join(process.cwd(), document.fileUrl);
 				try {
-					if (fs.existsSync(filePath)) {
-						fs.unlinkSync(filePath);
-					}
+					await deleteFromS3(document.fileUrl);
 				} catch (err) {
-					console.error("Error deleting file from storage:", err);
+					console.error("Error deleting file from S3:", err);
 				}
 			}
 
@@ -1252,65 +1242,37 @@ router.get("/:id/documents/:documentId", (async (
 			return res.status(404).json({ error: "Document not found" });
 		}
 
-		// Get the file path
-		const filePath = path.join(
-			process.cwd(),
-			document.fileUrl.replace(/^\//, "") // Remove leading slash if present
-		);
-
-		// Check if file exists
-		if (!fs.existsSync(filePath)) {
-			console.error("File not found at path:", filePath);
-			return res.status(404).json({ error: "File not found" });
-		}
-
-		// Get file extension and set appropriate content type
-		const fileExtension = path.extname(document.fileUrl).toLowerCase();
-		let contentType = "application/octet-stream";
-
-		switch (fileExtension) {
-			case ".pdf":
-				contentType = "application/pdf";
-				break;
-			case ".jpg":
-			case ".jpeg":
-				contentType = "image/jpeg";
-				break;
-			case ".png":
-				contentType = "image/png";
-				break;
-			case ".doc":
-			case ".docx":
-				contentType =
-					"application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-				break;
-			case ".xls":
-			case ".xlsx":
-				contentType =
-					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-				break;
-		}
-
-		// Set appropriate headers
-		res.setHeader("Content-Type", contentType);
-		res.setHeader(
-			"Content-Disposition",
-			`inline; filename="${path.basename(
-				document.fileUrl
-			)}${fileExtension}"`
-		);
-
-		// Stream the file
-		const fileStream = fs.createReadStream(filePath);
-		fileStream.pipe(res);
-
-		// Handle errors
-		fileStream.on("error", (error) => {
-			console.error("Error streaming file:", error);
-			if (!res.headersSent) {
-				res.status(500).json({ error: "Error streaming file" });
+		// Stream file from S3
+		try {
+			const { stream, contentType, contentLength } = await getS3ObjectStream(document.fileUrl);
+			
+			// Set appropriate headers
+			res.setHeader("Content-Type", contentType);
+			if (contentLength) {
+				res.setHeader("Content-Length", contentLength);
 			}
-		});
+			
+			// Extract filename from S3 key for Content-Disposition
+			const filename = document.fileUrl.split('/').pop() || 'document';
+			res.setHeader(
+				"Content-Disposition",
+				`inline; filename="${filename}"`
+			);
+
+			// Stream the file
+			stream.pipe(res);
+			
+			// Handle stream errors
+			stream.on("error", (error) => {
+				console.error("Error streaming file from S3:", error);
+				if (!res.headersSent) {
+					res.status(500).json({ error: "Error streaming file" });
+				}
+			});
+		} catch (s3Error) {
+			console.error("Error fetching from S3:", s3Error);
+			return res.status(404).json({ error: "File not found in storage" });
+		}
 
 		return res;
 	} catch (error) {
@@ -2386,8 +2348,8 @@ router.get("/:applicationId/signing-url", authenticateAndVerifyPhone, async (req
         return res.json({
             success: true,
             data: {
-                signingUrl: userSignatory.signingSlug 
-                    ? `${process.env.DOCUSEAL_BASE_URL || 'http://192.168.0.100:3001'}/s/${userSignatory.signingSlug}`
+                signingUrl: userSignatory.signingSlug
+                    ? `${docusealConfig.baseUrl}/s/${userSignatory.signingSlug}`
                     : userSignatory.signingUrl,
                 applicationId,
                 loanId: loan.id
@@ -2495,15 +2457,14 @@ router.get("/:loanId/pki-pdf", authenticateAndVerifyPhone, async (req: AuthReque
         }
 
         // Proxy request to signing orchestrator
-        const orchestratorUrl = process.env.SIGNING_ORCHESTRATOR_URL || 'https://sign.creditxpress.com.my';
-        const signedPdfUrl = `${orchestratorUrl}/api/signed/${loan.applicationId}/download`;
-        
+        const signedPdfUrl = `${signingConfig.url}/api/signed/${loan.applicationId}/download`;
+
         console.log('Proxying PKI PDF request to:', signedPdfUrl);
-        
+
         const response = await fetch(signedPdfUrl, {
             method: 'GET',
             headers: {
-                'X-API-Key': process.env.SIGNING_ORCHESTRATOR_API_KEY || 'dev-api-key'
+                'X-API-Key': signingConfig.apiKey
             }
         });
 

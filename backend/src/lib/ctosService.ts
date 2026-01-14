@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import axios from 'axios';
+import { ctosConfig } from './config';
 
 interface CTOSConfig {
   apiKey: string;
@@ -85,24 +86,15 @@ export class CTOSService {
   private config: CTOSConfig;
 
   constructor() {
-    // Support both individual env vars and JSON-formatted CTOS_CREDENTIALS (for AWS ECS)
-    let ctosCredentials: Record<string, string> = {};
-    if (process.env.CTOS_CREDENTIALS) {
-      try {
-        ctosCredentials = JSON.parse(process.env.CTOS_CREDENTIALS);
-      } catch {
-        console.warn('Failed to parse CTOS_CREDENTIALS JSON, falling back to individual env vars');
-      }
-    }
-
+    // Use centralized config which handles both individual env vars and JSON credentials
     this.config = {
-      apiKey: process.env.CTOS_API_KEY || ctosCredentials.api_key || '',
-      packageName: process.env.CTOS_PACKAGE_NAME || ctosCredentials.package_name || '',
-      securityKey: process.env.CTOS_SECURITY_KEY || ctosCredentials.security_key || '',
-      baseUrl: process.env.CTOS_BASE_URL || ctosCredentials.base_url || '',
-      webhookUrl: process.env.CTOS_WEBHOOK_URL || ctosCredentials.webhook_url || '',
-      ciphertext: process.env.CTOS_CIPHERTEXT || ctosCredentials.ciphertext || 'default16bytesiv', // 16 bytes for AES
-      cipher: process.env.CTOS_CIPHER || ctosCredentials.cipher || 'aes-256-cbc'
+      apiKey: ctosConfig.apiKey,
+      packageName: ctosConfig.packageName,
+      securityKey: ctosConfig.securityKey,
+      baseUrl: ctosConfig.baseUrl,
+      webhookUrl: ctosConfig.webhookUrl,
+      ciphertext: ctosConfig.ciphertext,
+      cipher: ctosConfig.cipher
     };
 
     // Log warning if CTOS config is incomplete

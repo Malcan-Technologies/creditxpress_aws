@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import * as jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
+import { jwtConfig, kycConfig } from "../lib/config";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-const JWT_REFRESH_SECRET =
-	process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key";
+const JWT_SECRET = jwtConfig.secret;
+const JWT_REFRESH_SECRET = jwtConfig.refreshSecret;
 
 export interface JwtPayload {
 	userId: string;
@@ -41,10 +41,7 @@ export const authenticateToken = (
 	}
 
 	try {
-		const decoded = jwt.verify(
-			token,
-			process.env.JWT_SECRET || "your-secret-key"
-		) as { userId: string };
+		const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
 		req.user = { userId: decoded.userId };
 		return next();
 	} catch (error) {
@@ -145,7 +142,7 @@ export const authenticateKycOrAuth = (
   const token = authHeader && (authHeader as string).split(" ")[1];
   if (token) {
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key") as { userId: string };
+      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
       req.user = { userId: decoded.userId };
       return next();
     } catch {}
@@ -157,7 +154,7 @@ export const authenticateKycOrAuth = (
     return res.status(401).json({ message: "Unauthorized" });
   }
   try {
-    const decoded = jwt.verify(kycToken, process.env.KYC_JWT_SECRET || (process.env.JWT_SECRET || "your-secret-key")) as { userId: string; kycId: string; };
+    const decoded = jwt.verify(kycToken, kycConfig.jwtSecret) as { userId: string; kycId: string; };
     // If route contains :kycId param, ensure it matches token
     const paramKycId = (req.params as any)?.kycId;
     if (paramKycId && decoded.kycId !== paramKycId) {

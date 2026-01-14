@@ -8,6 +8,7 @@ import swaggerUi from "swagger-ui-express";
 import { baseUrl } from "./config/swagger";
 import fs from "fs";
 import path from "path";
+import { serverConfig, corsConfig, logConfigStatus } from "./lib/config";
 import authRoutes from "./api/auth";
 import userRoutes from "./api/users";
 import onboardingRoutes from "./api/onboarding";
@@ -65,32 +66,19 @@ try {
 }
 
 const app = express();
-const port = process.env.PORT || 4001;
+const port = serverConfig.port;
+
+// Log configuration status at startup
+logConfigStatus();
 
 // Trust proxy for correct IP detection behind reverse proxy/load balancer
 // This is required for rate limiting and token validation to work correctly in production
 app.set('trust proxy', true);
 
-// Determine if we're in development mode
-const isDevelopment = process.env.NODE_ENV !== "production";
-
-// Get CORS origins from environment variable or use defaults
-const corsOrigins = process.env.CORS_ORIGIN
-	? process.env.CORS_ORIGIN.split(",")
-	: isDevelopment
-	? [
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:3002",
-			"http://localhost:3003",
-			"http://localhost:8080",
-	  ]
-	: ["https://creditxpress.com.my", "https://www.creditxpress.com.my", "https://admin.creditxpress.com.my", "https://api.creditxpress.com.my"];
-
 // Middleware
 app.use(
 	cors({
-		origin: corsOrigins,
+		origin: corsConfig.origins,
 		credentials: true,
 		methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allowedHeaders: [
@@ -117,7 +105,7 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Log all requests in development mode
-if (isDevelopment) {
+if (serverConfig.isDevelopment) {
 	app.use((req, _res, next) => {
 		console.log(`${req.method} ${req.path} - Body:`, req.body);
 		next();
@@ -168,8 +156,8 @@ app.use("/api/mtsa", mtsaRoutes);
 app.use("/api/pki", pkiRoutes);
 app.use("/api/ctos", ctosRoutes);
 
-// Serve static files from the uploads directory
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// NOTE: Static file serving removed - all files are now stored in S3
+// Files are accessed through API endpoints that stream from S3
 
 // Export Swagger specification to a JSON file
 // Create a directory for the Swagger JSON if it doesn't exist
@@ -182,10 +170,9 @@ if (!fs.existsSync(swaggerDir)) {
 (swaggerDocument as any).servers = [
 	{
 		url: baseUrl,
-		description:
-			process.env.NODE_ENV === "production"
-				? "Production server"
-				: "Local development server",
+		description: serverConfig.isProduction
+			? "Production server"
+			: "Local development server",
 	},
 ];
 

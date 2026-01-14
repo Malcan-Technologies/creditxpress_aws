@@ -35,7 +35,7 @@
   },
   
   "s3": {
-    "bucket": "creditxpress-prod-files"
+    "bucket": "creditxpress-files"
   },
   
   "secrets_prefix": "creditxpress/prod",
@@ -44,5 +44,12 @@
     "company_name": "OPG Capital Holdings Sdn. Bhd.",
     "primary_color": "#1a365d",
     "support_email": "support@creditxpress.com.my"
+  },
+
+  "docuseal": {
+    "template_id": "",
+    "company_signing_email": "admin@creditxpress.com.my",
+    "witness_email": "legal@creditxpress.com.my",
+    "witness_name": "Legal Representative"
   }
 }

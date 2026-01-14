@@ -1,11 +1,9 @@
 import { app, port } from "./app";
 import { CronScheduler } from "./lib/cronScheduler";
+import { urlConfig } from "./lib/config";
 
-// Get base URL from environment or use default, ensuring no trailing slash
-const baseUrl = (process.env.BASE_URL || `http://localhost:${port}`).replace(
-	/\/$/,
-	""
-);
+// Get base URL from centralized config, ensuring no trailing slash
+const baseUrl = urlConfig.api.replace(/\/$/, "");
 
 // Initialize cron scheduler
 const cronScheduler = CronScheduler.getInstance();
