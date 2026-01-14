@@ -137,9 +137,29 @@ aws sts get-caller-identity --query Account --output text
 
 ---
 
-## Step 3: Create Cloudflare Tunnel
+## Step 3: Cloudflare Setup
 
-### 3.1 Create Tunnel in Dashboard
+### 3.1 Clean Up Existing DNS Records
+
+Before setting up the tunnel, remove any existing A records pointing to old infrastructure:
+
+1. Go to **Cloudflare Dashboard → DNS → Records**
+2. **DELETE** these record types (if they exist):
+
+| Type | Name | Action |
+|------|------|--------|
+| A | `@` (root domain) | ❌ Delete |
+| A | `www` | ❌ Delete |
+| A | `api` | ❌ Delete |
+| A | `admin` | ❌ Delete |
+| A | `app` | ❌ Delete |
+| NS | (pointing to non-Cloudflare nameservers) | ❌ Delete |
+
+3. **KEEP** these records:
+   - MX records (email)
+   - TXT records (SPF, DKIM, DMARC, verification)
+
+### 3.2 Create Cloudflare Tunnel
 
 1. Go to **Cloudflare Dashboard → Zero Trust → Networks → Tunnels**
 2. Click **Create a tunnel**
@@ -147,17 +167,66 @@ aws sts get-caller-identity --query Account --output text
 4. Name: `your-client-cloud` (for AWS services)
 5. **Copy the tunnel token** - you'll need this for AWS Secrets Manager
 
-### 3.2 Configure Tunnel Routes
+### 3.3 Configure Tunnel Routes (Public Hostnames)
 
 In the tunnel configuration, add these public hostnames:
 
 | Hostname | Service |
 |----------|---------|
+| `yourdomain.com` | `http://frontend.your-client.local:3000` |
 | `api.yourdomain.com` | `http://backend.your-client.local:4001` |
-| `app.yourdomain.com` | `http://frontend.your-client.local:3000` |
 | `admin.yourdomain.com` | `http://admin.your-client.local:3000` |
 
 > **Note:** The `.local` DNS names use AWS Service Discovery. After Terraform runs, it will output the exact namespace to use.
+
+> **Note:** Cloudflare Tunnel automatically creates CNAME records for each hostname pointing to your tunnel.
+
+### 3.4 Configure WWW to Root Redirect
+
+To redirect `www.yourdomain.com` to `yourdomain.com`:
+
+1. Go to **Cloudflare Dashboard → Rules → Redirect Rules**
+2. Click **Create rule**
+3. Configure:
+   - **Rule name:** `WWW to root redirect`
+   - **When incoming requests match:** Custom filter expression
+   - **Expression:** `(http.host eq "www.yourdomain.com")`
+   - **Then:** Dynamic Redirect
+   - **Status code:** 301 (Permanent)
+   - **URL:** `concat("https://yourdomain.com", http.request.uri.path)`
+4. Click **Deploy**
+5. When prompted about DNS record, select **"Ignore and deploy rule anyway"**
+
+### 3.5 Configure SSL/TLS Settings
+
+1. Go to **Cloudflare Dashboard → SSL/TLS → Overview**
+2. Set encryption mode to **Full** (not "Full (strict)")
+
+3. Go to **SSL/TLS → Edge Certificates**
+4. Enable these settings:
+   - **Always Use HTTPS:** On
+   - **Automatic HTTPS Rewrites:** On
+   - **Minimum TLS Version:** TLS 1.2
+
+### 3.6 Recommended Security Settings
+
+1. Go to **Security → Settings**
+2. Set **Security Level:** Medium or High
+
+3. Go to **Security → Bots**
+4. Enable **Bot Fight Mode** (free tier available)
+
+### 3.7 Understanding HTTPS with Cloudflare Tunnel
+
+Traffic flow:
+```
+User (HTTPS) → Cloudflare Edge → Tunnel (encrypted) → ECS (HTTP)
+```
+
+- **Cloudflare manages SSL certificates** for your domain automatically
+- **The tunnel is encrypted** between Cloudflare and your `cloudflared` container
+- **Internal traffic uses HTTP** within your VPC (secure, never exposed)
+- **No SSL certificates needed** on your ECS containers
 
 ---
 
@@ -218,9 +287,9 @@ aws secretsmanager put-secret-value \
 
 ---
 
-## Step 6: Update Cloudflare Tunnel Config
+## Step 6: Verify Cloudflare Tunnel Config
 
-After Terraform runs, get the service discovery namespace:
+After Terraform runs, verify the service discovery namespace matches your tunnel configuration:
 
 ```bash
 terraform output service_discovery_namespace
@@ -229,13 +298,15 @@ terraform output service_discovery_namespace
 terraform output cloudflare_tunnel_ingress
 ```
 
-Update your Cloudflare Tunnel configuration with the exact service endpoints:
+Ensure your Cloudflare Tunnel hostnames use the correct service endpoints:
 
-| Hostname | Service |
-|----------|---------|
-| `api.yourdomain.com` | `http://backend.your-client.local:4001` |
-| `app.yourdomain.com` | `http://frontend.your-client.local:3000` |
-| `admin.yourdomain.com` | `http://admin.your-client.local:3000` |
+| Hostname | Service | Port |
+|----------|---------|------|
+| `yourdomain.com` | `http://frontend.your-client.local` | 3000 |
+| `api.yourdomain.com` | `http://backend.your-client.local` | 4001 |
+| `admin.yourdomain.com` | `http://admin.your-client.local` | 3000 |
+
+> **Important:** If you're using the root domain (e.g., `creditxpress.com.my`) instead of a subdomain like `app.`, make sure your tunnel routes to the frontend service.
 
 ---
 
@@ -355,6 +426,49 @@ aws logs tail /ecs/your-client/backend --since 10m
 1. Verify tunnel token is set correctly in Secrets Manager
 2. Check cloudflared logs for connection errors
 3. Ensure tunnel is enabled in Cloudflare dashboard
+
+### DNS Record Conflicts
+
+**Error:** `An A, AAAA, or CNAME record with that host already exists`
+
+This happens when adding tunnel routes and existing DNS records conflict:
+
+1. Go to **Cloudflare Dashboard → DNS → Records**
+2. Delete the conflicting A record for that hostname
+3. Retry adding the tunnel public hostname
+4. Cloudflare Tunnel will create the correct CNAME automatically
+
+### WWW Redirect Not Working
+
+1. Verify the redirect rule is deployed in **Rules → Redirect Rules**
+2. Check that no DNS record for `www` is bypassing Cloudflare (should be proxied)
+3. If prompted about DNS when creating the rule, select "Ignore and deploy rule anyway"
+
+### 502 Bad Gateway Errors
+
+This usually means cloudflared can't reach your ECS services:
+
+1. Check the service discovery namespace is correct:
+   ```bash
+   terraform output service_discovery_namespace
+   ```
+2. Verify ECS services are running and healthy:
+   ```bash
+   aws ecs describe-services \
+     --cluster your-client-cluster \
+     --services your-client-backend your-client-frontend
+   ```
+3. Check cloudflared logs for connection errors:
+   ```bash
+   aws logs tail /ecs/your-client/cloudflared --since 10m
+   ```
+4. Ensure the port numbers in tunnel config match your services (backend: 4001, frontend/admin: 3000)
+
+### SSL/HTTPS Issues
+
+1. Ensure SSL mode is set to **Full** (not "Full (strict)" or "Flexible")
+2. Wait up to 24 hours for Universal SSL certificate provisioning on new domains
+3. Check **SSL/TLS → Edge Certificates** for certificate status
 
 ### Database Connection Issues
 
