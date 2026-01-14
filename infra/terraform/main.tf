@@ -1,5 +1,6 @@
 # Root Terraform Configuration
 # This file ties together all modules using client.json configuration
+# Uses Cloudflare Tunnel for ingress instead of ALB
 
 terraform {
   required_version = ">= 1.0"
@@ -49,10 +50,8 @@ provider "aws" {
 module "networking" {
   source = "./modules/networking"
 
-  client_slug        = local.config.client_slug
-  region             = local.config.aws.region
-  # ALB requires at least 2 AZs, but we only run ECS tasks in one to save costs
-  availability_zones = ["${local.config.aws.region}a", "${local.config.aws.region}b"]
+  client_slug = local.config.client_slug
+  region      = local.config.aws.region
 }
 
 # ==============================================
@@ -100,7 +99,8 @@ module "secrets" {
 }
 
 # ==============================================
-# ECS Module
+# ECS Module (with Cloudflare Tunnel)
+# Cost-optimized: All services in public subnet (no NAT Gateway)
 # ==============================================
 module "ecs" {
   source = "./modules/ecs"
@@ -108,9 +108,16 @@ module "ecs" {
   client_slug       = local.config.client_slug
   cluster_name      = local.config.ecs.cluster
   vpc_id            = module.networking.vpc_id
-  # Use only first subnet for ECS tasks to minimize cross-AZ data transfer costs
-  public_subnet_ids = [module.networking.public_subnet_ids[0]]
+  public_subnet_id  = module.networking.public_subnet_id
   security_group_id = module.networking.ecs_security_group_id
+
+  # Cloudflare Tunnel configuration
+  cloudflare_tunnel_token_arn = module.secrets.secret_arns.cloudflare_tunnel_token
+  domains = {
+    app   = local.config.domains.app
+    admin = local.config.domains.admin
+    api   = local.config.domains.api
+  }
 
   # Minimum Fargate specs: 256 CPU (.25 vCPU) with 512MB memory
   # Cost-optimized for small deployments
@@ -149,39 +156,11 @@ module "ecs" {
 }
 
 # ==============================================
-# ALB Module
-# ==============================================
-module "alb" {
-  source = "./modules/alb"
-
-  client_slug       = local.config.client_slug
-  vpc_id            = module.networking.vpc_id
-  public_subnet_ids = module.networking.public_subnet_ids
-  security_group_id = module.networking.alb_security_group_id
-
-  domains = local.config.domains
-
-  target_groups = {
-    backend  = { arn = module.ecs.target_group_arns["backend"] }
-    frontend = { arn = module.ecs.target_group_arns["frontend"] }
-    admin    = { arn = module.ecs.target_group_arns["admin"] }
-  }
-
-  # Uncomment when ACM certificate is created
-  # certificate_arn = aws_acm_certificate.main.arn
-}
-
-# ==============================================
 # Outputs
 # ==============================================
 output "vpc_id" {
   description = "VPC ID"
   value       = module.networking.vpc_id
-}
-
-output "alb_dns_name" {
-  description = "ALB DNS name (point Cloudflare here)"
-  value       = module.alb.alb_dns_name
 }
 
 output "ecr_repositories" {
@@ -213,4 +192,14 @@ output "ecs_services" {
 output "secrets_prefix" {
   description = "Secrets Manager prefix"
   value       = local.config.secrets_prefix
+}
+
+output "service_discovery_namespace" {
+  description = "Internal DNS namespace for services"
+  value       = module.ecs.service_discovery_namespace
+}
+
+output "service_endpoints" {
+  description = "Internal DNS endpoints for services (used in Cloudflare Tunnel config)"
+  value       = module.ecs.service_endpoints
 }

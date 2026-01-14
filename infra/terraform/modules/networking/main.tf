@@ -1,5 +1,6 @@
 # Networking Module - VPC, Subnets, Security Groups
-# Creates the network infrastructure for ECS services
+# Cost-optimized: No NAT Gateway, ECS services use public subnets with public IPs
+# Still secure: No inbound ports open, all traffic via Cloudflare Tunnel
 
 variable "client_slug" {
   description = "Client identifier"
@@ -12,14 +13,8 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "availability_zones" {
-  description = "Availability zones for public subnets (ECS)"
-  type        = list(string)
-  default     = ["ap-southeast-5a"]  # Single AZ for cost savings
-}
-
 variable "region" {
-  description = "AWS region (used for RDS multi-AZ subnet requirement)"
+  description = "AWS region"
   type        = string
   default     = "ap-southeast-5"
 }
@@ -46,32 +41,26 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
-# Public Subnets (for ALB and ECS with public IPs)
+# Public Subnet (single AZ for ECS services - cost optimized)
 resource "aws_subnet" "public" {
-  count                   = length(var.availability_zones)
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = var.availability_zones[count.index]
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 0)
+  availability_zone       = "${var.region}a"
   map_public_ip_on_launch = true
 
   tags = {
-    Name   = "${var.client_slug}-public-${count.index + 1}"
+    Name   = "${var.client_slug}-public"
     Client = var.client_slug
     Type   = "public"
   }
 }
 
-# Private Subnets (for RDS - needs 2 AZs for subnet group requirement)
-locals {
-  # RDS requires subnets in at least 2 AZs for the subnet group
-  rds_availability_zones = ["${var.region}a", "${var.region}b"]
-}
-
+# Private Subnets (for RDS only - needs 2 AZs for subnet group requirement)
 resource "aws_subnet" "private" {
-  count             = 2  # Always 2 for RDS subnet group requirement
+  count             = 2
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 100)
-  availability_zone = local.rds_availability_zones[count.index]
+  availability_zone = count.index == 0 ? "${var.region}a" : "${var.region}b"
 
   tags = {
     Name   = "${var.client_slug}-private-${count.index + 1}"
@@ -80,7 +69,7 @@ resource "aws_subnet" "private" {
   }
 }
 
-# Route Table for Public Subnets
+# Route Table for Public Subnet
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -95,62 +84,19 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Associate Public Subnets with Route Table
+# Associate Public Subnet with Route Table
 resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
-  subnet_id      = aws_subnet.public[count.index].id
+  subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
 
-# Security Group for ALB
-resource "aws_security_group" "alb" {
-  name        = "${var.client_slug}-alb-sg"
-  description = "Security group for ALB"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description = "HTTP from anywhere"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTPS from anywhere"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name   = "${var.client_slug}-alb-sg"
-    Client = var.client_slug
-  }
-}
-
-# Security Group for ECS Tasks
+# Security Group for ECS Tasks (no inbound from internet, egress allowed)
 resource "aws_security_group" "ecs" {
   name        = "${var.client_slug}-ecs-sg"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description     = "HTTP from ALB"
-    from_port       = 0
-    to_port         = 65535
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
+  # Outbound: Allow all (for Cloudflare Tunnel, ECR pulls, external APIs)
   egress {
     from_port   = 0
     to_port     = 0
@@ -162,6 +108,21 @@ resource "aws_security_group" "ecs" {
     Name   = "${var.client_slug}-ecs-sg"
     Client = var.client_slug
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Separate ingress rule to avoid circular dependency issues
+resource "aws_security_group_rule" "ecs_internal" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 65535
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ecs.id
+  source_security_group_id = aws_security_group.ecs.id
+  description              = "Internal traffic between ECS tasks"
 }
 
 # Security Group for RDS
@@ -189,16 +150,14 @@ output "vpc_id" {
   value = aws_vpc.main.id
 }
 
-output "public_subnet_ids" {
-  value = aws_subnet.public[*].id
+output "public_subnet_id" {
+  description = "Public subnet ID for ECS services"
+  value       = aws_subnet.public.id
 }
 
 output "private_subnet_ids" {
-  value = aws_subnet.private[*].id
-}
-
-output "alb_security_group_id" {
-  value = aws_security_group.alb.id
+  description = "Private subnet IDs (for RDS)"
+  value       = aws_subnet.private[*].id
 }
 
 output "ecs_security_group_id" {

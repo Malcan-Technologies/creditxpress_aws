@@ -76,16 +76,26 @@ resource "aws_secretsmanager_secret" "ctos_credentials" {
   }
 }
 
+# Cloudflare Tunnel Token
+resource "aws_secretsmanager_secret" "cloudflare_tunnel_token" {
+  name = "${var.secrets_prefix}/cloudflare-tunnel-token"
+
+  tags = {
+    Client = var.client_slug
+  }
+}
+
 # Outputs
 output "secret_arns" {
   value = {
-    jwt_secret         = aws_secretsmanager_secret.jwt_secret.arn
-    jwt_refresh_secret = aws_secretsmanager_secret.jwt_refresh_secret.arn
-    signing_api_key    = aws_secretsmanager_secret.signing_api_key.arn
-    docuseal_token     = aws_secretsmanager_secret.docuseal_token.arn
-    whatsapp_token     = aws_secretsmanager_secret.whatsapp_token.arn
-    resend_api_key     = aws_secretsmanager_secret.resend_api_key.arn
-    ctos_credentials   = aws_secretsmanager_secret.ctos_credentials.arn
+    jwt_secret               = aws_secretsmanager_secret.jwt_secret.arn
+    jwt_refresh_secret       = aws_secretsmanager_secret.jwt_refresh_secret.arn
+    signing_api_key          = aws_secretsmanager_secret.signing_api_key.arn
+    docuseal_token           = aws_secretsmanager_secret.docuseal_token.arn
+    whatsapp_token           = aws_secretsmanager_secret.whatsapp_token.arn
+    resend_api_key           = aws_secretsmanager_secret.resend_api_key.arn
+    ctos_credentials         = aws_secretsmanager_secret.ctos_credentials.arn
+    cloudflare_tunnel_token  = aws_secretsmanager_secret.cloudflare_tunnel_token.arn
   }
 }
 

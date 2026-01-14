@@ -1,4 +1,6 @@
 # ECS Module - Fargate Cluster and Services
+# Cost-optimized: All services in public subnet with public IPs (no NAT Gateway)
+# Still secure: No inbound ports open, all traffic via Cloudflare Tunnel
 
 variable "client_slug" {
   description = "Client identifier"
@@ -15,9 +17,9 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "public_subnet_ids" {
-  description = "Public subnet IDs for ECS tasks"
-  type        = list(string)
+variable "public_subnet_id" {
+  description = "Public subnet ID for all ECS services"
+  type        = string
 }
 
 variable "security_group_id" {
@@ -45,6 +47,20 @@ variable "secrets_arns" {
   default     = {}
 }
 
+variable "cloudflare_tunnel_token_arn" {
+  description = "ARN of the Cloudflare Tunnel token secret"
+  type        = string
+}
+
+variable "domains" {
+  description = "Domain configuration for tunnel routing"
+  type = object({
+    app   = string
+    admin = string
+    api   = string
+  })
+}
+
 # Data source for current AWS region
 data "aws_region" "current" {}
 
@@ -68,6 +84,15 @@ resource "aws_cloudwatch_log_group" "services" {
   for_each = var.services
 
   name              = "/ecs/${var.client_slug}/${each.key}"
+  retention_in_days = 14
+
+  tags = {
+    Client = var.client_slug
+  }
+}
+
+resource "aws_cloudwatch_log_group" "cloudflared" {
+  name              = "/ecs/${var.client_slug}/cloudflared"
   retention_in_days = 14
 
   tags = {
@@ -192,7 +217,9 @@ resource "aws_iam_role_policy" "ecs_exec" {
   })
 }
 
-# Task Definitions
+# ==============================================
+# Application Services Task Definitions
+# ==============================================
 resource "aws_ecs_task_definition" "services" {
   for_each = var.services
 
@@ -227,12 +254,11 @@ resource "aws_ecs_task_definition" "services" {
       }
 
       healthCheck = {
-        # Use wget (available in Alpine) or node for health checks
         command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${each.value.port}${each.value.health} || exit 1"]
         interval    = 30
         timeout     = 10
         retries     = 3
-        startPeriod = 120  # Give containers more time to start
+        startPeriod = 120
       }
 
       essential = true
@@ -245,33 +271,54 @@ resource "aws_ecs_task_definition" "services" {
   }
 }
 
-# Target Groups
-resource "aws_lb_target_group" "services" {
-  for_each = var.services
+# ==============================================
+# Cloudflared Task Definition
+# ==============================================
+resource "aws_ecs_task_definition" "cloudflared" {
+  family                   = "${var.client_slug}-cloudflared"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
 
-  name        = "${var.client_slug}-${each.key}-tg"
-  port        = each.value.port
-  protocol    = "HTTP"
-  vpc_id      = var.vpc_id
-  target_type = "ip"
+  container_definitions = jsonencode([
+    {
+      name  = "cloudflared"
+      image = "cloudflare/cloudflared:latest"
+      
+      command = ["tunnel", "--no-autoupdate", "run"]
 
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
-    timeout             = 5
-    interval            = 30
-    path                = each.value.health
-    matcher             = "200-299"
-  }
+      secrets = [
+        {
+          name      = "TUNNEL_TOKEN"
+          valueFrom = var.cloudflare_tunnel_token_arn
+        }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.cloudflared.name
+          "awslogs-region"        = data.aws_region.current.name
+          "awslogs-stream-prefix" = "cloudflared"
+        }
+      }
+
+      essential = true
+    }
+  ])
 
   tags = {
-    Name   = "${var.client_slug}-${each.key}-tg"
+    Name   = "${var.client_slug}-cloudflared"
     Client = var.client_slug
   }
 }
 
-# ECS Services
+# ==============================================
+# ECS Services (all in public subnet with public IPs)
+# ==============================================
 resource "aws_ecs_service" "services" {
   for_each = var.services
 
@@ -281,22 +328,19 @@ resource "aws_ecs_service" "services" {
   desired_count   = each.value.desired_count
   launch_type     = "FARGATE"
 
-  # Enable ECS Exec for running migrations and debugging
   enable_execute_command = true
 
   network_configuration {
-    subnets          = var.public_subnet_ids
+    subnets          = [var.public_subnet_id]
     security_groups  = [var.security_group_id]
-    assign_public_ip = true
+    assign_public_ip = true  # Public IP for direct internet access (no NAT needed)
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.services[each.key].arn
-    container_name   = each.key
-    container_port   = each.value.port
+  # Service discovery for cloudflared to find services
+  service_registries {
+    registry_arn = aws_service_discovery_service.services[each.key].arn
   }
 
-  # Wait for service to be stable before considering deployment complete
   wait_for_steady_state = false
 
   lifecycle {
@@ -309,7 +353,75 @@ resource "aws_ecs_service" "services" {
   }
 }
 
+# ==============================================
+# Cloudflared Service
+# ==============================================
+resource "aws_ecs_service" "cloudflared" {
+  name            = "${var.client_slug}-cloudflared"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.cloudflared.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = [var.public_subnet_id]
+    security_groups  = [var.security_group_id]
+    assign_public_ip = true
+  }
+
+  wait_for_steady_state = false
+
+  lifecycle {
+    ignore_changes = [desired_count, task_definition]
+  }
+
+  tags = {
+    Name   = "${var.client_slug}-cloudflared"
+    Client = var.client_slug
+  }
+}
+
+# ==============================================
+# Service Discovery (for cloudflared to find services)
+# ==============================================
+resource "aws_service_discovery_private_dns_namespace" "main" {
+  name        = "${var.client_slug}.local"
+  description = "Private DNS namespace for ${var.client_slug} services"
+  vpc         = var.vpc_id
+
+  tags = {
+    Client = var.client_slug
+  }
+}
+
+resource "aws_service_discovery_service" "services" {
+  for_each = var.services
+
+  name = each.key
+
+  dns_config {
+    namespace_id = aws_service_discovery_private_dns_namespace.main.id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = {
+    Client = var.client_slug
+  }
+}
+
+# ==============================================
 # Outputs
+# ==============================================
 output "cluster_id" {
   value = aws_ecs_cluster.main.id
 }
@@ -318,15 +430,21 @@ output "cluster_arn" {
   value = aws_ecs_cluster.main.arn
 }
 
-output "target_group_arns" {
-  value = {
-    for k, v in aws_lb_target_group.services : k => v.arn
-  }
-}
-
 output "service_names" {
   value = {
     for k, v in aws_ecs_service.services : k => v.name
+  }
+}
+
+output "service_discovery_namespace" {
+  description = "Service discovery namespace for internal routing"
+  value       = aws_service_discovery_private_dns_namespace.main.name
+}
+
+output "service_endpoints" {
+  description = "Internal DNS names for services"
+  value = {
+    for k, v in aws_service_discovery_service.services : k => "${v.name}.${aws_service_discovery_private_dns_namespace.main.name}"
   }
 }
 
