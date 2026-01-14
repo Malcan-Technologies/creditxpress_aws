@@ -134,7 +134,7 @@ module "ecs" {
     frontend = {
       name     = local.config.ecs.frontend_service
       port     = 3000
-      health   = "/api/health"
+      health   = "/"
       ecr_repo = module.ecr.repository_urls["frontend"]
       cpu      = 256   # .25 vCPU (minimum)
       memory   = 512   # 512MB (minimum for 256 CPU)
@@ -142,7 +142,7 @@ module "ecs" {
     admin = {
       name     = local.config.ecs.admin_service
       port     = 3000
-      health   = "/api/health"
+      health   = "/login"
       ecr_repo = module.ecr.repository_urls["admin"]
       cpu      = 256   # .25 vCPU (minimum)
       memory   = 512   # 512MB (minimum for 256 CPU)

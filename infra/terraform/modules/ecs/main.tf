@@ -285,7 +285,7 @@ resource "aws_ecs_task_definition" "backend" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${var.services["backend"].port}${var.services["backend"].health} || exit 1"]
+        command     = ["CMD-SHELL", "wget -qO- http://localhost:${var.services["backend"].port}${var.services["backend"].health} > /dev/null 2>&1 || exit 1"]
         interval    = 30
         timeout     = 10
         retries     = 3
@@ -344,11 +344,11 @@ resource "aws_ecs_task_definition" "frontend_admin" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${each.value.port}${each.value.health} || exit 1"]
+        command     = ["CMD-SHELL", "wget -qO- http://localhost:${each.value.port}${each.value.health} > /dev/null 2>&1 || exit 1"]
         interval    = 30
-        timeout     = 10
+        timeout     = 5
         retries     = 3
-        startPeriod = 120
+        startPeriod = 60
       }
 
       essential = true
