@@ -70,6 +70,6 @@
     "typescript": "^5.8.3"
   },
   "prisma": {
-    "seed": "ts-node --project prisma/tsconfig.json prisma/seed.ts"
+    "seed": "node dist/prisma/seed.js || ts-node --project prisma/tsconfig.json prisma/seed.ts"
   }
 }

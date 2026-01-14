@@ -206,14 +206,14 @@ jobs:
           echo "⏳ Waiting for SSM agent to be ready..."
           sleep 15
           
-          # Run seed using shell wrapper that captures output to file
+          # Run seed using compiled JavaScript (ts-node not available in production)
           set +e
           aws ecs execute-command \
             --cluster $CLUSTER \
             --task $TASK_ARN \
             --container backend \
             --interactive \
-            --command "/bin/sh -c 'cd /app && npx prisma db seed > /tmp/seed.log 2>&1; echo EXIT_CODE=\$? >> /tmp/seed.log'" 2>&1
+            --command "/bin/sh -c 'cd /app && node dist/prisma/seed.js > /tmp/seed.log 2>&1; echo EXIT_CODE=\$? >> /tmp/seed.log'" 2>&1
           
           sleep 5
           
