@@ -471,7 +471,7 @@ router.put('/:id', authenticateToken, requireAdminOrAttestor, async (req: AuthRe
  *     security:
  *       - bearerAuth: []
  */
-router.post('/refresh', authenticateToken, requireAdminOrAttestor, async (req: AuthRequest, res: Response) => {
+router.post('/refresh', authenticateToken, requireAdminOrAttestor, async (_req: AuthRequest, res: Response) => {
   try {
     const signers = await prisma.internalSigner.findMany({
       where: {
