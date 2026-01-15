@@ -511,6 +511,34 @@ export default function AdminSigningSettingsPage() {
     }
   };
 
+  const getVerificationErrorMessage = (response: any): string => {
+    // If we have a specific message from the backend, use it
+    if (response.message && response.message !== 'Unknown response') {
+      return response.message;
+    }
+
+    // Check status code for specific error conditions
+    const statusCode = response.data?.statusCode;
+    
+    if (statusCode === '003' || statusCode === '004') {
+      // Invalid PIN
+      return 'The PIN you entered is incorrect for this certificate. Please check your PIN and try again.';
+    }
+    
+    if (statusCode === '001' || statusCode === '002') {
+      // User ID not found / not registered
+      return 'This IC number is not registered for internal user signing. Only company representatives and witnesses enrolled as internal users can verify their PIN here.';
+    }
+
+    if (statusCode === '005' || statusCode === '006') {
+      // Certificate issues
+      return 'There is an issue with your certificate. Please contact support for assistance.';
+    }
+
+    // Default message for unknown responses
+    return 'PIN verification failed. Please ensure:\n\n1. The PIN you entered is correct (8 digits)\n2. Your IC number is registered as an internal user (company representative or witness)\n\nIf you continue to experience issues, please contact support.';
+  };
+
   const handleVerifyPin = async () => {
     if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
       setError('User IC number and certificate serial number are required');
@@ -541,21 +569,26 @@ export default function AdminSigningSettingsPage() {
       });
 
 
-      setPinVerificationResult({
-        success: response.success,
-        message: response.message || (response.success ? 'PIN verified successfully' : 'PIN verification failed')
-      });
-
       if (response.success) {
+        setPinVerificationResult({
+          success: true,
+          message: 'PIN verified successfully! Your certificate PIN is valid.'
+        });
         // Clear PIN after successful verification
         setVerificationPin('');
+      } else {
+        setPinVerificationResult({
+          success: false,
+          message: getVerificationErrorMessage(response)
+        });
       }
     } catch (err) {
       console.error('PIN verification error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to verify PIN');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to verify PIN';
+      setError(errorMessage);
       setPinVerificationResult({
         success: false,
-        message: 'Failed to verify PIN'
+        message: 'Unable to connect to the verification service. Please try again later.'
       });
     } finally {
       setVerifyingPin(false);
@@ -1185,16 +1218,27 @@ export default function AdminSigningSettingsPage() {
                         ? 'bg-green-900/20 border-green-700' 
                         : 'bg-red-900/20 border-red-700'
                     }`}>
-                      <div className="flex items-center">
+                      <div className="flex items-start">
                         {pinVerificationResult.success ? (
-                          <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+                          <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2 mt-0.5 flex-shrink-0" />
                         ) : (
-                          <XCircleIcon className="h-5 w-5 text-red-400 mr-2" />
+                          <XCircleIcon className="h-5 w-5 text-red-400 mr-2 mt-0.5 flex-shrink-0" />
                         )}
-                        <span className={pinVerificationResult.success ? 'text-green-400' : 'text-red-400'}>
-                          {pinVerificationResult.message}
-                        </span>
+                        <div className={pinVerificationResult.success ? 'text-green-400' : 'text-red-400'}>
+                          {pinVerificationResult.message.split('\n').map((line, index) => (
+                            <p key={index} className={index > 0 ? 'mt-2' : ''}>
+                              {line}
+                            </p>
+                          ))}
+                        </div>
                       </div>
+                      {!pinVerificationResult.success && (
+                        <div className="mt-3 pt-3 border-t border-red-700/50">
+                          <p className="text-sm text-gray-400">
+                            <span className="font-medium">Note:</span> Internal user certificates are only valid for company representatives and witnesses who sign loan agreements. Borrowers use a different signing method.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 

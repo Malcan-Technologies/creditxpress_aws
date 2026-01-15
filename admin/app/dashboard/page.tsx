@@ -954,13 +954,26 @@ export default function AdminDashboardPage() {
 	const getServiceDisplayName = (serviceName: string) => {
 		switch (serviceName) {
 			case 'docuseal':
-				return 'DocuSeal';
+				return 'E-Signature Service';
 			case 'signingOrchestrator':
-				return 'Signing Orchestrator';
+				return 'Document Signing Hub';
 			case 'mtsa':
-				return 'MTSA';
+				return 'PKI Signing Service';
 			default:
 				return serviceName;
+		}
+	};
+
+	const getServiceDescription = (serviceName: string) => {
+		switch (serviceName) {
+			case 'docuseal':
+				return 'Collects borrower e-signatures on loan agreements';
+			case 'signingOrchestrator':
+				return 'Coordinates document workflow between signing services';
+			case 'mtsa':
+				return 'Applies legally-binding PKI digital signatures via MyTrustSigner';
+			default:
+				return '';
 		}
 	};
 
@@ -989,7 +1002,7 @@ export default function AdminDashboardPage() {
 				<div className="flex items-center justify-between mb-4">
 					<h2 className="text-lg font-medium text-white flex items-center">
 						<SignalIcon className="h-6 w-6 mr-2 text-blue-400" />
-						On-Premises Status
+						On-Premise Server
 					</h2>
 					<button
 						onClick={fetchHealthStatus}
@@ -1024,26 +1037,31 @@ export default function AdminDashboardPage() {
 								{Object.entries(healthStatus.services).map(([serviceName, service]) => (
 									<div 
 										key={serviceName}
-										className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700/30"
+										className="flex flex-col p-3 bg-gray-800/50 rounded-lg border border-gray-700/30"
 									>
-										<div className="flex items-center gap-2">
-											<div className={`${getHealthStatusColor(service.status)}`}>
-												{getHealthStatusIcon(service.status)}
-											</div>
-											<span className="text-sm text-gray-300">
-												{getServiceDisplayName(serviceName)}
-											</span>
-										</div>
-										<div className="text-right">
-											<div className={`text-xs font-medium ${getHealthStatusColor(service.status)}`}>
-												{service.status.charAt(0).toUpperCase() + service.status.slice(1)}
-											</div>
-											{service.responseTime > 0 && (
-												<div className="text-xs text-gray-500">
-													{service.responseTime}ms
+										<div className="flex items-center justify-between">
+											<div className="flex items-center gap-2">
+												<div className={`${getHealthStatusColor(service.status)}`}>
+													{getHealthStatusIcon(service.status)}
 												</div>
-											)}
+												<span className="text-sm text-gray-300">
+													{getServiceDisplayName(serviceName)}
+												</span>
+											</div>
+											<div className="text-right">
+												<div className={`text-xs font-medium ${getHealthStatusColor(service.status)}`}>
+													{service.status.charAt(0).toUpperCase() + service.status.slice(1)}
+												</div>
+												{service.responseTime > 0 && (
+													<div className="text-xs text-gray-500">
+														{service.responseTime}ms
+													</div>
+												)}
+											</div>
 										</div>
+										<p className="text-xs text-gray-500 mt-2">
+											{getServiceDescription(serviceName)}
+										</p>
 									</div>
 								))}
 							</div>

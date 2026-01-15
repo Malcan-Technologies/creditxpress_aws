@@ -5332,6 +5332,55 @@ router.get(
 						overdueRepaymentsCount: overdueInfo.overdueRepayments.length
 					});
 
+					// Get early settlement info from loan application history for settled/discharged loans
+					let earlySettlementInfo = null;
+					if (loan.status === 'DISCHARGED' || loan.status === 'PENDING_DISCHARGE' || loan.status === 'PENDING_EARLY_SETTLEMENT') {
+						try {
+							const settlementHistory = await prisma.loanApplicationHistory.findFirst({
+								where: {
+									applicationId: loan.applicationId,
+									metadata: {
+										path: ['kind'],
+										equals: 'EARLY_SETTLEMENT_APPROVAL'
+									}
+								},
+								orderBy: {
+									createdAt: 'desc'
+								}
+							});
+
+							// Also check for admin-approved early settlements
+							const adminSettlementHistory = !settlementHistory ? await prisma.loanApplicationHistory.findFirst({
+								where: {
+									applicationId: loan.applicationId,
+									metadata: {
+										path: ['kind'],
+										equals: 'EARLY_SETTLEMENT_APPROVAL_ADMIN'
+									}
+								},
+								orderBy: {
+									createdAt: 'desc'
+								}
+							}) : null;
+
+							const historyRecord = settlementHistory || adminSettlementHistory;
+							
+							if (historyRecord && historyRecord.metadata) {
+								const metadata = historyRecord.metadata as any;
+								const settlementDetails = metadata.settlementDetails || metadata;
+								earlySettlementInfo = {
+									totalSettlement: settlementDetails.totalSettlement || null,
+									discountAmount: settlementDetails.discountAmount || settlementDetails.interestSaved || null,
+									feeAmount: settlementDetails.earlySettlementFee || settlementDetails.feeAmount || null,
+									netSavings: settlementDetails.netSavings || null,
+									approvedAt: metadata.approvedAt || historyRecord.createdAt,
+								};
+							}
+						} catch (error) {
+							console.error(`Error fetching early settlement info for loan ${loan.id}:`, error);
+						}
+					}
+
 					return {
 						...loan,
 						overdueInfo,
@@ -5343,6 +5392,8 @@ router.get(
 							totalAccruedFees: loan.lateFee.totalAccruedFees,
 							status: loan.lateFee.status,
 						} : null,
+						// Add early settlement info for settled/discharged loans
+						earlySettlementInfo,
 					};
 				})
 			);
