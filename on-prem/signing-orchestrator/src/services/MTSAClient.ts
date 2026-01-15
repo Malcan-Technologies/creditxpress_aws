@@ -426,31 +426,68 @@ export class MTSAClient {
 
   /**
    * Verify certificate PIN for digital signing
+   * 
+   * MTSA Response fields:
+   * - statusCode: Status code of the request
+   * - statusMsg: Status message of the request  
+   * - certStatus: Certificate status (Valid or Invalid)
+   * - certPinStatus: Certificate PIN status (Valid or Invalid)
    */
   async verifyCertPin(
     request: { UserID: string; CertSerialNo: string; CertPin: string },
     correlationId?: string
-  ): Promise<{ statusCode: string; statusMsg: string; pinVerified: boolean }> {
+  ): Promise<{ statusCode: string; statusMsg: string; pinVerified: boolean; certStatus?: string; certPinStatus?: string }> {
     const log = correlationId ? createCorrelatedLogger(correlationId) : logger;
     
     log.info('Verifying certificate PIN', { 
       userId: request.UserID,
-      hasCertPin: !!request.CertPin 
+      hasCertPin: !!request.CertPin,
+      hasCertSerialNo: !!request.CertSerialNo
     });
 
-    const result = await this.executeSoapMethod<{ statusCode: string; statusMsg: string; pinVerified: boolean }>(
+    const result = await this.executeSoapMethod<{ 
+      statusCode: string; 
+      statusMsg: string; 
+      certStatus?: string;
+      certPinStatus?: string;
+      return?: { 
+        statusCode: string; 
+        statusMsg: string;
+        certStatus?: string;
+        certPinStatus?: string;
+      } 
+    }>(
       'VerifyCertPin',
       request,
       correlationId
     );
 
+    // Handle potential undefined result or different response structure
+    if (!result) {
+      log.warn('VerifyCertPin returned undefined result');
+      return { statusCode: '9999', statusMsg: 'No response received', pinVerified: false };
+    }
+
+    // Handle different possible response structures (data may be in result.return or at root level)
+    const responseData = (result as any)?.return || result;
+    const statusCode = responseData?.statusCode || '9999';
+    const statusMsg = responseData?.statusMsg || 'PIN verification failed';
+    const certStatus = responseData?.certStatus;
+    const certPinStatus = responseData?.certPinStatus;
+    
+    // PIN is verified if statusCode is '000' AND certPinStatus is 'Valid'
+    const pinVerified = statusCode === '000' && certPinStatus === 'Valid';
+
     log.info('Certificate PIN verification completed', { 
-      statusCode: result.statusCode, 
-      success: result.statusCode === '000',
-      pinVerified: result.pinVerified 
+      statusCode,
+      statusMsg,
+      certStatus,
+      certPinStatus,
+      pinVerified,
+      rawResult: JSON.stringify(result).slice(0, 500)
     });
 
-    return result;
+    return { statusCode, statusMsg, pinVerified, certStatus, certPinStatus };
   }
 
   /**

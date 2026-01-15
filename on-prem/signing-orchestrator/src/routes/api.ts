@@ -417,7 +417,9 @@ router.post('/verify-cert-pin', verifyApiKey, async (req, res) => {
     
     const statusCode = result?.statusCode || '9999';
     const statusMsg = result?.statusMsg || 'Unknown response';
-    const pinVerified = statusCode === '000';
+    const certStatus = result?.certStatus;
+    const certPinStatus = result?.certPinStatus;
+    const pinVerified = result?.pinVerified || false;
     
     res.status(200).json({
       success: pinVerified,
@@ -425,7 +427,8 @@ router.post('/verify-cert-pin', verifyApiKey, async (req, res) => {
       data: {
         statusCode: statusCode,
         pinVerified: pinVerified,
-        certPinStatus: pinVerified ? 'Valid' : 'Invalid'
+        certStatus: certStatus,
+        certPinStatus: certPinStatus
       },
       correlationId: req.correlationId,
     });

@@ -62,7 +62,8 @@ interface CertificateStatus {
     validFrom: string;
     validTo: string;
   };
-  nextStep: 'kyc' | 'certificate' | 'enrollment' | 'complete';
+  nextStep: 'kyc' | 'certificate' | 'enrollment' | 'complete' | 'verify-type';
+  isExternalCert?: boolean; // True if user has external cert (needs internal enrollment)
 }
 
 interface KycSession {
@@ -282,11 +283,12 @@ export default function AdminSigningSettingsPage() {
       );
       
       if (response.success && response.data?.certStatus === 'Valid') {
+        // Valid cert found - need to verify if it's internal (has PIN) or external (uses OTP)
         setCertificateStatus({
           hasValidCert: true,
-          message: 'You have a valid digital certificate for signing documents.',
+          message: 'A valid certificate was found. Please verify your PIN to confirm it is an internal signing certificate.',
           certificateData: response.data,
-          nextStep: 'complete'
+          nextStep: 'verify-type'
         });
       } else {
         try {
@@ -584,6 +586,64 @@ export default function AdminSigningSettingsPage() {
       if (response.success) setVerificationPin('');
     } catch (err) {
       setPinVerificationResult({ success: false, message: 'Failed to verify PIN' });
+    } finally {
+      setVerifyingPin(false);
+    }
+  };
+
+  // Verify if certificate is internal (has PIN) or external (uses OTP)
+  const handleVerifyCertificateType = async () => {
+    if (!currentUser?.icNumber || !certificateStatus?.certificateData?.certSerialNo) {
+      setError('Certificate information is required');
+      return;
+    }
+    if (!/^\d{8}$/.test(verificationPin)) {
+      setError('Please enter a valid 8-digit PIN');
+      return;
+    }
+
+    try {
+      setVerifyingPin(true);
+      setError(null);
+
+      const response = await fetchWithAdminTokenRefresh<{ success: boolean; message?: string }>('/api/admin/mtsa/verify-cert-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.icNumber,
+          certSerialNo: certificateStatus.certificateData.certSerialNo,
+          certPin: verificationPin,
+        }),
+      });
+
+      if (response.success) {
+        // PIN verified - this is an internal certificate, mark as complete
+        setCertificateStatus({
+          ...certificateStatus,
+          message: 'You have a valid internal signing certificate.',
+          nextStep: 'complete',
+          isExternalCert: false
+        });
+        setVerificationPin('');
+      } else {
+        // PIN failed - this is likely an external certificate
+        setCertificateStatus({
+          ...certificateStatus,
+          message: 'Your existing certificate is an external (borrower) certificate that uses email OTP. To sign as an internal user (admin/attestor/witness), you need to enroll for an internal certificate with PIN authentication.',
+          nextStep: 'kyc',
+          isExternalCert: true
+        });
+        setVerificationPin('');
+      }
+    } catch (err) {
+      // Error could mean external cert or connection issue
+      setCertificateStatus({
+        ...certificateStatus,
+        message: 'Could not verify PIN. If you have an external certificate, you need to enroll for an internal certificate.',
+        nextStep: 'kyc',
+        isExternalCert: true
+      });
+      setVerificationPin('');
     } finally {
       setVerifyingPin(false);
     }
@@ -1073,6 +1133,87 @@ export default function AdminSigningSettingsPage() {
               </Card>
             )}
 
+            {/* Verify Certificate Type Step - Check if internal or external cert */}
+            {certificateStatus?.nextStep === 'verify-type' && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-blue-400" />
+                    Verify Certificate Type
+                  </CardTitle>
+                  <CardDescription>
+                    A valid certificate was found. Enter your 8-digit PIN to verify it is an internal signing certificate.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Alert variant="info">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Internal certificates use an 8-digit PIN for signing. External (borrower) certificates use email OTP.
+                      If you enrolled as a borrower previously, you will need to enroll a new internal certificate.
+                    </AlertDescription>
+                  </Alert>
+
+                  {certificateStatus.certificateData && (
+                    <div className="p-4 bg-gray-800 rounded-lg">
+                      <h4 className="text-sm font-medium text-white mb-3">Certificate Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-400">Status:</span>
+                          <Badge variant="success" className="ml-2">{certificateStatus.certificateData.certStatus}</Badge>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Serial Number:</span>
+                          <span className="text-white ml-2 font-mono text-xs">{certificateStatus.certificateData.certSerialNo}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Valid From:</span>
+                          <span className="text-white ml-2">{certificateStatus.certificateData.validFrom}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Valid To:</span>
+                          <span className="text-white ml-2">{certificateStatus.certificateData.validTo}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>Enter your 8-digit Certificate PIN</Label>
+                    <Input
+                      type="password"
+                      value={verificationPin}
+                      onChange={(e) => setVerificationPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      placeholder="Enter PIN to verify"
+                      maxLength={8}
+                      className="text-center tracking-widest max-w-xs"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button onClick={handleVerifyCertificateType} disabled={verifyingPin || verificationPin.length !== 8}>
+                      {verifyingPin && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Verify PIN
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setCertificateStatus({
+                          ...certificateStatus,
+                          message: 'You chose to enroll a new internal certificate.',
+                          nextStep: 'kyc',
+                          isExternalCert: true
+                        });
+                        setVerificationPin('');
+                      }}
+                    >
+                      I don&apos;t have a PIN / Enroll New Certificate
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* KYC Step */}
             {certificateStatus?.nextStep === 'kyc' && !showPinStep && (
               <Card>
@@ -1081,9 +1222,22 @@ export default function AdminSigningSettingsPage() {
                     <FileText className="h-5 w-5 text-blue-400" />
                     Step 1: KYC Verification
                   </CardTitle>
-                  <CardDescription>Complete KYC verification to proceed with certificate enrollment.</CardDescription>
+                  <CardDescription>
+                    {certificateStatus.isExternalCert 
+                      ? 'You need to enroll for an internal signing certificate. Complete KYC verification first.'
+                      : 'Complete KYC verification to proceed with certificate enrollment.'}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {certificateStatus.isExternalCert && (
+                    <Alert variant="warning">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        Your existing certificate is for external (borrower) signing and uses email OTP. 
+                        Internal signers (admins, attestors, witnesses) require a certificate with PIN authentication.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {kycSession && ctosOnboardingUrl && (
                     <Alert variant="info">
                       <Clock className="h-4 w-4" />
@@ -1632,13 +1786,18 @@ export default function AdminSigningSettingsPage() {
                         <Alert variant="success">
                           <CheckCircle2 className="h-4 w-4" />
                           <AlertDescription>
-                            Valid certificate found: {lookupResult.certificateInfo?.certStatus}
+                            Valid certificate found: {lookupResult.certificateInfo?.certStatus}.
+                            After adding, they will need to verify their PIN to confirm it&apos;s an internal certificate.
                           </AlertDescription>
                         </Alert>
                       ) : (
                         <Alert variant="warning">
                           <AlertTriangle className="h-4 w-4" />
-                          <AlertDescription>No valid certificate found for this IC number.</AlertDescription>
+                          <AlertDescription>
+                            No valid certificate found for this IC number. This user needs to enroll for an internal 
+                            signing certificate first. They can do this by logging into the admin panel and going to 
+                            Settings → Signing.
+                          </AlertDescription>
                         </Alert>
                       )}
 
