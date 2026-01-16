@@ -35,6 +35,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh, checkAdminAuth } from "../../lib/authUtils";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
 	LineChart,
 	Line,
@@ -748,13 +749,22 @@ export default function AdminDashboardPage() {
 		}
 	};
 
-	const fetchHealthStatus = async () => {
+	const fetchHealthStatus = async (showToast = false) => {
 		setHealthLoading(true);
 		try {
 			const response = await fetchWithAdminTokenRefresh<HealthStatus>(
 				"/api/admin/health-check"
 			);
 			setHealthStatus(response);
+			if (showToast) {
+				if (response.overall === 'healthy') {
+					toast.success("All on-premise services are healthy");
+				} else if (response.overall === 'degraded') {
+					toast.warning("Some on-premise services are degraded");
+				} else {
+					toast.error("On-premise services are unhealthy");
+				}
+			}
 		} catch (error) {
 			console.error("Error fetching health status:", error);
 			setHealthStatus({
@@ -767,6 +777,9 @@ export default function AdminDashboardPage() {
 				overall: 'error',
 				error: 'Failed to fetch health status'
 			});
+			if (showToast) {
+				toast.error("Failed to check on-premise server health");
+			}
 		} finally {
 			setHealthLoading(false);
 		}
@@ -779,8 +792,10 @@ export default function AdminDashboardPage() {
 				fetchDashboardData(),
 				fetchHealthStatus()
 			]);
+			toast.success("Dashboard refreshed successfully");
 		} catch (error) {
 			console.error("Error refreshing dashboard data:", error);
+			toast.error("Failed to refresh dashboard");
 		} finally {
 			setRefreshing(false);
 		}
@@ -1017,7 +1032,7 @@ export default function AdminDashboardPage() {
 						On-Premise Server
 					</h2>
 					<button
-						onClick={fetchHealthStatus}
+						onClick={() => fetchHealthStatus(true)}
 						disabled={healthLoading}
 						className="flex items-center gap-2 px-3 py-1 bg-gray-800/50 border border-gray-700/50 rounded-lg hover:bg-gray-700/50 transition-colors disabled:opacity-50"
 					>

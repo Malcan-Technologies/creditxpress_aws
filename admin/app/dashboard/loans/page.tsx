@@ -1169,12 +1169,15 @@ function ActiveLoansContent() {
 						fetchSignatureStatus(currentSelectedLoanId);
 					}
 				}
+				toast.success("Loans refreshed successfully");
 			} else {
 				setError("Failed to load loans data");
+				toast.error("Failed to load loans data");
 			}
 		} catch (error) {
 			console.error("Error refreshing loans:", error);
 			setError("Failed to refresh loans. Please try again.");
+			toast.error("Failed to refresh loans");
 		} finally {
 			setRefreshing(false);
 		}
@@ -5456,47 +5459,6 @@ function ActiveLoansContent() {
 														</table>
 													</div>
 												</div>
-
-												{/* Prepayment Summary */}
-												{selectedLoan.totalPaid &&
-													selectedLoan.totalPaid >
-														0 && (
-														<div className="mt-6 bg-green-800/20 p-4 rounded-lg border border-green-400/20">
-															<h5 className="text-green-200 font-medium mb-3">
-																Prepayment
-																Summary
-															</h5>
-															<div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-																<div>
-																	<p className="text-green-300">
-																		Total
-																		Prepaid
-																		Amount
-																	</p>
-																	<p className="text-white font-medium text-lg">
-																		{formatCurrency(
-																			selectedLoan.totalPaid
-																		)}
-																	</p>
-																</div>
-																{selectedLoan.remainingPrepayment &&
-																	selectedLoan.remainingPrepayment >
-																		0 && (
-																		<div>
-																			<p className="text-green-300">
-																				Remaining
-																				Prepayment
-																			</p>
-																			<p className="text-white font-medium text-lg">
-																				{formatCurrency(
-																					selectedLoan.remainingPrepayment
-																				)}
-																			</p>
-																		</div>
-																	)}
-															</div>
-														</div>
-													)}
 											</>
 										) : (
 											<div className="text-center py-12">

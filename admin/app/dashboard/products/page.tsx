@@ -102,7 +102,13 @@ export default function AdminProductsPage() {
 
 	const handleRefresh = async () => {
 		setRefreshing(true);
-		await fetchProducts();
+		try {
+			await fetchProducts();
+			toast.success("Products refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing products:", error);
+			toast.error("Failed to refresh products");
+		}
 	};
 
 	const handleEdit = (product: Product) => {

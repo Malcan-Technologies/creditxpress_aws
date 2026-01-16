@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import AdminLayout from "../../../components/AdminLayout";
 import { fetchWithAdminTokenRefresh } from "../../../../lib/authUtils";
+import { toast } from "sonner";
 import {
   MagnifyingGlassIcon,
   ArrowDownTrayIcon,
@@ -125,9 +126,13 @@ export default function DocumentStorageLogsPage() {
         setScanStats(response.stats);
         // Refresh the logs after scan
         await fetchLogs();
+        toast.success(`Document scan completed: ${response.stats.totalScanned} files scanned, ${response.stats.matched} matched`);
+      } else {
+        toast.error("Document scan failed");
       }
     } catch (error) {
       console.error("Error scanning documents:", error);
+      toast.error("Failed to scan documents");
     } finally {
       setScanning(false);
     }

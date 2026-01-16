@@ -17,6 +17,7 @@ import {
 	XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
+import { toast } from "sonner";
 
 interface DisbursementData {
 	id: string;
@@ -218,9 +219,15 @@ function DisbursementsContent() {
 		setSearchTerm(e.target.value);
 	};
 
-	const handleRefresh = () => {
+	const handleRefresh = async () => {
 		setRefreshing(true);
-		fetchDisbursements();
+		try {
+			await fetchDisbursements();
+			toast.success("Disbursements refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing disbursements:", error);
+			toast.error("Failed to refresh disbursements");
+		}
 	};
 
 	const handleViewDisbursement = (disbursement: DisbursementData) => {

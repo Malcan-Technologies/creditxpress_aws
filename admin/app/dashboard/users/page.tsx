@@ -138,9 +138,11 @@ export default function AdminUsersPage() {
 				"/api/admin/users"
 			);
 			setUsers(users);
+			toast.success("Users refreshed successfully");
 		} catch (error) {
 			console.error("Error refreshing users:", error);
 			setError("Failed to refresh users. Please try again.");
+			toast.error("Failed to refresh users");
 		} finally {
 			setRefreshing(false);
 		}

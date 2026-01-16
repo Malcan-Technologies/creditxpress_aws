@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
+import ConfirmationModal from "../../../components/ConfirmationModal";
 import {
 	VideoCameraIcon,
 	UserIcon,
@@ -127,6 +128,16 @@ export default function LiveAttestationsPage() {
 		setSearchTerm(e.target.value);
 	};
 
+	const handleRefresh = async () => {
+		try {
+			await loadLiveAttestationRequests();
+			toast.success("Live attestations refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing live attestations:", error);
+			toast.error("Failed to refresh live attestations");
+		}
+	};
+
 	const handleMarkCompleteClick = (applicationId: string) => {
 		setConfirmApplicationId(applicationId);
 		setShowConfirmModal(true);
@@ -240,7 +251,7 @@ export default function LiveAttestationsPage() {
 					</p>
 				</div>
 				<button
-					onClick={loadLiveAttestationRequests}
+					onClick={handleRefresh}
 					className="mt-4 md:mt-0 flex items-center px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors"
 				>
 					<ArrowPathIcon className="h-4 w-4 mr-2" />
@@ -590,79 +601,26 @@ export default function LiveAttestationsPage() {
 			</div>
 
 			{/* Confirmation Modal */}
-			{showConfirmModal && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
-					{/* Backdrop */}
-					<div 
-						className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-						onClick={() => {
-							setShowConfirmModal(false);
-							setConfirmApplicationId(null);
-						}}
-					/>
-					{/* Modal */}
-					<div className="relative bg-gray-900 border border-gray-700/50 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
-						{/* Header */}
-						<div className="bg-green-500/10 border-b border-green-500/20 px-6 py-4">
-							<div className="flex items-center">
-								<div className="flex-shrink-0 bg-green-500/20 rounded-full p-2">
-									<CheckCircleIcon className="h-6 w-6 text-green-400" />
-								</div>
-								<h3 className="ml-3 text-lg font-semibold text-white">
-									Confirm Attestation Completion
-								</h3>
-							</div>
-						</div>
-						{/* Content */}
-						<div className="px-6 py-5">
-							<div className="space-y-4">
-								<p className="text-gray-300">
-									Please confirm that the following has been completed:
-								</p>
-								<div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4">
-									<ul className="text-sm text-gray-300 space-y-3">
-										<li className="flex items-start">
-											<CheckCircleIcon className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0 text-green-400" />
-											<span>The borrower has met with the lawyer via live video call</span>
-										</li>
-										<li className="flex items-start">
-											<CheckCircleIcon className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0 text-green-400" />
-											<span>The lawyer has verified the borrower's identity</span>
-										</li>
-										<li className="flex items-start">
-											<CheckCircleIcon className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0 text-green-400" />
-											<span>The attestation process has been successfully completed</span>
-										</li>
-									</ul>
-								</div>
-								<p className="text-sm text-amber-400 flex items-start">
-									<ClockIcon className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
-									This action cannot be undone. The application will proceed to the next stage.
-								</p>
-							</div>
-						</div>
-						{/* Actions */}
-						<div className="bg-gray-800/50 border-t border-gray-700/50 px-6 py-4 flex justify-end space-x-3">
-							<button
-								onClick={() => {
-									setShowConfirmModal(false);
-									setConfirmApplicationId(null);
-								}}
-								className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700/50 hover:bg-gray-700 border border-gray-600/50 rounded-lg transition-colors"
-							>
-								Cancel
-							</button>
-							<button
-								onClick={handleCompleteAttestation}
-								className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 border border-green-500 rounded-lg transition-colors flex items-center"
-							>
-								<CheckCircleIcon className="h-4 w-4 mr-1.5" />
-								Confirm Completion
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
+			<ConfirmationModal
+				open={showConfirmModal}
+				onClose={() => {
+					setShowConfirmModal(false);
+					setConfirmApplicationId(null);
+				}}
+				onConfirm={handleCompleteAttestation}
+				title="Confirm Attestation Completion"
+				message="Please confirm that the following has been completed:"
+				details={[
+					"The borrower has met with the lawyer via live video call",
+					"The lawyer has verified the borrower's identity",
+					"The attestation process has been successfully completed",
+					"⚠️ This action cannot be undone. The application will proceed to the next stage.",
+				]}
+				confirmText="Confirm Completion"
+				confirmColor="green"
+				isProcessing={processingId !== null}
+				processingText="Processing..."
+			/>
 		</AdminLayout>
 	);
 }

@@ -286,11 +286,17 @@ function LateFeeContent({ initialSearchTerm }: { initialSearchTerm: string }) {
 		setSearchTerm(e.target.value);
 	};
 
-	const handleRefresh = () => {
+	const handleRefresh = async () => {
 		setRefreshing(true);
 		// Clear selected late fee to force re-selection with fresh data
 		setSelectedLateFee(null);
-		fetchLateFees();
+		try {
+			await fetchLateFees();
+			toast.success("Late fees refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing late fees:", error);
+			toast.error("Failed to refresh late fees");
+		}
 	};
 
 	const handleViewLateFee = (fee: LateFeeData) => {

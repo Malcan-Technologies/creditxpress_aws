@@ -44,6 +44,7 @@ import {
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
+import ConfirmationModal, { ConfirmationModalColor } from "../../../components/ConfirmationModal";
 
 interface LoanApplication {
   id: string;
@@ -208,6 +209,29 @@ function AdminApplicationsPageContent() {
     return "details";
   };
 
+  // Helper function to get the appropriate tab for a given application status
+  const getTabForStatus = (status: string): string => {
+    if (status === "PENDING_APPROVAL") {
+      return "approval";
+    } else if (
+      [
+        "PENDING_SIGNATURE",
+        "PENDING_PKI_SIGNING",
+        "PENDING_SIGNING_COMPANY_WITNESS",
+        "PENDING_SIGNING_OTP_DS",
+      ].includes(status)
+    ) {
+      return "signatures";
+    } else if (status === "PENDING_STAMPING") {
+      return "stamping";
+    } else if (status === "PENDING_DISBURSEMENT") {
+      return "disbursement";
+    } else if (status === "COLLATERAL_REVIEW") {
+      return "collateral";
+    }
+    return "details";
+  };
+
   const [selectedTab, setSelectedTab] = useState<string>(getInitialTab());
   const [refreshing, setRefreshing] = useState(false);
   const [signaturesData, setSignaturesData] = useState<any>(null);
@@ -223,6 +247,45 @@ function AdminApplicationsPageContent() {
   // Actions tab states - hidden by default with warning
   const [showActionsTab, setShowActionsTab] = useState(false);
   const [showActionsWarningModal, setShowActionsWarningModal] = useState(false);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    details?: string[];
+    confirmText: string;
+    confirmColor: ConfirmationModalColor;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    message: "",
+    details: [],
+    confirmText: "Confirm",
+    confirmColor: "blue",
+    onConfirm: () => {},
+  });
+
+  // Helper to show confirmation modal
+  const showConfirmModal = (config: {
+    title: string;
+    message: string;
+    details?: string[];
+    confirmText: string;
+    confirmColor: ConfirmationModalColor;
+    onConfirm: () => void;
+  }) => {
+    setConfirmModal({
+      open: true,
+      ...config,
+    });
+  };
+
+  // Helper to close confirmation modal
+  const closeConfirmModal = () => {
+    setConfirmModal((prev) => ({ ...prev, open: false }));
+  };
 
   // Helper function to check if application has pending company signature
   const hasPendingCompanySignature = (app: LoanApplication): boolean => {
@@ -309,7 +372,7 @@ function AdminApplicationsPageContent() {
     getInitialFilters()
   );
 
-  // Additional states for approval, attestation, and disbursement
+  // Additional states for approval and disbursement
   const [decisionNotes, setDecisionNotes] = useState("");
   const [collateralNotes, setCollateralNotes] = useState("");
   const [disbursementNotes, setDisbursementNotes] = useState("");
@@ -346,17 +409,6 @@ function AdminApplicationsPageContent() {
   const [creditReport, setCreditReport] = useState<any | null>(null);
   const [lastKnownStatus, setLastKnownStatus] = useState<string | null>(null);
   const [showStatusChangeAlert, setShowStatusChangeAlert] = useState(false);
-
-  // Attestation states
-  const [attestationType, setAttestationType] = useState<
-    "IMMEDIATE" | "MEETING"
-  >("IMMEDIATE");
-  const [attestationNotes, setAttestationNotes] = useState("");
-  const [attestationVideoWatched, setAttestationVideoWatched] = useState(false);
-  const [attestationTermsAccepted, setAttestationTermsAccepted] =
-    useState(false);
-  const [meetingCompletedAt, setMeetingCompletedAt] = useState("");
-  const [processingAttestation, setProcessingAttestation] = useState(false);
 
   // Stamping states
   const [stampCertificateFile, setStampCertificateFile] = useState<File | null>(
@@ -560,12 +612,17 @@ function AdminApplicationsPageContent() {
       // ATTESTOR users get filtered applications from backend
       if (currentUserRole === "ATTESTOR") {
         try {
-          const applicationsData = await fetchWithAdminTokenRefresh<
-            LoanApplication[]
-          >("/api/admin/applications");
+          const response = await fetchWithAdminTokenRefresh<{
+            success: boolean;
+            data: LoanApplication[];
+            systemSettings?: { lateFeeGraceDays: number };
+          }>("/api/admin/applications");
 
-          if (applicationsData) {
-            setApplications(applicationsData);
+          if (response.success && response.data) {
+            setApplications(response.data);
+            if (response.systemSettings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+            }
           } else {
             setApplications([]);
           }
@@ -578,9 +635,56 @@ function AdminApplicationsPageContent() {
 
       // Try fetching applications from applications endpoint (ADMIN only)
       try {
-        const applicationsData = await fetchWithAdminTokenRefresh<
-          LoanApplication[]
+        const response = await fetchWithAdminTokenRefresh<
+          | {
+              success: boolean;
+              data: LoanApplication[];
+              systemSettings?: { lateFeeGraceDays: number };
+            }
+          | LoanApplication[]
+          | { error?: string; message?: string }
         >("/api/admin/applications");
+        
+        // Check for error responses
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          if ('error' in response || 'message' in response) {
+            const errorMsg = (response as { error?: string; message?: string }).error || 
+                            (response as { error?: string; message?: string }).message;
+            console.error('API returned error:', errorMsg);
+            setError(errorMsg || 'Failed to refresh applications');
+            return;
+          }
+        }
+        
+        // Extract applications - handle both wrapped format { success, data } and direct array format
+        let applicationsData: LoanApplication[] = [];
+        if (Array.isArray(response)) {
+          // Direct array format
+          applicationsData = response;
+        } else if (response && typeof response === 'object') {
+          // Wrapped format { success, data, systemSettings }
+          if ('data' in response && Array.isArray((response as { data?: unknown }).data)) {
+            applicationsData = (response as { data: LoanApplication[] }).data;
+          }
+          if ('systemSettings' in response) {
+            const settings = (response as { systemSettings?: { lateFeeGraceDays?: number } }).systemSettings;
+            if (settings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(settings.lateFeeGraceDays);
+            }
+          }
+        }
+
+        // Ensure applicationsData is always an array
+        if (!Array.isArray(applicationsData)) {
+          console.error('Applications data is not an array:', applicationsData);
+          applicationsData = [];
+        }
+
+        // If no applications, set empty array and return early
+        if (applicationsData.length === 0) {
+          setApplications([]);
+          return;
+        }
 
         // For each application, fetch its history
         const applicationsWithHistory = await Promise.all(
@@ -644,13 +748,16 @@ function AdminApplicationsPageContent() {
             }
           }
         }
+        toast.success("Applications refreshed successfully");
       } catch (appError) {
         console.error("Error fetching applications:", appError);
         setError("Failed to refresh applications. Please try again.");
+        toast.error("Failed to refresh applications");
       }
     } catch (error) {
       console.error("Error refreshing data:", error);
       setError("An unexpected error occurred during refresh.");
+      toast.error("An unexpected error occurred during refresh");
     } finally {
       setRefreshing(false);
     }
@@ -711,7 +818,21 @@ function AdminApplicationsPageContent() {
               systemSettings?: { lateFeeGraceDays: number };
             }
           | LoanApplication[]
+          | { error?: string; message?: string }
         >("/api/admin/applications");
+        
+        // Check for error responses
+        if (response && typeof response === 'object' && !Array.isArray(response)) {
+          if ('error' in response || 'message' in response) {
+            const errorMsg = (response as { error?: string; message?: string }).error || 
+                            (response as { error?: string; message?: string }).message;
+            console.error('API returned error:', errorMsg);
+            setError(errorMsg || 'Failed to load applications');
+            setApplications([]);
+            setLoading(false);
+            return;
+          }
+        }
         
         // Extract applications - handle both wrapped format { success, data } and direct array format
         let applicationsData: LoanApplication[] = [];
@@ -720,11 +841,14 @@ function AdminApplicationsPageContent() {
           applicationsData = response;
         } else if (response && typeof response === 'object') {
           // Wrapped format { success, data, systemSettings }
-          if ('data' in response && Array.isArray(response.data)) {
-            applicationsData = response.data;
+          if ('data' in response && Array.isArray((response as { data?: unknown }).data)) {
+            applicationsData = (response as { data: LoanApplication[] }).data;
           }
-          if ('systemSettings' in response && response.systemSettings?.lateFeeGraceDays !== undefined) {
-            setLateFeeGraceDays(response.systemSettings.lateFeeGraceDays);
+          if ('systemSettings' in response) {
+            const settings = (response as { systemSettings?: { lateFeeGraceDays?: number } }).systemSettings;
+            if (settings?.lateFeeGraceDays !== undefined) {
+              setLateFeeGraceDays(settings.lateFeeGraceDays);
+            }
           }
         }
 
@@ -732,6 +856,13 @@ function AdminApplicationsPageContent() {
         if (!Array.isArray(applicationsData)) {
           console.error('Applications data is not an array:', applicationsData);
           applicationsData = [];
+        }
+
+        // If no applications, set empty array and return early
+        if (applicationsData.length === 0) {
+          setApplications([]);
+          setLoading(false);
+          return;
         }
 
         // For each application, fetch its history
@@ -1029,29 +1160,8 @@ function AdminApplicationsPageContent() {
 
       // Auto-switch to appropriate tab based on status (unless tab is explicitly set via URL)
       if (!tabParam) {
-		if (firstApp.status === "PENDING_APPROVAL") {
-		  setSelectedTab("approval");
-		} else if (firstApp.status === "PENDING_ATTESTATION") {
-		  setSelectedTab("attestation");
-		} else if (
-		  [
-			"PENDING_SIGNATURE",
-			"PENDING_PKI_SIGNING",
-			"PENDING_SIGNING_COMPANY_WITNESS",
-			"PENDING_SIGNING_OTP_DS",
-		  ].includes(firstApp.status)
-		) {
-		  setSelectedTab("signatures");
-		} else if (firstApp.status === "PENDING_STAMPING") {
-		  setSelectedTab("stamping");
-		} else if (firstApp.status === "PENDING_DISBURSEMENT") {
-		  setSelectedTab("disbursement");
-		} else if (firstApp.status === "COLLATERAL_REVIEW") {
-		  setSelectedTab("collateral");
-		} else {
-		  setSelectedTab(getInitialTab());
-		}
-	  }
+        setSelectedTab(getTabForStatus(firstApp.status));
+      }
     }
     // Clear selection if no results
     else if (filteredApplications.length === 0) {
@@ -1136,35 +1246,8 @@ function AdminApplicationsPageContent() {
     // Determine the appropriate tab based on status (unless tab is explicitly set via URL)
     let newTab = tabParam;
     if (!tabParam) {
-      if (application.status === "PENDING_APPROVAL") {
-        newTab = "approval";
-        setSelectedTab("approval");
-      } else if (application.status === "PENDING_ATTESTATION") {
-        newTab = "attestation";
-        setSelectedTab("attestation");
-      } else if (
-        [
-          "PENDING_SIGNATURE",
-          "PENDING_PKI_SIGNING",
-          "PENDING_SIGNING_COMPANY_WITNESS",
-          "PENDING_SIGNING_OTP_DS",
-        ].includes(application.status)
-      ) {
-        newTab = "signatures";
-        setSelectedTab("signatures");
-      } else if (application.status === "PENDING_STAMPING") {
-        newTab = "stamping";
-        setSelectedTab("stamping");
-      } else if (application.status === "PENDING_DISBURSEMENT") {
-        newTab = "disbursement";
-        setSelectedTab("disbursement");
-      } else if (application.status === "COLLATERAL_REVIEW") {
-        newTab = "collateral";
-        setSelectedTab("collateral");
-      } else {
-        newTab = getInitialTab();
-        setSelectedTab(getInitialTab());
-      }
+      newTab = getTabForStatus(application.status);
+      setSelectedTab(newTab);
     }
 
     // Update URL to reflect the selected application, preserving filter and tab
@@ -1663,17 +1746,9 @@ function AdminApplicationsPageContent() {
     return `Status changed to ${getStatusLabel(newStatus)}`;
   };
 
-  // Approval decision handler
-  const handleApprovalDecision = async (decision: "approve" | "reject") => {
+  // Process approval decision (called after confirmation)
+  const processApprovalDecision = async (decision: "approve" | "reject") => {
     if (!selectedApplication) return;
-
-    // Show confirmation dialog
-    const actionText = decision === "approve" ? "approve" : "reject";
-    const confirmMessage = `Are you sure you want to ${actionText} this loan application for ${selectedApplication.user?.fullName}?`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
 
     setProcessingDecision(true);
     try {
@@ -1687,6 +1762,12 @@ function AdminApplicationsPageContent() {
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
       
+      // Update the selected application status and switch to appropriate tab
+      setSelectedApplication((prev) =>
+        prev ? { ...prev, status: newStatus } : null
+      );
+      setSelectedTab(getTabForStatus(newStatus));
+      
       // Show success toast
       toast.success(decision === "approve" 
         ? `Application approved for ${selectedApplication.user?.fullName}` 
@@ -1699,17 +1780,31 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  // Collateral decision handler
-  const handleCollateralDecision = async (decision: "approve" | "reject") => {
+  // Approval decision handler - shows confirmation modal
+  const handleApprovalDecision = (decision: "approve" | "reject") => {
     if (!selectedApplication) return;
 
-    // Show confirmation dialog
-    const actionText = decision === "approve" ? "approve" : "reject";
-    const confirmMessage = `Are you sure you want to ${actionText} this collateral loan application for ${selectedApplication.user?.fullName}?`;
+    const isApprove = decision === "approve";
+    showConfirmModal({
+      title: isApprove ? "Approve Application" : "Reject Application",
+      message: `Are you sure you want to ${decision} this loan application?`,
+      details: [
+        `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+        `Amount: ${selectedApplication.amount ? `RM ${selectedApplication.amount.toLocaleString()}` : "Not set"}`,
+        `Product: ${selectedApplication.product?.name || "Unknown"}`,
+      ],
+      confirmText: isApprove ? "Approve Application" : "Reject Application",
+      confirmColor: isApprove ? "green" : "red",
+      onConfirm: () => {
+        closeConfirmModal();
+        processApprovalDecision(decision);
+      },
+    });
+  };
 
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
+  // Process collateral decision (called after confirmation)
+  const processCollateralDecision = async (decision: "approve" | "reject") => {
+    if (!selectedApplication) return;
 
     setProcessingCollateral(true);
     try {
@@ -1724,6 +1819,12 @@ function AdminApplicationsPageContent() {
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
       
+      // Update the selected application status and switch to appropriate tab
+      setSelectedApplication((prev) =>
+        prev ? { ...prev, status: newStatus } : null
+      );
+      setSelectedTab(getTabForStatus(newStatus));
+      
       // Show success toast
       toast.success(decision === "approve" 
         ? `Collateral approved for ${selectedApplication.user?.fullName}` 
@@ -1736,118 +1837,34 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  // Attestation completion handler
-  const handleAttestationCompletion = async () => {
+  // Collateral decision handler - shows confirmation modal
+  const handleCollateralDecision = (decision: "approve" | "reject") => {
     if (!selectedApplication) return;
 
-    // Validation based on attestation type
-    if (attestationType === "IMMEDIATE") {
-      if (!attestationVideoWatched || !attestationTermsAccepted) {
-        setError(
-          "For immediate attestation, video must be watched and terms must be accepted"
-        );
-        return;
-      }
-    } else if (attestationType === "MEETING") {
-      if (!meetingCompletedAt) {
-        setError(
-          "For meeting attestation, please provide the meeting completion date"
-        );
-        return;
-      }
-    }
-
-    // Show confirmation dialog
-    const confirmMessage = `Are you sure you want to mark attestation as completed for ${selectedApplication.user?.fullName}?\n\nType: ${attestationType}\nThis will move the application to PENDING_SIGNATURE status.`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    setProcessingAttestation(true);
-    try {
-      const response = await fetch(
-        `/api/admin/applications/${selectedApplication.id}/complete-attestation`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
-          },
-          body: JSON.stringify({
-            attestationType,
-            attestationNotes:
-              attestationNotes ||
-              `${attestationType} attestation completed by admin`,
-            attestationVideoWatched:
-              attestationType === "IMMEDIATE" ? attestationVideoWatched : false,
-            attestationTermsAccepted:
-              attestationType === "IMMEDIATE" ? attestationTermsAccepted : true,
-            meetingCompletedAt:
-              attestationType === "MEETING" ? meetingCompletedAt : null,
-          }),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        // Refresh the application data
-        await fetchApplications();
-        await fetchApplicationHistory(selectedApplication.id);
-
-        // Reset attestation form
-        setAttestationType("IMMEDIATE");
-        setAttestationNotes("");
-        setAttestationVideoWatched(false);
-        setAttestationTermsAccepted(false);
-        setMeetingCompletedAt("");
-
-        // Update selected application
-        setSelectedApplication((prev) =>
-          prev ? { ...prev, status: "PENDING_SIGNATURE" } : null
-        );
-        
-        // Show success toast
-        toast.success(`Attestation completed for ${selectedApplication.user?.fullName}`);
-      } else {
-        const errorData = await response.json();
-        console.error("Attestation completion error:", errorData);
-        setError(
-          errorData.error ||
-            errorData.message ||
-            "Failed to complete attestation"
-        );
-      }
-    } catch (error) {
-      console.error("Error completing attestation:", error);
-      setError("Failed to complete attestation");
-    } finally {
-      setProcessingAttestation(false);
-    }
+    const isApprove = decision === "approve";
+    showConfirmModal({
+      title: isApprove ? "Approve Collateral" : "Reject Collateral",
+      message: `Are you sure you want to ${decision} this collateral loan application?`,
+      details: [
+        `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+        `Amount: ${selectedApplication.amount ? `RM ${selectedApplication.amount.toLocaleString()}` : "Not set"}`,
+        `Product: ${selectedApplication.product?.name || "Unknown"}`,
+      ],
+      confirmText: isApprove ? "Approve Collateral" : "Reject Collateral",
+      confirmColor: isApprove ? "green" : "red",
+      onConfirm: () => {
+        closeConfirmModal();
+        processCollateralDecision(decision);
+      },
+    });
   };
 
-  // Disbursement handler
-  const handleDisbursement = async () => {
+  // Process disbursement (called after confirmation)
+  const processDisbursement = async () => {
     if (!selectedApplication || !disbursementReference) return;
-
-    // Show confirmation dialog
-    const disbursementAmount =
-      selectedApplication.netDisbursement || selectedApplication.amount;
-    const confirmMessage = `Are you sure you want to disburse ${formatCurrency(
-      disbursementAmount
-    )} to ${
-      selectedApplication.user?.fullName
-    }?\n\nReference: ${disbursementReference}\nBank: ${
-      selectedApplication.user?.bankName
-    }\nAccount: ${selectedApplication.user?.accountNumber}`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
 
     setProcessingDisbursement(true);
     try {
-
       const response = await fetch(
         `/api/admin/applications/${selectedApplication.id}/disburse`,
         {
@@ -1871,10 +1888,11 @@ function AdminApplicationsPageContent() {
         setDisbursementNotes("");
         setDisbursementReference("");
 
-        // Update selected application
+        // Update selected application and switch to details tab (ACTIVE loans don't have action tabs)
         setSelectedApplication((prev) =>
           prev ? { ...prev, status: "ACTIVE" } : null
         );
+        setSelectedTab("details");
         
         // Show success toast
         toast.success(`Loan disbursed successfully for ${selectedApplication.user?.fullName}`);
@@ -1891,6 +1909,32 @@ function AdminApplicationsPageContent() {
     } finally {
       setProcessingDisbursement(false);
     }
+  };
+
+  // Disbursement handler - shows confirmation modal
+  const handleDisbursement = () => {
+    if (!selectedApplication || !disbursementReference) return;
+
+    const disbursementAmount =
+      selectedApplication.netDisbursement || selectedApplication.amount;
+
+    showConfirmModal({
+      title: "Confirm Disbursement",
+      message: `Are you sure you want to disburse funds for this loan?`,
+      details: [
+        `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+        `Amount: ${formatCurrency(disbursementAmount)}`,
+        `Reference: ${disbursementReference}`,
+        `Bank: ${selectedApplication.user?.bankName || "Not set"}`,
+        `Account: ${selectedApplication.user?.accountNumber || "Not set"}`,
+      ],
+      confirmText: "Disburse Loan",
+      confirmColor: "green",
+      onConfirm: () => {
+        closeConfirmModal();
+        processDisbursement();
+      },
+    });
   };
 
   // Disbursement slip upload handler
@@ -1935,62 +1979,9 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  // Fresh offer handler
-  const handleFreshOfferSubmission = async () => {
+  // Process fresh offer (called after confirmation)
+  const processFreshOffer = async () => {
     if (!selectedApplication) return;
-
-    // Validate required fields
-    if (
-      !freshOfferAmount ||
-      !freshOfferTerm ||
-      !freshOfferInterestRate ||
-      !freshOfferMonthlyRepayment ||
-      !freshOfferNetDisbursement ||
-      !freshOfferStampingFee ||
-      !freshOfferLegalFeeFixed ||
-      !freshOfferProductId
-    ) {
-      setError(
-        "All fresh offer fields are required, including product selection and fee amounts"
-      );
-      return;
-    }
-
-    // Show confirmation dialog with fee breakdown
-    const legalFeeValue = parseFloat(freshOfferLegalFeeFixed) || 0;
-    const stampingFeeValue = parseFloat(freshOfferStampingFee) || 0;
-    const totalFees = legalFeeValue + stampingFeeValue;
-    const loanAmount = parseFloat(freshOfferAmount) || 0;
-
-    // Get product info to show stamping fee percentage
-    const selectedProduct = products.find((p) => p.id === freshOfferProductId);
-    const productStampingFeePercentage = selectedProduct?.stampingFee || 0;
-    const calculatedStampingFee = (loanAmount * productStampingFeePercentage) / 100;
-    
-    // Calculate actual percentage being charged (reverse-calculate from amount)
-    const actualStampingFeePercentage = loanAmount > 0 ? (stampingFeeValue / loanAmount) * 100 : 0;
-    const isManuallyAdjusted = Math.abs(stampingFeeValue - calculatedStampingFee) > 0.01;
-
-    const confirmMessage = `Are you sure you want to submit a fresh offer to ${
-      selectedApplication.user?.fullName
-    }?
-
-LOAN TERMS:
-• Loan Amount: RM${loanAmount.toFixed(2)}
-• Term: ${freshOfferTerm} months
-• Interest Rate: ${freshOfferInterestRate}% monthly
-• Monthly Repayment: RM${parseFloat(freshOfferMonthlyRepayment).toFixed(2)}
-
-FEES:
-• Legal Fee (Fixed): RM${legalFeeValue.toFixed(2)}
-• Stamping Fee${isManuallyAdjusted ? ` (${actualStampingFeePercentage.toFixed(2)}% - manually adjusted)` : ` (${productStampingFeePercentage}%)`}: RM${stampingFeeValue.toFixed(2)}
-• Total Fees: RM${totalFees.toFixed(2)}
-
-NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
 
     setProcessingFreshOffer(true);
     try {
@@ -2032,10 +2023,11 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
       await fetchApplications();
       await fetchApplicationHistory(selectedApplication.id);
 
-      // Update selected application status
+      // Update selected application status and switch to details tab
       setSelectedApplication((prev) =>
         prev ? { ...prev, status: "PENDING_FRESH_OFFER" } : null
       );
+      setSelectedTab("details");
       
       // Show success toast
       toast.success(`Fresh offer sent to ${selectedApplication.user?.fullName}`);
@@ -2045,6 +2037,64 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
     } finally {
       setProcessingFreshOffer(false);
     }
+  };
+
+  // Fresh offer handler - shows confirmation modal
+  const handleFreshOfferSubmission = () => {
+    if (!selectedApplication) return;
+
+    // Validate required fields
+    if (
+      !freshOfferAmount ||
+      !freshOfferTerm ||
+      !freshOfferInterestRate ||
+      !freshOfferMonthlyRepayment ||
+      !freshOfferNetDisbursement ||
+      !freshOfferStampingFee ||
+      !freshOfferLegalFeeFixed ||
+      !freshOfferProductId
+    ) {
+      setError(
+        "All fresh offer fields are required, including product selection and fee amounts"
+      );
+      return;
+    }
+
+    // Calculate fee breakdown for display
+    const legalFeeValue = parseFloat(freshOfferLegalFeeFixed) || 0;
+    const stampingFeeValue = parseFloat(freshOfferStampingFee) || 0;
+    const totalFees = legalFeeValue + stampingFeeValue;
+    const loanAmount = parseFloat(freshOfferAmount) || 0;
+
+    // Get product info to show stamping fee percentage
+    const selectedProduct = products.find((p) => p.id === freshOfferProductId);
+    const productStampingFeePercentage = selectedProduct?.stampingFee || 0;
+    const calculatedStampingFee = (loanAmount * productStampingFeePercentage) / 100;
+    
+    // Calculate actual percentage being charged (reverse-calculate from amount)
+    const actualStampingFeePercentage = loanAmount > 0 ? (stampingFeeValue / loanAmount) * 100 : 0;
+    const isManuallyAdjusted = Math.abs(stampingFeeValue - calculatedStampingFee) > 0.01;
+
+    showConfirmModal({
+      title: "Submit Fresh Offer",
+      message: `Are you sure you want to submit a fresh offer to ${selectedApplication.user?.fullName}?`,
+      details: [
+        `Loan Amount: RM ${loanAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Term: ${freshOfferTerm} months`,
+        `Interest Rate: ${freshOfferInterestRate}% monthly`,
+        `Monthly Repayment: RM ${parseFloat(freshOfferMonthlyRepayment).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Legal Fee: RM ${legalFeeValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Stamping Fee${isManuallyAdjusted ? ` (${actualStampingFeePercentage.toFixed(2)}%)` : ` (${productStampingFeePercentage}%)`}: RM ${stampingFeeValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Total Fees: RM ${totalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        `Net Disbursement: RM ${parseFloat(freshOfferNetDisbursement).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+      ],
+      confirmText: "Submit Fresh Offer",
+      confirmColor: "blue",
+      onConfirm: () => {
+        closeConfirmModal();
+        processFreshOffer();
+      },
+    });
   };
 
   // Fetch products for selection
@@ -2529,25 +2579,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
           </button>
           <button
             onClick={() => {
-              setSelectedFilters(["PENDING_ATTESTATION"]);
-              router.push("/dashboard/applications?filter=pending-attestation");
-            }}
-            className={`px-4 py-2 rounded-lg border transition-colors ${
-              selectedFilters.length === 1 &&
-              selectedFilters.includes("PENDING_ATTESTATION")
-                ? "bg-cyan-500/30 text-cyan-100 border-cyan-400/30"
-                : "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
-            }`}
-          >
-            Pending Attestation (
-            {
-              applications.filter((app) => app.status === "PENDING_ATTESTATION")
-                .length
-            }
-            )
-          </button>
-          <button
-            onClick={() => {
               setSelectedFilters([
                 "PENDING_SIGNATURE",
                 "PENDING_PKI_SIGNING",
@@ -2814,10 +2845,23 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
         <div className="lg:col-span-2">
           {selectedApplication ? (
             <div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-              <div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-                <h3 className="text-lg font-medium text-white">
-                  Application Details
-                </h3>
+              <div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-medium text-white">
+                    Application Details
+                  </h3>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    {(() => {
+                      const StatusIcon = getStatusIcon(selectedApplication.status);
+                      return (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedApplication.status)}`}>
+                          <StatusIcon className="h-3.5 w-3.5 mr-1" />
+                          {getStatusLabel(selectedApplication.status)}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
                 <span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
                   ID: {selectedApplication.id.substring(0, 8)}
                 </span>
@@ -2941,24 +2985,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                       <span className="ml-1.5 flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                      </span>
-                    </div>
-                  )}
-                  {/* Show Attestation tab for PENDING_ATTESTATION applications - ACTION REQUIRED */}
-                  {selectedApplication.status === "PENDING_ATTESTATION" && (
-                    <div
-                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
-                        selectedTab === "attestation"
-                          ? "border-b-2 border-cyan-400 font-medium text-white bg-cyan-500/10"
-                          : "text-cyan-300 hover:text-cyan-200 bg-cyan-500/5 hover:bg-cyan-500/10"
-                      }`}
-                      onClick={() => setSelectedTab("attestation")}
-                    >
-                      <ClipboardDocumentCheckIcon className="h-4 w-4 mr-1.5" />
-                      Attestation
-                      <span className="ml-1.5 flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-cyan-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                       </span>
                     </div>
                   )}
@@ -4710,287 +4736,6 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                   </div>
                 )}
 
-                {/* Attestation Tab */}
-                {selectedTab === "attestation" && (
-                  <div>
-                    {/* Attestation Section */}
-                    <div className="border border-cyan-500/30 rounded-lg p-6 bg-cyan-500/10 mb-6">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
-                        <ClipboardDocumentCheckIcon className="h-6 w-6 mr-2 text-cyan-400" />
-                        Loan Terms Attestation
-                      </h4>
-
-                      {/* Application Summary */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Applicant
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.user?.fullName}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.email}
-                          </p>
-                          
-                          {/* IC Number Section */}
-                          <div className="mt-2 flex items-center gap-2">
-                            {!editingIcNumber ? (
-                              <>
-                                <p className="text-sm text-gray-400">
-                                  IC: {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
-                                </p>
-                                <button
-                                  onClick={() => {
-                                    setIcNumberValue(
-                                      selectedApplication.user?.icNumber || 
-                                      selectedApplication.user?.idNumber || 
-                                      ""
-                                    );
-                                    setEditingIcNumber(true);
-                                  }}
-                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
-                                  title="Edit IC Number"
-                                >
-                                  <PencilSquareIcon className="h-4 w-4" />
-                                </button>
-                              </>
-                            ) : (
-                              <div className="flex items-center gap-2 flex-1">
-                                <input
-                                  type="text"
-                                  value={icNumberValue}
-                                  onChange={(e) => setIcNumberValue(e.target.value)}
-                                  placeholder="Enter IC number"
-                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
-                                  disabled={updatingIcNumber}
-                                />
-                                <button
-                                  onClick={() => {
-                                    if (selectedApplication?.userId) {
-                                      updateUserIcNumber(selectedApplication.userId, icNumberValue);
-                                    }
-                                  }}
-                                  disabled={updatingIcNumber || !icNumberValue.trim()}
-                                  className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Save IC Number"
-                                >
-                                  {updatingIcNumber ? (
-                                    <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <CheckCircleIcon className="h-4 w-4" />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingIcNumber(false);
-                                    setIcNumberValue("");
-                                  }}
-                                  disabled={updatingIcNumber}
-                                  className="p-1 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Cancel"
-                                >
-                                  <XMarkIcon className="h-4 w-4" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Loan Details
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.amount
-                              ? formatCurrency(selectedApplication.amount)
-                              : "Amount not set"}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.term
-                              ? `${selectedApplication.term} months`
-                              : "Term not set"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Attestation Type Selection */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-300 mb-3">
-                          Attestation Type
-                        </label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div
-                            className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                              attestationType === "IMMEDIATE"
-                                ? "border-cyan-400/50 bg-cyan-500/10"
-                                : "border-gray-600 bg-gray-800/30 hover:border-gray-500"
-                            }`}
-                            onClick={() => setAttestationType("IMMEDIATE")}
-                          >
-                            <div className="flex items-center mb-2">
-                              <input
-                                type="radio"
-                                checked={attestationType === "IMMEDIATE"}
-                                onChange={() => setAttestationType("IMMEDIATE")}
-                                className="mr-2"
-                              />
-                              <h6 className="text-white font-medium">
-                                Immediate Attestation
-                              </h6>
-                            </div>
-                            <p className="text-sm text-gray-400">
-                              Customer watches video and accepts terms online
-                            </p>
-                          </div>
-                          <div
-                            className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                              attestationType === "MEETING"
-                                ? "border-cyan-400/50 bg-cyan-500/10"
-                                : "border-gray-600 bg-gray-800/30 hover:border-gray-500"
-                            }`}
-                            onClick={() => setAttestationType("MEETING")}
-                          >
-                            <div className="flex items-center mb-2">
-                              <input
-                                type="radio"
-                                checked={attestationType === "MEETING"}
-                                onChange={() => setAttestationType("MEETING")}
-                                className="mr-2"
-                              />
-                              <h6 className="text-white font-medium">
-                                Meeting with Lawyer
-                              </h6>
-                            </div>
-                            <p className="text-sm text-gray-400">
-                              Schedule meeting with legal counsel
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Immediate Attestation Form */}
-                      {attestationType === "IMMEDIATE" && (
-                        <div className="mb-6 p-4 bg-gray-800/30 rounded-lg">
-                          <h6 className="text-white font-medium mb-3">
-                            Immediate Attestation Requirements
-                          </h6>
-                          <div className="space-y-3">
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={attestationVideoWatched}
-                                onChange={(e) =>
-                                  setAttestationVideoWatched(e.target.checked)
-                                }
-                                className="mr-3"
-                              />
-                              <label className="text-gray-300">
-                                Customer has watched the loan terms video
-                              </label>
-                            </div>
-                            <div className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={attestationTermsAccepted}
-                                onChange={(e) =>
-                                  setAttestationTermsAccepted(e.target.checked)
-                                }
-                                className="mr-3"
-                              />
-                              <label className="text-gray-300">
-                                Customer has accepted the loan terms and
-                                conditions
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Meeting Attestation Form */}
-                      {attestationType === "MEETING" && (
-                        <div className="mb-6 p-4 bg-gray-800/30 rounded-lg">
-                          <h6 className="text-white font-medium mb-3">
-                            Meeting Attestation Details
-                          </h6>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Meeting Completion Date & Time
-                            </label>
-                            <input
-                              type="datetime-local"
-                              value={meetingCompletedAt}
-                              onChange={(e) =>
-                                setMeetingCompletedAt(e.target.value)
-                              }
-                              className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Attestation Notes */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Attestation Notes (Optional)
-                        </label>
-                        <textarea
-                          value={attestationNotes}
-                          onChange={(e) => setAttestationNotes(e.target.value)}
-                          placeholder="Add notes about the attestation process..."
-                          className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                          rows={3}
-                        />
-                      </div>
-
-                      {/* Complete Attestation Button */}
-                      <div className="flex space-x-4">
-                        <button
-                          onClick={handleAttestationCompletion}
-                          disabled={
-                            processingAttestation ||
-                            (attestationType === "IMMEDIATE" &&
-                              (!attestationVideoWatched ||
-                                !attestationTermsAccepted)) ||
-                            (attestationType === "MEETING" &&
-                              !meetingCompletedAt)
-                          }
-                          className="flex items-center px-6 py-3 bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-600/50 text-white font-medium rounded-lg transition-colors"
-                        >
-                          <CheckCircleIcon className="h-5 w-5 mr-2" />
-                          {processingAttestation
-                            ? "Processing..."
-                            : "Complete Attestation"}
-                        </button>
-                      </div>
-
-                      {/* Process Information */}
-                      <div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
-                        <h5 className="text-sm font-medium text-blue-200 mb-2">
-                          Attestation Process
-                        </h5>
-                        <ul className="text-xs text-blue-200 space-y-1">
-                          <li>
-                            • <strong>Immediate:</strong> Customer confirms they
-                            have watched the video and accepted terms
-                          </li>
-                          <li>
-                            • <strong>Meeting:</strong> Legal counsel meeting
-                            completed and terms explained
-                          </li>
-                          <li>
-                            • Application will move to PENDING_SIGNATURE status
-                            upon completion
-                          </li>
-                          <li>
-                            • All attestation details are logged in the audit
-                            trail
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Disbursement Tab */}
                 {selectedTab === "disbursement" && (
                   <div>
@@ -5420,14 +5165,18 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                               </p>
                               <button
                                 onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      "Are you sure you want to replace the existing stamp certificate? The current certificate will be overwritten."
-                                    )
-                                  ) {
-                                    setReplacingStampCertificate(true);
-                                    setStampCertificateFile(null);
-                                  }
+                                  showConfirmModal({
+                                    title: "Replace Certificate",
+                                    message: "Are you sure you want to replace the existing stamp certificate?",
+                                    details: ["The current certificate will be overwritten."],
+                                    confirmText: "Replace Certificate",
+                                    confirmColor: "amber",
+                                    onConfirm: () => {
+                                      closeConfirmModal();
+                                      setReplacingStampCertificate(true);
+                                      setStampCertificateFile(null);
+                                    },
+                                  });
                                 }}
                                 className="text-xs px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md transition-colors"
                               >
@@ -5574,74 +5323,81 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                         !replacingStampCertificate && (
                           <div className="flex space-x-4">
                             <button
-                              onClick={async () => {
-                                const confirmMessage = `Are you sure you want to confirm stamping for ${selectedApplication.user?.fullName}?\n\nThis will move the application to PENDING_DISBURSEMENT status and allow loan disbursement.`;
+                              onClick={() => {
+                                showConfirmModal({
+                                  title: "Confirm Stamping",
+                                  message: `Are you sure you want to confirm stamping for this application?`,
+                                  details: [
+                                    `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+                                    "This will move the application to PENDING_DISBURSEMENT status",
+                                    "Loan disbursement will be enabled after confirmation",
+                                  ],
+                                  confirmText: "Confirm Stamping",
+                                  confirmColor: "green",
+                                  onConfirm: async () => {
+                                    closeConfirmModal();
+                                    setConfirmingStamping(true);
+                                    try {
+                                      const response = await fetch(
+                                        `/api/admin/applications/${selectedApplication.id}/confirm-stamping`,
+                                        {
+                                          method: "POST",
+                                          headers: {
+                                            Authorization: `Bearer ${localStorage.getItem(
+                                              "adminToken"
+                                            )}`,
+                                            "Content-Type": "application/json",
+                                          },
+                                        }
+                                      );
 
-                                if (!window.confirm(confirmMessage)) {
-                                  return;
-                                }
+                                      const data = await response.json();
 
-                                setConfirmingStamping(true);
-                                try {
+                                      if (!response.ok) {
+                                        throw new Error(
+                                          data.message || "Confirmation failed"
+                                        );
+                                      }
 
-                                  const response = await fetch(
-                                    `/api/admin/applications/${selectedApplication.id}/confirm-stamping`,
-                                    {
-                                      method: "POST",
-                                      headers: {
-                                        Authorization: `Bearer ${localStorage.getItem(
-                                          "adminToken"
-                                        )}`,
-                                        "Content-Type": "application/json",
-                                      },
+                                      toast.success(
+                                        "Stamping confirmed! Application moved to PENDING_DISBURSEMENT."
+                                      );
+
+                                      // Update selected application status to trigger disbursement reference generation
+                                      const updatedApp = {
+                                        ...selectedApplication,
+                                        status: "PENDING_DISBURSEMENT",
+                                      };
+                                      setSelectedApplication(updatedApp as any);
+
+                                      // Generate disbursement reference immediately
+                                      const reference = `DISB-${selectedApplication.id
+                                        .slice(-8)
+                                        .toUpperCase()}-${Date.now().toString().slice(-6)}`;
+                                      setDisbursementReference(reference);
+
+                                      // Refresh application data
+                                      await fetchApplications();
+                                      setSelectedTab("disbursement");
+                                      setSelectedFilters(["PENDING_DISBURSEMENT"]);
+                                      router.push("/dashboard/applications?filter=pending-disbursement");
+                                    } catch (error) {
+                                      console.error(
+                                        "❌ Error confirming stamping:",
+                                        error
+                                      );
+                                      toast.error(
+                                        `Failed to confirm stamping: ${
+                                          error instanceof Error
+                                            ? error.message
+                                            : "Unknown error"
+                                        }`
+                                      );
+                                    } finally {
+                                      setConfirmingStamping(false);
                                     }
-                                  );
-
-                                  const data = await response.json();
-
-                                  if (!response.ok) {
-                                    throw new Error(
-                                      data.message || "Confirmation failed"
-                                    );
-                                  }
-
-                                  toast.success(
-                                    "Stamping confirmed! Application moved to PENDING_DISBURSEMENT."
-                                  );
-
-                                  // Update selected application status to trigger disbursement reference generation
-                                  const updatedApp = {
-                                    ...selectedApplication,
-                                    status: "PENDING_DISBURSEMENT",
-                                  };
-                                  setSelectedApplication(updatedApp as any);
-
-                                  // Generate disbursement reference immediately
-                                  const reference = `DISB-${selectedApplication.id
-                                    .slice(-8)
-                                    .toUpperCase()}-${Date.now().toString().slice(-6)}`;
-                                  setDisbursementReference(reference);
-
-                                  // Refresh application data
-                                  await fetchApplications();
-								  setSelectedTab("disbursement");
-								  setSelectedFilters(["PENDING_DISBURSEMENT"]);
-								  router.push("/dashboard/applications?filter=pending-disbursement");
-                                } catch (error) {
-                                  console.error(
-                                    "❌ Error confirming stamping:",
-                                    error
-                                  );
-                                  toast.error(
-                                    `Failed to confirm stamping: ${
-                                      error instanceof Error
-                                        ? error.message
-                                        : "Unknown error"
-                                    }`
-                                  );
-                                } finally {
-                                  setConfirmingStamping(false);
-                                }
+                                  },
+                                });
                               }}
                               disabled={confirmingStamping}
                               className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
@@ -5883,6 +5639,18 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        open={confirmModal.open}
+        onClose={closeConfirmModal}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        details={confirmModal.details}
+        confirmText={confirmModal.confirmText}
+        confirmColor={confirmModal.confirmColor}
+      />
     </AdminLayout>
   );
 }

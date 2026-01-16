@@ -344,9 +344,15 @@ function PaymentsContent() {
 		setSelectedPayment(payment);
 	};
 
-	const handleRefresh = () => {
+	const handleRefresh = async () => {
 		setRefreshing(true);
-		fetchPayments(true, true); // Force cache bust
+		try {
+			await fetchPayments(true, true); // Force cache bust
+			toast.success("Payments refreshed successfully");
+		} catch (error) {
+			console.error("Error refreshing payments:", error);
+			toast.error("Failed to refresh payments");
+		}
 	};
 
 	const handleApprovePayment = async () => {
