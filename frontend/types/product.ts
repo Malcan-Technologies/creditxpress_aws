@@ -14,6 +14,11 @@ export interface ProductType {
 	lateFeeFixedAmount?: number;
 	lateFeeFrequencyDays?: number;
 	applicationFee: number;
+	// New fee structure
+	legalFeeType?: 'PERCENTAGE' | 'FIXED';
+	legalFeeValue?: number;
+	stampingFee?: number;
+	legalFeeFixed?: number;
 	eligibility: string[];
 	features: string[];
 	requiredDocuments?: string[];

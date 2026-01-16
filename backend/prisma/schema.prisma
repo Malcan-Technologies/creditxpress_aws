@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum LegalFeeType {
+  PERCENTAGE
+  FIXED
+}
+
 model Product {
   id                   String            @id @default(cuid())
   code                 String            @unique
@@ -32,6 +37,8 @@ model Product {
   collateralRequired   Boolean           @default(false)
   stampingFee          Float             @default(0)
   legalFeeFixed        Float             @default(0)
+  legalFeeType         LegalFeeType      @default(FIXED)
+  legalFeeValue        Float             @default(0)
   applications         LoanApplication[]
 
   @@map("products")

@@ -12,11 +12,13 @@ interface Product {
 	loanTypes?: string[];
 	repaymentTerms: number[]; // Array of months
 	interestRate: number; // Monthly interest rate in percentage
-	legalFee: number; // Legal fee in percentage (old)
-	originationFee: number; // Origination fee in percentage (old)
-	applicationFee: number; // Application fee as fixed amount (old)
-	stampingFee: number; // Stamping fee in percentage (new)
-	legalFeeFixed: number; // Legal fee as fixed amount (new)
+	legalFee: number; // Legal fee in percentage (old - deprecated)
+	originationFee: number; // Origination fee in percentage (old - deprecated)
+	applicationFee: number; // Application fee as fixed amount (old - deprecated)
+	stampingFee: number; // Stamping fee in percentage (always percentage)
+	legalFeeFixed: number; // Legal fee as fixed amount (old - deprecated)
+	legalFeeType?: 'PERCENTAGE' | 'FIXED'; // New: determines how legal fee is calculated
+	legalFeeValue?: number; // New: the legal fee value (interpreted based on legalFeeType)
 }
 
 interface ApplicationDetails {
@@ -194,20 +196,25 @@ function ApplicationDetailsFormContent({
 				termInMonths
 			);
 
-			// Calculate new fee structure
-			const legalFeeFixedValue = selectedProduct.legalFeeFixed || 0;
-			const stampingFeeValue = (loanAmount * (selectedProduct.stampingFee || 0)) / 100;
+			// Calculate legal fee based on legalFeeType
+			const legalFeeValue = selectedProduct.legalFeeValue ?? selectedProduct.legalFeeFixed ?? 0;
+			const legalFeeAmount = selectedProduct.legalFeeType === 'PERCENTAGE'
+				? (loanAmount * legalFeeValue) / 100
+				: legalFeeValue;
+
+			// Stamping fee is always a percentage
+			const stampingFeeAmount = (loanAmount * (selectedProduct.stampingFee || 0)) / 100;
 
 			// Calculate net disbursement with new fees
-			const netDisbursementValue = loanAmount - legalFeeFixedValue - stampingFeeValue;
+			const netDisbursementValue = loanAmount - legalFeeAmount - stampingFeeAmount;
 
 			const submissionValues = {
 				...formValues,
 				monthlyRepayment: monthlyRepayment.toFixed(2),
 				interestRate: selectedProduct.interestRate.toString(), // Keep as percentage
 				// New fee structure
-				stampingFee: stampingFeeValue.toFixed(2),
-				legalFeeFixed: legalFeeFixedValue.toFixed(2),
+				stampingFee: stampingFeeAmount.toFixed(2),
+				legalFeeFixed: legalFeeAmount.toFixed(2), // Store calculated amount regardless of type
 				// Old fees set to 0 for backward compatibility
 				legalFee: "0",
 				originationFee: "0",

@@ -144,9 +144,22 @@ interface LoanData {
 		amount: number;
 		purpose: string;
 		status?: string;
+		// Fee fields for financial breakdown
+		stampingFee?: number;
+		legalFeeFixed?: number;
+		legalFee?: number;
+		originationFee?: number;
+		applicationFee?: number;
+		netDisbursement?: number;
+		interestRate?: number;
+		monthlyRepayment?: number;
 		product: {
 			name: string;
 			code: string;
+			// Late fee fields
+			lateFeeRate?: number;
+			lateFeeFixedAmount?: number;
+			lateFeeFrequencyDays?: number;
 		};
 		user: {
 			id: string;
@@ -158,6 +171,19 @@ interface LoanData {
 			monthlyIncome?: string;
 			bankName?: string;
 			accountNumber?: string;
+			// Address fields
+			address1?: string;
+			address2?: string;
+			city?: string;
+			state?: string;
+			zipCode?: string;
+			country?: string;
+			// Education and employment fields
+			educationLevel?: string;
+			serviceLength?: string;
+			nationality?: string;
+			icNumber?: string;
+			idNumber?: string;
 		};
 	};
 	user: {
@@ -165,6 +191,28 @@ interface LoanData {
 		fullName: string;
 		email: string;
 		phoneNumber: string;
+		// Address fields
+		address1?: string;
+		address2?: string;
+		city?: string;
+		state?: string;
+		zipCode?: string;
+		country?: string;
+		// Additional fields
+		icNumber?: string;
+		idNumber?: string;
+		nationality?: string;
+		educationLevel?: string;
+		employmentStatus?: string;
+		employerName?: string;
+		serviceLength?: string;
+		monthlyIncome?: string;
+		bankName?: string;
+		accountNumber?: string;
+		// Emergency contact fields
+		emergencyContactName?: string;
+		emergencyContactPhone?: string;
+		emergencyContactRelationship?: string;
 	};
 	repayments?: LoanRepayment[];
 	overdueInfo?: {
@@ -3841,7 +3889,7 @@ function ActiveLoansContent() {
 
 										{/* Loan Details */}
 										<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-											{/* Customer Information */}
+											{/* Customer Information - Enhanced */}
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
 												<h4 className="text-white font-medium mb-3 flex items-center justify-between">
 													<div className="flex items-center">
@@ -3859,65 +3907,194 @@ function ActiveLoansContent() {
 														View Profile
 													</Link>
 												</h4>
-												<div className="space-y-3">
-													<div>
-														<p className="text-gray-400 text-sm">
-															Full Name
-														</p>
-														<p className="text-white">
-															{
-																selectedLoan
-																	.user
-																	.fullName
-															}
-														</p>
+												
+												{/* Basic Info */}
+												<div className="space-y-2 text-sm mb-4">
+													<div className="flex justify-between">
+														<span className="text-gray-400">Full Name</span>
+														<span className="text-white font-medium">
+															{selectedLoan.user.fullName}
+														</span>
 													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Email
-														</p>
-														<p className="text-white">
-															{
-																selectedLoan
-																	.user.email
-															}
-														</p>
+													<div className="flex justify-between">
+														<span className="text-gray-400">IC Number</span>
+														<span className="text-white">
+															{selectedLoan.user.icNumber || selectedLoan.user.idNumber || "N/A"}
+														</span>
 													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Phone
-														</p>
-														<p className="text-white">
-															{selectedLoan.user
-																.phoneNumber ||
-																"N/A"}
-														</p>
+													<div className="flex justify-between">
+														<span className="text-gray-400">Email</span>
+														<span className="text-white">
+															{selectedLoan.user.email}
+														</span>
 													</div>
-													{selectedLoan.application
-														?.user
-														?.employmentStatus && (
-														<div>
-															<p className="text-gray-400 text-sm">
-																Employment
-															</p>
-															<p className="text-white">
-																{
-																	selectedLoan
-																		.application
-																		.user
-																		.employmentStatus
-																}
-															</p>
+													<div className="flex justify-between">
+														<span className="text-gray-400">Phone</span>
+														<span className="text-white">
+															{selectedLoan.user.phoneNumber || "N/A"}
+														</span>
+													</div>
+													{selectedLoan.user.nationality && (
+														<div className="flex justify-between">
+															<span className="text-gray-400">Nationality</span>
+															<span className="text-white">
+																{selectedLoan.user.nationality}
+															</span>
+														</div>
+													)}
+													{selectedLoan.user.educationLevel && (
+														<div className="flex justify-between">
+															<span className="text-gray-400">Education</span>
+															<span className="text-white">
+																{selectedLoan.user.educationLevel}
+															</span>
 														</div>
 													)}
 												</div>
+
+												{/* Employment Section */}
+												{(selectedLoan.user.employmentStatus || selectedLoan.user.employerName || selectedLoan.user.monthlyIncome) && (
+													<div className="border-t border-gray-600/50 pt-3 mb-4">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Employment</p>
+														<div className="space-y-2 text-sm">
+															{selectedLoan.user.employmentStatus && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Status</span>
+																	<span className="text-white">
+																		{selectedLoan.user.employmentStatus}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.employerName && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Employer</span>
+																	<span className="text-white">
+																		{selectedLoan.user.employerName}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.serviceLength && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Length of Service</span>
+																	<span className="text-white">
+																		{selectedLoan.user.serviceLength}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.monthlyIncome && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Monthly Income</span>
+																	<span className="text-emerald-400 font-medium">
+																		{formatCurrency(parseFloat(selectedLoan.user.monthlyIncome))}
+																	</span>
+																</div>
+															)}
+														</div>
+													</div>
+												)}
+
+												{/* Address Section */}
+												{(selectedLoan.user.address1 || selectedLoan.user.city) && (
+													<div className="border-t border-gray-600/50 pt-3 mb-4">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Address</p>
+														<div className="text-sm text-white">
+															{selectedLoan.user.address1 && (
+																<p>{selectedLoan.user.address1}</p>
+															)}
+															{selectedLoan.user.address2 && (
+																<p>{selectedLoan.user.address2}</p>
+															)}
+															{(selectedLoan.user.city || selectedLoan.user.state || selectedLoan.user.zipCode) && (
+																<p>
+																	{[
+																		selectedLoan.user.city,
+																		selectedLoan.user.state,
+																		selectedLoan.user.zipCode
+																	].filter(Boolean).join(', ')}
+																</p>
+															)}
+															{selectedLoan.user.country && (
+																<p>{selectedLoan.user.country}</p>
+															)}
+														</div>
+													</div>
+												)}
+
+												{/* Bank Details */}
+												{(selectedLoan.user.bankName || selectedLoan.user.accountNumber) && (
+													<div className="border-t border-gray-600/50 pt-3 mb-4">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Bank Details</p>
+														<div className="space-y-2 text-sm">
+															{selectedLoan.user.bankName && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Bank</span>
+																	<span className="text-white">
+																		{selectedLoan.user.bankName}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.accountNumber && (
+																<div className="flex justify-between items-center">
+																	<span className="text-gray-400">Account No.</span>
+																	<div className="flex items-center gap-2">
+																		<span className="text-white font-mono">
+																			{selectedLoan.user.accountNumber}
+																		</span>
+																		<button
+																			onClick={() => {
+																				navigator.clipboard.writeText(selectedLoan.user.accountNumber || '');
+																			}}
+																			className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-400/20 hover:bg-blue-500/30"
+																			title="Copy"
+																		>
+																			Copy
+																		</button>
+																	</div>
+																</div>
+															)}
+														</div>
+													</div>
+												)}
+
+												{/* Emergency Contact */}
+												{(selectedLoan.user.emergencyContactName || selectedLoan.user.emergencyContactPhone) && (
+													<div className="border-t border-gray-600/50 pt-3">
+														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Emergency Contact</p>
+														<div className="space-y-2 text-sm">
+															{selectedLoan.user.emergencyContactName && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Name</span>
+																	<span className="text-white">
+																		{selectedLoan.user.emergencyContactName}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.emergencyContactRelationship && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Relationship</span>
+																	<span className="text-white">
+																		{selectedLoan.user.emergencyContactRelationship}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.emergencyContactPhone && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Phone</span>
+																	<span className="text-white">
+																		{selectedLoan.user.emergencyContactPhone}
+																	</span>
+																</div>
+															)}
+														</div>
+													</div>
+												)}
 											</div>
 
-											{/* Loan Terms */}
+											{/* Calculation Method */}
 											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30">
 												<h4 className="text-white font-medium mb-3 flex items-center">
 													<DocumentTextIcon className="h-5 w-5 mr-2 text-green-400" />
-													Loan Terms & Calculation Method
+													Calculation Method
 												</h4>
 												<div className="space-y-3">
 													<div>
@@ -3940,26 +4117,6 @@ function ActiveLoansContent() {
 																.application
 																?.purpose ||
 																"N/A"}
-														</p>
-													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Term
-														</p>
-														<p className="text-white">
-															{selectedLoan.term}{" "}
-															months
-														</p>
-													</div>
-													<div>
-														<p className="text-gray-400 text-sm">
-															Interest Rate
-														</p>
-														<p className="text-white">
-															{
-																selectedLoan.interestRate
-															}
-															% p.a.
 														</p>
 													</div>
 													<div>
@@ -4066,6 +4223,130 @@ function ActiveLoansContent() {
 															}
 														})()}
 													</div>
+												</div>
+											</div>
+
+											{/* Loan Terms - Full width */}
+											<div className="bg-gray-800/30 p-4 rounded-lg border border-gray-700/30 md:col-span-2">
+												<h4 className="text-white font-medium mb-4 flex items-center">
+													<BanknotesIcon className="h-5 w-5 mr-2 text-emerald-400" />
+													Loan Terms
+												</h4>
+												
+												<div className="space-y-4">
+													{/* Loan Terms Row */}
+													<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Loan Amount</span>
+															<span className="text-white font-medium md:mt-1">
+																{selectedLoan.application?.amount
+																	? formatCurrency(selectedLoan.application.amount)
+																	: formatCurrency(selectedLoan.principalAmount)}
+															</span>
+														</div>
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Loan Term</span>
+															<span className="text-white font-medium md:mt-1">
+																{selectedLoan.term} months
+															</span>
+														</div>
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Interest Rate</span>
+															<span className="text-white font-medium md:mt-1">
+																{selectedLoan.interestRate}% p.a.
+															</span>
+														</div>
+														<div className="flex justify-between md:flex-col md:justify-start">
+															<span className="text-gray-400">Monthly Repayment</span>
+															<span className="text-purple-400 font-semibold md:mt-1">
+																{formatCurrency(selectedLoan.monthlyPayment)}
+															</span>
+														</div>
+													</div>
+
+													{/* Fees Breakdown */}
+													<div className="border-t border-gray-600/50 pt-4">
+														<p className="text-sm font-medium text-gray-300 mb-3">Fees Deducted at Disbursement</p>
+														<div className="space-y-2 text-sm">
+															<div className="flex justify-between items-center">
+																<span className="text-gray-400">Legal Fee</span>
+																<span className="text-red-400">
+																	- {selectedLoan.application?.legalFeeFixed !== undefined && selectedLoan.application?.legalFeeFixed !== null && selectedLoan.application?.legalFeeFixed > 0
+																		? formatCurrency(selectedLoan.application.legalFeeFixed)
+																		: "RM 0.00"}
+																</span>
+															</div>
+															<div className="flex justify-between items-center">
+																<span className="text-gray-400">Stamping Fee</span>
+																<span className="text-red-400">
+																	- {selectedLoan.application?.stampingFee !== undefined && selectedLoan.application?.stampingFee !== null && selectedLoan.application?.stampingFee > 0
+																		? formatCurrency(selectedLoan.application.stampingFee)
+																		: "RM 0.00"}
+																</span>
+															</div>
+															<div className="flex justify-between items-center pt-2 border-t border-gray-600/30">
+																<span className="text-gray-300 font-medium">Total Fees</span>
+																<span className="text-red-400 font-medium">
+																	- {formatCurrency(
+																		(selectedLoan.application?.legalFeeFixed || 0) + 
+																		(selectedLoan.application?.stampingFee || 0)
+																	)}
+																</span>
+															</div>
+														</div>
+													</div>
+
+													{/* Net Disbursement - Highlighted */}
+													<div className="bg-emerald-500/10 rounded-lg p-4 border border-emerald-500/30">
+														<div className="flex justify-between items-center">
+															<div>
+																<p className="text-emerald-400 font-medium">Net Disbursement</p>
+																<p className="text-xs text-gray-400 mt-0.5">Amount credited to borrower's account</p>
+															</div>
+															<span className="text-emerald-400 text-xl font-semibold">
+																{selectedLoan.application?.netDisbursement
+																	? formatCurrency(selectedLoan.application.netDisbursement)
+																	: formatCurrency(
+																		(selectedLoan.application?.amount || selectedLoan.principalAmount) - 
+																		(selectedLoan.application?.legalFeeFixed || 0) - 
+																		(selectedLoan.application?.stampingFee || 0)
+																	)}
+															</span>
+														</div>
+													</div>
+
+													{/* Late Payment Fees from Product */}
+													{selectedLoan.application?.product && (
+														<div className="border-t border-gray-600/50 pt-4">
+															<p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees (per product terms)</p>
+															<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+																	<span className="text-gray-400 block text-xs mb-1">Late Fee Rate</span>
+																	<span className="text-amber-400 font-medium">
+																		{selectedLoan.application.product.lateFeeRate !== undefined && selectedLoan.application.product.lateFeeRate !== null
+																			? `${selectedLoan.application.product.lateFeeRate}%`
+																			: "8%"} <span className="text-xs text-gray-400">per annum</span>
+																	</span>
+																</div>
+																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+																	<span className="text-gray-400 block text-xs mb-1">Fixed Late Fee</span>
+																	<span className="text-amber-400 font-medium">
+																		{selectedLoan.application.product.lateFeeFixedAmount !== undefined && selectedLoan.application.product.lateFeeFixedAmount !== null
+																			? formatCurrency(selectedLoan.application.product.lateFeeFixedAmount)
+																			: "RM 0.00"} <span className="text-xs text-gray-400">per occurrence</span>
+																	</span>
+																</div>
+																<div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+																	<span className="text-gray-400 block text-xs mb-1">Grace Period</span>
+																	<span className="text-amber-400 font-medium">
+																		{selectedLoan.application.product.lateFeeFrequencyDays !== undefined && selectedLoan.application.product.lateFeeFrequencyDays !== null
+																			? `${selectedLoan.application.product.lateFeeFrequencyDays} days`
+																			: "7 days"} <span className="text-xs text-gray-400">before fee applies</span>
+																	</span>
+																</div>
+															</div>
+														</div>
+													)}
 												</div>
 											</div>
 

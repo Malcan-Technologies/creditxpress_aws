@@ -21,6 +21,8 @@ interface ProductInput {
 	applicationFee: number;
 	stampingFee: number;
 	legalFeeFixed: number;
+	legalFeeType?: 'PERCENTAGE' | 'FIXED';
+	legalFeeValue?: number;
 	requiredDocuments: string[];
 	features: string[];
 	loanTypes: string[];
@@ -107,6 +109,8 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 					applicationFee: true,
 					stampingFee: true,
 					legalFeeFixed: true,
+					legalFeeType: true,
+					legalFeeValue: true,
 					requiredDocuments: true,
 					features: true,
 					loanTypes: true,
@@ -127,6 +131,7 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 				applicationFee: Number(product.applicationFee),
 				stampingFee: Number(product.stampingFee),
 				legalFeeFixed: Number(product.legalFeeFixed),
+				legalFeeValue: Number(product.legalFeeValue),
 				interestRate: Number(product.interestRate),
 				lateFeeRate: Number(product.lateFeeRate),
 				lateFeeFixedAmount: Number(product.lateFeeFixedAmount),
@@ -153,6 +158,8 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 				applicationFee: true,
 				stampingFee: true,
 				legalFeeFixed: true,
+				legalFeeType: true,
+				legalFeeValue: true,
 				requiredDocuments: true,
 				features: true,
 				loanTypes: true,
@@ -172,6 +179,7 @@ const getProducts: RequestHandler<{}, any, any, GetProductsQuery> = async (
 			applicationFee: Number(product.applicationFee),
 			stampingFee: Number(product.stampingFee),
 			legalFeeFixed: Number(product.legalFeeFixed),
+			legalFeeValue: Number(product.legalFeeValue),
 			interestRate: Number(product.interestRate),
 			lateFeeRate: Number(product.lateFeeRate),
 			lateFeeFixedAmount: Number(product.lateFeeFixedAmount),
@@ -231,6 +239,8 @@ const createProduct: RequestHandler<{}, any, ProductInput> = async (
 				applicationFee: data.applicationFee || 0,
 				stampingFee: data.stampingFee || 0,
 				legalFeeFixed: data.legalFeeFixed || 0,
+				legalFeeType: data.legalFeeType || 'FIXED',
+				legalFeeValue: data.legalFeeValue || 0,
 				requiredDocuments: data.requiredDocuments,
 				features: data.features,
 				loanTypes: data.loanTypes,
@@ -314,6 +324,8 @@ const updateProduct: RequestHandler<ProductParams, any, ProductInput> = async (
 				applicationFee: data.applicationFee !== undefined ? data.applicationFee : 0,
 				stampingFee: data.stampingFee !== undefined ? data.stampingFee : 0,
 				legalFeeFixed: data.legalFeeFixed !== undefined ? data.legalFeeFixed : 0,
+				legalFeeType: data.legalFeeType !== undefined ? data.legalFeeType : 'FIXED',
+				legalFeeValue: data.legalFeeValue !== undefined ? data.legalFeeValue : 0,
 				requiredDocuments: data.requiredDocuments,
 				features: data.features,
 				loanTypes: data.loanTypes,
@@ -432,6 +444,8 @@ const getProductById: RequestHandler<ProductParams> = async (req, res) => {
 				applicationFee: true,
 				stampingFee: true,
 				legalFeeFixed: true,
+				legalFeeType: true,
+				legalFeeValue: true,
 				requiredDocuments: true,
 				features: true,
 				loanTypes: true,
@@ -444,7 +458,19 @@ const getProductById: RequestHandler<ProductParams> = async (req, res) => {
 			return res.status(404).json({ message: "Product not found" });
 		}
 
-		return res.json(product);
+		return res.json({
+			...product,
+			// Convert Decimal fields to numbers for proper JSON serialization
+			originationFee: Number(product.originationFee),
+			legalFee: Number(product.legalFee),
+			applicationFee: Number(product.applicationFee),
+			stampingFee: Number(product.stampingFee),
+			legalFeeFixed: Number(product.legalFeeFixed),
+			legalFeeValue: Number(product.legalFeeValue),
+			interestRate: Number(product.interestRate),
+			lateFeeRate: Number(product.lateFeeRate),
+			lateFeeFixedAmount: Number(product.lateFeeFixedAmount),
+		});
 	} catch (error) {
 		console.error("Error fetching product by ID:", error);
 		return res.status(500).json({ message: "Error fetching product" });

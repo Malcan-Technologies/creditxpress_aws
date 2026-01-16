@@ -3596,6 +3596,24 @@ router.get(
 							idNumber: true,
 							bankName: true,
 							accountNumber: true,
+							// Address fields
+							address1: true,
+							address2: true,
+							city: true,
+							state: true,
+							zipCode: true,
+							country: true,
+							// Employment and education fields
+							employmentStatus: true,
+							employerName: true,
+							monthlyIncome: true,
+							serviceLength: true,
+							educationLevel: true,
+							nationality: true,
+							// Emergency contact
+							emergencyContactName: true,
+							emergencyContactPhone: true,
+							emergencyContactRelationship: true,
 						},
 					},
 					product: {
@@ -3603,6 +3621,8 @@ router.get(
 							id: true,
 							name: true,
 							code: true,
+							requiredDocuments: true,
+							collateralRequired: true,
 						},
 					},
 					documents: {
@@ -3973,6 +3993,23 @@ router.get(
 							monthlyIncome: true,
 							bankName: true,
 							accountNumber: true,
+							// Address fields
+							address1: true,
+							address2: true,
+							city: true,
+							state: true,
+							zipCode: true,
+							country: true,
+							// Education and employment fields
+							educationLevel: true,
+							serviceLength: true,
+							nationality: true,
+							icNumber: true,
+							idNumber: true,
+							// Emergency contact
+							emergencyContactName: true,
+							emergencyContactPhone: true,
+							emergencyContactRelationship: true,
 						},
 					},
 					product: {
@@ -3985,6 +4022,11 @@ router.get(
 							description: true,
 							interestRate: true,
 							repaymentTerms: true,
+							requiredDocuments: true,
+							collateralRequired: true,
+							lateFeeRate: true,
+							lateFeeFixedAmount: true,
+							lateFeeFrequencyDays: true,
 						},
 					},
 					documents: {
@@ -4020,6 +4062,23 @@ router.get(
 								monthlyIncome: true,
 								bankName: true,
 								accountNumber: true,
+								// Address fields
+								address1: true,
+								address2: true,
+								city: true,
+								state: true,
+								zipCode: true,
+								country: true,
+								// Education and employment fields
+								educationLevel: true,
+								serviceLength: true,
+								nationality: true,
+								icNumber: true,
+								idNumber: true,
+								// Emergency contact
+								emergencyContactName: true,
+								emergencyContactPhone: true,
+								emergencyContactRelationship: true,
 							},
 						},
 						product: {
@@ -4032,6 +4091,11 @@ router.get(
 								description: true,
 								interestRate: true,
 								repaymentTerms: true,
+								requiredDocuments: true,
+								collateralRequired: true,
+								lateFeeRate: true,
+								lateFeeFixedAmount: true,
+								lateFeeFrequencyDays: true,
 							},
 						},
 						documents: {
@@ -5191,6 +5255,238 @@ router.patch(
 
 /**
  * @swagger
+ * /api/admin/applications/{applicationId}/documents:
+ *   post:
+ *     summary: Upload documents for a loan application (admin only)
+ *     tags: [Admin - Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               document:
+ *                 type: string
+ *                 format: binary
+ *                 description: The document file (PDF, JPG, or PNG)
+ *               documentType:
+ *                 type: string
+ *                 description: The type/category of the document
+ *     responses:
+ *       200:
+ *         description: Document uploaded successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Application not found
+ *       500:
+ *         description: Server error
+ */
+// Upload document for application (admin only)
+router.post(
+	"/applications/:applicationId/documents",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	(req, res, next) => {
+		// Dynamic import of multer config - use memory storage for S3 upload
+		const upload = multer({
+			storage: (multer as any).memoryStorage(),
+			fileFilter: (_req: any, file: any, cb: any) => {
+				const allowedMimeTypes = [
+					'application/pdf',
+					'image/jpeg',
+					'image/jpg', 
+					'image/png',
+				];
+				if (allowedMimeTypes.includes(file.mimetype) || 
+					file.originalname.toLowerCase().match(/\.(pdf|jpg|jpeg|png)$/)) {
+					cb(null, true);
+				} else {
+					cb(new Error('Only PDF, JPG, and PNG files are allowed'), false);
+				}
+			},
+			limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+		});
+		upload.single('document')(req, res, next);
+	},
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId } = req.params;
+			const { documentType } = req.body;
+			const file = (req as any).file as Express.Multer.File;
+
+			if (!file) {
+				return res.status(400).json({ message: "No file uploaded" });
+			}
+
+			if (!documentType) {
+				return res.status(400).json({ message: "Document type is required" });
+			}
+
+			// Check if application exists
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				select: { id: true, userId: true },
+			});
+
+			if (!application) {
+				return res.status(404).json({ message: "Application not found" });
+			}
+
+			// Upload to S3
+			const uploadResult = await uploadToS3Organized(
+				file.buffer,
+				file.originalname,
+				file.mimetype,
+				{
+					folder: S3_FOLDERS.DOCUMENTS,
+					subFolder: documentType.toLowerCase().replace(/\s+/g, '-'),
+					userId: application.userId,
+				}
+			);
+
+			if (!uploadResult.success || !uploadResult.key) {
+				return res.status(500).json({ 
+					message: "Failed to upload document to storage",
+					error: uploadResult.error 
+				});
+			}
+
+			// Create document record
+			const document = await prisma.userDocument.create({
+				data: {
+					userId: application.userId,
+					applicationId: applicationId,
+					type: documentType,
+					fileUrl: uploadResult.key,
+					status: "PENDING",
+				},
+			});
+
+			console.log(`Admin ${req.user?.userId} uploaded document ${document.id} for application ${applicationId}`);
+
+			return res.json({
+				success: true,
+				message: "Document uploaded successfully",
+				document: {
+					id: document.id,
+					type: document.type,
+					status: document.status,
+					fileUrl: document.fileUrl,
+					createdAt: document.createdAt,
+				},
+			});
+		} catch (error: any) {
+			console.error("Error uploading document:", error);
+			return res.status(500).json({ 
+				message: "Internal server error",
+				error: error.message 
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
+ * /api/admin/applications/{applicationId}/documents/{documentId}:
+ *   delete:
+ *     summary: Delete a document from an application (admin only)
+ *     tags: [Admin - Applications]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: applicationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The loan application ID
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The document ID to delete
+ *     responses:
+ *       200:
+ *         description: Document deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Access denied, admin privileges required
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ */
+// Delete document from application (admin only)
+router.delete(
+	"/applications/:applicationId/documents/:documentId",
+	authenticateToken,
+	isAdmin as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId, documentId } = req.params;
+
+			// Find the document
+			const document = await prisma.userDocument.findFirst({
+				where: {
+					id: documentId,
+					applicationId: applicationId,
+				},
+			});
+
+			if (!document) {
+				return res.status(404).json({ message: "Document not found" });
+			}
+
+			// Delete from S3 if we have a file URL
+			if (document.fileUrl) {
+				try {
+					await deleteFromS3(document.fileUrl);
+				} catch (s3Error) {
+					console.error("Error deleting from S3:", s3Error);
+					// Continue with database deletion even if S3 fails
+				}
+			}
+
+			// Delete the document record
+			await prisma.userDocument.delete({
+				where: { id: documentId },
+			});
+
+			console.log(`Admin ${req.user?.userId} deleted document ${documentId} from application ${applicationId}`);
+
+			return res.json({
+				success: true,
+				message: "Document deleted successfully",
+			});
+		} catch (error: any) {
+			console.error("Error deleting document:", error);
+			return res.status(500).json({ 
+				message: "Internal server error",
+				error: error.message 
+			});
+		}
+	}
+);
+
+/**
+ * @swagger
  * /api/admin/loans:
  *   get:
  *     summary: Get all approved and disbursed loan applications
@@ -5250,15 +5546,54 @@ router.get(
 							fullName: true,
 							phoneNumber: true,
 							email: true,
+							// Address fields
+							address1: true,
+							address2: true,
+							city: true,
+							state: true,
+							zipCode: true,
+							country: true,
+							// Additional fields
+							icNumber: true,
+							idNumber: true,
+							nationality: true,
+							educationLevel: true,
+							employmentStatus: true,
+							employerName: true,
+							serviceLength: true,
+							monthlyIncome: true,
+							bankName: true,
+							accountNumber: true,
+							// Emergency contact fields
+							emergencyContactName: true,
+							emergencyContactPhone: true,
+							emergencyContactRelationship: true,
 						},
 					},
 					application: {
-						include: {
+						select: {
+							id: true,
+							amount: true,
+							purpose: true,
+							status: true,
+							// Fee fields for financial breakdown
+							stampingFee: true,
+							legalFeeFixed: true,
+							legalFee: true,
+							originationFee: true,
+							applicationFee: true,
+							netDisbursement: true,
+							interestRate: true,
+							monthlyRepayment: true,
 							product: {
 								select: {
 									id: true,
 									name: true,
 									code: true,
+									// Late fee fields
+									lateFeeRate: true,
+									lateFeeFixedAmount: true,
+									lateFeeFrequencyDays: true,
 								},
 							},
 							user: {
@@ -5272,6 +5607,23 @@ router.get(
 									monthlyIncome: true,
 									bankName: true,
 									accountNumber: true,
+									// Address fields
+									address1: true,
+									address2: true,
+									city: true,
+									state: true,
+									zipCode: true,
+									country: true,
+									// Education and employment fields
+									educationLevel: true,
+									serviceLength: true,
+									nationality: true,
+									icNumber: true,
+									idNumber: true,
+									// Emergency contact fields
+									emergencyContactName: true,
+									emergencyContactPhone: true,
+									emergencyContactRelationship: true,
 								},
 							},
 						},
@@ -11543,6 +11895,8 @@ router.get(
 					applicationFee: true,
 					stampingFee: true,
 					legalFeeFixed: true,
+					legalFeeType: true,
+					legalFeeValue: true,
 					requiredDocuments: true,
 					features: true,
 					loanTypes: true,
@@ -11562,6 +11916,7 @@ router.get(
 				applicationFee: Number(product.applicationFee),
 				stampingFee: Number(product.stampingFee),
 				legalFeeFixed: Number(product.legalFeeFixed),
+				legalFeeValue: Number(product.legalFeeValue),
 				interestRate: Number(product.interestRate),
 				lateFeeRate: Number(product.lateFeeRate),
 				lateFeeFixedAmount: Number(product.lateFeeFixedAmount),

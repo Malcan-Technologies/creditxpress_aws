@@ -34,8 +34,4 @@ RUN chmod +x scripts/*.sh scripts/*.js
 
 # Generate Prisma client after volume mount, push schema and start the server (cron is now built-in)
 # Note: Using ts-node-dev directly instead of build to avoid TypeScript compilation blocking startup
-CMD /bin/bash -c "sleep 5 && npm install && npx prisma generate && npx prisma db push --accept-data-loss && npm run dev" 
-# Add migration validation
-COPY scripts/validate-migration.sh /app/scripts/
-COPY scripts/safe-migrate.sh /app/scripts/
-RUN chmod +x /app/scripts/*.sh
+CMD /bin/bash -c "sleep 5 && npm install && npx prisma generate && npx prisma db push --accept-data-loss && npm run dev"

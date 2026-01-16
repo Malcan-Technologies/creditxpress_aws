@@ -32,6 +32,8 @@ interface Product {
 	applicationFee: number;
 	stampingFee: number;
 	legalFeeFixed: number;
+	legalFeeType: 'PERCENTAGE' | 'FIXED';
+	legalFeeValue: number;
 	requiredDocuments: string[];
 	features: string[];
 	loanTypes: string[];
@@ -43,6 +45,20 @@ interface Product {
 
 interface ProductFormData extends Omit<Product, "repaymentTerms"> {
 	repaymentTerms: string[];
+}
+
+// Helper function to generate product code from name (camelCase)
+function generateProductCode(name: string): string {
+	if (!name.trim()) return "";
+	return name
+		.toLowerCase()
+		.replace(/[^a-z0-9\s]/g, '') // Remove special chars
+		.split(/\s+/)
+		.filter(word => word.length > 0)
+		.map((word, index) => 
+			index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
+		)
+		.join('');
 }
 
 export default function AdminProductsPage() {
@@ -57,6 +73,9 @@ export default function AdminProductsPage() {
 	const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [formData, setFormData] = useState<Partial<ProductFormData>>({});
+	const [isCodeManuallyEdited, setIsCodeManuallyEdited] = useState(false);
+	const [showAdditionalDetails, setShowAdditionalDetails] = useState(false);
+	const [repaymentTermsInput, setRepaymentTermsInput] = useState("");
 
 	useEffect(() => {
 		fetchProducts();
@@ -95,7 +114,12 @@ export default function AdminProductsPage() {
 			requiredDocuments: [...product.requiredDocuments],
 			features: [...product.features],
 			loanTypes: [...product.loanTypes],
+			legalFeeType: product.legalFeeType || 'FIXED',
+			legalFeeValue: product.legalFeeValue ?? product.legalFeeFixed ?? 0,
 		});
+		setRepaymentTermsInput(product.repaymentTerms.join(", "));
+		setIsCodeManuallyEdited(true); // Existing products have their own codes
+		setShowAdditionalDetails(false);
 		setIsModalOpen(true);
 	};
 
@@ -107,23 +131,28 @@ export default function AdminProductsPage() {
 			description: "",
 			minAmount: 0,
 			maxAmount: 0,
-			repaymentTerms: [3, 6, 12].map(String),
-			interestRate: 0,
+			repaymentTerms: ["3", "6", "12"],
+			interestRate: 1.5,
 			eligibility: [],
-			lateFeeRate: 0.1,
-			lateFeeFixedAmount: 250,
+			lateFeeRate: 0.022,
+			lateFeeFixedAmount: 0,
 			lateFeeFrequencyDays: 7,
 			originationFee: 0,
 			legalFee: 0,
 			applicationFee: 0,
-			stampingFee: 0,
+			stampingFee: 0.5,
 			legalFeeFixed: 0,
+			legalFeeType: 'FIXED',
+			legalFeeValue: 0,
 			requiredDocuments: [],
 			features: [],
 			loanTypes: [],
 			isActive: true,
 			collateralRequired: false,
 		});
+		setRepaymentTermsInput("3, 6, 12");
+		setIsCodeManuallyEdited(false);
+		setShowAdditionalDetails(false);
 		setIsModalOpen(true);
 	};
 
@@ -165,32 +194,32 @@ export default function AdminProductsPage() {
 			if (formData.lateFeeFrequencyDays === undefined || formData.lateFeeFrequencyDays === null || formData.lateFeeFrequencyDays <= 0) {
 				validationErrors.push("Fixed Fee Frequency must be greater than 0");
 			}
-			if (formData.originationFee === undefined || formData.originationFee === null || formData.originationFee < 0) {
-				validationErrors.push("Origination Fee must be a valid positive number or 0");
-			}
-			if (formData.legalFee === undefined || formData.legalFee === null || formData.legalFee < 0) {
-				validationErrors.push("Legal Fee must be a valid positive number or 0");
-			}
-			if (formData.applicationFee === undefined || formData.applicationFee === null || formData.applicationFee < 0) {
-				validationErrors.push("Application Fee must be a valid positive number or 0");
-			}
 			if (formData.stampingFee === undefined || formData.stampingFee === null || formData.stampingFee < 0) {
 				validationErrors.push("Stamping Fee must be a valid positive number or 0");
 			}
-			if (formData.legalFeeFixed === undefined || formData.legalFeeFixed === null || formData.legalFeeFixed < 0) {
-				validationErrors.push("Legal Fee (Fixed) must be a valid positive number or 0");
+			if (formData.legalFeeValue === undefined || formData.legalFeeValue === null || formData.legalFeeValue < 0) {
+				validationErrors.push("Legal Fee Value must be a valid positive number or 0");
 			}
 			
-			// Validate repayment terms
-			const validTerms = formData.repaymentTerms
-				?.map((term) => {
+			// Validate repayment terms - parse from raw input string
+			const validTerms = repaymentTermsInput
+				.split(",")
+				.map((term) => {
 					const num = parseInt(term.trim());
 					return isNaN(num) ? null : num;
 				})
-				.filter((num): num is number => num !== null) || [];
+				.filter((num): num is number => num !== null && num > 0);
 			
 			if (validTerms.length === 0) {
-				validationErrors.push("At least one Repayment Term is required");
+				validationErrors.push("At least one valid Repayment Term is required (positive numbers only)");
+			}
+
+			// Check for duplicate product code
+			const existingProduct = products.find(
+				p => p.code.toLowerCase() === formData.code?.toLowerCase() && p.id !== editingProduct?.id
+			);
+			if (existingProduct) {
+				validationErrors.push("A product with this code already exists");
 			}
 
 			// If there are validation errors, show them and stop submission
@@ -200,6 +229,10 @@ export default function AdminProductsPage() {
 			}
 
 			// Convert repayment terms to numbers and handle undefined numeric values
+			// Filter and trim array fields on submit (not during editing to allow newlines)
+			const cleanArrayField = (arr: string[] | undefined) => 
+				(arr || []).map(s => s.trim()).filter(s => s !== "");
+
 			const submissionData = {
 				...formData,
 				// Convert undefined to 0 for numeric fields
@@ -209,12 +242,19 @@ export default function AdminProductsPage() {
 				lateFeeRate: formData.lateFeeRate ?? 0,
 				lateFeeFixedAmount: formData.lateFeeFixedAmount ?? 0,
 				lateFeeFrequencyDays: formData.lateFeeFrequencyDays ?? 7,
-				originationFee: formData.originationFee ?? 0,
-				legalFee: formData.legalFee ?? 0,
-				applicationFee: formData.applicationFee ?? 0,
+				originationFee: 0, // Deprecated - set to 0
+				legalFee: 0, // Deprecated - set to 0
+				applicationFee: 0, // Deprecated - set to 0
 				stampingFee: formData.stampingFee ?? 0,
-				legalFeeFixed: formData.legalFeeFixed ?? 0,
+				legalFeeFixed: formData.legalFeeType === 'FIXED' ? (formData.legalFeeValue ?? 0) : 0, // Backward compat
+				legalFeeType: formData.legalFeeType ?? 'FIXED',
+				legalFeeValue: formData.legalFeeValue ?? 0,
 				repaymentTerms: validTerms,
+				// Clean array fields on submit
+				eligibility: cleanArrayField(formData.eligibility),
+				requiredDocuments: cleanArrayField(formData.requiredDocuments),
+				features: cleanArrayField(formData.features),
+				loanTypes: cleanArrayField(formData.loanTypes),
 			};
 
 			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -583,8 +623,13 @@ export default function AdminProductsPage() {
 											<div className="text-xs">
 												{(() => {
 													const fees = [];
-													if (product.legalFeeFixed > 0) {
-														fees.push(`RM ${product.legalFeeFixed} (Legal)`);
+													const legalValue = product.legalFeeValue ?? product.legalFeeFixed ?? 0;
+													if (legalValue > 0) {
+														if (product.legalFeeType === 'PERCENTAGE') {
+															fees.push(`${legalValue}% (Legal)`);
+														} else {
+															fees.push(`RM ${legalValue} (Legal)`);
+														}
 													}
 													if (product.stampingFee > 0) {
 														fees.push(`${product.stampingFee}% (Stamping)`);
@@ -659,7 +704,7 @@ export default function AdminProductsPage() {
 		{/* Modal */}
 			{isModalOpen && (
 				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-					<div className="bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+					<div className="bg-gray-800 rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
 						<div className="flex justify-between items-center mb-6">
 							<h3 className="text-xl font-semibold text-white">
 								{editingProduct ? "Edit Product" : "Create New Product"}
@@ -667,7 +712,7 @@ export default function AdminProductsPage() {
 							<button
 								onClick={() => {
 									setIsModalOpen(false);
-									setError(null); // Clear errors when closing modal
+									setError(null);
 								}}
 								className="text-gray-400 hover:text-white transition-colors"
 							>
@@ -691,356 +736,510 @@ export default function AdminProductsPage() {
 							</div>
 						)}
 
-						<form onSubmit={handleSubmit}>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Product Code
-									</label>
-									<input
-										type="text"
-										value={formData.code || ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												code: e.target.value,
-											})
-										}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Product Name
-									</label>
-									<input
-										type="text"
-										value={formData.name || ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												name: e.target.value,
-											})
-										}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									/>
-								</div>
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Description
-									</label>
-									<textarea
-										value={formData.description || ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												description: e.target.value,
-											})
-										}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										rows={3}
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Minimum Amount (MYR)
-									</label>
-									<input
-										type="number"
-										value={formData.minAmount ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												minAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Maximum Amount (MYR)
-									</label>
-									<input
-										type="number"
-										value={formData.maxAmount ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												maxAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Interest Rate (% per month)
-									</label>
-									<input
-										type="number"
-										step="0.01"
-										value={formData.interestRate ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												interestRate: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Late Fee Rate (% per day)
-									</label>
-									<input
-										type="number"
-										step="0.001"
-										value={formData.lateFeeRate ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												lateFeeRate: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										placeholder="0.1 (for 0.1% per day)"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Fixed Late Fee Amount (MYR)
-									</label>
-									<input
-										type="number"
-										step="0.01"
-										value={formData.lateFeeFixedAmount ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												lateFeeFixedAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										placeholder="250 (fixed fee amount)"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Fixed Fee Frequency (days)
-									</label>
-									<input
-										type="number"
-										value={formData.lateFeeFrequencyDays ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												lateFeeFrequencyDays: e.target.value === "" ? undefined : parseInt(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, false)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										placeholder="7 (every 7 days)"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Legal Fee (MYR)
-									</label>
-									<input
-										type="number"
-										step="0.01"
-										value={formData.legalFeeFixed ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												legalFeeFixed: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										placeholder="Fixed amount in MYR"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Stamping Fee (%)
-									</label>
-									<input
-										type="number"
-										step="0.01"
-										value={formData.stampingFee ?? ""}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												stampingFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
-											})
-										}
-										onKeyDown={(e) => handleNumericKeyDown(e, true)}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										placeholder="Percentage of loan amount"
-									/>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Status
-									</label>
-									<select
-										value={formData.isActive ? "true" : "false"}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												isActive: e.target.value === "true",
-											})
-										}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									>
-										<option value="true">Active</option>
-										<option value="false">Inactive</option>
-									</select>
-								</div>
-								<div>
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Collateral Required
-									</label>
-									<select
-										value={formData.collateralRequired ? "true" : "false"}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												collateralRequired: e.target.value === "true",
-											})
-										}
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-									>
-										<option value="false">Not Required</option>
-										<option value="true">Required</option>
-									</select>
-								</div>
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Repayment Terms (months, one per line)
-									</label>
-									<textarea
-										value={formData.repaymentTerms?.join("\n") || ""}
-										onChange={(e) => {
-											const lines = e.target.value.split("\n");
-											setFormData((prev) => ({
-												...prev,
-												repaymentTerms: lines,
-											}));
-										}}
-										placeholder="3&#10;6&#10;12"
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										rows={4}
-									/>
-								</div>
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Eligibility Criteria (one per line)
-									</label>
-									<textarea
-										value={formData.eligibility?.join("\n") || ""}
-										onChange={(e) => {
-											const lines = e.target.value
-												.split("\n")
-												.map(line => line.trim())
-												.filter(line => line !== "");
-											setFormData({
-												...formData,
-												eligibility: lines,
-											});
-										}}
-										placeholder="Minimum age: 21 years&#10;Minimum income: RM 2,000&#10;Employment: At least 6 months"
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										rows={4}
-									/>
-								</div>
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Required Documents (one per line)
-									</label>
-									<textarea
-										value={formData.requiredDocuments?.join("\n") || ""}
-										onChange={(e) => {
-											const lines = e.target.value
-												.split("\n")
-												.map(line => line.trim())
-												.filter(line => line !== "");
-											setFormData({
-												...formData,
-												requiredDocuments: lines,
-											});
-										}}
-										placeholder="IC&#10;Latest 3 months bank statements&#10;Latest 3 months payslips"
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										rows={4}
-									/>
-								</div>
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Product Features (one per line)
-									</label>
-									<textarea
-										value={formData.features?.join("\n") || ""}
-										onChange={(e) => {
-											const lines = e.target.value
-												.split("\n")
-												.map(line => line.trim())
-												.filter(line => line !== "");
-											setFormData({
-												...formData,
-												features: lines,
-											});
-										}}
-										placeholder="Fast approval within 24 hours&#10;No hidden fees&#10;Flexible repayment terms"
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										rows={4}
-									/>
-								</div>
-								<div className="md:col-span-2">
-									<label className="block text-sm font-medium text-gray-300 mb-1">
-										Loan Types (one per line)
-									</label>
-									<textarea
-										value={formData.loanTypes?.join("\n") || ""}
-										onChange={(e) => {
-											const lines = e.target.value
-												.split("\n")
-												.map(line => line.trim())
-												.filter(line => line !== "");
-											setFormData({
-												...formData,
-												loanTypes: lines,
-											});
-										}}
-										placeholder="Personal Loan&#10;Business Loan&#10;Education Loan"
-										className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-										rows={4}
-									/>
+						<form onSubmit={handleSubmit} className="space-y-6">
+							{/* SECTION: Basic Information */}
+							<div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/30">
+								<h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">
+									Basic Information
+								</h4>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Product Name <span className="text-red-400">*</span>
+										</label>
+										<input
+											type="text"
+											value={formData.name || ""}
+											onChange={(e) => {
+												const newName = e.target.value;
+												setFormData({
+													...formData,
+													name: newName,
+													// Auto-generate code if not manually edited
+													code: isCodeManuallyEdited ? formData.code : generateProductCode(newName),
+												});
+											}}
+											placeholder="e.g., Personal Loan"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Product Code <span className="text-red-400">*</span>
+										</label>
+										<div className="flex gap-2">
+											<input
+												type="text"
+												value={formData.code || ""}
+												onChange={(e) => {
+													setFormData({
+														...formData,
+														code: e.target.value,
+													});
+												}}
+												disabled={!isCodeManuallyEdited}
+												placeholder="Auto-generated from name"
+												className={`flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${!isCodeManuallyEdited ? 'bg-gray-600/50 text-gray-300' : ''}`}
+											/>
+											<button
+												type="button"
+												onClick={() => {
+													if (isCodeManuallyEdited) {
+														// Reset to auto-generated
+														setFormData({
+															...formData,
+															code: generateProductCode(formData.name || ""),
+														});
+													}
+													setIsCodeManuallyEdited(!isCodeManuallyEdited);
+												}}
+												className="px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-gray-300 hover:bg-gray-500 hover:text-white transition-colors text-sm"
+											>
+												{isCodeManuallyEdited ? "Auto" : "Edit"}
+											</button>
+										</div>
+									</div>
+									<div className="md:col-span-2">
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Description <span className="text-red-400">*</span>
+										</label>
+										<textarea
+											value={formData.description || ""}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													description: e.target.value,
+												})
+											}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter') {
+													e.stopPropagation();
+												}
+											}}
+											placeholder="Describe the loan product..."
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+											rows={3}
+										/>
+									</div>
+									{/* Status Toggle */}
+									<div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+										<div>
+											<span className="text-sm font-medium text-gray-300">Product Status</span>
+											<p className="text-xs text-gray-400">Enable to make this product available to users</p>
+										</div>
+										<label className="relative inline-flex items-center cursor-pointer">
+											<input
+												type="checkbox"
+												checked={formData.isActive ?? true}
+												onChange={(e) =>
+													setFormData({
+														...formData,
+														isActive: e.target.checked,
+													})
+												}
+												className="sr-only peer"
+											/>
+											<div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+											<span className="ms-3 text-sm font-medium text-gray-300">
+												{formData.isActive ? 'Active' : 'Inactive'}
+											</span>
+										</label>
+									</div>
+									{/* Collateral Toggle */}
+									<div className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+										<div>
+											<span className="text-sm font-medium text-gray-300">Collateral Required</span>
+											<p className="text-xs text-gray-400">Require collateral for this loan product</p>
+										</div>
+										<label className="relative inline-flex items-center cursor-pointer">
+											<input
+												type="checkbox"
+												checked={formData.collateralRequired ?? false}
+												onChange={(e) =>
+													setFormData({
+														...formData,
+														collateralRequired: e.target.checked,
+													})
+												}
+												className="sr-only peer"
+											/>
+											<div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+											<span className="ms-3 text-sm font-medium text-gray-300">
+												{formData.collateralRequired ? 'Required' : 'Not Required'}
+											</span>
+										</label>
+									</div>
 								</div>
 							</div>
 
-							<div className="flex justify-end space-x-4">
+							{/* SECTION: Loan Parameters */}
+							<div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/30">
+								<h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">
+									Loan Parameters
+								</h4>
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Minimum Amount (MYR) <span className="text-red-400">*</span>
+										</label>
+										<input
+											type="number"
+											value={formData.minAmount ?? ""}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													minAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
+												})
+											}
+											onKeyDown={(e) => handleNumericKeyDown(e, true)}
+											placeholder="1000"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Maximum Amount (MYR) <span className="text-red-400">*</span>
+										</label>
+										<input
+											type="number"
+											value={formData.maxAmount ?? ""}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													maxAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
+												})
+											}
+											onKeyDown={(e) => handleNumericKeyDown(e, true)}
+											placeholder="50000"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Interest Rate (% per month) <span className="text-red-400">*</span>
+										</label>
+										<input
+											type="number"
+											step="0.01"
+											value={formData.interestRate ?? ""}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													interestRate: e.target.value === "" ? undefined : parseFloat(e.target.value),
+												})
+											}
+											onKeyDown={(e) => handleNumericKeyDown(e, true)}
+											placeholder="1.5"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Repayment Terms (months) <span className="text-red-400">*</span>
+										</label>
+										<input
+											type="text"
+											value={repaymentTermsInput}
+											onChange={(e) => setRepaymentTermsInput(e.target.value)}
+											placeholder="3, 6, 12, 24"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+										<p className="text-xs text-gray-400 mt-1">Comma-separated values (e.g., 3, 6, 12, 24)</p>
+									</div>
+								</div>
+							</div>
+
+							{/* SECTION: Disbursement Fees */}
+							<div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/30">
+								<h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">
+									Disbursement Fees
+								</h4>
+								<div className="space-y-4">
+									{/* Legal Fee Type Selection */}
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-2">
+											Legal Fee Type
+										</label>
+										<div className="flex gap-4">
+											<label className="flex items-center cursor-pointer">
+												<input
+													type="radio"
+													name="legalFeeType"
+													value="PERCENTAGE"
+													checked={formData.legalFeeType === 'PERCENTAGE'}
+													onChange={() =>
+														setFormData({
+															...formData,
+															legalFeeType: 'PERCENTAGE',
+														})
+													}
+													className="w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 focus:ring-blue-500"
+												/>
+												<span className="ms-2 text-sm text-gray-300">Percentage of Loan</span>
+											</label>
+											<label className="flex items-center cursor-pointer">
+												<input
+													type="radio"
+													name="legalFeeType"
+													value="FIXED"
+													checked={formData.legalFeeType === 'FIXED'}
+													onChange={() =>
+														setFormData({
+															...formData,
+															legalFeeType: 'FIXED',
+														})
+													}
+													className="w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 focus:ring-blue-500"
+												/>
+												<span className="ms-2 text-sm text-gray-300">Fixed Amount</span>
+											</label>
+										</div>
+									</div>
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div>
+											<label className="block text-sm font-medium text-gray-300 mb-1">
+												Legal Fee Value {formData.legalFeeType === 'PERCENTAGE' ? '(%)' : '(MYR)'} <span className="text-red-400">*</span>
+											</label>
+											<input
+												type="number"
+												step="0.01"
+												value={formData.legalFeeValue ?? ""}
+												onChange={(e) =>
+													setFormData({
+														...formData,
+														legalFeeValue: e.target.value === "" ? undefined : parseFloat(e.target.value),
+													})
+												}
+												onKeyDown={(e) => handleNumericKeyDown(e, true)}
+												placeholder={formData.legalFeeType === 'PERCENTAGE' ? "e.g., 1.5" : "e.g., 500"}
+												className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+											/>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-300 mb-1">
+												Stamping Fee (%) <span className="text-red-400">*</span>
+											</label>
+											<input
+												type="number"
+												step="0.01"
+												value={formData.stampingFee ?? ""}
+												onChange={(e) =>
+													setFormData({
+														...formData,
+														stampingFee: e.target.value === "" ? undefined : parseFloat(e.target.value),
+													})
+												}
+												onKeyDown={(e) => handleNumericKeyDown(e, true)}
+												placeholder="0.5"
+												className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+											/>
+											<p className="text-xs text-gray-400 mt-1">Always calculated as percentage of loan amount</p>
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* SECTION: Late Payment Fees */}
+							<div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600/30">
+								<h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">
+									Late Payment Fees
+								</h4>
+								<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Late Fee Rate (% per day)
+										</label>
+										<input
+											type="number"
+											step="0.001"
+											value={formData.lateFeeRate ?? ""}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													lateFeeRate: e.target.value === "" ? undefined : parseFloat(e.target.value),
+												})
+											}
+											onKeyDown={(e) => handleNumericKeyDown(e, true)}
+											placeholder="0.1"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Fixed Late Fee (MYR)
+										</label>
+										<input
+											type="number"
+											step="0.01"
+											value={formData.lateFeeFixedAmount ?? ""}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													lateFeeFixedAmount: e.target.value === "" ? undefined : parseFloat(e.target.value),
+												})
+											}
+											onKeyDown={(e) => handleNumericKeyDown(e, true)}
+											placeholder="250"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-300 mb-1">
+											Fixed Fee Frequency (days)
+										</label>
+										<input
+											type="number"
+											value={formData.lateFeeFrequencyDays ?? ""}
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													lateFeeFrequencyDays: e.target.value === "" ? undefined : parseInt(e.target.value),
+												})
+											}
+											onKeyDown={(e) => handleNumericKeyDown(e, false)}
+											placeholder="7"
+											className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+										/>
+									</div>
+								</div>
+							</div>
+
+							{/* SECTION: Additional Details (Collapsible) */}
+							<div className="bg-gray-700/30 rounded-lg border border-gray-600/30">
+								<button
+									type="button"
+									onClick={() => setShowAdditionalDetails(!showAdditionalDetails)}
+									className="w-full px-4 py-3 flex items-center justify-between text-left"
+								>
+									<h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
+										Additional Details
+									</h4>
+									<svg
+										className={`w-5 h-5 text-gray-400 transition-transform ${showAdditionalDetails ? 'rotate-180' : ''}`}
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+									</svg>
+								</button>
+								{showAdditionalDetails && (
+									<div className="px-4 pb-4 space-y-4">
+										<div>
+											<label className="block text-sm font-medium text-gray-300 mb-1">
+												Eligibility Criteria (one per line)
+											</label>
+											<textarea
+												value={formData.eligibility?.join("\n") || ""}
+												onChange={(e) => {
+													// Keep raw lines while editing, filter on submit
+													const lines = e.target.value.split("\n");
+													setFormData({
+														...formData,
+														eligibility: lines,
+													});
+												}}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter') {
+														e.stopPropagation();
+													}
+												}}
+												placeholder="Minimum age: 21 years&#10;Minimum income: RM 2,000&#10;Employment: At least 6 months"
+												className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+												rows={3}
+											/>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-300 mb-1">
+												Required Documents (one per line)
+											</label>
+											<textarea
+												value={formData.requiredDocuments?.join("\n") || ""}
+												onChange={(e) => {
+													// Keep raw lines while editing, filter on submit
+													const lines = e.target.value.split("\n");
+													setFormData({
+														...formData,
+														requiredDocuments: lines,
+													});
+												}}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter') {
+														e.stopPropagation();
+													}
+												}}
+												placeholder="IC&#10;Latest 3 months bank statements&#10;Latest 3 months payslips"
+												className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+												rows={3}
+											/>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-300 mb-1">
+												Product Features (one per line)
+											</label>
+											<textarea
+												value={formData.features?.join("\n") || ""}
+												onChange={(e) => {
+													// Keep raw lines while editing, filter on submit
+													const lines = e.target.value.split("\n");
+													setFormData({
+														...formData,
+														features: lines,
+													});
+												}}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter') {
+														e.stopPropagation();
+													}
+												}}
+												placeholder="Fast approval within 24 hours&#10;No hidden fees&#10;Flexible repayment terms"
+												className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+												rows={3}
+											/>
+										</div>
+										<div>
+											<label className="block text-sm font-medium text-gray-300 mb-1">
+												Loan Types / Purposes (one per line)
+											</label>
+											<textarea
+												value={formData.loanTypes?.join("\n") || ""}
+												onChange={(e) => {
+													// Keep raw lines while editing, filter on submit
+													const lines = e.target.value.split("\n");
+													setFormData({
+														...formData,
+														loanTypes: lines,
+													});
+												}}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter') {
+														e.stopPropagation();
+													}
+												}}
+												placeholder="Personal Loan&#10;Business Loan&#10;Education Loan"
+												className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+												rows={3}
+											/>
+										</div>
+									</div>
+								)}
+							</div>
+
+							{/* Form Actions */}
+							<div className="flex justify-end space-x-4 pt-4 border-t border-gray-700">
 								<button
 									type="button"
 									onClick={() => {
 										setIsModalOpen(false);
-										setError(null); // Clear errors when cancelling
+										setError(null);
 									}}
-									className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
+									className="px-6 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-600 hover:text-white transition-colors"
 								>
 									Cancel
 								</button>
 								<button
 									type="submit"
-									className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+									className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
 								>
 									{editingProduct ? "Update Product" : "Create Product"}
 								</button>

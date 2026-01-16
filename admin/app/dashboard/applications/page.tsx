@@ -37,6 +37,7 @@ import {
   ArrowsUpDownIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
+  ArrowUpTrayIcon,
 } from "@heroicons/react/24/outline";
 
 interface LoanApplication {
@@ -52,6 +53,12 @@ interface LoanApplication {
   monthlyRepayment?: number;
   interestRate?: number;
   netDisbursement?: number;
+  // Fee fields
+  stampingFee?: number;
+  legalFeeFixed?: number;
+  legalFee?: number;
+  originationFee?: number;
+  applicationFee?: number;
   user?: {
     fullName?: string;
     phoneNumber?: string;
@@ -66,8 +73,15 @@ interface LoanApplication {
     city?: string;
     state?: string;
     zipCode?: string;
+    country?: string;
     icNumber?: string;
     idNumber?: string;
+    nationality?: string;
+    educationLevel?: string;
+    serviceLength?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+    emergencyContactRelationship?: string;
   };
   product?: {
     name?: string;
@@ -75,6 +89,11 @@ interface LoanApplication {
     description?: string;
     interestRate?: number;
     repaymentTerms?: any;
+    requiredDocuments?: string[];
+    collateralRequired?: boolean;
+    lateFeeRate?: number;
+    lateFeeFixedAmount?: number;
+    lateFeeFrequencyDays?: number;
   };
   documents?: Document[];
   history?: LoanApplicationHistory[];
@@ -188,6 +207,10 @@ function AdminApplicationsPageContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [signaturesData, setSignaturesData] = useState<any>(null);
   const [loadingSignatures, setLoadingSignatures] = useState(false);
+  
+  // Document upload states
+  const [uploadingDocument, setUploadingDocument] = useState<string | null>(null); // document type being uploaded
+  const [documentUploadError, setDocumentUploadError] = useState<string | null>(null);
 
   // Helper function to check if application has pending company signature
   const hasPendingCompanySignature = (app: LoanApplication): boolean => {
@@ -735,6 +758,23 @@ function AdminApplicationsPageContent() {
         if (selectedApp) {
           setSelectedApplication(selectedApp);
           setViewDialogOpen(true);
+          // Fetch full application details (includes product requiredDocuments, late fees, etc.)
+          try {
+            const detailResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${applicationId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
+                },
+              }
+            );
+            if (detailResponse.ok) {
+              const fullApplication = await detailResponse.json();
+              setSelectedApplication(fullApplication);
+            }
+          } catch (detailError) {
+            console.error("Error fetching application details:", detailError);
+          }
         }
       }
     } catch (error) {
@@ -1015,9 +1055,33 @@ function AdminApplicationsPageContent() {
     return ALL_FILTERS.every((filter) => selectedFilters.includes(filter));
   };
 
+  // Fetch full application details (includes all product fields like requiredDocuments, late fees, etc.)
+  const fetchApplicationDetails = async (applicationId: string) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${applicationId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("adminToken")}`,
+          },
+        }
+      );
+      if (response.ok) {
+        const fullApplication = await response.json();
+        setSelectedApplication(fullApplication);
+      }
+    } catch (error) {
+      console.error("Error fetching application details:", error);
+    }
+  };
+
   // Handle view application details
   const handleViewClick = (application: LoanApplication) => {
+    // Set initial data from list, then fetch full details
     setSelectedApplication(application);
+    
+    // Fetch full application details (includes product requiredDocuments, late fees, etc.)
+    fetchApplicationDetails(application.id);
 
     // Determine the appropriate tab based on status (unless tab is explicitly set via URL)
     let newTab = tabParam;
@@ -1378,6 +1442,143 @@ function AdminApplicationsPageContent() {
       alert(
         "Failed to update document status. API endpoint may not be implemented yet."
       );
+    }
+  };
+
+  // Handle document upload by admin
+  const handleAdminDocumentUpload = async (
+    documentType: string,
+    file: File
+  ) => {
+    if (!selectedApplication) return;
+
+    try {
+      setUploadingDocument(documentType);
+      setDocumentUploadError(null);
+
+      // Validate file type
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        setDocumentUploadError('Only PDF, JPG, and PNG files are allowed');
+        setUploadingDocument(null);
+        return;
+      }
+
+      // Validate file size (50MB)
+      const maxSize = 50 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setDocumentUploadError('File size must be less than 50MB');
+        setUploadingDocument(null);
+        return;
+      }
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('documentType', documentType);
+
+      // Upload document
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${selectedApplication.id}/documents`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('adminToken')}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to upload document');
+      }
+
+      const result = await response.json();
+
+      // Update the application in state with the new document
+      if (selectedApplication) {
+        const newDocument = {
+          id: result.document.id,
+          type: result.document.type,
+          status: result.document.status,
+          fileUrl: result.document.fileUrl,
+          createdAt: result.document.createdAt,
+          updatedAt: result.document.createdAt,
+        };
+
+        const updatedDocuments = [...(selectedApplication.documents || []), newDocument];
+
+        setSelectedApplication({
+          ...selectedApplication,
+          documents: updatedDocuments,
+        });
+
+        // Also update in the applications list
+        setApplications(
+          applications.map((app) =>
+            app.id === selectedApplication.id
+              ? { ...app, documents: updatedDocuments }
+              : app
+          )
+        );
+      }
+
+      setUploadingDocument(null);
+    } catch (error: any) {
+      console.error('Error uploading document:', error);
+      setDocumentUploadError(error.message || 'Failed to upload document');
+      setUploadingDocument(null);
+    }
+  };
+
+  // Handle document deletion by admin
+  const handleAdminDocumentDelete = async (documentId: string) => {
+    if (!selectedApplication) return;
+
+    if (!confirm('Are you sure you want to delete this document?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/applications/${selectedApplication.id}/documents/${documentId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('adminToken')}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete document');
+      }
+
+      // Update the application in state
+      if (selectedApplication && selectedApplication.documents) {
+        const updatedDocuments = selectedApplication.documents.filter(
+          (doc) => doc.id !== documentId
+        );
+
+        setSelectedApplication({
+          ...selectedApplication,
+          documents: updatedDocuments,
+        });
+
+        // Also update in the applications list
+        setApplications(
+          applications.map((app) =>
+            app.id === selectedApplication.id
+              ? { ...app, documents: updatedDocuments }
+              : app
+          )
+        );
+      }
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
+      alert(error.message || 'Failed to delete document');
     }
   };
 
@@ -2694,62 +2895,193 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                 {/* Tab Content */}
                 {selectedTab === "details" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    {/* Applicant Information */}
+                    {/* Applicant Information - Enhanced */}
                     <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
-                      <h4 className="text-lg font-medium text-white mb-3 flex items-center">
+                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
                         <UserCircleIcon className="h-5 w-5 mr-2 text-blue-400" />
                         Applicant Information
                       </h4>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-gray-400">Name:</span>{" "}
-                          <span className="text-white">
+                      
+                      {/* Basic Info */}
+                      <div className="space-y-2 text-sm mb-4">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Full Name</span>
+                          <span className="text-white font-medium">
                             {selectedApplication.user?.fullName || "N/A"}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-gray-400">Email:</span>{" "}
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">IC Number</span>
+                          <span className="text-white">
+                            {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Email</span>
                           <span className="text-white">
                             {selectedApplication.user?.email || "N/A"}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-gray-400">Phone:</span>{" "}
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Phone</span>
                           <span className="text-white">
                             {selectedApplication.user?.phoneNumber || "N/A"}
                           </span>
                         </div>
-                        {selectedApplication.user?.employmentStatus && (
-                          <div>
-                            <span className="text-gray-400">Employment:</span>{" "}
+                        {selectedApplication.user?.nationality && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Nationality</span>
                             <span className="text-white">
-                              {selectedApplication.user.employmentStatus}
+                              {selectedApplication.user.nationality}
                             </span>
                           </div>
                         )}
-                        {selectedApplication.user?.employerName && (
-                          <div>
-                            <span className="text-gray-400">Employer:</span>{" "}
+                        {selectedApplication.user?.educationLevel && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Education</span>
                             <span className="text-white">
-                              {selectedApplication.user.employerName}
-                            </span>
-                          </div>
-                        )}
-                        {selectedApplication.user?.monthlyIncome && (
-                          <div>
-                            <span className="text-gray-400">
-                              Monthly Income:
-                            </span>{" "}
-                            <span className="text-white">
-                              {formatCurrency(
-                                parseFloat(
-                                  selectedApplication.user.monthlyIncome
-                                )
-                              )}
+                              {selectedApplication.user.educationLevel}
                             </span>
                           </div>
                         )}
                       </div>
+
+                      {/* Employment Section */}
+                      {(selectedApplication.user?.employmentStatus || selectedApplication.user?.employerName || selectedApplication.user?.monthlyIncome) && (
+                        <div className="border-t border-gray-600/50 pt-3 mb-4">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Employment</p>
+                          <div className="space-y-2 text-sm">
+                            {selectedApplication.user?.employmentStatus && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Status</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.employmentStatus}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.employerName && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Employer</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.employerName}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.serviceLength && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Length of Service</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.serviceLength}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.monthlyIncome && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Monthly Income</span>
+                                <span className="text-emerald-400 font-medium">
+                                  {formatCurrency(parseFloat(selectedApplication.user.monthlyIncome))}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Address Section */}
+                      {(selectedApplication.user?.address1 || selectedApplication.user?.city) && (
+                        <div className="border-t border-gray-600/50 pt-3 mb-4">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Address</p>
+                          <div className="text-sm text-white">
+                            {selectedApplication.user?.address1 && (
+                              <p>{selectedApplication.user.address1}</p>
+                            )}
+                            {selectedApplication.user?.address2 && (
+                              <p>{selectedApplication.user.address2}</p>
+                            )}
+                            {(selectedApplication.user?.city || selectedApplication.user?.state || selectedApplication.user?.zipCode) && (
+                              <p>
+                                {[
+                                  selectedApplication.user?.city,
+                                  selectedApplication.user?.state,
+                                  selectedApplication.user?.zipCode
+                                ].filter(Boolean).join(', ')}
+                              </p>
+                            )}
+                            {selectedApplication.user?.country && (
+                              <p>{selectedApplication.user.country}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bank Details */}
+                      {(selectedApplication.user?.bankName || selectedApplication.user?.accountNumber) && (
+                        <div className="border-t border-gray-600/50 pt-3 mb-4">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Bank Details</p>
+                          <div className="space-y-2 text-sm">
+                            {selectedApplication.user?.bankName && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Bank</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.bankName}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.accountNumber && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-gray-400">Account No.</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-mono">
+                                    {selectedApplication.user.accountNumber}
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(selectedApplication.user?.accountNumber || '');
+                                    }}
+                                    className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-400/20 hover:bg-blue-500/30"
+                                    title="Copy"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Emergency Contact */}
+                      {(selectedApplication.user?.emergencyContactName || selectedApplication.user?.emergencyContactPhone) && (
+                        <div className="border-t border-gray-600/50 pt-3">
+                          <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Emergency Contact</p>
+                          <div className="space-y-2 text-sm">
+                            {selectedApplication.user?.emergencyContactName && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Name</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.emergencyContactName}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.emergencyContactRelationship && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Relationship</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.emergencyContactRelationship}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.emergencyContactPhone && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Phone</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.emergencyContactPhone}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Loan Information */}
@@ -2801,90 +3133,467 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                         </div>
                       </div>
                     </div>
+
+                    {/* Financial Details - Full width breakdown */}
+                    <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 md:col-span-2">
+                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                        <BanknotesIcon className="h-5 w-5 mr-2 text-emerald-400" />
+                        Financial Breakdown
+                      </h4>
+                      
+                      <div className="space-y-4">
+                        {/* Loan Terms Row */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Loan Amount</span>
+                            <span className="text-white font-medium md:mt-1">
+                              {selectedApplication.amount
+                                ? formatCurrency(selectedApplication.amount)
+                                : "Not specified"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Loan Term</span>
+                            <span className="text-white font-medium md:mt-1">
+                              {selectedApplication.term
+                                ? `${selectedApplication.term} months`
+                                : "Not specified"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Interest Rate</span>
+                            <span className="text-white font-medium md:mt-1">
+                              {selectedApplication.interestRate
+                                ? `${selectedApplication.interestRate}% monthly`
+                                : "Not specified"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between md:flex-col md:justify-start">
+                            <span className="text-gray-400">Monthly Repayment</span>
+                            <span className="text-purple-400 font-semibold md:mt-1">
+                              {selectedApplication.monthlyRepayment
+                                ? formatCurrency(selectedApplication.monthlyRepayment)
+                                : "Not calculated"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Fees Breakdown */}
+                        <div className="border-t border-gray-600/50 pt-4">
+                          <p className="text-sm font-medium text-gray-300 mb-3">Fees Deducted at Disbursement</p>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-400">Legal Fee</span>
+                              <span className="text-red-400">
+                                - {selectedApplication.legalFeeFixed !== undefined && selectedApplication.legalFeeFixed !== null && selectedApplication.legalFeeFixed > 0
+                                  ? formatCurrency(selectedApplication.legalFeeFixed)
+                                  : "RM 0.00"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-400">Stamping Fee</span>
+                              <span className="text-red-400">
+                                - {selectedApplication.stampingFee !== undefined && selectedApplication.stampingFee !== null && selectedApplication.stampingFee > 0
+                                  ? formatCurrency(selectedApplication.stampingFee)
+                                  : "RM 0.00"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2 border-t border-gray-600/30">
+                              <span className="text-gray-300 font-medium">Total Fees</span>
+                              <span className="text-red-400 font-medium">
+                                - {formatCurrency(
+                                  (selectedApplication.legalFeeFixed || 0) + 
+                                  (selectedApplication.stampingFee || 0)
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Net Disbursement - Highlighted */}
+                        <div className="bg-emerald-500/10 rounded-lg p-4 border border-emerald-500/30">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-emerald-400 font-medium">Net Disbursement</p>
+                              <p className="text-xs text-gray-400 mt-0.5">Amount credited to borrower's account</p>
+                            </div>
+                            <span className="text-emerald-400 text-xl font-semibold">
+                              {selectedApplication.netDisbursement
+                                ? formatCurrency(selectedApplication.netDisbursement)
+                                : selectedApplication.amount
+                                  ? formatCurrency(
+                                      selectedApplication.amount - 
+                                      (selectedApplication.legalFeeFixed || 0) - 
+                                      (selectedApplication.stampingFee || 0)
+                                    )
+                                  : "Not calculated"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Late Payment Fees from Product */}
+                        {selectedApplication.product && (
+                          <div className="border-t border-gray-600/50 pt-4">
+                            <p className="text-sm font-medium text-gray-300 mb-3">Late Payment Fees (per product terms)</p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                              <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                <span className="text-gray-400 block text-xs mb-1">Late Fee Rate</span>
+                                <span className="text-amber-400 font-medium">
+                                  {selectedApplication.product.lateFeeRate !== undefined && selectedApplication.product.lateFeeRate !== null
+                                    ? `${selectedApplication.product.lateFeeRate}%`
+                                    : "8%"} <span className="text-xs text-gray-400">per annum</span>
+                                </span>
+                              </div>
+                              <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                <span className="text-gray-400 block text-xs mb-1">Fixed Late Fee</span>
+                                <span className="text-amber-400 font-medium">
+                                  {selectedApplication.product.lateFeeFixedAmount !== undefined && selectedApplication.product.lateFeeFixedAmount !== null
+                                    ? formatCurrency(selectedApplication.product.lateFeeFixedAmount)
+                                    : "RM 0.00"} <span className="text-xs text-gray-400">per occurrence</span>
+                                </span>
+                              </div>
+                              <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                                <span className="text-gray-400 block text-xs mb-1">Grace Period</span>
+                                <span className="text-amber-400 font-medium">
+                                  {selectedApplication.product.lateFeeFrequencyDays !== undefined && selectedApplication.product.lateFeeFrequencyDays !== null
+                                    ? `${selectedApplication.product.lateFeeFrequencyDays} days`
+                                    : "7 days"} <span className="text-xs text-gray-400">before fee applies</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* Documents Tab - ADMIN only */}
                 {selectedTab === "documents" && userRole === "ADMIN" && (
-                  <div>
-                    {/* Application Documents */}
-                    {selectedApplication.documents &&
-                      selectedApplication.documents.length > 0 && (
-                        <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50 mb-6">
-                          <h4 className="text-lg font-medium text-white mb-3 flex items-center">
-                            <DocumentTextIcon className="h-5 w-5 mr-2 text-amber-400" />
-                            Documents
-                          </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {selectedApplication.documents.map((doc) => (
-                              <div
-                                key={doc.id}
-                                className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30"
-                              >
-                                <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium text-white">
-                                    {getDocumentTypeName(doc.type)}
-                                  </span>
-                                  <span
-                                    className={`px-2 py-1 text-xs rounded-full ${
-                                      getDocumentStatusColor(doc.status).bg
-                                    } ${
-                                      getDocumentStatusColor(doc.status).text
-                                    }`}
-                                  >
-                                    {doc.status}
-                                  </span>
-                                </div>
-                                <div className="flex space-x-2 mt-2">
-                                  <a
-                                    href={formatDocumentUrl(
-                                      doc.fileUrl,
-                                      doc.id
-                                    )}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
-                                  >
-                                    View
-                                  </a>
-                                  <button
-                                    onClick={() =>
-                                      handleDocumentStatusChange(
-                                        doc.id,
-                                        "APPROVED"
-                                      )
-                                    }
-                                    disabled={doc.status === "APPROVED"}
-                                    className={`text-xs px-2 py-1 rounded border ${
-                                      doc.status === "APPROVED"
-                                        ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
-                                        : "bg-green-500/20 text-green-200 border-green-400/20 hover:bg-green-500/30"
-                                    }`}
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleDocumentStatusChange(
-                                        doc.id,
-                                        "REJECTED"
-                                      )
-                                    }
-                                    disabled={doc.status === "REJECTED"}
-                                    className={`text-xs px-2 py-1 rounded border ${
-                                      doc.status === "REJECTED"
-                                        ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
-                                        : "bg-red-500/20 text-red-200 border-red-400/20 hover:bg-red-500/30"
-                                    }`}
-                                  >
-                                    Reject
-                                  </button>
+                  <div className="space-y-6">
+                    {/* Document Summary */}
+                    {(() => {
+                      // Normalize document types - remove surrounding quotes if present
+                      const normalizeDocType = (docType: string | unknown): string => {
+                        if (typeof docType !== 'string') return String(docType);
+                        // Remove surrounding quotes that may come from JSON storage
+                        return docType.replace(/^["']|["']$/g, '').trim();
+                      };
+                      
+                      const rawRequiredDocs = selectedApplication.product?.requiredDocuments || [];
+                      const requiredDocs = rawRequiredDocs.map(normalizeDocType);
+                      const uploadedDocs = selectedApplication.documents || [];
+                      const uploadedDocTypes = Array.from(new Set(uploadedDocs.map(d => normalizeDocType(d.type))));
+                      const missingDocs = requiredDocs.filter((docType: string) => !uploadedDocTypes.includes(docType));
+                      const hasAllDocs = missingDocs.length === 0 && requiredDocs.length > 0;
+                      const isCollateralLoan = selectedApplication.product?.collateralRequired === true;
+                      
+                      return (
+                        <>
+                          {/* Summary Banner */}
+                          <div className={`rounded-lg p-4 border ${
+                            isCollateralLoan 
+                              ? "bg-amber-500/10 border-amber-500/30"
+                              : hasAllDocs 
+                                ? "bg-green-500/10 border-green-500/30" 
+                                : requiredDocs.length === 0
+                                  ? "bg-gray-700/30 border-gray-600/30"
+                                  : "bg-amber-500/10 border-amber-500/30"
+                          }`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                {isCollateralLoan ? (
+                                  <ClipboardDocumentCheckIcon className="h-5 w-5 text-amber-400 mr-2" />
+                                ) : hasAllDocs ? (
+                                  <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+                                ) : requiredDocs.length === 0 ? (
+                                  <DocumentTextIcon className="h-5 w-5 text-gray-400 mr-2" />
+                                ) : (
+                                  <ExclamationTriangleIcon className="h-5 w-5 text-amber-400 mr-2" />
+                                )}
+                                <div>
+                                  <p className={`font-medium ${
+                                    isCollateralLoan 
+                                      ? "text-amber-200"
+                                      : hasAllDocs 
+                                        ? "text-green-200" 
+                                        : requiredDocs.length === 0
+                                          ? "text-gray-300"
+                                          : "text-amber-200"
+                                  }`}>
+                                    {isCollateralLoan 
+                                      ? "Collateral Loan - Documents Optional"
+                                      : hasAllDocs 
+                                        ? "All Required Documents Uploaded" 
+                                        : requiredDocs.length === 0
+                                          ? "No Required Documents for this Product"
+                                          : `${missingDocs.length} of ${requiredDocs.length} Required Documents Missing`}
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    {uploadedDocs.length} document{uploadedDocs.length !== 1 ? 's' : ''} uploaded
+                                    {requiredDocs.length > 0 && ` • ${requiredDocs.length} required by product`}
+                                  </p>
                                 </div>
                               </div>
-                            ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+
+                          {/* Required Documents Checklist */}
+                          {requiredDocs.length > 0 && (
+                            <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+                              <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                                <ClipboardDocumentCheckIcon className="h-5 w-5 mr-2 text-blue-400" />
+                                Required Documents
+                              </h4>
+                              <div className="space-y-3">
+                                {requiredDocs.map((docType: string) => {
+                                  const uploadedForType = uploadedDocs.filter(d => normalizeDocType(d.type) === docType);
+                                  const hasUpload = uploadedForType.length > 0;
+                                  const allApproved = hasUpload && uploadedForType.every(d => d.status === 'APPROVED');
+                                  const hasRejected = hasUpload && uploadedForType.some(d => d.status === 'REJECTED');
+                                  
+                                  return (
+                                    <div key={docType} className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30">
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex items-start">
+                                          <div className={`mt-0.5 mr-3 rounded-full p-1 ${
+                                            allApproved 
+                                              ? "bg-green-500/20" 
+                                              : hasRejected 
+                                                ? "bg-red-500/20"
+                                                : hasUpload 
+                                                  ? "bg-amber-500/20" 
+                                                  : "bg-gray-600/20"
+                                          }`}>
+                                            {allApproved ? (
+                                              <CheckCircleIcon className="h-4 w-4 text-green-400" />
+                                            ) : hasRejected ? (
+                                              <XCircleIcon className="h-4 w-4 text-red-400" />
+                                            ) : hasUpload ? (
+                                              <ClockIcon className="h-4 w-4 text-amber-400" />
+                                            ) : (
+                                              <XMarkIcon className="h-4 w-4 text-gray-500" />
+                                            )}
+                                          </div>
+                                          <div>
+                                            <p className="text-white font-medium">{getDocumentTypeName(docType)}</p>
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                              {!hasUpload 
+                                                ? "Not uploaded" 
+                                                : allApproved 
+                                                  ? `${uploadedForType.length} file(s) approved`
+                                                  : hasRejected
+                                                    ? "Needs re-upload"
+                                                    : `${uploadedForType.length} file(s) pending review`}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <span className={`px-2 py-1 text-xs rounded-full ${
+                                          allApproved 
+                                            ? "bg-green-500/20 text-green-200 border border-green-400/30"
+                                            : hasRejected 
+                                              ? "bg-red-500/20 text-red-200 border border-red-400/30"
+                                              : hasUpload 
+                                                ? "bg-amber-500/20 text-amber-200 border border-amber-400/30"
+                                                : "bg-gray-600/20 text-gray-400 border border-gray-500/30"
+                                        }`}>
+                                          {allApproved ? "Approved" : hasRejected ? "Rejected" : hasUpload ? "Pending" : "Missing"}
+                                        </span>
+                                      </div>
+                                      
+                                      {/* Show uploaded files for this type */}
+                                      {hasUpload && (
+                                        <div className="mt-3 pl-8 space-y-2">
+                                          {uploadedForType.map((doc) => (
+                                            <div key={doc.id} className="flex items-center justify-between text-sm bg-gray-700/30 rounded px-3 py-2">
+                                              <span className="text-gray-300 truncate max-w-[200px]">
+                                                {doc.fileUrl.split('/').pop()}
+                                              </span>
+                                              <div className="flex items-center space-x-2">
+                                                <span className={`px-1.5 py-0.5 text-xs rounded ${
+                                                  getDocumentStatusColor(doc.status).bg
+                                                } ${getDocumentStatusColor(doc.status).text}`}>
+                                                  {doc.status}
+                                                </span>
+                                                <a
+                                                  href={formatDocumentUrl(doc.fileUrl, doc.id)}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
+                                                >
+                                                  View
+                                                </a>
+                                                <button
+                                                  onClick={() => handleDocumentStatusChange(doc.id, "APPROVED")}
+                                                  disabled={doc.status === "APPROVED"}
+                                                  className={`text-xs px-2 py-1 rounded border ${
+                                                    doc.status === "APPROVED"
+                                                      ? "bg-gray-700/50 text-gray-400 border-gray-600/50 cursor-not-allowed"
+                                                      : "bg-green-500/20 text-green-200 border-green-400/20 hover:bg-green-500/30"
+                                                  }`}
+                                                >
+                                                  ✓
+                                                </button>
+                                                <button
+                                                  onClick={() => handleDocumentStatusChange(doc.id, "REJECTED")}
+                                                  disabled={doc.status === "REJECTED"}
+                                                  className={`text-xs px-2 py-1 rounded border ${
+                                                    doc.status === "REJECTED"
+                                                      ? "bg-gray-700/50 text-gray-400 border-gray-600/50 cursor-not-allowed"
+                                                      : "bg-red-500/20 text-red-200 border-red-400/20 hover:bg-red-500/30"
+                                                  }`}
+                                                >
+                                                  ✗
+                                                </button>
+                                                <button
+                                                  onClick={() => handleAdminDocumentDelete(doc.id)}
+                                                  className="text-xs px-2 py-1 rounded border bg-gray-600/20 text-gray-300 border-gray-500/30 hover:bg-red-500/20 hover:text-red-200 hover:border-red-400/30"
+                                                  title="Delete document"
+                                                >
+                                                  🗑
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Upload button for missing or additional documents */}
+                                      <div className="mt-3 pl-8">
+                                        <label className="relative cursor-pointer">
+                                          <input
+                                            type="file"
+                                            accept=".pdf,.jpg,.jpeg,.png"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                handleAdminDocumentUpload(docType, file);
+                                                e.target.value = ''; // Reset input
+                                              }
+                                            }}
+                                            disabled={uploadingDocument === docType}
+                                          />
+                                          <span className={`inline-flex items-center text-xs px-3 py-1.5 rounded border transition-colors ${
+                                            uploadingDocument === docType
+                                              ? "bg-gray-600/50 text-gray-400 border-gray-500/30 cursor-wait"
+                                              : "bg-purple-500/20 text-purple-200 border-purple-400/30 hover:bg-purple-500/30"
+                                          }`}>
+                                            {uploadingDocument === docType ? (
+                                              <>
+                                                <svg className="animate-spin h-3 w-3 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Uploading...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <ArrowUpTrayIcon className="h-3 w-3 mr-1.5" />
+                                                {hasUpload ? "Add More" : "Upload"}
+                                              </>
+                                            )}
+                                          </span>
+                                        </label>
+                                        {documentUploadError && uploadingDocument === null && (
+                                          <p className="text-xs text-red-400 mt-1">{documentUploadError}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Additional Documents (uploaded but not in required list) */}
+                          {(() => {
+                            const additionalDocs = uploadedDocs.filter(
+                              (doc) => !requiredDocs.includes(normalizeDocType(doc.type))
+                            );
+                            if (additionalDocs.length === 0) return null;
+                            
+                            return (
+                              <div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+                                <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                                  <DocumentTextIcon className="h-5 w-5 mr-2 text-purple-400" />
+                                  Additional Documents
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {additionalDocs.map((doc) => (
+                                    <div
+                                      key={doc.id}
+                                      className="border border-gray-700/40 rounded-lg p-3 bg-gray-800/30"
+                                    >
+                                      <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm font-medium text-white">
+                                          {getDocumentTypeName(doc.type)}
+                                        </span>
+                                        <span
+                                          className={`px-2 py-1 text-xs rounded-full ${
+                                            getDocumentStatusColor(doc.status).bg
+                                          } ${getDocumentStatusColor(doc.status).text}`}
+                                        >
+                                          {doc.status}
+                                        </span>
+                                      </div>
+                                      <div className="flex space-x-2 mt-2">
+                                        <a
+                                          href={formatDocumentUrl(doc.fileUrl, doc.id)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs px-2 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30"
+                                        >
+                                          View
+                                        </a>
+                                        <button
+                                          onClick={() => handleDocumentStatusChange(doc.id, "APPROVED")}
+                                          disabled={doc.status === "APPROVED"}
+                                          className={`text-xs px-2 py-1 rounded border ${
+                                            doc.status === "APPROVED"
+                                              ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
+                                              : "bg-green-500/20 text-green-200 border-green-400/20 hover:bg-green-500/30"
+                                          }`}
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          onClick={() => handleDocumentStatusChange(doc.id, "REJECTED")}
+                                          disabled={doc.status === "REJECTED"}
+                                          className={`text-xs px-2 py-1 rounded border ${
+                                            doc.status === "REJECTED"
+                                              ? "bg-gray-700/50 text-gray-400 border-gray-600/50"
+                                              : "bg-red-500/20 text-red-200 border-red-400/20 hover:bg-red-500/30"
+                                          }`}
+                                        >
+                                          Reject
+                                        </button>
+                                        <button
+                                          onClick={() => handleAdminDocumentDelete(doc.id)}
+                                          className="text-xs px-2 py-1 rounded border bg-gray-600/20 text-gray-300 border-gray-500/30 hover:bg-red-500/20 hover:text-red-200 hover:border-red-400/30"
+                                          title="Delete document"
+                                        >
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* No Documents Message */}
+                          {uploadedDocs.length === 0 && requiredDocs.length === 0 && (
+                            <div className="border border-gray-700/50 rounded-lg p-8 bg-gray-800/50 text-center">
+                              <DocumentTextIcon className="h-12 w-12 text-gray-500 mx-auto mb-3" />
+                              <p className="text-gray-400">No documents uploaded for this application</p>
+                              <p className="text-xs text-gray-500 mt-1">This product does not require any documents</p>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 

@@ -2231,58 +2231,6 @@ export default function AdminDashboardPage() {
 									<ArrowTrendingUpIcon className="h-6 w-6 text-emerald-400" />
 					</div>
 
-								{/* Repayment Headlines */}
-					<div className="grid grid-cols-3 gap-4 mb-6">
-						<div className="text-center">
-										<p className="text-2xl font-bold text-emerald-400">
-								{formatCurrencyCompact(
-									calculateMetrics(
-													currentData,
-										"actual_repayments"
-									).total
-								)}
-							</p>
-							<p className="text-xs text-gray-400">
-								Total Collections
-							</p>
-						</div>
-						<div className="text-center">
-							<p className="text-2xl font-bold text-white">
-								{formatCurrencyCompact(
-									calculateMetrics(
-													currentData,
-										"actual_repayments"
-												).currentPeriod
-								)}
-							</p>
-										<p className="text-xs text-gray-400">{getPeriodLabel()}</p>
-						</div>
-						<div className="text-center">
-							<p
-								className={`text-2xl font-bold ${
-									calculateMetrics(
-													currentData,
-										"actual_repayments"
-									).growth >= 0
-										? "text-green-400"
-										: "text-red-400"
-								}`}
-							>
-								{calculateMetrics(
-												currentData,
-									"actual_repayments"
-								).growth >= 0
-									? "+"
-									: ""}
-								{calculateMetrics(
-												currentData,
-									"actual_repayments"
-								).growth.toFixed(1)}
-								%
-							</p>
-										<p className="text-xs text-gray-400">{getGrowthLabel()}</p>
-						</div>
-					</div>
 					<div className="h-80">
 						<ResponsiveContainer width="100%" height="100%">
 										<BarChart data={currentData}>
@@ -2570,11 +2518,12 @@ export default function AdminDashboardPage() {
 												formatter={(value: any) => [formatCurrencyCompact(value)]}
 											/>
 											<Legend wrapperStyle={{ color: "#9CA3AF" }} />
-								<Area
-									type="monotone"
+								{/* Interest Revenue (larger) on bottom, Fees Revenue (smaller) on top */}
+											<Area
+												type="monotone"
 												dataKey="revenue"
 												stroke="#10B981"
-									fillOpacity={1}
+												fillOpacity={1}
 												fill="url(#colorRevenue)"
 												name="Interest Revenue"
 											/>
@@ -2585,7 +2534,7 @@ export default function AdminDashboardPage() {
 												fillOpacity={1}
 												fill="url(#colorFees)"
 												name="Fees Revenue"
-								/>
+											/>
 							</AreaChart>
 						</ResponsiveContainer>
 								</div>
