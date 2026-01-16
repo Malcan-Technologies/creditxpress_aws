@@ -160,36 +160,44 @@ export default function AddressForm({
 							<label htmlFor="state" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
 								State <span className="text-red-500">*</span>
 							</label>
-							<select
-								id="state"
-								name="state"
-								value={formik.values.state}
-								onChange={formik.handleChange}
-								onBlur={formik.handleBlur}
-								className={`block w-full px-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
-									formik.touched.state && formik.errors.state
-										? "border-red-300 focus:ring-red-500"
-										: "border-gray-300 hover:border-gray-400"
-								}`}
-							>
-								<option value="">Select state</option>
-								<option value="Johor">Johor</option>
-								<option value="Kedah">Kedah</option>
-								<option value="Kelantan">Kelantan</option>
-								<option value="Kuala Lumpur">Kuala Lumpur</option>
-								<option value="Labuan">Labuan</option>
-								<option value="Malacca">Malacca</option>
-								<option value="Negeri Sembilan">Negeri Sembilan</option>
-								<option value="Pahang">Pahang</option>
-								<option value="Penang">Penang</option>
-								<option value="Perak">Perak</option>
-								<option value="Perlis">Perlis</option>
-								<option value="Putrajaya">Putrajaya</option>
-								<option value="Sabah">Sabah</option>
-								<option value="Sarawak">Sarawak</option>
-								<option value="Selangor">Selangor</option>
-								<option value="Terengganu">Terengganu</option>
-							</select>
+							<div className="relative">
+								<select
+									id="state"
+									name="state"
+									value={formik.values.state}
+									onChange={formik.handleChange}
+									onBlur={formik.handleBlur}
+									className={`block w-full px-3 pr-10 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base appearance-none ${
+										formik.touched.state && formik.errors.state
+											? "border-red-300 focus:ring-red-500"
+											: "border-gray-300 hover:border-gray-400"
+									}`}
+								>
+									<option value="">Select state</option>
+									<option value="Johor">Johor</option>
+									<option value="Kedah">Kedah</option>
+									<option value="Kelantan">Kelantan</option>
+									<option value="Kuala Lumpur">Kuala Lumpur</option>
+									<option value="Labuan">Labuan</option>
+									<option value="Malacca">Malacca</option>
+									<option value="Negeri Sembilan">Negeri Sembilan</option>
+									<option value="Pahang">Pahang</option>
+									<option value="Penang">Penang</option>
+									<option value="Perak">Perak</option>
+									<option value="Perlis">Perlis</option>
+									<option value="Putrajaya">Putrajaya</option>
+									<option value="Sabah">Sabah</option>
+									<option value="Sarawak">Sarawak</option>
+									<option value="Selangor">Selangor</option>
+									<option value="Terengganu">Terengganu</option>
+								</select>
+								{/* Custom dropdown arrow */}
+								<div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+									<svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+										<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+									</svg>
+								</div>
+							</div>
 							{formik.touched.state && formik.errors.state && (
 								<p className="mt-2 text-sm text-red-600 font-medium">
 									{formik.errors.state}

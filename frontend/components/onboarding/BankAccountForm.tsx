@@ -82,7 +82,7 @@ export default function BankAccountForm({
 							Select Bank <span className="text-red-500">*</span>
 						</label>
 						<div className="relative">
-							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
 								<BanknotesIcon className="h-5 w-5 text-gray-400" />
 							</div>
 							<select
@@ -91,7 +91,7 @@ export default function BankAccountForm({
 								value={formik.values.bankName}
 								onChange={formik.handleChange}
 								onBlur={formik.handleBlur}
-								className={`block w-full pl-10 pr-8 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
+								className={`block w-full pl-11 pr-10 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base appearance-none ${
 									formik.touched.bankName && formik.errors.bankName
 										? "border-red-300 focus:ring-red-500"
 										: "border-gray-300 hover:border-gray-400"
@@ -104,6 +104,12 @@ export default function BankAccountForm({
 									</option>
 								))}
 							</select>
+							{/* Custom dropdown arrow */}
+							<div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+								<svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+									<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+								</svg>
+							</div>
 						</div>
 						{formik.touched.bankName && formik.errors.bankName && (
 							<p className="mt-2 text-sm text-red-600 font-medium">
