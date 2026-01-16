@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, RequestHandler } from "express";
 import { prisma } from "../lib/prisma";
 import { authenticateAndVerifyPhone } from "../middleware/auth";
 import { Response } from "express";
@@ -7,6 +7,7 @@ import { validatePhoneNumber, normalizePhoneNumber } from "../lib/phoneUtils";
 import { OTPUtils, OTPType } from "../lib/otpUtils";
 import whatsappService from "../lib/whatsappService";
 import crypto from "crypto";
+import { getS3ObjectStream } from "../lib/storage";
 
 const router = Router();
 
@@ -505,8 +506,16 @@ router.get(
 				return res.status(401).json({ message: "Unauthorized" });
 			}
 
+			// Optional query parameter to filter by status (e.g., ?status=APPROVED for reuse)
+			const statusFilter = req.query.status as string | undefined;
+
+			const whereClause: any = { userId };
+			if (statusFilter) {
+				whereClause.status = statusFilter;
+			}
+
 			const documents = await prisma.userDocument.findMany({
-				where: { userId },
+				where: whereClause,
 				include: {
 					application: {
 						include: {
@@ -528,6 +537,103 @@ router.get(
 			return res.status(500).json({ message: "Failed to fetch documents" });
 		}
 	}
+);
+
+/**
+ * @swagger
+ * /api/users/me/documents/{documentId}:
+ *   get:
+ *     summary: Get a specific document file for the current user
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The document ID
+ *     responses:
+ *       200:
+ *         description: Document file stream
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+	"/me/documents/:documentId",
+	authenticateAndVerifyPhone,
+	(async (req: AuthRequest, res: Response) => {
+		try {
+			const userId = req.user?.userId;
+			const { documentId } = req.params;
+
+			if (!userId) {
+				return res.status(401).json({ message: "Unauthorized" });
+			}
+
+			// Get the document and verify it belongs to the user
+			const document = await prisma.userDocument.findFirst({
+				where: {
+					id: documentId,
+					userId: userId,
+				},
+			});
+
+			if (!document) {
+				return res.status(404).json({ message: "Document not found" });
+			}
+
+			// Stream file from S3
+			try {
+				const { stream, contentType, contentLength } = await getS3ObjectStream(document.fileUrl);
+				
+				// Set appropriate headers
+				res.setHeader("Content-Type", contentType);
+				if (contentLength) {
+					res.setHeader("Content-Length", contentLength);
+				}
+				
+				// Extract filename from S3 key for Content-Disposition
+				const filename = document.fileUrl.split('/').pop() || 'document';
+				res.setHeader(
+					"Content-Disposition",
+					`inline; filename="${filename}"`
+				);
+
+				// Stream the file
+				stream.pipe(res);
+				
+				// Handle stream errors
+				stream.on("error", (error) => {
+					console.error("Error streaming file from S3:", error);
+					if (!res.headersSent) {
+						res.status(500).json({ message: "Error streaming file" });
+					}
+				});
+			} catch (s3Error) {
+				console.error("Error fetching from S3:", s3Error);
+				return res.status(404).json({ message: "File not found in storage" });
+			}
+
+			return res;
+		} catch (error) {
+			console.error("Error serving user document:", error);
+			if (!res.headersSent) {
+				return res.status(500).json({ message: "Internal server error" });
+			}
+			return res;
+		}
+	}) as RequestHandler
 );
 
 // Get or create wallet for a user

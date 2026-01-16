@@ -302,7 +302,8 @@ export default function DocumentUploadForm({
 
 	const fetchPreviousDocuments = async () => {
 		try {
-			const response = await fetch("/api/users/me/documents", {
+			// Only fetch APPROVED documents for reuse
+			const response = await fetch("/api/users/me/documents?status=APPROVED", {
 				headers: {
 					Authorization: `Bearer ${localStorage.getItem("token")}`,
 				},
@@ -360,7 +361,8 @@ export default function DocumentUploadForm({
 							},
 						}
 					),
-					fetch("/api/users/me/documents", {
+					// Only fetch APPROVED documents for reuse
+					fetch("/api/users/me/documents?status=APPROVED", {
 						headers: {
 							Authorization: `Bearer ${localStorage.getItem("token")}`,
 						},
@@ -905,6 +907,13 @@ export default function DocumentUploadForm({
 	const isPDFFile = (url: string) => {
 		const ext = getFileExtension(url);
 		return ext === 'pdf';
+	};
+
+	// Get the proper URL for accessing a document (handles S3 and local files)
+	// For "Use Previous" documents, always use the user documents endpoint
+	// This works for all user-owned documents regardless of which application they were uploaded for
+	const getDocumentAccessUrl = (doc: PreviousDocument): string => {
+		return `/api/users/me/documents/${doc.id}`;
 	};
 
 	const openPreviousDocsDialog = (docType: string) => {
@@ -1486,10 +1495,10 @@ export default function DocumentUploadForm({
 				</DialogTitle>
 				<DialogContent>
 					<Typography className="mb-4">
-						Select documents from your previous uploads to use for this document type.
+						Select from your previously approved documents to use for this document type.
 					</Typography>
 					{previousDocuments.length === 0 ? (
-						<Typography>No previous documents found.</Typography>
+						<Typography>No approved previous documents found.</Typography>
 					) : (
 						<List>
 							{previousDocuments
@@ -1509,9 +1518,14 @@ export default function DocumentUploadForm({
 											}
 											label={
 												<Box className="flex-1">
-													<Typography variant="subtitle2">
-														{doc.type}
-													</Typography>
+													<Box className="flex items-center gap-2">
+														<Typography variant="subtitle2">
+															{doc.type}
+														</Typography>
+														<span className="inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-700/10">
+															Approved
+														</span>
+													</Box>
 													<Typography variant="body2" className="text-gray-600">
 														{doc.fileUrl?.split("/").pop() || "Document"}
 													</Typography>
@@ -1596,7 +1610,7 @@ export default function DocumentUploadForm({
 						<Box className="min-h-96 flex items-center justify-center p-4">
 							{isImageFile(previewFile.fileUrl) ? (
 								<img
-									src={`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`}
+									src={getDocumentAccessUrl(previewFile)}
 									alt="Document preview"
 									style={{
 										maxWidth: "100%",
@@ -1616,7 +1630,7 @@ export default function DocumentUploadForm({
 								/>
 							) : isPDFFile(previewFile.fileUrl) ? (
 								<iframe
-									src={`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`}
+									src={getDocumentAccessUrl(previewFile)}
 									width="100%"
 									height="600px"
 									style={{ border: "none" }}
@@ -1637,7 +1651,7 @@ export default function DocumentUploadForm({
 										variant="outlined"
 										onClick={() => {
 											window.open(
-												`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`,
+												getDocumentAccessUrl(previewFile),
 												"_blank"
 											);
 										}}
@@ -1660,7 +1674,7 @@ export default function DocumentUploadForm({
 						<Button
 							onClick={() => {
 								window.open(
-									`${process.env.NEXT_PUBLIC_API_URL}${previewFile.fileUrl}`,
+									getDocumentAccessUrl(previewFile),
 									"_blank"
 								);
 							}}

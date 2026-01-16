@@ -17,7 +17,12 @@ export async function GET(req: NextRequest) {
 			);
 		}
 
-		const response = await fetch(`${API_URL}/api/users/me/documents`, {
+		// Pass through query parameters (e.g., status=APPROVED)
+		const { searchParams } = new URL(req.url);
+		const queryString = searchParams.toString();
+		const url = `${API_URL}/api/users/me/documents${queryString ? `?${queryString}` : ''}`;
+
+		const response = await fetch(url, {
 			headers: {
 				Authorization: authHeader,
 			},

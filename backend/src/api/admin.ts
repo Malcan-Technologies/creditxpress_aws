@@ -4042,6 +4042,22 @@ router.get(
 							createdAt: "desc",
 						},
 					},
+					history: {
+						select: {
+							id: true,
+							applicationId: true,
+							previousStatus: true,
+							newStatus: true,
+							changedBy: true,
+							changeReason: true,
+							notes: true,
+							metadata: true,
+							createdAt: true,
+						},
+						orderBy: {
+							createdAt: "desc",
+						},
+					},
 				},
 			});
 
@@ -4106,6 +4122,22 @@ router.get(
 								fileUrl: true,
 								createdAt: true,
 								updatedAt: true,
+							},
+							orderBy: {
+								createdAt: "desc",
+							},
+						},
+						history: {
+							select: {
+								id: true,
+								applicationId: true,
+								previousStatus: true,
+								newStatus: true,
+								changedBy: true,
+								changeReason: true,
+								notes: true,
+								metadata: true,
+								createdAt: true,
 							},
 							orderBy: {
 								createdAt: "desc",
@@ -5235,9 +5267,58 @@ router.patch(
 					.json({ message: "Invalid status value" });
 			}
 
-			const document = await prisma.userDocument.update({
+			// First fetch the document to get current status and applicationId
+			const existingDocument = await prisma.userDocument.findUnique({
 				where: { id },
-				data: { status },
+				select: {
+					id: true,
+					type: true,
+					status: true,
+					applicationId: true,
+					fileUrl: true,
+				},
+			});
+
+			if (!existingDocument) {
+				return res.status(404).json({ message: "Document not found" });
+			}
+
+			const previousStatus = existingDocument.status;
+
+			// Update document and create audit trail in a transaction
+			const document = await prisma.$transaction(async (tx) => {
+				// Update document status
+				const updatedDoc = await tx.userDocument.update({
+					where: { id },
+					data: { status },
+				});
+
+				// Create audit trail entry if there's an applicationId
+				if (existingDocument.applicationId) {
+					const actionType = status === "APPROVED" ? "DOCUMENT_APPROVED" : 
+									   status === "REJECTED" ? "DOCUMENT_REJECTED" : 
+									   "DOCUMENT_STATUS_CHANGED";
+					
+					await tx.loanApplicationHistory.create({
+						data: {
+							applicationId: existingDocument.applicationId,
+							previousStatus: null,
+							newStatus: actionType,
+							changedBy: req.user?.userId || "ADMIN",
+							changeReason: `ADMIN_${actionType}`,
+							notes: `Admin ${status.toLowerCase()} document: ${existingDocument.type} (${existingDocument.fileUrl?.split('/').pop() || 'unknown'})`,
+							metadata: {
+								documentId: id,
+								documentType: existingDocument.type,
+								previousDocumentStatus: previousStatus,
+								newDocumentStatus: status,
+								fileName: existingDocument.fileUrl?.split('/').pop() || null,
+							},
+						},
+					});
+				}
+
+				return updatedDoc;
 			});
 
 			// TODO: Send notification to user about document status change

@@ -1129,8 +1129,6 @@ function AdminApplicationsPageContent() {
     
     // Use router.push to update URL without causing a full page reload
     router.push(`/dashboard/applications?${params.toString()}`, { scroll: false });
-
-    fetchApplicationHistory(application.id);
   };
 
   const handleViewClose = () => {
@@ -1601,6 +1599,21 @@ function AdminApplicationsPageContent() {
     // Handle document deletion by admin
     if (changeReason === "ADMIN_DOCUMENT_DELETE" || newStatus === "DOCUMENT_DELETED") {
       return "Admin deleted document";
+    }
+
+    // Handle document approval by admin
+    if (changeReason === "ADMIN_DOCUMENT_APPROVED" || newStatus === "DOCUMENT_APPROVED") {
+      return "Admin approved document";
+    }
+
+    // Handle document rejection by admin
+    if (changeReason === "ADMIN_DOCUMENT_REJECTED" || newStatus === "DOCUMENT_REJECTED") {
+      return "Admin rejected document";
+    }
+
+    // Handle document status change by admin
+    if (newStatus === "DOCUMENT_STATUS_CHANGED") {
+      return "Admin changed document status";
     }
 
     if (!previousStatus) {
@@ -3632,6 +3645,10 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                             Customer Actions
                           </span>
                         </div>
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-cyan-400 rounded-full mr-2"></div>
+                          <span className="text-gray-400">Document Changes</span>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         {selectedApplication.history &&
@@ -3651,9 +3668,17 @@ NET DISBURSEMENT: RM${parseFloat(freshOfferNetDisbursement).toFixed(2)}`;
                                   <div className="flex-shrink-0 mt-1">
                                     <div
                                       className={`w-2 h-2 rounded-full ${
-                                        historyItem.changedBy
-                                          ?.toLowerCase()
-                                          .includes("system")
+                                        // Document-related events get cyan color
+                                        historyItem.newStatus === 'DOCUMENT_UPLOADED' ||
+                                        historyItem.newStatus === 'DOCUMENT_DELETED' ||
+                                        historyItem.newStatus === 'DOCUMENT_APPROVED' ||
+                                        historyItem.newStatus === 'DOCUMENT_REJECTED' ||
+                                        historyItem.newStatus === 'DOCUMENT_STATUS_CHANGED' ||
+                                        historyItem.changeReason?.includes('DOCUMENT')
+                                          ? "bg-cyan-400"
+                                          : historyItem.changedBy
+                                              ?.toLowerCase()
+                                              .includes("system")
                                           ? "bg-blue-400"
                                           : historyItem.changedBy &&
                                             (historyItem.changedBy.startsWith(

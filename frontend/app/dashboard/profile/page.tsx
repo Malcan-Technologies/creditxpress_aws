@@ -486,14 +486,9 @@ export default function ProfilePage() {
 	};
 
 	const handleDocumentView = (document: UserDocument) => {
-		if (document.applicationId) {
-			// For application documents, use the existing document viewing endpoint
-			const viewUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001'}/api/loan-applications/${document.applicationId}/documents/${document.id}`;
-			window.open(viewUrl, '_blank');
-		} else {
-			// For standalone documents (if any)
-			window.open(document.fileUrl, '_blank');
-		}
+		// Use the unified user documents endpoint - works for all documents (S3 and local)
+		// This endpoint streams the document through the backend, handling S3 authentication
+		window.open(`/api/users/me/documents/${document.id}`, '_blank');
 	};
 
 

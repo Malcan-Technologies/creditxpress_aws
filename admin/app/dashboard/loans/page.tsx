@@ -1885,6 +1885,15 @@ function ActiveLoansContent() {
 		if (newStatus === "DOCUMENT_DELETED") {
 			return "Document Deleted";
 		}
+		if (newStatus === "DOCUMENT_APPROVED") {
+			return "Document Approved";
+		}
+		if (newStatus === "DOCUMENT_REJECTED") {
+			return "Document Rejected";
+		}
+		if (newStatus === "DOCUMENT_STATUS_CHANGED") {
+			return "Document Status Changed";
+		}
 		
 		// If changeReason is provided, use it directly
 		if (changeReason) {
@@ -5791,6 +5800,9 @@ function ActiveLoansContent() {
 																						// Document-related events get cyan color
 																						event.data.newStatus === 'DOCUMENT_UPLOADED' || 
 																						event.data.newStatus === 'DOCUMENT_DELETED' ||
+																						event.data.newStatus === 'DOCUMENT_APPROVED' ||
+																						event.data.newStatus === 'DOCUMENT_REJECTED' ||
+																						event.data.newStatus === 'DOCUMENT_STATUS_CHANGED' ||
 																						event.data.changeReason?.includes('DOCUMENT')
 																							? "bg-cyan-400"
 																							: event.data.changedBy?.toLowerCase().includes('system')

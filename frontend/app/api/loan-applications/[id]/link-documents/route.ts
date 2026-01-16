@@ -9,8 +9,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001";
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
     try {
-		const cookieStore = await cookies();
-		const token = cookieStore.get("token")?.value;
+		// Try to get token from Authorization header first, then fall back to cookies
+		const authHeader = req.headers.get("authorization");
+		let token = authHeader?.replace("Bearer ", "");
+		
+		if (!token) {
+			const cookieStore = await cookies();
+			token = cookieStore.get("token")?.value;
+		}
 
 		if (!token) {
 			return NextResponse.json(
