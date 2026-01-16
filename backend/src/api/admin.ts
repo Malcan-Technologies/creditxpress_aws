@@ -1607,15 +1607,17 @@ router.get(
 				repayment_count: bigint;
 			}>;
 
-			// Get monthly fees earned from disbursed applications
-			const monthlyFees = (await prisma.$queryRaw`
+			// Get monthly fees earned from disbursed applications (origination, legal, etc.)
+			const monthlyOriginationFees = (await prisma.$queryRaw`
 				SELECT 
 					DATE_TRUNC('month', la."updatedAt" + INTERVAL '8 hours') as month,
 					ROUND(SUM(
 						COALESCE(la."applicationFee", 0) + 
 						COALESCE(la."originationFee", 0) + 
-						COALESCE(la."legalFee", 0)
-					)::numeric, 2) as fees_earned
+						COALESCE(la."legalFee", 0) +
+						COALESCE(la."stampingFee", 0) +
+						COALESCE(la."legalFeeFixed", 0)
+					)::numeric, 2) as origination_fees
 				FROM "loan_applications" la
 				WHERE la.status IN ('ACTIVE', 'DISBURSED', 'PENDING_DISCHARGE', 'DISCHARGED')
 				AND la."updatedAt" >= ${sixMonthsAgo}
@@ -1623,7 +1625,23 @@ router.get(
 				ORDER BY month ASC
 			`) as Array<{
 				month: Date;
-				fees_earned: number;
+				origination_fees: number;
+			}>;
+
+			// Get monthly late fees (penalty fees) collected from repayments
+			const monthlyLateFees = (await prisma.$queryRaw`
+				SELECT 
+					DATE_TRUNC('month', lr."paidAt" + INTERVAL '8 hours') as month,
+					ROUND(COALESCE(SUM(lr."lateFeesPaid"), 0)::numeric, 2) as late_fees
+				FROM "loan_repayments" lr
+				WHERE lr."lateFeesPaid" > 0
+				AND lr."paidAt" IS NOT NULL
+				AND lr."paidAt" >= ${sixMonthsAgo}
+				GROUP BY DATE_TRUNC('month', lr."paidAt" + INTERVAL '8 hours')
+				ORDER BY month ASC
+			`) as Array<{
+				month: Date;
+				late_fees: number;
 			}>;
 
 			// Get monthly accrued interest (cumulative unpaid interest as of each month-end)
@@ -1770,11 +1788,26 @@ router.get(
 					},
 				])
 			);
-			const feesMap = new Map(
-				monthlyFees.map((f) => [
+			// Create maps for origination fees and late fees, then combine
+			const originationFeesMap = new Map(
+				monthlyOriginationFees.map((f) => [
 					f.month.toISOString(),
+					Number(f.origination_fees) || 0,
+				])
+			);
+			const lateFeesMap = new Map(
+				monthlyLateFees.map((f) => [
+					f.month.toISOString(),
+					Number(f.late_fees) || 0,
+				])
+			);
+			// Combined fees map (origination + late fees)
+			const allMonthKeys = new Set([...originationFeesMap.keys(), ...lateFeesMap.keys()]);
+			const feesMap = new Map(
+				Array.from(allMonthKeys).map((monthKey) => [
+					monthKey,
 					{
-						fees_earned: Number(f.fees_earned) || 0,
+						fees_earned: (originationFeesMap.get(monthKey) || 0) + (lateFeesMap.get(monthKey) || 0),
 					},
 				])
 			);
@@ -2091,8 +2124,8 @@ router.get(
 				repayment_count: bigint;
 			}>;
 
-			// Get daily fees earned from disbursed applications
-			const dailyFees = (await prisma.$queryRaw`
+			// Get daily fees earned from disbursed applications (origination, legal, etc.)
+			const dailyOriginationFees = (await prisma.$queryRaw`
 				SELECT 
 					DATE(la."updatedAt" + INTERVAL '8 hours') as date,
 					ROUND(SUM(
@@ -2101,7 +2134,7 @@ router.get(
 						COALESCE(la."legalFee", 0) +
 						COALESCE(la."stampingFee", 0) +
 						COALESCE(la."legalFeeFixed", 0)
-					)::numeric, 2) as fees_earned
+					)::numeric, 2) as origination_fees
 				FROM "loan_applications" la
 				WHERE la.status IN ('ACTIVE', 'DISBURSED', 'PENDING_DISCHARGE', 'DISCHARGED')
 				AND la."updatedAt" >= ${thirtyDaysAgo}
@@ -2109,7 +2142,23 @@ router.get(
 				ORDER BY date ASC
 			`) as Array<{
 				date: Date;
-				fees_earned: number;
+				origination_fees: number;
+			}>;
+
+			// Get daily late fees (penalty fees) collected from repayments
+			const dailyLateFees = (await prisma.$queryRaw`
+				SELECT 
+					DATE(lr."paidAt" + INTERVAL '8 hours') as date,
+					ROUND(COALESCE(SUM(lr."lateFeesPaid"), 0)::numeric, 2) as late_fees
+				FROM "loan_repayments" lr
+				WHERE lr."lateFeesPaid" > 0
+				AND lr."paidAt" IS NOT NULL
+				AND lr."paidAt" >= ${thirtyDaysAgo}
+				GROUP BY DATE(lr."paidAt" + INTERVAL '8 hours')
+				ORDER BY date ASC
+			`) as Array<{
+				date: Date;
+				late_fees: number;
 			}>;
 
 			// Get daily accrued interest (cumulative unpaid interest as of each date)
@@ -2260,11 +2309,26 @@ router.get(
 					},
 				])
 			);
-			const feesMap = new Map(
-				dailyFees.map((f) => [
+			// Create maps for origination fees and late fees, then combine
+			const originationFeesMap = new Map(
+				dailyOriginationFees.map((f) => [
 					f.date.toISOString().split('T')[0],
+					Number(f.origination_fees) || 0,
+				])
+			);
+			const lateFeesMap = new Map(
+				dailyLateFees.map((f) => [
+					f.date.toISOString().split('T')[0],
+					Number(f.late_fees) || 0,
+				])
+			);
+			// Combined fees map (origination + late fees)
+			const allDateKeys = new Set([...originationFeesMap.keys(), ...lateFeesMap.keys()]);
+			const feesMap = new Map(
+				Array.from(allDateKeys).map((dateKey) => [
+					dateKey,
 					{
-						fees_earned: Number(f.fees_earned) || 0,
+						fees_earned: (originationFeesMap.get(dateKey) || 0) + (lateFeesMap.get(dateKey) || 0),
 					},
 				])
 			);
