@@ -566,7 +566,7 @@ function AdminApplicationsPageContent() {
       case "PENDING_APPROVAL":
         return "Pending Approval";
       case "PENDING_FRESH_OFFER":
-        return "Fresh Offer Pending";
+        return "Counter Offer Pending";
       case "PENDING_ATTESTATION":
         return "Pending Attestation";
       case "CERT_CHECK":
@@ -2000,10 +2000,10 @@ function AdminApplicationsPageContent() {
       setSelectedTab("details");
       
       // Show success toast
-      toast.success(`Fresh offer sent to ${selectedApplication.user?.fullName}`);
+      toast.success(`Counter offer sent to ${selectedApplication.user?.fullName}`);
     } catch (error) {
-      console.error("Error submitting fresh offer:", error);
-      setError("Failed to submit fresh offer");
+      console.error("Error submitting counter offer:", error);
+      setError("Failed to submit counter offer");
     } finally {
       setProcessingFreshOffer(false);
     }
@@ -2025,7 +2025,7 @@ function AdminApplicationsPageContent() {
       !freshOfferProductId
     ) {
       setError(
-        "All fresh offer fields are required, including product selection and fee amounts"
+        "All counter offer fields are required, including product selection and fee amounts"
       );
       return;
     }
@@ -2046,8 +2046,8 @@ function AdminApplicationsPageContent() {
     const isManuallyAdjusted = Math.abs(stampingFeeValue - calculatedStampingFee) > 0.01;
 
     showConfirmModal({
-      title: "Submit Fresh Offer",
-      message: `Are you sure you want to submit a fresh offer to ${selectedApplication.user?.fullName}?`,
+      title: "Send Counter Offer",
+      message: `Are you sure you want to send a counter offer to ${selectedApplication.user?.fullName}?`,
       details: [
         `Loan Amount: RM ${loanAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         `Term: ${freshOfferTerm} months`,
@@ -2058,8 +2058,8 @@ function AdminApplicationsPageContent() {
         `Total Fees: RM ${totalFees.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         `Net Disbursement: RM ${parseFloat(freshOfferNetDisbursement).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
       ],
-      confirmText: "Submit Fresh Offer",
-      confirmColor: "blue",
+      confirmText: "Send Counter Offer",
+      confirmColor: "purple",
       onConfirm: () => {
         closeConfirmModal();
         processFreshOffer();
@@ -2697,7 +2697,7 @@ function AdminApplicationsPageContent() {
                 : "bg-gray-700/50 text-gray-300 border-gray-600/30 hover:bg-gray-700/70"
             }`}
           >
-            Fresh Offers (
+            Counter Offers (
             {
               applications.filter((app) => app.status === "PENDING_FRESH_OFFER")
                 .length
@@ -2851,15 +2851,15 @@ function AdminApplicationsPageContent() {
                     <InformationCircleIcon className="h-4 w-4 mr-1.5" />
                     Details
                   </div>
-                  {/* Documents tab - ADMIN only, highlighted for approval/collateral review */}
+                  {/* Documents tab - ADMIN only, highlighted for collateral review */}
                   {userRole === "ADMIN" && (
                     <div
                       className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
                         selectedTab === "documents"
-                          ? ["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status)
+                          ? selectedApplication.status === "COLLATERAL_REVIEW"
                             ? "border-b-2 border-amber-400 font-medium text-white bg-amber-500/10"
                             : "border-b-2 border-blue-400 font-medium text-white"
-                          : ["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status)
+                          : selectedApplication.status === "COLLATERAL_REVIEW"
                             ? "text-amber-300 hover:text-amber-200 bg-amber-500/5 hover:bg-amber-500/10"
                             : "text-gray-400 hover:text-gray-200"
                       }`}
@@ -2870,14 +2870,14 @@ function AdminApplicationsPageContent() {
                       {selectedApplication?.documents &&
                         selectedApplication.documents.length > 0 && (
                           <span className={`ml-1.5 text-xs font-medium px-1.5 py-0.5 rounded-full border ${
-                            ["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status)
+                            selectedApplication.status === "COLLATERAL_REVIEW"
                               ? "bg-amber-500/20 text-amber-200 border-amber-400/20"
                               : "bg-blue-500/20 text-blue-200 border-blue-400/20"
                           }`}>
                             {selectedApplication.documents.length}
                           </span>
                         )}
-                      {["PENDING_APPROVAL", "COLLATERAL_REVIEW"].includes(selectedApplication.status) && (
+                      {selectedApplication.status === "COLLATERAL_REVIEW" && (
                         <span className="ml-1.5 flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-amber-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
@@ -2920,6 +2920,20 @@ function AdminApplicationsPageContent() {
                         <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-purple-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
                       </span>
+                    </div>
+                  )}
+                  {/* Show Credit Report tab for PENDING_APPROVAL applications - ADMIN only */}
+                  {selectedApplication.status === "PENDING_APPROVAL" && userRole === "ADMIN" && (
+                    <div
+                      className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+                        selectedTab === "credit-report"
+                          ? "border-b-2 border-blue-400 font-medium text-white"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                      onClick={() => setSelectedTab("credit-report")}
+                    >
+                      <ShieldCheckIcon className="h-4 w-4 mr-1.5" />
+                      Credit Report
                     </div>
                   )}
                   {/* Show Approval tab for PENDING_APPROVAL applications - ACTION REQUIRED */}
@@ -4057,37 +4071,61 @@ function AdminApplicationsPageContent() {
 
                 {/* Approval Tab */}
                 {selectedTab === "approval" && (
-                  <div>
-                    {/* Credit Decision Section */}
-                    <div className="border border-amber-500/30 rounded-lg p-6 bg-amber-500/10 mb-6">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center">
+                  <div className="space-y-6">
+                    {/* Navigation Hint */}
+                    <div className="flex items-start gap-3 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
+                      <InformationCircleIcon className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-gray-300">
+                        <p className="mb-2">Before making a decision, please review:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => setSelectedTab("details")}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-colors border border-blue-500/30"
+                          >
+                            <UserCircleIcon className="h-4 w-4" />
+                            Details Tab
+                          </button>
+                          <button
+                            onClick={() => setSelectedTab("documents")}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg transition-colors border border-blue-500/30"
+                          >
+                            <FolderIcon className="h-4 w-4" />
+                            Documents Tab
+                          </button>
+                          {userRole === "ADMIN" && (
+                            <button
+                              onClick={() => setSelectedTab("credit-report")}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 rounded-lg transition-colors border border-cyan-500/30"
+                            >
+                              <ShieldCheckIcon className="h-4 w-4" />
+                              Credit Report
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Credit Decision Card */}
+                    <div className="border border-amber-500/30 rounded-xl p-6 bg-gradient-to-br from-amber-500/10 to-amber-600/5">
+                      <h4 className="text-lg font-semibold text-white mb-5 flex items-center">
                         <DocumentMagnifyingGlassIcon className="h-6 w-6 mr-2 text-amber-400" />
-                        Credit Decision Required
+                        Credit Decision
                       </h4>
 
                       {/* Application Summary */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-800/50 rounded-lg">
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Applicant
-                          </h5>
-                          <p className="text-white">
-                            {selectedApplication.user?.fullName}
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            {selectedApplication.user?.email}
-                          </p>
-                          
-                          {/* IC Number Section */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Applicant</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.fullName || "—"}</p>
+                          <p className="text-sm text-gray-400 mt-1">{selectedApplication.user?.email}</p>
+                          {/* IC Number with inline edit */}
                           <div className="mt-2 flex items-center gap-2">
+                            <span className="text-xs text-gray-500">IC:</span>
                             {!editingIcNumber ? (
                               <>
-                                <h5 className="text-sm text-white">
-                                  IC Number:
-                                </h5>
-								<p className="text-sm text-white">
-									{selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
-								</p>
+                                <span className="text-sm text-white font-mono">
+                                  {selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}
+                                </span>
                                 <button
                                   onClick={() => {
                                     setIcNumberValue(
@@ -4097,10 +4135,10 @@ function AdminApplicationsPageContent() {
                                     );
                                     setEditingIcNumber(true);
                                   }}
-                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                                  className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
                                   title="Edit IC Number"
                                 >
-                                  <PencilSquareIcon className="h-4 w-4" />
+                                  <PencilSquareIcon className="h-3.5 w-3.5" />
                                 </button>
                               </>
                             ) : (
@@ -4110,7 +4148,7 @@ function AdminApplicationsPageContent() {
                                   value={icNumberValue}
                                   onChange={(e) => setIcNumberValue(e.target.value)}
                                   placeholder="Enter IC number"
-                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500"
+                                  className="flex-1 px-2 py-1 text-sm bg-gray-700 text-white border border-gray-600 rounded focus:outline-none focus:border-blue-500 font-mono"
                                   disabled={updatingIcNumber}
                                 />
                                 <button
@@ -4121,7 +4159,7 @@ function AdminApplicationsPageContent() {
                                   }}
                                   disabled={updatingIcNumber || !icNumberValue.trim()}
                                   className="p-1 text-green-400 hover:text-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Save IC Number"
+                                  title="Save"
                                 >
                                   {updatingIcNumber ? (
                                     <ArrowPathIcon className="h-4 w-4 animate-spin" />
@@ -4144,52 +4182,32 @@ function AdminApplicationsPageContent() {
                             )}
                           </div>
                         </div>
-                        <div>
-                          <h5 className="text-sm font-medium text-gray-300 mb-2">
-                            Loan Details
-                          </h5>
-                          <p className="text-white">
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Loan Request</p>
+                          <p className="text-2xl font-bold text-amber-400">
                             {selectedApplication.amount
                               ? formatCurrency(selectedApplication.amount)
-                              : "Amount not set"}
+                              : "—"}
                           </p>
-                          <p className="text-sm text-gray-400">
+                          <p className="text-sm text-gray-400 mt-1">
                             {selectedApplication.term
-                              ? `${selectedApplication.term} months`
+                              ? `${selectedApplication.term} months • ${selectedApplication.product?.name || "Unknown Product"}`
                               : "Term not set"}
                           </p>
                         </div>
                       </div>
 
-                      {/* Credit Report Section - ADMIN only */}
-                      {userRole === "ADMIN" && (
-                        <CreditReportCard
-                          userId={selectedApplication.userId}
-                          applicationId={selectedApplication.id}
-                          userFullName={selectedApplication.user?.fullName || ""}
-                          userIcNumber={selectedApplication.user?.icNumber || selectedApplication.user?.idNumber}
-                          existingReport={creditReport}
-                          onReportFetched={(report) => {
-                            setCreditReport(report);
-                            // Refresh application to get updated history
-                            if (selectedApplication) {
-                              fetchApplications();
-                            }
-                          }}
-                        />
-                      )}
-
                       {/* Decision Notes */}
-                      <div className="mb-6">
+                      <div className="mb-5">
                         <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Decision Notes (Optional)
+                          Decision Notes <span className="text-gray-500 font-normal">(Optional)</span>
                         </label>
                         <textarea
                           value={decisionNotes}
                           onChange={(e) => setDecisionNotes(e.target.value)}
                           placeholder="Add notes about your decision..."
-                          className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                          rows={3}
+                          className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                          rows={2}
                         />
                       </div>
 
@@ -4199,80 +4217,75 @@ function AdminApplicationsPageContent() {
                           <div className="flex items-center">
                             <CheckCircleIcon className="h-6 w-6 text-blue-400 mr-3" />
                             <div>
-                              <p className="text-blue-200 font-medium">
-                                Loan Already Disbursed
-                              </p>
-                              <p className="text-blue-300/70 text-sm">
-                                This loan has been disbursed and cannot be
-                                modified.
-                              </p>
+                              <p className="text-blue-200 font-medium">Loan Already Disbursed</p>
+                              <p className="text-blue-300/70 text-sm">This loan has been disbursed and cannot be modified.</p>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="flex space-x-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <button
                             onClick={() => handleApprovalDecision("approve")}
                             disabled={processingDecision}
-                            className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-600/50 text-white font-medium rounded-lg transition-colors"
+                            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/30 disabled:shadow-none"
                           >
-                            <CheckCircleIcon className="h-5 w-5 mr-2" />
-                            {processingDecision
-                              ? "Processing..."
-                              : "Approve Application"}
+                            <CheckCircleIcon className="h-5 w-5" />
+                            {processingDecision ? "Processing..." : "Approve Application"}
                           </button>
                           <button
                             onClick={() => handleApprovalDecision("reject")}
                             disabled={processingDecision}
-                            className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-600/50 text-white font-medium rounded-lg transition-colors"
+                            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all"
                           >
-                            <XCircleIcon className="h-5 w-5 mr-2" />
-                            {processingDecision
-                              ? "Processing..."
-                              : "Reject Application"}
+                            <XCircleIcon className="h-5 w-5" />
+                            {processingDecision ? "Processing..." : "Reject Application"}
                           </button>
                         </div>
                       )}
 
-                      {/* Workflow Information */}
-                      <div className="mt-6 p-4 bg-blue-500/10 border border-blue-400/20 rounded-lg">
-                        <h5 className="text-sm font-medium text-blue-200 mb-2">
-                          Next Steps
-                        </h5>
-                        <ul className="text-xs text-blue-200 space-y-1">
-                          <li>
-                            • <strong>Approve:</strong> Application will move to
-                            PENDING_SIGNATURE status
-                          </li>
-                          <li>
-                            • <strong>Reject:</strong> Application will be
-                            marked as REJECTED and user will be notified
-                          </li>
-                          <li>
-                            • All decisions are logged in the audit trail with
-                            timestamps
-                          </li>
-                        </ul>
+                      {/* Workflow Info */}
+                      <div className="mt-5 flex items-start gap-2 text-xs text-gray-500">
+                        <InformationCircleIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <p>
+                          <strong className="text-green-400">Approve</strong> → Moves to signing • 
+                          <strong className="text-red-400 ml-1">Reject</strong> → Marks as rejected & notifies user
+                        </p>
                       </div>
+                    </div>
 
-                      {/* Fresh Offer Section */}
-                      <div className="mt-6 p-4 bg-purple-500/10 border border-purple-400/20 rounded-lg">
-                        <div className="flex items-center justify-between mb-4">
-                          <h5 className="text-sm font-medium text-purple-200">
-                            Fresh Offer Option
-                          </h5>
+                    {/* Counter Offer Section */}
+                    <div className="border border-purple-500/30 rounded-xl overflow-hidden">
+                      <div 
+                        className={`p-5 bg-gradient-to-br from-purple-500/10 to-purple-600/5 ${!showFreshOfferForm ? 'cursor-pointer hover:from-purple-500/15' : ''}`}
+                        onClick={() => !showFreshOfferForm && populateFreshOfferForm()}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-purple-500/20 rounded-lg">
+                              <ArrowsUpDownIcon className="h-5 w-5 text-purple-400" />
+                            </div>
+                            <div>
+                              <h5 className="text-base font-semibold text-white">Counter Offer</h5>
+                              <p className="text-xs text-gray-400 mt-0.5">Propose alternative loan terms to the applicant</p>
+                            </div>
+                          </div>
                           {!showFreshOfferForm && (
                             <button
-                              onClick={populateFreshOfferForm}
-                              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                populateFreshOfferForm();
+                              }}
+                              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-colors"
                             >
-                              Submit Fresh Offer
+                              Create Counter Offer
                             </button>
                           )}
                         </div>
+                      </div>
 
-                        {showFreshOfferForm && (
-                          <div className="space-y-4">
+                      {showFreshOfferForm && (
+                        <div className="p-5 pt-0 bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-t border-purple-500/20">
+                          <div className="space-y-5 mt-5">
                             {/* Product Selection */}
                             <div>
                               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -4280,16 +4293,13 @@ function AdminApplicationsPageContent() {
                               </label>
                               <select
                                 value={freshOfferProductId}
-                                onChange={(e) =>
-                                  setFreshOfferProductId(e.target.value)
-                                }
-                                className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                onChange={(e) => setFreshOfferProductId(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                               >
                                 <option value="">Select product</option>
                                 {products.map((product) => (
                                   <option key={product.id} value={product.id}>
-                                    {product.name} - {product.interestRate}%
-                                    interest
+                                    {product.name} - {product.interestRate}% interest
                                   </option>
                                 ))}
                               </select>
@@ -4304,11 +4314,9 @@ function AdminApplicationsPageContent() {
                                 <input
                                   type="number"
                                   value={freshOfferAmount}
-                                  onChange={(e) =>
-                                    setFreshOfferAmount(e.target.value)
-                                  }
+                                  onChange={(e) => setFreshOfferAmount(e.target.value)}
                                   placeholder="Enter amount"
-                                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                   step="0.01"
                                 />
                               </div>
@@ -4319,11 +4327,9 @@ function AdminApplicationsPageContent() {
                                 <input
                                   type="number"
                                   value={freshOfferTerm}
-                                  onChange={(e) =>
-                                    setFreshOfferTerm(e.target.value)
-                                  }
+                                  onChange={(e) => setFreshOfferTerm(e.target.value)}
                                   placeholder="Enter term"
-                                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                 />
                               </div>
                               <div>
@@ -4333,11 +4339,9 @@ function AdminApplicationsPageContent() {
                                 <input
                                   type="number"
                                   value={freshOfferInterestRate}
-                                  onChange={(e) =>
-                                    setFreshOfferInterestRate(e.target.value)
-                                  }
-                                  placeholder="Enter interest rate"
-                                  className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                  onChange={(e) => setFreshOfferInterestRate(e.target.value)}
+                                  placeholder="Enter rate"
+                                  className="w-full px-4 py-3 bg-gray-800/70 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                   step="0.01"
                                 />
                               </div>
@@ -4352,14 +4356,14 @@ function AdminApplicationsPageContent() {
                                 {!feeEditMode ? (
                                   <button
                                     onClick={handleEditFees}
-                                    className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded-md transition-colors"
                                   >
                                     Edit Fees
                                   </button>
                                 ) : (
                                   <button
                                     onClick={handleSaveFees}
-                                    className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
+                                    className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-500 text-white rounded-md transition-colors"
                                   >
                                     Save Fees
                                   </button>
@@ -4370,25 +4374,15 @@ function AdminApplicationsPageContent() {
                                   <label className="block text-sm font-medium text-gray-300 mb-1">
                                     Legal Fee (Fixed Amount - RM)
                                   </label>
-                                  {products.find(
-                                    (p) => p.id === freshOfferProductId
-                                  ) && (
+                                  {products.find((p) => p.id === freshOfferProductId) && (
                                     <p className="text-xs text-gray-400 mb-2">
-                                      Auto: RM
-                                      {
-                                        products.find(
-                                          (p) => p.id === freshOfferProductId
-                                        )?.legalFeeFixed
-                                      }{" "}
-                                      fixed
+                                      Auto: RM{products.find((p) => p.id === freshOfferProductId)?.legalFeeFixed} fixed
                                     </p>
                                   )}
                                   <input
                                     type="number"
                                     value={freshOfferLegalFeeFixed}
-                                    onChange={(e) =>
-                                      handleFeeChange("legalFixed", e.target.value)
-                                    }
+                                    onChange={(e) => handleFeeChange("legalFixed", e.target.value)}
                                     disabled={!feeEditMode}
                                     placeholder="Auto-calculated"
                                     className={`w-full px-3 py-2 border rounded-lg transition-colors ${
@@ -4403,29 +4397,18 @@ function AdminApplicationsPageContent() {
                                   <label className="block text-sm font-medium text-gray-300 mb-1">
                                     Stamping Fee (RM)
                                   </label>
-                                  {products.find(
-                                    (p) => p.id === freshOfferProductId
-                                  ) && (
+                                  {products.find((p) => p.id === freshOfferProductId) && (
                                     <p className="text-xs text-gray-400 mb-2">
-                                      Auto: {
-                                        products.find(
-                                          (p) => p.id === freshOfferProductId
-                                        )?.stampingFee
-                                      }% of loan amount (calculated)
+                                      Auto: {products.find((p) => p.id === freshOfferProductId)?.stampingFee}% of loan amount
                                     </p>
                                   )}
                                   <input
                                     type="number"
                                     value={freshOfferStampingFee}
-                                    onChange={(e) =>
-                                      handleFeeChange(
-                                        "stamping",
-                                        e.target.value
-                                      )
-                                    }
+                                    onChange={(e) => handleFeeChange("stamping", e.target.value)}
                                     disabled={!feeEditMode}
                                     placeholder="Auto-calculated"
-                                    className={`w-full px-3 py-2 border rounded-lg transition-colors step-0.01 ${
+                                    className={`w-full px-3 py-2 border rounded-lg transition-colors ${
                                       feeEditMode
                                         ? "bg-gray-800/50 border-gray-600 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         : "bg-gray-700/50 border-gray-600/50 text-gray-400 cursor-not-allowed"
@@ -4468,45 +4451,131 @@ function AdminApplicationsPageContent() {
 
                             <div>
                               <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Fresh Offer Notes (Optional)
+                                Notes <span className="text-gray-500 font-normal">(Optional)</span>
                               </label>
                               <textarea
                                 value={freshOfferNotes}
-                                onChange={(e) =>
-                                  setFreshOfferNotes(e.target.value)
-                                }
-                                placeholder="Add notes about the fresh offer..."
-                                className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                                rows={3}
+                                onChange={(e) => setFreshOfferNotes(e.target.value)}
+                                placeholder="Explain the reason for the counter offer..."
+                                className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                                rows={2}
                               />
                             </div>
 
-                            <div className="flex space-x-4">
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 pt-2">
                               <button
                                 onClick={handleFreshOfferSubmission}
                                 disabled={processingFreshOffer}
-                                className="flex items-center px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50 text-white font-medium rounded-lg transition-colors"
+                                className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 disabled:shadow-none"
                               >
-                                {processingFreshOffer
-                                  ? "Submitting..."
-                                  : "Submit Fresh Offer"}
+                                {processingFreshOffer ? (
+                                  <>
+                                    <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ArrowsUpDownIcon className="h-5 w-5" />
+                                    Send Counter Offer
+                                  </>
+                                )}
                               </button>
                               <button
                                 onClick={() => setShowFreshOfferForm(false)}
                                 disabled={processingFreshOffer}
-                                className="flex items-center px-6 py-3 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-600/50 text-white font-medium rounded-lg transition-colors"
+                                className="px-6 py-3.5 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-medium rounded-xl transition-colors"
                               >
                                 Cancel
                               </button>
                             </div>
                           </div>
-                        )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                        <p className="text-xs text-purple-200/70 mt-2">
-                          Submit a fresh offer with revised terms. The user will
-                          be notified and can accept or reject the new offer.
-                        </p>
+                {/* Credit Report Tab - ADMIN only */}
+                {selectedTab === "credit-report" && userRole === "ADMIN" && (
+                  <div className="space-y-6">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-cyan-500/20 rounded-lg">
+                          <ShieldCheckIcon className="h-6 w-6 text-cyan-400" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-white">Credit Report (CTOS)</h4>
+                          <p className="text-sm text-gray-400">
+                            View or fetch credit report for {selectedApplication.user?.fullName}
+                          </p>
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Applicant Summary */}
+                    <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Applicant</p>
+                          <p className="text-white font-medium">{selectedApplication.user?.fullName || "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">IC Number</p>
+                          <p className="text-white font-mono">{selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Loan Amount</p>
+                          <p className="text-white font-medium">
+                            {selectedApplication.amount ? formatCurrency(selectedApplication.amount) : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Credit Report Card */}
+                    <CreditReportCard
+                      userId={selectedApplication.userId}
+                      applicationId={selectedApplication.id}
+                      userFullName={selectedApplication.user?.fullName || ""}
+                      userIcNumber={selectedApplication.user?.icNumber || selectedApplication.user?.idNumber}
+                      existingReport={creditReport}
+                      onReportFetched={(report) => {
+                        setCreditReport(report);
+                        if (selectedApplication) {
+                          fetchApplications();
+                        }
+                      }}
+                      onRequestConfirmation={(onConfirm) => {
+                        showConfirmModal({
+                          title: "Request Fresh Credit Report",
+                          message: "Are you sure you want to request a fresh credit report from CTOS?",
+                          details: [
+                            `Applicant: ${selectedApplication.user?.fullName || "Unknown"}`,
+                            `IC Number: ${selectedApplication.user?.icNumber || selectedApplication.user?.idNumber || "Not set"}`,
+                            "",
+                            "⚠️ This will charge company credits.",
+                          ],
+                          confirmText: "Request Report",
+                          confirmColor: "blue",
+                          onConfirm: () => {
+                            closeConfirmModal();
+                            onConfirm();
+                          },
+                        });
+                      }}
+                    />
+
+                    {/* Back to Approval */}
+                    <div className="flex justify-center">
+                      <button
+                        onClick={() => setSelectedTab("approval")}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        <ArrowLeftIcon className="h-4 w-4" />
+                        Back to Approval Decision
+                      </button>
                     </div>
                   </div>
                 )}

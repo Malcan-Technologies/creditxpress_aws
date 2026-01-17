@@ -8,7 +8,7 @@ import {
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 
-export type ConfirmationModalColor = "green" | "red" | "blue" | "amber";
+export type ConfirmationModalColor = "green" | "red" | "blue" | "amber" | "purple";
 
 export interface ConfirmationModalProps {
   open: boolean;
@@ -68,6 +68,15 @@ export default function ConfirmationModal({
           detailsText: "text-amber-200",
           button: "bg-amber-600 hover:bg-amber-700 border-amber-500",
         };
+      case "purple":
+        return {
+          header: "bg-purple-500/20 border-purple-500/30",
+          iconBg: "bg-purple-500/20",
+          title: "text-purple-400",
+          detailsBg: "bg-purple-500/10 border-purple-500/20",
+          detailsText: "text-purple-200",
+          button: "bg-purple-600 hover:bg-purple-700 border-purple-500",
+        };
       case "blue":
       default:
         return {
@@ -89,6 +98,8 @@ export default function ConfirmationModal({
         return <XCircleIcon className="h-6 w-6 text-red-400" />;
       case "amber":
         return <ExclamationTriangleIcon className="h-6 w-6 text-amber-400" />;
+      case "purple":
+        return <InformationCircleIcon className="h-6 w-6 text-purple-400" />;
       case "blue":
       default:
         return <InformationCircleIcon className="h-6 w-6 text-blue-400" />;
@@ -103,6 +114,8 @@ export default function ConfirmationModal({
         return <XCircleIcon className="h-4 w-4 mr-1.5" />;
       case "amber":
         return <ExclamationTriangleIcon className="h-4 w-4 mr-1.5" />;
+      case "purple":
+        return <CheckCircleIcon className="h-4 w-4 mr-1.5" />;
       case "blue":
       default:
         return <CheckCircleIcon className="h-4 w-4 mr-1.5" />;

@@ -23,6 +23,7 @@ import receiptsRoutes from "./receipts";
 import earlySettlementRoutes from "./admin/early-settlement";
 import cronRoutes from "./admin/cron";
 import pdfLettersRoutes from "./admin/pdf-letters";
+import lampiranARoutes from "./admin/lampiran-a";
 import accessLogsRoutes from "./admin/access-logs";
 import documentLogsRoutes from "./admin/document-logs";
 import whatsappService from "../lib/whatsappService";
@@ -335,6 +336,7 @@ router.use("/receipts", receiptsRoutes);
 router.use("/early-settlement", earlySettlementRoutes);
 router.use("/cron", cronRoutes);
 router.use("/loans", pdfLettersRoutes);
+router.use("/loans", lampiranARoutes);
 router.use("/access-logs", accessLogsRoutes);
 router.use("/document-logs", documentLogsRoutes);
 

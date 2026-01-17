@@ -11,6 +11,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../lib/authUtils";
 import { GaugeComponent } from "react-gauge-component";
+import { toast } from "sonner";
 
 interface CreditReport {
 	id: string;
@@ -47,6 +48,7 @@ interface CreditReportCardProps {
 	userIcNumber?: string;
 	existingReport?: CreditReport | null;
 	onReportFetched?: (report: CreditReport) => void;
+	onRequestConfirmation?: (onConfirm: () => void) => void;
 }
 
 export default function CreditReportCard({
@@ -56,11 +58,11 @@ export default function CreditReportCard({
 	userIcNumber,
 	existingReport,
 	onReportFetched,
+	onRequestConfirmation,
 }: CreditReportCardProps) {
 	const [loadingCache, setLoadingCache] = useState(false);
 	const [loadingRequest, setLoadingRequest] = useState(false);
 	const [report, setReport] = useState<CreditReport | null>(existingReport || null);
-	const [error, setError] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState(false);
 	const [autoLoaded, setAutoLoaded] = useState(false);
 	const [requestStatus, setRequestStatus] = useState<string | null>(null);
@@ -69,7 +71,6 @@ export default function CreditReportCard({
 	// Auto-load cached report on mount or when userId/applicationId changes
 	useEffect(() => {
 		setReport(existingReport || null);
-		setError(null);
 		setExpanded(false);
 		if (existingReport) {
 			setRequestStatus(existingReport.requestStatus || null);
@@ -117,10 +118,9 @@ export default function CreditReportCard({
 		// Handle 404 as expected case (no cached report) - stay silent
 		if (err?.response?.status === 404 || err?.status === 404) {
 			setReport(null);
-			setError(null);
 		} else {
 			// Only show error for actual failures (not 404)
-			setError(
+			toast.error(
 				err instanceof Error
 					? err.message
 					: "Error loading cached report"
@@ -133,95 +133,99 @@ export default function CreditReportCard({
 	};
 
 	const handleReloadReport = async () => {
-		
 		setLoadingCache(true);
-			setError(null);
 
-			try {
-				const result = await fetchWithAdminTokenRefresh<{
-					success: boolean;
-					data: CreditReport;
+		try {
+			const result = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data: CreditReport;
 			}>(`/api/admin/credit-reports/cache/${userId}`, {
 				method: "GET",
-				});
+			});
 
-				if (result.success && result.data) {
-					setReport(result.data);
+			if (result.success && result.data) {
+				setReport(result.data);
 				setRequestStatus(result.data.requestStatus || null);
 				if (onReportFetched) {
 					onReportFetched(result.data);
 				}
-				} else {
-				setError("No cached report available for this user");
+				toast.success("Credit report reloaded successfully");
+			} else {
+				toast.info("No cached report available for this user");
 			}
 		} catch (err: any) {
 			console.error("[CTOS FRONTEND] ✗ Error reloading credit report:", err);
 			// Handle 404 as expected case (no cached report)
 			if (err?.response?.status === 404 || err?.status === 404) {
-				setError("No cached report available for this user");
+				toast.info("No cached report available for this user");
 			} else {
-				setError(
+				toast.error(
 					err instanceof Error
 						? err.message
 						: "Failed to reload report"
 				);
 			}
-			} finally {
+		} finally {
 			setLoadingCache(false);
-			}
+		}
 	};
 			
-	const handleRequestFreshReport = async () => {
-		if (!userIcNumber) {
-			setError("IC number is required to request credit report");
-				return;
-			}
+	const executeRequestFreshReport = async () => {
+		setLoadingRequest(true);
 
-		// Show confirmation dialog
-		const confirmMessage = `Are you sure you want to request a fresh credit report from CTOS?\n\nThis will charge company credits.`;
-
-		if (!window.confirm(confirmMessage)) {
-					return;
-				}
-
-			setLoadingRequest(true);
-			setError(null);
-
-			try {
-				const result = await fetchWithAdminTokenRefresh<{
-					success: boolean;
-					data: CreditReport;
+		try {
+			const result = await fetchWithAdminTokenRefresh<{
+				success: boolean;
+				data: CreditReport;
 			}>("/api/admin/credit-reports/request-and-confirm", {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						applicationId,
-						userId,
-						icNumber: userIcNumber,
-						fullName: userFullName,
-					}),
-				});
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					applicationId,
+					userId,
+					icNumber: userIcNumber,
+					fullName: userFullName,
+				}),
+			});
 
-				if (result.success && result.data) {
-					setReport(result.data);
-					setRequestStatus("COMPLETED");
-					if (onReportFetched) {
-						onReportFetched(result.data);
-					}
-				} else {
-					setError("Failed to request credit report");
+			if (result.success && result.data) {
+				setReport(result.data);
+				setRequestStatus("COMPLETED");
+				if (onReportFetched) {
+					onReportFetched(result.data);
 				}
-			} catch (err) {
-				console.error("Error requesting credit report:", err);
-				setError(
-					err instanceof Error
-						? err.message
-						: "Failed to request credit report"
-				);
-			} finally {
-				setLoadingRequest(false);
+				toast.success("Fresh credit report requested successfully");
+			} else {
+				toast.error("Failed to request credit report");
+			}
+		} catch (err) {
+			console.error("Error requesting credit report:", err);
+			toast.error(
+				err instanceof Error
+					? err.message
+					: "Failed to request credit report"
+			);
+		} finally {
+			setLoadingRequest(false);
+		}
+	};
+
+	const handleRequestFreshReport = () => {
+		if (!userIcNumber) {
+			toast.error("IC number is required to request credit report");
+			return;
+		}
+
+		// Use callback if provided, otherwise use window.confirm as fallback
+		if (onRequestConfirmation) {
+			onRequestConfirmation(executeRequestFreshReport);
+		} else {
+			const confirmMessage = `Are you sure you want to request a fresh credit report from CTOS?\n\nThis will charge company credits.`;
+			if (window.confirm(confirmMessage)) {
+				executeRequestFreshReport();
+			}
 		}
 	};
 
@@ -356,16 +360,6 @@ export default function CreditReportCard({
 				</div>
 			</div>
 
-			{/* Error/Info Message */}
-			{error && (
-				<div className={`mb-4 p-3 rounded-lg text-sm ${
-					error.includes("No cached report available")
-						? "bg-blue-500/20 border border-blue-400/20 text-blue-200"
-						: "bg-red-500/20 border border-red-400/20 text-red-200"
-				}`}>
-					{error}
-				</div>
-			)}
 
 			{/* Report Display */}
 			{report && (
@@ -1665,7 +1659,7 @@ export default function CreditReportCard({
 												document.body.removeChild(a);
 											} catch (error) {
 												console.error("Error downloading PDF:", error);
-												setError(error instanceof Error ? error.message : "Failed to download PDF report");
+												toast.error(error instanceof Error ? error.message : "Failed to download PDF report");
 											}
 										}}
 										className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-500/20 to-purple-600/20 text-purple-200 rounded-xl border border-purple-400/30 hover:from-purple-500/30 hover:to-purple-600/30 hover:shadow-lg transition-all font-medium shadow-md"

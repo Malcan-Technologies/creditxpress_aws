@@ -30,6 +30,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { fetchWithAdminTokenRefresh } from "../../../lib/authUtils";
 import { toast } from "sonner";
+import CreditReportCard from "../../components/CreditReportCard";
+import ConfirmationModal, { ConfirmationModalColor } from "../../../components/ConfirmationModal";
 
 interface LoanRepayment {
 	id: string;
@@ -389,6 +391,43 @@ function ActiveLoansContent() {
 	
 	// System-wide late fee grace period setting
 	const [lateFeeGraceDays, setLateFeeGraceDays] = useState<number>(3);
+
+	// Credit report state
+	const [creditReport, setCreditReport] = useState<any | null>(null);
+
+	// Confirmation modal state
+	const [confirmModal, setConfirmModal] = useState<{
+		open: boolean;
+		title: string;
+		message: string;
+		details?: string[];
+		confirmText: string;
+		confirmColor: ConfirmationModalColor;
+		onConfirm: () => void;
+	}>({
+		open: false,
+		title: "",
+		message: "",
+		details: [],
+		confirmText: "Confirm",
+		confirmColor: "blue",
+		onConfirm: () => {},
+	});
+
+	const showConfirmModal = (config: {
+		title: string;
+		message: string;
+		details?: string[];
+		confirmText: string;
+		confirmColor: ConfirmationModalColor;
+		onConfirm: () => void;
+	}) => {
+		setConfirmModal({ ...config, open: true });
+	};
+
+	const closeConfirmModal = () => {
+		setConfirmModal((prev) => ({ ...prev, open: false }));
+	};
 
 	useEffect(() => {
 		const fetchUserRole = async () => {
@@ -1520,6 +1559,52 @@ function ActiveLoansContent() {
 		} catch (error) {
 			console.error("❌ Error downloading stamp certificate:", error);
 			toast.error(error instanceof Error ? error.message : "Failed to download stamp certificate");
+		}
+	};
+
+	const downloadLampiranA = async (loanId: string) => {
+		try {
+			toast.info("Generating Lampiran A...");
+			const token = localStorage.getItem("adminToken");
+			const response = await fetch(
+				`/api/admin/loans/${loanId}/lampiran-a`,
+				{
+					method: 'GET',
+					headers: {
+						"Authorization": `Bearer ${token}`,
+					},
+				}
+			);
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+			}
+
+			const blob = await response.blob();
+			const url = window.URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			
+			// Extract filename from Content-Disposition header or use default
+			const contentDisposition = response.headers.get('Content-Disposition');
+			let filename = `Lampiran-A-${loanId.substring(0, 8)}.pdf`;
+			if (contentDisposition) {
+				const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+				if (filenameMatch) {
+					filename = filenameMatch[1];
+				}
+			}
+			
+			link.download = filename;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			window.URL.revokeObjectURL(url);
+			toast.success("Lampiran A downloaded successfully");
+		} catch (error) {
+			console.error('Error downloading Lampiran A:', error);
+			toast.error(`Failed to download Lampiran A: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -3082,6 +3167,15 @@ function ActiveLoansContent() {
 											)}
 											Download CSV
 										</button>
+										{/* Lampiran A - Compliance Document */}
+										<button
+											onClick={() => downloadLampiranA(selectedLoan.id)}
+											className="flex items-center px-3 py-1.5 bg-indigo-500/20 text-indigo-200 rounded-lg border border-indigo-400/20 hover:bg-indigo-500/30 transition-colors text-xs"
+											title="Download Lampiran A (Borrower Account Ledger) - Compliance document under Moneylenders Act 1951"
+										>
+											<ClipboardDocumentCheckIcon className="h-3 w-3 mr-1" />
+											Lampiran A
+										</button>
 									</div>
 								</div>
 							</div>
@@ -3147,6 +3241,20 @@ function ActiveLoansContent() {
 										<FolderIcon className="h-4 w-4 mr-1.5" />
 										Documents
 									</div>
+									{/* Credit Report tab - ADMIN only */}
+									{userRole === "ADMIN" && (
+										<div
+											className={`px-4 py-2 cursor-pointer transition-colors flex items-center ${
+												selectedTab === "credit-report"
+													? "border-b-2 border-blue-400 font-medium text-white"
+													: "text-gray-400 hover:text-gray-200"
+											}`}
+											onClick={() => setSelectedTab("credit-report")}
+										>
+											<DocumentCheckIcon className="h-4 w-4 mr-1.5" />
+											Credit Report
+										</div>
+									)}
 									{/* Only show Default Letters tab for loans that need default-related letters */}
 									{(() => {
 										// Show tab for loans that are Late, Default Risk, or Defaulted
@@ -6247,6 +6355,75 @@ function ActiveLoansContent() {
 										})()}
 									</div>
 								)}
+
+								{/* Credit Report Tab */}
+								{selectedTab === "credit-report" && userRole === "ADMIN" && (
+									<div className="space-y-6">
+										{/* User Summary Card */}
+										<div className="border border-gray-700/50 rounded-lg p-4 bg-gray-800/50">
+											<h4 className="text-lg font-medium text-white mb-4 flex items-center">
+												<UserCircleIcon className="h-5 w-5 mr-2 text-blue-400" />
+												Borrower Information
+											</h4>
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+												<div>
+													<p className="text-gray-400 text-xs">Full Name</p>
+													<p className="text-white font-medium">
+														{selectedLoan.user?.fullName || "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-gray-400 text-xs">IC Number</p>
+													<p className="text-white font-medium">
+														{selectedLoan.user?.icNumber || selectedLoan.user?.idNumber || "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-gray-400 text-xs">Phone</p>
+													<p className="text-white font-medium">
+														{selectedLoan.user?.phoneNumber || "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-gray-400 text-xs">Loan Amount</p>
+													<p className="text-white font-medium">
+														{formatCurrency(selectedLoan.principalAmount)}
+													</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Credit Report Card */}
+										<CreditReportCard
+											userId={selectedLoan.userId}
+											applicationId={selectedLoan.applicationId}
+											userFullName={selectedLoan.user?.fullName || ""}
+											userIcNumber={selectedLoan.user?.icNumber || selectedLoan.user?.idNumber}
+											existingReport={creditReport}
+											onReportFetched={(report) => {
+												setCreditReport(report);
+											}}
+											onRequestConfirmation={(onConfirm) => {
+												showConfirmModal({
+													title: "Request Fresh Credit Report",
+													message: "Are you sure you want to request a fresh credit report from CTOS?",
+													details: [
+														`Borrower: ${selectedLoan.user?.fullName || "Unknown"}`,
+														`IC Number: ${selectedLoan.user?.icNumber || selectedLoan.user?.idNumber || "Not set"}`,
+														"",
+														"⚠️ This will charge company credits.",
+													],
+													confirmText: "Request Report",
+													confirmColor: "blue",
+													onConfirm: () => {
+														closeConfirmModal();
+														onConfirm();
+													},
+												});
+											}}
+										/>
+									</div>
+								)}
 							</div>
 						</div>
 					) : (
@@ -7047,6 +7224,18 @@ function ActiveLoansContent() {
 					)}
 				</div>
 			)}
+
+			{/* Confirmation Modal */}
+			<ConfirmationModal
+				open={confirmModal.open}
+				onClose={closeConfirmModal}
+				onConfirm={confirmModal.onConfirm}
+				title={confirmModal.title}
+				message={confirmModal.message}
+				details={confirmModal.details}
+				confirmText={confirmModal.confirmText}
+				confirmColor={confirmModal.confirmColor}
+			/>
 		</AdminLayout>
 	);
 }
