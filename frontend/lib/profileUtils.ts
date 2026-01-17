@@ -8,6 +8,9 @@ interface UserProfile {
 	state: string | null;
 	zipCode: string | null;
 	icNumber?: string | null;
+	race?: string | null;
+	gender?: string | null;
+	occupation?: string | null;
 	emergencyContactName?: string | null;
 	emergencyContactPhone?: string | null;
 	emergencyContactRelationship?: string | null;
@@ -31,7 +34,7 @@ export function checkProfileCompleteness(profile: UserProfile | null): ProfileCo
 	const sections = [
 		{
 			name: "Personal Information",
-			fields: ["fullName", "email", "phoneNumber", "dateOfBirth"],
+			fields: ["fullName", "email", "phoneNumber", "dateOfBirth", "race", "gender"],
 			required: true
 		},
 		{
@@ -51,7 +54,7 @@ export function checkProfileCompleteness(profile: UserProfile | null): ProfileCo
 		},
 		{
 			name: "Employment",
-			fields: ["employmentStatus", "monthlyIncome"],
+			fields: ["employmentStatus", "monthlyIncome", "occupation"],
 			required: true,
 			conditionalFields: [
 				{

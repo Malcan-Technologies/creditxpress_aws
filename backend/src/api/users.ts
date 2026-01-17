@@ -127,23 +127,27 @@ router.get(
 					createdAt: true,
 					updatedAt: true,
 					role: true,
-					// IC/Passport Information
-					icNumber: true,
-					icType: true,
-					// Education Information
-					educationLevel: true,
-					// Emergency Contact Information
-					emergencyContactName: true,
-					emergencyContactPhone: true,
-					emergencyContactRelationship: true,
-				},
-			});
+				// IC/Passport Information
+				icNumber: true,
+				icType: true,
+				// Education Information
+				educationLevel: true,
+				// Demographics
+				race: true,
+				gender: true,
+				occupation: true,
+				// Emergency Contact Information
+				emergencyContactName: true,
+				emergencyContactPhone: true,
+				emergencyContactRelationship: true,
+			},
+		});
 
-			if (!user) {
-				return res.status(404).json({ message: "User not found" });
-			}
+		if (!user) {
+			return res.status(404).json({ message: "User not found" });
+		}
 
-			return res.json(user);
+		return res.json(user);
 		} catch (error) {
 			console.error("Error fetching user data:", error);
 			return res.status(500).json({ message: "Internal server error" });
@@ -289,20 +293,24 @@ router.put(
 					lastLoginAt: true,
 					createdAt: true,
 					updatedAt: true,
-					role: true,
-					// IC/Passport Information
-					icNumber: true,
-					icType: true,
-					// Education Information
-					educationLevel: true,
-					// Emergency Contact Information
-					emergencyContactName: true,
-					emergencyContactPhone: true,
-					emergencyContactRelationship: true,
-				},
-			});
+				role: true,
+				// IC/Passport Information
+				icNumber: true,
+				icType: true,
+				// Education Information
+				educationLevel: true,
+				// Demographics
+				race: true,
+				gender: true,
+				occupation: true,
+				// Emergency Contact Information
+				emergencyContactName: true,
+				emergencyContactPhone: true,
+				emergencyContactRelationship: true,
+			},
+		});
 
-			return res.json(updatedUser);
+		return res.json(updatedUser);
 		} catch (error) {
 			console.error("Error updating user data:", error);
 			console.error("Error details:", {

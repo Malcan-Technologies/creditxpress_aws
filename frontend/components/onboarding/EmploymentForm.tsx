@@ -24,6 +24,9 @@ const employmentStatuses = [
 ] as const;
 
 const validationSchema = Yup.object({
+	occupation: Yup.string()
+		.required("Occupation is required")
+		.min(2, "Occupation must be at least 2 characters"),
 	employmentStatus: Yup.string()
 		.oneOf(employmentStatuses)
 		.required("Employment status is required"),
@@ -74,6 +77,7 @@ export default function EmploymentForm({
 }: EmploymentFormProps) {
 	const formik = useFormik<EmploymentInfo>({
 		initialValues: {
+			occupation: initialValues.occupation || "",
 			employmentStatus: initialValues.employmentStatus || "",
 			employerName: initialValues.employerName || "",
 			monthlyIncome: initialValues.monthlyIncome || "",
@@ -119,7 +123,7 @@ export default function EmploymentForm({
 		formik.values.employmentStatus === "Self-Employed";
 
 	// Check if mandatory fields are completed
-	const isFormValid = formik.values.employmentStatus !== "";
+	const isFormValid = formik.values.occupation.trim() !== "" && formik.values.employmentStatus !== "";
 
 	return (
 		<div className="bg-white rounded-xl lg:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -140,6 +144,37 @@ export default function EmploymentForm({
 				</div>
 
 				<form onSubmit={formik.handleSubmit} className="space-y-6">
+					{/* Occupation */}
+					<div>
+						<label htmlFor="occupation" className="block text-sm lg:text-base font-medium text-gray-700 mb-2">
+							Occupation <span className="text-red-500">*</span>
+						</label>
+						<div className="relative">
+							<div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+								<BriefcaseIcon className="h-5 w-5 text-gray-400" />
+							</div>
+							<input
+								id="occupation"
+								name="occupation"
+								type="text"
+								value={formik.values.occupation}
+								onChange={formik.handleChange}
+								onBlur={formik.handleBlur}
+								placeholder="e.g. Manager, Engineer, Doctor"
+								className={`block w-full pl-10 pr-3 py-3 lg:py-4 border rounded-xl lg:rounded-2xl text-gray-900 bg-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-primary focus:border-transparent transition-all duration-200 text-sm lg:text-base ${
+									formik.touched.occupation && formik.errors.occupation
+										? "border-red-300 focus:ring-red-500"
+										: "border-gray-300 hover:border-gray-400"
+								}`}
+							/>
+						</div>
+						{formik.touched.occupation && formik.errors.occupation && (
+							<p className="mt-2 text-sm text-red-600 font-medium">
+								{formik.errors.occupation}
+							</p>
+						)}
+					</div>
+
 					{/* Employment Status */}
 					<div>
 						<label className="block text-sm lg:text-base font-medium text-gray-700 mb-4">

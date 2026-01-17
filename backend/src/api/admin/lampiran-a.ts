@@ -160,6 +160,10 @@ router.get("/:loanId/lampiran-a", authenticateToken, requireAdmin, async (req: A
             state: true,
             zipCode: true,
             country: true,
+            // Demographics
+            race: true,
+            gender: true,
+            occupation: true,
           },
         },
         application: {
@@ -328,6 +332,10 @@ router.get("/:loanId/lampiran-a", authenticateToken, requireAdmin, async (req: A
         monthlyIncome: loan.user.monthlyIncome || undefined,
         employerName: loan.user.employerName || undefined,
         address: formatAddress(loan.user),
+        // Demographics
+        race: loan.user.race || undefined,
+        gender: loan.user.gender || undefined,
+        occupation: loan.user.occupation || undefined,
       },
       loan: {
         disbursedAt: loan.disbursedAt?.toISOString() || loan.createdAt.toISOString(),

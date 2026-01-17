@@ -21,8 +21,6 @@ const styles = StyleSheet.create({
   // Header section
   header: {
     marginBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#000000',
     paddingBottom: 10,
   },
   headerTitle: {
@@ -215,32 +213,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 6,
   },
-  companyFooter: {
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  companyFooterText: {
-    fontSize: 6,
-    color: '#999999',
-    textAlign: 'center',
-    marginBottom: 1,
-  },
-  legendSection: {
-    marginTop: 10,
-    padding: 8,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  legendTitle: {
-    fontSize: 8,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  legendItem: {
-    fontSize: 7,
-    marginBottom: 2,
-  },
 });
 
 // Interfaces for the data structure
@@ -253,6 +225,10 @@ export interface LampiranABorrower {
   monthlyIncome?: string;
   employerName?: string;
   address: string;
+  // Demographics
+  race?: string;
+  gender?: string;
+  occupation?: string;
 }
 
 export interface LampiranALoan {
@@ -315,31 +291,45 @@ const formatDate = (dateString: string): string => {
 };
 
 /**
- * Translate employment status to Malay
+ * Get Pekerjaan (Occupation/Job title) - e.g., Manager, Salesman
+ * If not provided, return "Tiada Maklumat"
  */
-const translateEmploymentStatus = (employmentStatus?: string): string => {
-  if (!employmentStatus) return '-';
+const getPekerjaan = (occupation?: string): string => {
+  return occupation || 'Tiada Maklumat';
+};
+
+/**
+ * Get Bangsa (Race) for Lampiran A
+ */
+const getBangsa = (race?: string): string => {
+  if (!race) return '-';
+  const r = race.toUpperCase();
+  if (r.includes('MALAY') || r === 'MELAYU') return 'Melayu';
+  if (r.includes('CHINESE') || r === 'CINA') return 'Cina';
+  if (r.includes('INDIAN') || r === 'INDIA') return 'India';
+  if (r.includes('SABAH') || r.includes('SARAWAK') || r.includes('BUMIPUTRA') || r.includes('KADAZAN') || r.includes('IBAN') || r.includes('BIDAYUH')) return 'Bumiputra (Sabah/Sarawak)';
+  if (r.includes('OTHER') || r.includes('LAIN')) return 'Lain-lain';
+  return race; // Return as-is if already in BM or unknown
+};
+
+/**
+ * Get Majikan (Employer type) for Lampiran A
+ * Valid values: Kerajaan, Swasta, Berniaga, Kerja Sendiri, Tidak Bekerja
+ */
+const getMajikan = (employmentStatus?: string): string => {
+  if (!employmentStatus) return 'Tiada Maklumat';
   const status = employmentStatus.toUpperCase();
+  // Check UNEMPLOYED first before EMPLOYED (since UNEMPLOYED contains EMPLOYED)
+  // Student, Retired, Unemployed, Not Working all fall under Tidak Bekerja
+  if (status.includes('UNEMPLOYED') || status.includes('NOT WORKING') || status.includes('TIDAK BEKERJA') || 
+      status.includes('STUDENT') || status.includes('PELAJAR') || status.includes('RETIRED') || status.includes('PENCEN')) {
+    return 'Tidak Bekerja';
+  }
   if (status.includes('GOVERNMENT') || status.includes('KERAJAAN')) return 'Kerajaan';
   if (status.includes('PRIVATE') || status.includes('SWASTA') || status.includes('EMPLOYED')) return 'Swasta';
   if (status.includes('BUSINESS') || status.includes('BERNIAGA')) return 'Berniaga';
-  if (status.includes('SELF') || status.includes('FREELANCE') || status.includes('KERJA SENDIRI')) return 'Kerja Sendiri';
-  if (status.includes('UNEMPLOYED') || status.includes('TIDAK BEKERJA') || status.includes('NOT WORKING')) return 'Tidak Bekerja';
-  if (status.includes('RETIRED') || status.includes('PENCEN')) return 'Pencen';
-  if (status.includes('STUDENT') || status.includes('PELAJAR')) return 'Pelajar';
-  // Default to the original value if no match
-  return employmentStatus;
-};
-
-const getEmployerType = (employmentStatus?: string): string => {
-  if (!employmentStatus) return '-';
-  const status = employmentStatus.toUpperCase();
-  if (status.includes('GOVERNMENT') || status.includes('KERAJAAN')) return 'Kerajaan';
-  if (status.includes('PRIVATE') || status.includes('SWASTA') || status.includes('EMPLOYED')) return 'Swasta';
-  if (status.includes('BUSINESS') || status.includes('BERNIAGA') || status.includes('SELF')) return 'Berniaga';
-  if (status.includes('FREELANCE') || status.includes('KERJA SENDIRI')) return 'Kerja Sendiri';
-  if (status.includes('UNEMPLOYED') || status.includes('TIDAK BEKERJA') || status.includes('NOT WORKING')) return 'Tidak Bekerja';
-  return 'Swasta';
+  if (status.includes('SELF') || status.includes('FREELANCE') || status.includes('SENDIRI')) return 'Kerja Sendiri';
+  return 'Tiada Maklumat';
 };
 
 const getStatusNote = (status: number): string => {
@@ -392,14 +382,14 @@ const LampiranADocument: React.FC<{ data: LampiranAData }> = ({ data }) => {
             <Text style={styles.borrowerLabel}></Text>
             <View style={styles.borrowerSubRow}>
               <Text style={styles.borrowerSubLabel}>Bangsa:</Text>
-              <Text style={styles.borrowerSubValue}>{data.borrower.nationality || '-'}</Text>
+              <Text style={styles.borrowerSubValue}>{getBangsa(data.borrower.race) || data.borrower.nationality || '-'}</Text>
             </View>
           </View>
           <View style={styles.borrowerRow}>
             <Text style={styles.borrowerLabel}></Text>
             <View style={styles.borrowerSubRow}>
               <Text style={styles.borrowerSubLabel}>Pekerjaan:</Text>
-              <Text style={styles.borrowerSubValue}>{translateEmploymentStatus(data.borrower.employmentStatus)}</Text>
+              <Text style={styles.borrowerSubValue}>{getPekerjaan(data.borrower.occupation)}</Text>
             </View>
           </View>
           <View style={styles.borrowerRow}>
@@ -416,7 +406,7 @@ const LampiranADocument: React.FC<{ data: LampiranAData }> = ({ data }) => {
             <View style={styles.borrowerSubRow}>
               <Text style={styles.borrowerSubLabel}>Majikan:</Text>
               <Text style={styles.borrowerSubValue}>
-                {data.borrower.employerName || getEmployerType(data.borrower.employmentStatus)}
+                {getMajikan(data.borrower.employmentStatus)}
               </Text>
             </View>
           </View>
@@ -475,14 +465,20 @@ const LampiranADocument: React.FC<{ data: LampiranAData }> = ({ data }) => {
           <Text style={styles.sectionNumber}>3. </Text>BUTIRAN BAYARAN BALIK
         </Text>
         <View style={styles.repaymentTable}>
-          {/* Header row */}
+          {/* Header row with Catatan legend embedded in header */}
           <View style={styles.repaymentHeaderRow}>
             <Text style={[styles.repaymentHeaderCell, styles.repayColDate]}>Tarikh</Text>
             <Text style={[styles.repaymentHeaderCell, styles.repayColTotal]}>Jumlah Besar (RM)</Text>
             <Text style={[styles.repaymentHeaderCell, styles.repayColPayment]}>Bayaran Balik Pinjaman (RM)</Text>
             <Text style={[styles.repaymentHeaderCell, styles.repayColBalance]}>Baki Pinjaman (RM)</Text>
             <Text style={[styles.repaymentHeaderCell, styles.repayColReceipt]}>No. Resit</Text>
-            <Text style={[styles.repaymentHeaderCellLast, styles.repayColNotes]}>Catatan</Text>
+            <View style={[styles.repaymentHeaderCellLast, styles.repayColNotes, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+              <Text style={{ fontWeight: 'bold', fontSize: 7, marginBottom: 2 }}>Catatan:</Text>
+              <Text style={{ fontSize: 6 }}>1. Pinjaman Selesai</Text>
+              <Text style={{ fontSize: 6 }}>2. Pinjaman Semasa</Text>
+              <Text style={{ fontSize: 6 }}>3. Dalam Proses Dapat Balik</Text>
+              <Text style={{ fontSize: 6 }}>4. Dalam Tindakan Mahkamah</Text>
+            </View>
           </View>
           {/* Data rows */}
           {data.repayments.length > 0 ? (
@@ -511,31 +507,11 @@ const LampiranADocument: React.FC<{ data: LampiranAData }> = ({ data }) => {
           )}
         </View>
 
-        {/* Legend */}
-        <View style={styles.legendSection}>
-          <Text style={styles.legendTitle}>Catatan:</Text>
-          <Text style={styles.legendItem}>1. Pinjaman Selesai</Text>
-          <Text style={styles.legendItem}>2. Pinjaman Semasa</Text>
-          <Text style={styles.legendItem}>3. Dalam Proses Dapat Balik</Text>
-          <Text style={styles.legendItem}>4. Dalam Tindakan Mahkamah</Text>
-        </View>
-
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             Dokumen ini dijana secara automatik pada {formatDate(data.generatedAt)} untuk tujuan pematuhan Akta Pemberi Pinjam Wang 1951 [Subseksyen 18(1)]
           </Text>
-          <View style={styles.companyFooter}>
-            <Text style={styles.companyFooterText}>{data.company.name}</Text>
-            <Text style={styles.companyFooterText}>{data.company.address}</Text>
-            {(data.company.regNo || data.company.licenseNo) && (
-              <Text style={styles.companyFooterText}>
-                {data.company.regNo && `No. Pendaftaran: ${data.company.regNo}`}
-                {data.company.regNo && data.company.licenseNo && ' | '}
-                {data.company.licenseNo && `No. Lesen: ${data.company.licenseNo}`}
-              </Text>
-            )}
-          </View>
         </View>
       </Page>
     </Document>

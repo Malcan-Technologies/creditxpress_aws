@@ -68,6 +68,10 @@ interface UserProfile {
 	icType?: string | null;
 	// Education Information
 	educationLevel?: string | null;
+	// Demographics
+	race?: string | null;
+	gender?: string | null;
+	occupation?: string | null;
 	// Emergency Contact Information
 	emergencyContactName?: string | null;
 	emergencyContactPhone?: string | null;
@@ -843,64 +847,90 @@ export default function ProfilePage() {
 									</div>
 								)}
 
-								{/* Personal Information Display */}
-								<div>
-									<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Personal Information</h4>
-									<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-											<div className="flex items-center space-x-3">
-												<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-												<div className="min-w-0">
-													<label className="block text-sm font-medium text-gray-500 font-body">
-														Full Name
-													</label>
-													<p className="mt-1 text-base text-gray-700 font-body truncate">
-														{profile?.fullName || "Not provided"}
-													</p>
-												</div>
+							{/* Personal Information Display */}
+							<div>
+								<h4 className="text-base font-semibold text-gray-700 mb-4 font-heading">Personal Information</h4>
+								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+										<div className="flex items-center space-x-3">
+											<IdentificationIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+											<div className="min-w-0">
+												<label className="block text-sm font-medium text-gray-500 font-body">
+													Full Name
+												</label>
+												<p className="mt-1 text-base text-gray-700 font-body truncate">
+													{profile?.fullName || "Not provided"}
+												</p>
 											</div>
 										</div>
-										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-											<div className="flex items-center space-x-3">
-												<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-												<div className="min-w-0">
-													<label className="block text-sm font-medium text-gray-500 font-body">
-														Email
-													</label>
-													<p className="mt-1 text-base text-gray-700 font-body truncate">
-														{profile?.email || "Not provided"}
-													</p>
-												</div>
+									</div>
+									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+										<div className="flex items-center space-x-3">
+											<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+											<div className="min-w-0">
+												<label className="block text-sm font-medium text-gray-500 font-body">
+													Email
+												</label>
+												<p className="mt-1 text-base text-gray-700 font-body truncate">
+													{profile?.email || "Not provided"}
+												</p>
 											</div>
 										</div>
-										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-											<div className="flex items-center space-x-3">
-												<CalendarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-												<div className="min-w-0">
-													<label className="block text-sm font-medium text-gray-500 font-body">
-														Date of Birth
-													</label>
-													<p className="mt-1 text-base text-gray-700 font-body truncate">
-														{profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : "Not provided"}
-													</p>
-												</div>
+									</div>
+									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+										<div className="flex items-center space-x-3">
+											<CalendarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+											<div className="min-w-0">
+												<label className="block text-sm font-medium text-gray-500 font-body">
+													Date of Birth
+												</label>
+												<p className="mt-1 text-base text-gray-700 font-body truncate">
+													{profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : "Not provided"}
+												</p>
 											</div>
 										</div>
-										<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-											<div className="flex items-center space-x-3">
-												<AcademicCapIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-												<div className="min-w-0">
-													<label className="block text-sm font-medium text-gray-500 font-body">
-														Education Level
-													</label>
-													<p className="mt-1 text-base text-gray-700 font-body truncate">
-														{profile?.educationLevel || "Not provided"}
-													</p>
-												</div>
+									</div>
+									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+										<div className="flex items-center space-x-3">
+											<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+											<div className="min-w-0">
+												<label className="block text-sm font-medium text-gray-500 font-body">
+													Race
+												</label>
+												<p className="mt-1 text-base text-gray-700 font-body truncate">
+													{profile?.race || "Not provided"}
+												</p>
+											</div>
+										</div>
+									</div>
+									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+										<div className="flex items-center space-x-3">
+											<UserCircleIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+											<div className="min-w-0">
+												<label className="block text-sm font-medium text-gray-500 font-body">
+													Gender
+												</label>
+												<p className="mt-1 text-base text-gray-700 font-body truncate">
+													{profile?.gender || "Not provided"}
+												</p>
+											</div>
+										</div>
+									</div>
+									<div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+										<div className="flex items-center space-x-3">
+											<AcademicCapIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+											<div className="min-w-0">
+												<label className="block text-sm font-medium text-gray-500 font-body">
+													Education Level
+												</label>
+												<p className="mt-1 text-base text-gray-700 font-body truncate">
+													{profile?.educationLevel || "Not provided"}
+												</p>
 											</div>
 										</div>
 									</div>
 								</div>
+							</div>
 
 								{/* IC/Passport Display */}
 								<div className="pt-6">
@@ -1131,63 +1161,76 @@ export default function ProfilePage() {
 										
 									</div>
 
-									{/* Employment Information Display */}
-									<div className="space-y-4">
-										<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
-											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-												<div className="flex items-center space-x-3">
-													<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-													<div className="min-w-0">
-														<label className="block text-sm font-medium text-gray-500 font-body">
-															Employment Status
-														</label>
-														<p className="mt-1 text-base text-gray-700 font-body truncate">
-															{profile?.employmentStatus || "Not provided"}
-														</p>
-													</div>
+								{/* Employment Information Display */}
+								<div className="space-y-4">
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+										<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Occupation
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.occupation || "Not provided"}
+													</p>
 												</div>
 											</div>
-											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-												<div className="flex items-center space-x-3">
-													<BuildingOfficeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-													<div className="min-w-0">
-														<label className="block text-sm font-medium text-gray-500 font-body">
-															Employer Name
-														</label>
-														<p className="mt-1 text-base text-gray-700 font-body truncate">
-															{profile?.employerName || "Not provided"}
-														</p>
-													</div>
+										</div>
+										<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Employment Status
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.employmentStatus || "Not provided"}
+													</p>
 												</div>
 											</div>
-											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-												<div className="flex items-center space-x-3">
-													<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-													<div className="min-w-0">
-														<label className="block text-sm font-medium text-gray-500 font-body">
-															Service Length
-														</label>
-														<p className="mt-1 text-base text-gray-700 font-body truncate">
-															{profile?.serviceLength ? `${profile.serviceLength} years` : "Not provided"}
-														</p>
-													</div>
+										</div>
+										<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<BuildingOfficeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Employer Name
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.employerName || "Not provided"}
+													</p>
 												</div>
 											</div>
-											<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
-												<div className="flex items-center space-x-3">
-													<CurrencyDollarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-													<div className="min-w-0">
-														<label className="block text-sm font-medium text-gray-500 font-body">
-															Monthly Income
-														</label>
-														<p className="mt-1 text-base text-gray-700 font-body truncate">
-															{profile?.monthlyIncome ? `RM ${Number(profile.monthlyIncome).toLocaleString()}` : "Not provided"}
-														</p>
-													</div>
+										</div>
+										<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<ClockIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Service Length
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.serviceLength ? `${profile.serviceLength} years` : "Not provided"}
+													</p>
+												</div>
+											</div>
+										</div>
+										<div className="bg-gray-50 p-4 lg:p-5 rounded-lg border border-gray-200">
+											<div className="flex items-center space-x-3">
+												<CurrencyDollarIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+												<div className="min-w-0">
+													<label className="block text-sm font-medium text-gray-500 font-body">
+														Monthly Income
+													</label>
+													<p className="mt-1 text-base text-gray-700 font-body truncate">
+														{profile?.monthlyIncome ? `RM ${Number(profile.monthlyIncome).toLocaleString()}` : "Not provided"}
+													</p>
 												</div>
 											</div>
 										</div>
 									</div>
+								</div>
 								</div>
 							</div>
 

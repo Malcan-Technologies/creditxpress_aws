@@ -82,6 +82,9 @@ model User {
   serviceLength                String?
   phoneVerified                Boolean              @default(false)
   educationLevel               String?
+  race                         String?
+  gender                       String?
+  occupation                   String?
   resetToken                   String?
   resetTokenExpiry             DateTime?
   kycSessions                  KycSession[]

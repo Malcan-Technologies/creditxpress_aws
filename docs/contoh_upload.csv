@@ -1,0 +1,52 @@
+JenisPemohon,NamaPemohon,JenisSyarikat,NomborPerniagaan,NoKp,NomborTelefon ,Bangsa,Jantina,Pekerjaan,Pendapatan,Majikan,Alamat,StatusCagaran,JenisCagaran,NilaiCagaran,TarikhPinjaman,PinjamanPokok,JumlahFaedahKeseluruhan,JumlahPinjamanKeseluruhan,KadarFaedah,TempohBayaran,BakiPinjamanKeseluruhan,JumlahNpl,Nota
+Individu,Ali Bin Abu,,,8.89E+12,199999999,Lain - lain,Lelaki,Sendiri,1000,Tiada Maklumat,XXXXX,Tidak Bercagar,,,15/10/2021,10000,5400,15400,18,36,0,0,PINJAMAN SELESAI
+Syarikat,ALI BHD,Bumi,XXXXXXXX,,,,,,,,,Bercagar,Emas,30000,15/10/2021,10000,5400,15400,18,36,0,0,DALAM PROSES DAPAT BALIK
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+"Maklumat berjenis 
+(Individu Atau Syarikat)
+ yang  diterima dan 
+wajib diisi.","Sila Masukan Nama 
+Penuh Pemohon","Maklumat Berjenis
+ (Bumi, Bukan Bumi,Asing)
+ yang diterima dan wajib
+ diisi sekiranya pemohon
+ berstatus syarikat","Sila Masukan nombor
+ perniagaan bagi 
+permohon berstatus
+ syarikat.","Sila Masukan NoKp
+bagi pemohon individu.","Sila Masukan 
+Nombor Telefon
+bagi pemohon individu.","Sila Masukan Bangsa (Melayu,Cina,India
+Lain - lain, Bumiputra(Sabah/Sarawak),
+Bukan Warganegara, Tiada Maklumat)
+bagi pemohon individu.","Sila Masukan Jantina 
+(Lelaki /Perempuan)
+bagi pemohon individu.","Sila Masukan Pekerjaan 
+bagi pemohon individu.","Sila Masukan Pendapatan 
+bagi pemohon individu.","Sila Masukan Majikan (Tiada Maklumat 
+,Kerajaan,Swasta,Berniaga,Kerja Sendiri
+,Tidak Bekerja)
+bagi pemohon individu.","Sila Masukan Alamat 
+bagi pemohon individu.","Sila Masukan Status Cagaran.(BerCagar / 
+Tidak Bercagar)","Sila Masukan Jenis Cagaran (Emas,Tanah,
+Rumah,Kenderaan Bermotor,
+Lain-lain)
+sekiranya Status Cagaran
+=  Bercagar.","Sila Masukan Nilai Cagaran
+sekiranya Status Cagaran
+=  Bercagar","Sila Masukan 
+Tarikh Pinjaman","Sila Masukan 
+Pinjaman Pokok","Sila Masukan Jumlah 
+Faedah Keseluruhan.","Sila Masukan Jumlah 
+Pinjaman Keseluruhan .",Sila Masukan kadar Faedah.,"Sila Masukan
+ Tempoh Bayaran","Sila Masukan Baki 
+Pinjaman Keseluruhan.",Sila Masukan Jumlah NPL,"Sila Pilih Maklumat Nota( PINJAMAN SELESAI
+,PINJAMAN SEMASA,DALAM PROSES DAPAT BALIK, DALAM TINDAKAN MAHKAMAH);"

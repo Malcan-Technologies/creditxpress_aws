@@ -88,6 +88,10 @@ interface LoanApplication {
     emergencyContactName?: string;
     emergencyContactPhone?: string;
     emergencyContactRelationship?: string;
+    // Demographics
+    race?: string;
+    gender?: string;
+    occupation?: string;
   };
   product?: {
     name?: string;
@@ -3078,18 +3082,26 @@ function AdminApplicationsPageContent() {
                             </span>
                           </div>
                         )}
-                        {selectedApplication.user?.educationLevel && (
+                        {selectedApplication.user?.race && (
                           <div className="flex justify-between">
-                            <span className="text-gray-400">Education</span>
+                            <span className="text-gray-400">Race</span>
                             <span className="text-white">
-                              {selectedApplication.user.educationLevel}
+                              {selectedApplication.user.race}
+                            </span>
+                          </div>
+                        )}
+                        {selectedApplication.user?.gender && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Gender</span>
+                            <span className="text-white">
+                              {selectedApplication.user.gender}
                             </span>
                           </div>
                         )}
                       </div>
 
                       {/* Employment Section */}
-                      {(selectedApplication.user?.employmentStatus || selectedApplication.user?.employerName || selectedApplication.user?.monthlyIncome) && (
+                      {(selectedApplication.user?.employmentStatus || selectedApplication.user?.employerName || selectedApplication.user?.monthlyIncome || selectedApplication.user?.occupation || selectedApplication.user?.educationLevel) && (
                         <div className="border-t border-gray-600/50 pt-3 mb-4">
                           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Employment</p>
                           <div className="space-y-2 text-sm">
@@ -3098,6 +3110,14 @@ function AdminApplicationsPageContent() {
                                 <span className="text-gray-400">Status</span>
                                 <span className="text-white">
                                   {selectedApplication.user.employmentStatus}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.occupation && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Occupation</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.occupation}
                                 </span>
                               </div>
                             )}
@@ -3113,7 +3133,7 @@ function AdminApplicationsPageContent() {
                               <div className="flex justify-between">
                                 <span className="text-gray-400">Length of Service</span>
                                 <span className="text-white">
-                                  {selectedApplication.user.serviceLength}
+                                  {selectedApplication.user.serviceLength} years
                                 </span>
                               </div>
                             )}
@@ -3122,6 +3142,14 @@ function AdminApplicationsPageContent() {
                                 <span className="text-gray-400">Monthly Income</span>
                                 <span className="text-emerald-400 font-medium">
                                   {formatCurrency(parseFloat(selectedApplication.user.monthlyIncome))}
+                                </span>
+                              </div>
+                            )}
+                            {selectedApplication.user?.educationLevel && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Education Level</span>
+                                <span className="text-white">
+                                  {selectedApplication.user.educationLevel}
                                 </span>
                               </div>
                             )}
@@ -3179,6 +3207,7 @@ function AdminApplicationsPageContent() {
                                   <button
                                     onClick={() => {
                                       navigator.clipboard.writeText(selectedApplication.user?.accountNumber || '');
+                                      toast.success("Account number copied to clipboard");
                                     }}
                                     className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-400/20 hover:bg-blue-500/30"
                                     title="Copy"

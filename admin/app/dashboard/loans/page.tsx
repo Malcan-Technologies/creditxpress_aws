@@ -193,6 +193,10 @@ interface LoanData {
 			nationality?: string;
 			icNumber?: string;
 			idNumber?: string;
+			// Demographics
+			race?: string;
+			gender?: string;
+			occupation?: string;
 		};
 		// Documents associated with this application
 		documents?: {
@@ -231,6 +235,10 @@ interface LoanData {
 		emergencyContactName?: string;
 		emergencyContactPhone?: string;
 		emergencyContactRelationship?: string;
+		// Demographics
+		race?: string;
+		gender?: string;
+		occupation?: string;
 	};
 	repayments?: LoanRepayment[];
 	overdueInfo?: {
@@ -2290,6 +2298,230 @@ function ActiveLoansContent() {
 		}
 	};
 
+	/**
+	 * Download all loans in KPKT format for uploading to KPKT portal
+	 * Format follows the contoh_upload.csv template
+	 */
+	const downloadKPKTExport = async () => {
+		try {
+			setRefreshing(true);
+			
+			// KPKT CSV headers (exact column names from template)
+			const headers = [
+				'JenisPemohon',
+				'NamaPemohon',
+				'JenisSyarikat',
+				'NomborPerniagaan',
+				'NoKp',
+				'NomborTelefon',
+				'Bangsa',
+				'Jantina',
+				'Pekerjaan',
+				'Pendapatan',
+				'Majikan',
+				'Alamat',
+				'StatusCagaran',
+				'JenisCagaran',
+				'NilaiCagaran',
+				'TarikhPinjaman',
+				'PinjamanPokok',
+				'JumlahFaedahKeseluruhan',
+				'JumlahPinjamanKeseluruhan',
+				'KadarFaedah',
+				'TempohBayaran',
+				'BakiPinjamanKeseluruhan',
+				'JumlahNpl',
+				'Nota'
+			];
+
+			// Helper to get Majikan (Employer type) for KPKT format
+			// Valid values: Kerajaan, Swasta, Berniaga, Kerja Sendiri, Tidak Bekerja
+			const getMajikanForKPKT = (employmentStatus?: string): string => {
+				if (!employmentStatus) return 'Tiada Maklumat';
+				const s = employmentStatus.toUpperCase();
+				// Check UNEMPLOYED first before EMPLOYED (since UNEMPLOYED contains EMPLOYED)
+				// Student, Retired, Unemployed, Not Working all fall under Tidak Bekerja
+				if (s.includes('UNEMPLOYED') || s.includes('NOT WORKING') || s.includes('TIDAK BEKERJA') || 
+				    s.includes('STUDENT') || s.includes('PELAJAR') || s.includes('RETIRED') || s.includes('PENCEN')) {
+					return 'Tidak Bekerja';
+				}
+				if (s.includes('GOVERNMENT') || s.includes('KERAJAAN')) return 'Kerajaan';
+				if (s.includes('PRIVATE') || s.includes('SWASTA') || s.includes('EMPLOYED')) return 'Swasta';
+				if (s.includes('BUSINESS') || s.includes('BERNIAGA')) return 'Berniaga';
+				if (s.includes('SELF') || s.includes('FREELANCE') || s.includes('SENDIRI')) return 'Kerja Sendiri';
+				return 'Tiada Maklumat';
+			};
+
+			// Helper to get Pekerjaan (Occupation/Job title) for KPKT format
+			// This is the actual job title (e.g., Manager, Salesman)
+			// If not provided, return "Tiada Maklumat"
+			const getPekerjaanForKPKT = (occupation?: string): string => {
+				return occupation || 'Tiada Maklumat';
+			};
+
+			// Helper to translate gender to Jantina (Lelaki/Perempuan)
+			const getJantinaForKPKT = (gender?: string): string => {
+				if (!gender) return '';
+				const g = gender.toUpperCase();
+				if (g === 'MALE' || g === 'M' || g === 'LELAKI') return 'Lelaki';
+				if (g === 'FEMALE' || g === 'F' || g === 'PEREMPUAN') return 'Perempuan';
+				return '';
+			};
+
+			// Helper to translate race to Bangsa for KPKT
+			const getBangsaForKPKT = (race?: string): string => {
+				if (!race) return 'Tiada Maklumat';
+				const r = race.toUpperCase();
+				if (r.includes('MALAY') || r === 'MELAYU') return 'Melayu';
+				if (r.includes('CHINESE') || r === 'CINA') return 'Cina';
+				if (r.includes('INDIAN') || r === 'INDIA') return 'India';
+				if (r.includes('SABAH') || r.includes('SARAWAK') || r.includes('BUMIPUTRA') || r.includes('KADAZAN') || r.includes('IBAN') || r.includes('BIDAYUH')) return 'Bumiputra(Sabah/Sarawak)';
+				if (r.includes('OTHER') || r.includes('LAIN')) return 'Lain - lain';
+				return 'Lain - lain';
+			};
+
+			// Helper to translate nationality to Bangsa (fallback if race not available)
+			const translateNationalityToKPKT = (nationality?: string): string => {
+				if (!nationality) return 'Tiada Maklumat';
+				const n = nationality.toUpperCase();
+				if (n.includes('MALAY') || n === 'MELAYU') return 'Melayu';
+				if (n.includes('CHINESE') || n === 'CINA') return 'Cina';
+				if (n.includes('INDIAN') || n === 'INDIA') return 'India';
+				if (n.includes('SABAH') || n.includes('SARAWAK') || n.includes('BUMIPUTRA') || n.includes('KADAZAN') || n.includes('IBAN') || n.includes('BIDAYUH')) return 'Bumiputra(Sabah/Sarawak)';
+				if (n.includes('MALAYSIA') || n.includes('WARGANEGARA')) return 'Lain - lain';
+				if (n.includes('FOREIGN') || n.includes('ASING') || !n.includes('MALAYSIA')) return 'Bukan Warganegara';
+				return 'Lain - lain';
+			};
+
+			// Helper to get loan status in KPKT Nota format
+			const getLoanNota = (loan: LoanData): string => {
+				const status = loan.status.toUpperCase();
+				if (status === 'DISCHARGED' || status === 'COMPLETED' || status === 'SETTLED') {
+					return 'PINJAMAN SELESAI';
+				}
+				if (status === 'DEFAULTED' || status === 'DEFAULT' || status === 'IN_COURT' || status === 'LEGAL_ACTION' || loan.defaultedAt) {
+					return 'DALAM TINDAKAN MAHKAMAH';
+				}
+				if (status === 'POTENTIAL_DEFAULT' || status === 'RECOVERY' || status === 'COLLECTION' || status === 'OVERDUE' || loan.defaultRiskFlaggedAt) {
+					return 'DALAM PROSES DAPAT BALIK';
+				}
+				return 'PINJAMAN SEMASA';
+			};
+
+			// Helper to format date as DD/MM/YYYY
+			const formatKPKTDate = (dateString: string | null): string => {
+				if (!dateString) return '';
+				const date = new Date(dateString);
+				const day = date.getDate().toString().padStart(2, '0');
+				const month = (date.getMonth() + 1).toString().padStart(2, '0');
+				const year = date.getFullYear();
+				return `${day}/${month}/${year}`;
+			};
+
+			// Helper to format address
+			const formatKPKTAddress = (user: any): string => {
+				const parts = [
+					user?.address1,
+					user?.address2,
+					user?.city,
+					user?.state,
+					user?.zipCode,
+				].filter(Boolean);
+				return parts.join(', ') || '';
+			};
+
+			// Build CSV data
+			const csvData: string[][] = [headers];
+
+			for (const loan of filteredLoans) {
+				const user = loan.application?.user || loan.user;
+				const isCompany = false; // Currently all loans are individual - can be extended if needed
+				
+				// Calculate total interest
+				const totalInterest = (loan.totalAmount || loan.principalAmount) - loan.principalAmount;
+				
+				// Calculate annualized interest rate
+				// Formula: (Total Interest / Principal) / (Term in Years) * 100
+				// Example: Principal 150,000, Interest 27,000, Term 12 months
+				//   Annual Rate = (27,000 / 150,000) / (12/12) * 100 = 18%
+				const termInYears = loan.term / 12;
+				const annualizedInterestRate = loan.principalAmount > 0 && termInYears > 0
+					? (totalInterest / loan.principalAmount) / termInYears * 100
+					: loan.interestRate; // Fallback to stored rate if calculation fails
+				
+				// Calculate NPL amount (if in default or recovery status)
+				const isNPL = loan.status === 'DEFAULTED' || loan.status === 'DEFAULT' || 
+				              loan.status === 'POTENTIAL_DEFAULT' || loan.defaultedAt || loan.defaultRiskFlaggedAt;
+				const nplAmount = isNPL ? loan.outstandingBalance : 0;
+
+				const row = [
+					isCompany ? 'Syarikat' : 'Individu',                           // JenisPemohon
+					user?.fullName || '',                                           // NamaPemohon
+					isCompany ? '' : '',                                            // JenisSyarikat (empty for individuals)
+					isCompany ? '' : '',                                            // NomborPerniagaan (empty for individuals)
+					user?.icNumber || user?.idNumber || '',                         // NoKp
+					user?.phoneNumber || '',                                        // NomborTelefon
+					getBangsaForKPKT(user?.race) || translateNationalityToKPKT(user?.nationality), // Bangsa (use race, fallback to nationality)
+					getJantinaForKPKT(user?.gender),                                // Jantina
+					getPekerjaanForKPKT(user?.occupation),                          // Pekerjaan (job title)
+					user?.monthlyIncome || '',                                      // Pendapatan
+					getMajikanForKPKT(user?.employmentStatus),                      // Majikan (employer type)
+					formatKPKTAddress(user),                                        // Alamat
+					loan.application?.product?.collateralRequired ? 'Bercagar' : 'Tidak Bercagar', // StatusCagaran
+					loan.application?.product?.collateralRequired ? 'Lain-lain' : '', // JenisCagaran
+					'',                                                             // NilaiCagaran
+					formatKPKTDate(loan.disbursedAt || loan.createdAt),            // TarikhPinjaman
+					Math.round(loan.principalAmount).toString(),                    // PinjamanPokok
+					Math.round(totalInterest).toString(),                           // JumlahFaedahKeseluruhan
+					Math.round(loan.totalAmount || loan.principalAmount).toString(), // JumlahPinjamanKeseluruhan
+					Math.round(annualizedInterestRate).toString(),                  // KadarFaedah (annualized %)
+					loan.term.toString(),                                           // TempohBayaran
+					Math.round(loan.outstandingBalance).toString(),                 // BakiPinjamanKeseluruhan
+					Math.round(nplAmount).toString(),                               // JumlahNpl
+					getLoanNota(loan)                                               // Nota
+				];
+
+				csvData.push(row);
+			}
+
+			// Convert to CSV string
+			const csvContent = csvData
+				.map(row => 
+					row.map(cell => {
+						const cellString = String(cell || '');
+						// Escape quotes and wrap in quotes if contains comma, quote, or newline
+						if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
+							return '"' + cellString.replace(/"/g, '""') + '"';
+						}
+						return cellString;
+					}).join(',')
+				)
+				.join('\n');
+
+			// Create and download the file
+			const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+			const link = document.createElement('a');
+			
+			if (link.download !== undefined) {
+				const url = URL.createObjectURL(blob);
+				link.setAttribute('href', url);
+				link.setAttribute('download', `KPKT_Export_${new Date().toISOString().split('T')[0]}.csv`);
+				link.style.visibility = 'hidden';
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+			}
+
+			toast.success('KPKT export downloaded successfully');
+		} catch (error) {
+			console.error('Error downloading KPKT export:', error);
+			setError('Failed to download KPKT export file');
+			toast.error('Failed to download KPKT export');
+		} finally {
+			setRefreshing(false);
+		}
+	};
+
 	const downloadIndividualLoanCSV = async (loan: LoanData) => {
 		try {
 			setRefreshing(true);
@@ -2627,16 +2859,30 @@ function ActiveLoansContent() {
 				</div>
 				<div className="mt-4 md:mt-0 flex gap-3">
 					<button
-						onClick={downloadCSV}
+						onClick={downloadKPKTExport}
 						disabled={refreshing}
-						className="flex items-center px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors"
+						className="flex items-center px-4 py-2 bg-amber-500/20 text-amber-200 rounded-lg border border-amber-400/20 hover:bg-amber-500/30 transition-colors"
+						title="Export all loans in KPKT format for portal upload"
 					>
 						{refreshing ? (
 							<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
 						) : (
 							<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
 						)}
-						Download All (CSV)
+						KPKT Export (CSV)
+					</button>
+					<button
+						onClick={downloadCSV}
+						disabled={refreshing}
+						className="flex items-center px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors"
+						title="Download detailed audit trail with repayments and history"
+					>
+						{refreshing ? (
+							<ArrowPathIcon className="h-4 w-4 mr-2 animate-spin" />
+						) : (
+							<DocumentArrowDownIcon className="h-4 w-4 mr-2" />
+						)}
+						Audit Trail (CSV)
 					</button>
 					<button
 						onClick={handleRefresh}
@@ -4230,18 +4476,26 @@ function ActiveLoansContent() {
 															</span>
 														</div>
 													)}
-													{selectedLoan.user.educationLevel && (
+													{selectedLoan.user.race && (
 														<div className="flex justify-between">
-															<span className="text-gray-400">Education</span>
+															<span className="text-gray-400">Race</span>
 															<span className="text-white">
-																{selectedLoan.user.educationLevel}
+																{selectedLoan.user.race}
+															</span>
+														</div>
+													)}
+													{selectedLoan.user.gender && (
+														<div className="flex justify-between">
+															<span className="text-gray-400">Gender</span>
+															<span className="text-white">
+																{selectedLoan.user.gender}
 															</span>
 														</div>
 													)}
 												</div>
 
 												{/* Employment Section */}
-												{(selectedLoan.user.employmentStatus || selectedLoan.user.employerName || selectedLoan.user.monthlyIncome) && (
+												{(selectedLoan.user.employmentStatus || selectedLoan.user.employerName || selectedLoan.user.monthlyIncome || selectedLoan.user.occupation || selectedLoan.user.educationLevel) && (
 													<div className="border-t border-gray-600/50 pt-3 mb-4">
 														<p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">Employment</p>
 														<div className="space-y-2 text-sm">
@@ -4250,6 +4504,14 @@ function ActiveLoansContent() {
 																	<span className="text-gray-400">Status</span>
 																	<span className="text-white">
 																		{selectedLoan.user.employmentStatus}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.occupation && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Occupation</span>
+																	<span className="text-white">
+																		{selectedLoan.user.occupation}
 																	</span>
 																</div>
 															)}
@@ -4265,7 +4527,7 @@ function ActiveLoansContent() {
 																<div className="flex justify-between">
 																	<span className="text-gray-400">Length of Service</span>
 																	<span className="text-white">
-																		{selectedLoan.user.serviceLength}
+																		{selectedLoan.user.serviceLength} years
 																	</span>
 																</div>
 															)}
@@ -4274,6 +4536,14 @@ function ActiveLoansContent() {
 																	<span className="text-gray-400">Monthly Income</span>
 																	<span className="text-emerald-400 font-medium">
 																		{formatCurrency(parseFloat(selectedLoan.user.monthlyIncome))}
+																	</span>
+																</div>
+															)}
+															{selectedLoan.user.educationLevel && (
+																<div className="flex justify-between">
+																	<span className="text-gray-400">Education Level</span>
+																	<span className="text-white">
+																		{selectedLoan.user.educationLevel}
 																	</span>
 																</div>
 															)}
@@ -4331,6 +4601,7 @@ function ActiveLoansContent() {
 																		<button
 																			onClick={() => {
 																				navigator.clipboard.writeText(selectedLoan.user.accountNumber || '');
+																				toast.success("Account number copied to clipboard");
 																			}}
 																			className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-400/20 hover:bg-blue-500/30"
 																			title="Copy"

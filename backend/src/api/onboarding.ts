@@ -27,6 +27,9 @@ interface UserResponse {
 	icNumber: string | null;
 	icType: string | null;
 	educationLevel: string | null;
+	race: string | null;
+	gender: string | null;
+	occupation: string | null;
 	emergencyContactName: string | null;
 	emergencyContactPhone: string | null;
 	emergencyContactRelationship: string | null;
@@ -63,6 +66,9 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 				icNumber: true,
 				icType: true,
 				educationLevel: true,
+				race: true,
+				gender: true,
+				occupation: true,
 				emergencyContactName: true,
 				emergencyContactPhone: true,
 				emergencyContactRelationship: true,
@@ -81,6 +87,9 @@ router.get("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respon
 			icNumber: user.icNumber,
 			icType: user.icType,
 			educationLevel: user.educationLevel,
+			race: user.race,
+			gender: user.gender,
+			occupation: user.occupation,
 			serviceLength: user.serviceLength,
 			emergencyContactName: user.emergencyContactName,
 			emergencyContactPhone: user.emergencyContactPhone,
@@ -119,39 +128,45 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 			serviceLength,
 			bankName,
 			accountNumber,
-			onboardingStep,
-			icNumber,
-			icType,
-			educationLevel,
-			emergencyContactName,
-			emergencyContactPhone,
-			emergencyContactRelationship,
-		} = req.body;
+		onboardingStep,
+		icNumber,
+		icType,
+		educationLevel,
+		race,
+		gender,
+		occupation,
+		emergencyContactName,
+		emergencyContactPhone,
+		emergencyContactRelationship,
+	} = req.body;
 
-		// Prepare the data for update
-		const data: any = {
-			fullName,
-			email,
-			address1,
-			address2,
-			city,
-			state,
-			zipCode: postalCode,
-			employmentStatus,
-			employerName,
-			monthlyIncome,
-			serviceLength,
-			bankName,
-			accountNumber,
-			onboardingStep,
-			isOnboardingComplete: onboardingStep >= 4,
-			icNumber,
-			icType,
-			educationLevel,
-			emergencyContactName,
-			emergencyContactPhone,
-			emergencyContactRelationship,
-		};
+	// Prepare the data for update
+	const data: any = {
+		fullName,
+		email,
+		address1,
+		address2,
+		city,
+		state,
+		zipCode: postalCode,
+		employmentStatus,
+		employerName,
+		monthlyIncome,
+		serviceLength,
+		bankName,
+		accountNumber,
+		onboardingStep,
+		isOnboardingComplete: onboardingStep >= 4,
+		icNumber,
+		icType,
+		educationLevel,
+		race,
+		gender,
+		occupation,
+		emergencyContactName,
+		emergencyContactPhone,
+		emergencyContactRelationship,
+	};
 
 		// Convert date string to Date object if present
 		if (dateOfBirth) {
@@ -188,28 +203,34 @@ router.post("/", authenticateAndVerifyPhone, async (req: AuthRequest, res: Respo
 				serviceLength: true,
 				bankName: true,
 				accountNumber: true,
-				icNumber: true,
-				icType: true,
-				educationLevel: true,
-				emergencyContactName: true,
-				emergencyContactPhone: true,
-				emergencyContactRelationship: true,
-			},
-		});
+			icNumber: true,
+			icType: true,
+			educationLevel: true,
+			race: true,
+			gender: true,
+			occupation: true,
+			emergencyContactName: true,
+			emergencyContactPhone: true,
+			emergencyContactRelationship: true,
+		},
+	});
 
-		// Convert zipCode to postalCode for frontend
-		const response: UserResponse = {
-			...updatedUser,
-			postalCode: updatedUser.zipCode,
-			zipCode: undefined,
-			icNumber: updatedUser.icNumber,
-			icType: updatedUser.icType,
-			educationLevel: updatedUser.educationLevel,
-			serviceLength: updatedUser.serviceLength,
-			emergencyContactName: updatedUser.emergencyContactName,
-			emergencyContactPhone: updatedUser.emergencyContactPhone,
-			emergencyContactRelationship: updatedUser.emergencyContactRelationship,
-		};
+	// Convert zipCode to postalCode for frontend
+	const response: UserResponse = {
+		...updatedUser,
+		postalCode: updatedUser.zipCode,
+		zipCode: undefined,
+		icNumber: updatedUser.icNumber,
+		icType: updatedUser.icType,
+		educationLevel: updatedUser.educationLevel,
+		race: updatedUser.race,
+		gender: updatedUser.gender,
+		occupation: updatedUser.occupation,
+		serviceLength: updatedUser.serviceLength,
+		emergencyContactName: updatedUser.emergencyContactName,
+		emergencyContactPhone: updatedUser.emergencyContactPhone,
+		emergencyContactRelationship: updatedUser.emergencyContactRelationship,
+	};
 
 		console.log("Onboarding POST - Updated user:", response);
 		return res.json(response);

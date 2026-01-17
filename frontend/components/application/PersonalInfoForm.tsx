@@ -24,6 +24,9 @@ interface PersonalInfoFormProps {
 		employerName?: string;
 		monthlyIncome: string;
 		serviceLength?: string;
+		race?: string;
+		gender?: string;
+		occupation?: string;
 		address1: string;
 		address2?: string;
 		city: string;
@@ -60,6 +63,9 @@ export default function PersonalInfoForm({
 					employerName: data.employerName || "",
 					monthlyIncome: data.monthlyIncome || "",
 					serviceLength: data.serviceLength || "",
+					race: data.race || "",
+					gender: data.gender || "",
+					occupation: data.occupation || "",
 					address1: data.address1 || "",
 					address2: data.address2 || "",
 					city: data.city || "",
@@ -187,21 +193,48 @@ export default function PersonalInfoForm({
 								</p>
 							</div>
 
-							<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
-								<div className="flex items-center space-x-3 mb-2">
-									<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
-									<label className="text-sm lg:text-base font-medium text-gray-700 font-body">
-										Email Address
-									</label>
-								</div>
-								<p className="text-base lg:text-lg text-gray-900 font-body ml-8">
-									{userInfo.email || "Not provided"}
-								</p>
+						<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
+							<div className="flex items-center space-x-3 mb-2">
+								<EnvelopeIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+								<label className="text-sm lg:text-base font-medium text-gray-700 font-body">
+									Email Address
+								</label>
 							</div>
+							<p className="text-base lg:text-lg text-gray-900 font-body ml-8">
+								{userInfo.email || "Not provided"}
+							</p>
 						</div>
 					</div>
 
-					{/* Employment Information Section */}
+					{/* Race and Gender */}
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+						<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
+							<div className="flex items-center space-x-3 mb-2">
+								<UserIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+								<label className="text-sm lg:text-base font-medium text-gray-700 font-body">
+									Race
+								</label>
+							</div>
+							<p className="text-base lg:text-lg text-gray-900 font-body ml-8">
+								{userInfo.race || "Not provided"}
+							</p>
+						</div>
+
+						<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
+							<div className="flex items-center space-x-3 mb-2">
+								<UserIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+								<label className="text-sm lg:text-base font-medium text-gray-700 font-body">
+									Gender
+								</label>
+							</div>
+							<p className="text-base lg:text-lg text-gray-900 font-body ml-8">
+								{userInfo.gender || "Not provided"}
+							</p>
+						</div>
+					</div>
+				</div>
+
+				{/* Employment Information Section */}
 					<div className="space-y-6">
 						<div className="border-b border-gray-200 pb-4">
 							<h3 className="text-base lg:text-lg font-heading font-semibold text-gray-700 mb-4">
@@ -209,7 +242,19 @@ export default function PersonalInfoForm({
 							</h3>
 						</div>
 
-						<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
+						<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-4 lg:gap-6">
+							<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
+								<div className="flex items-center space-x-3 mb-2">
+									<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />
+									<label className="text-sm lg:text-base font-medium text-gray-700 font-body">
+										Occupation
+									</label>
+								</div>
+								<p className="text-base lg:text-lg text-gray-900 font-body ml-8">
+									{userInfo.occupation || "Not provided"}
+								</p>
+							</div>
+
 							<div className="bg-gray-50 rounded-xl p-4 lg:p-6">
 								<div className="flex items-center space-x-3 mb-2">
 									<BriefcaseIcon className="h-5 w-5 text-purple-primary flex-shrink-0" />

@@ -6,6 +6,8 @@ export interface PersonalInfo {
 	icNumber: string;
 	icType: 'IC' | 'PASSPORT' | null;
 	educationLevel: string;
+	race: string;
+	gender: string;
 	emergencyContactName: string;
 	emergencyContactPhone: string;
 	emergencyContactRelationship: string;
@@ -20,6 +22,7 @@ export interface AddressInfo {
 }
 
 export interface EmploymentInfo {
+	occupation: string;
 	employmentStatus: string;
 	employerName: string;
 	monthlyIncome: string;

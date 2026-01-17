@@ -20,6 +20,9 @@ interface PersonalInfo {
 	monthlyIncome: string;
 	serviceLength?: string;
 	educationLevel: string;
+	race: string;
+	gender: string;
+	occupation: string;
 	address1: string;
 	address2?: string;
 	city: string;
@@ -62,6 +65,20 @@ const educationLevels = [
 	"Other",
 ];
 
+const raceOptions = [
+	"Melayu",
+	"Cina",
+	"India",
+	"Lain-lain",
+	"Bumiputra (Sabah/Sarawak)",
+	"Bukan Warganegara",
+];
+
+const genderOptions = [
+	"Male",
+	"Female",
+];
+
 // Create a client component for handling searchParams
 function PersonalInfoVerificationFormContent({
 	onSubmit,
@@ -77,6 +94,9 @@ function PersonalInfoVerificationFormContent({
 		monthlyIncome: "",
 		serviceLength: "",
 		educationLevel: "",
+		race: "",
+		gender: "",
+		occupation: "",
 		address1: "",
 		address2: "",
 		city: "",
@@ -115,6 +135,9 @@ function PersonalInfoVerificationFormContent({
 						monthlyIncome: userData.monthlyIncome || "",
 						serviceLength: userData.serviceLength || "",
 						educationLevel: userData.educationLevel || "",
+						race: userData.race || "",
+						gender: userData.gender || "",
+						occupation: userData.occupation || "",
 						address1: userData.address1 || "",
 						address2: userData.address2 || "",
 						city: userData.city || "",
@@ -180,6 +203,18 @@ function PersonalInfoVerificationFormContent({
 
 		if (!formValues.educationLevel) {
 			newErrors.educationLevel = "Education level is required";
+		}
+
+		if (!formValues.race) {
+			newErrors.race = "Race is required";
+		}
+
+		if (!formValues.gender) {
+			newErrors.gender = "Gender is required";
+		}
+
+		if (!formValues.occupation) {
+			newErrors.occupation = "Occupation is required";
 		}
 
 		if (!formValues.address1) {
@@ -396,25 +431,91 @@ function PersonalInfoVerificationFormContent({
 							)}
 						</div>
 
-						<div className="md:col-span-2">
-							<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
-								Phone Number
-							</label>
-							<input
-								type="text"
-								value={formValues.phoneNumber}
-								disabled
-								className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 font-body cursor-not-allowed"
-								placeholder="Phone number (verified)"
-							/>
-							<p className="mt-1 text-xs text-gray-500 font-body">
-								Your phone number cannot be changed as it's linked to your verified account
-							</p>
+					<div className="md:col-span-2">
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Phone Number
+						</label>
+						<input
+							type="text"
+							value={formValues.phoneNumber}
+							disabled
+							className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 font-body cursor-not-allowed"
+							placeholder="Phone number (verified)"
+						/>
+						<p className="mt-1 text-xs text-gray-500 font-body">
+							Your phone number cannot be changed as it's linked to your verified account
+						</p>
+					</div>
+
+					{/* Race */}
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Race
+						</label>
+						<div className="relative">
+							<select
+								value={formValues.race}
+								onChange={handleChange("race")}
+								className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none ${
+									errors.race ? "border-red-300" : "border-gray-300"
+								}`}
+							>
+								<option value="">Select your race</option>
+								{raceOptions.map((race) => (
+									<option key={race} value={race}>
+										{race}
+									</option>
+								))}
+							</select>
+							<div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+								<svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+									<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+								</svg>
+							</div>
 						</div>
+						{errors.race && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.race}
+							</p>
+						)}
+					</div>
+
+					{/* Gender */}
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Gender
+						</label>
+						<div className="relative">
+							<select
+								value={formValues.gender}
+								onChange={handleChange("gender")}
+								className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body appearance-none ${
+									errors.gender ? "border-red-300" : "border-gray-300"
+								}`}
+							>
+								<option value="">Select your gender</option>
+								{genderOptions.map((gender) => (
+									<option key={gender} value={gender}>
+										{gender}
+									</option>
+								))}
+							</select>
+							<div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+								<svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+									<path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+								</svg>
+							</div>
+						</div>
+						{errors.gender && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.gender}
+							</p>
+						)}
 					</div>
 				</div>
+			</div>
 
-				{/* Education & Employment Section */}
+			{/* Education & Employment Section */}
 				<div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
 					<div className="flex items-center space-x-2 mb-6">
 						<BriefcaseIcon className="h-5 w-5 text-blue-400" />
@@ -450,17 +551,38 @@ function PersonalInfoVerificationFormContent({
 									</svg>
 								</div>
 							</div>
-							{errors.educationLevel && (
-								<p className="mt-1 text-sm text-red-600 font-body">
-									{errors.educationLevel}
-								</p>
-							)}
-						</div>
+					{errors.educationLevel && (
+						<p className="mt-1 text-sm text-red-600 font-body">
+							{errors.educationLevel}
+						</p>
+					)}
+				</div>
 
-						<div>
-							<label className="block text-sm font-medium text-gray-700 mb-3 font-body">
-								Employment Status
-							</label>
+				{/* Occupation */}
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-2 font-body">
+							Occupation
+						</label>
+						<input
+							type="text"
+							value={formValues.occupation}
+							onChange={handleChange("occupation")}
+							className={`w-full px-4 py-3 bg-white border rounded-xl text-gray-700 placeholder-gray-400 focus:border-purple-primary focus:ring-1 focus:ring-purple-primary transition-colors font-body ${
+								errors.occupation ? "border-red-300" : "border-gray-300"
+							}`}
+							placeholder="e.g. Manager, Engineer, Doctor"
+						/>
+						{errors.occupation && (
+							<p className="mt-1 text-sm text-red-600 font-body">
+								{errors.occupation}
+							</p>
+						)}
+					</div>
+
+					<div>
+						<label className="block text-sm font-medium text-gray-700 mb-3 font-body">
+							Employment Status
+						</label>
 							<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
 								{[
 									"Employed",

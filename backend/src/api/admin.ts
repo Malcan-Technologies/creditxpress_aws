@@ -3616,6 +3616,10 @@ router.get(
 							emergencyContactName: true,
 							emergencyContactPhone: true,
 							emergencyContactRelationship: true,
+							// Demographics
+							race: true,
+							gender: true,
+							occupation: true,
 						},
 					},
 					product: {
@@ -4040,6 +4044,10 @@ router.get(
 							emergencyContactName: true,
 							emergencyContactPhone: true,
 							emergencyContactRelationship: true,
+							// Demographics
+							race: true,
+							gender: true,
+							occupation: true,
 						},
 					},
 					product: {
@@ -5725,6 +5733,10 @@ router.get(
 							emergencyContactName: true,
 							emergencyContactPhone: true,
 							emergencyContactRelationship: true,
+							// Demographics
+							race: true,
+							gender: true,
+							occupation: true,
 						},
 					},
 					application: {
@@ -5784,6 +5796,10 @@ router.get(
 									emergencyContactName: true,
 									emergencyContactPhone: true,
 									emergencyContactRelationship: true,
+									// Demographics
+									race: true,
+									gender: true,
+									occupation: true,
 								},
 							},
 							// Documents associated with this application

@@ -122,62 +122,68 @@ function OnboardingPageContent() {
 					return;
 				}
 
-				// Fetch user data using our fetchWithTokenRefresh utility
-				const userData = await fetchWithTokenRefresh<{
-					id: string;
-					phoneNumber: string;
-					fullName: string | null;
-					email: string | null;
-					dateOfBirth: string | null;
-					address1: string | null;
-					address2: string | null;
-					city: string | null;
-					state: string | null;
-					postalCode: string | null;
-					employmentStatus: string | null;
-					employerName: string | null;
-					monthlyIncome: string | null;
-					serviceLength: string | null;
-					emergencyContactName: string | null;
-					emergencyContactPhone: string | null;
-					emergencyContactRelationship: string | null;
-					bankName: string | null;
-					accountNumber: string | null;
-					onboardingStep: number;
-					isOnboardingComplete: boolean;
-					icNumber: string | null;
-					icType: string | null;
-					educationLevel: string | null;
-				}>("/api/onboarding");
+			// Fetch user data using our fetchWithTokenRefresh utility
+			const userData = await fetchWithTokenRefresh<{
+				id: string;
+				phoneNumber: string;
+				fullName: string | null;
+				email: string | null;
+				dateOfBirth: string | null;
+				address1: string | null;
+				address2: string | null;
+				city: string | null;
+				state: string | null;
+				postalCode: string | null;
+				employmentStatus: string | null;
+				employerName: string | null;
+				monthlyIncome: string | null;
+				serviceLength: string | null;
+				emergencyContactName: string | null;
+				emergencyContactPhone: string | null;
+				emergencyContactRelationship: string | null;
+				bankName: string | null;
+				accountNumber: string | null;
+				onboardingStep: number;
+				isOnboardingComplete: boolean;
+				icNumber: string | null;
+				icType: string | null;
+				educationLevel: string | null;
+				race: string | null;
+				gender: string | null;
+				occupation: string | null;
+			}>("/api/onboarding");
 
-				// Set form data with fetched user data
-				setFormData({
-					fullName: userData.fullName || "",
-					dateOfBirth: userData.dateOfBirth
-						? new Date(userData.dateOfBirth)
-						: null,
-					email: userData.email || "",
-					phoneNumber: userData.phoneNumber || "",
-					icNumber: userData.icNumber || "",
-					icType: userData.icType as 'IC' | 'PASSPORT' | null,
-					educationLevel: userData.educationLevel || "",
-					address1: userData.address1 || "",
-					address2: userData.address2 || "",
-					city: userData.city || "",
-					state: userData.state || "",
-					postalCode: userData.postalCode || "",
-					employmentStatus: userData.employmentStatus || "",
-					employerName: userData.employerName || "",
-					monthlyIncome: userData.monthlyIncome || "",
-					serviceLength: userData.serviceLength || "",
-					emergencyContactName: userData.emergencyContactName || "",
-					emergencyContactPhone: userData.emergencyContactPhone || "",
-					emergencyContactRelationship: userData.emergencyContactRelationship || "",
-					bankName: userData.bankName || "",
-					accountNumber: userData.accountNumber || "",
-					onboardingStep: userData.onboardingStep || 0,
-					isOnboardingComplete: userData.isOnboardingComplete || false,
-				});
+			// Set form data with fetched user data
+			setFormData({
+				fullName: userData.fullName || "",
+				dateOfBirth: userData.dateOfBirth
+					? new Date(userData.dateOfBirth)
+					: null,
+				email: userData.email || "",
+				phoneNumber: userData.phoneNumber || "",
+				icNumber: userData.icNumber || "",
+				icType: userData.icType as 'IC' | 'PASSPORT' | null,
+				educationLevel: userData.educationLevel || "",
+				race: userData.race || "",
+				gender: userData.gender || "",
+				occupation: userData.occupation || "",
+				address1: userData.address1 || "",
+				address2: userData.address2 || "",
+				city: userData.city || "",
+				state: userData.state || "",
+				postalCode: userData.postalCode || "",
+				employmentStatus: userData.employmentStatus || "",
+				employerName: userData.employerName || "",
+				monthlyIncome: userData.monthlyIncome || "",
+				serviceLength: userData.serviceLength || "",
+				emergencyContactName: userData.emergencyContactName || "",
+				emergencyContactPhone: userData.emergencyContactPhone || "",
+				emergencyContactRelationship: userData.emergencyContactRelationship || "",
+				bankName: userData.bankName || "",
+				accountNumber: userData.accountNumber || "",
+				onboardingStep: userData.onboardingStep || 0,
+				isOnboardingComplete: userData.isOnboardingComplete || false,
+			});
 
 				// Check certificate status if user has IC number and full name
 				if (userData.icNumber && userData.fullName) {
