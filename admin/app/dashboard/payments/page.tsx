@@ -184,11 +184,15 @@ function PaymentsContent() {
 		paymentDate: "",
 	});
 
-	// Handle URL search parameter
+	// Handle URL search and status parameters
 	useEffect(() => {
 		const searchParam = searchParams.get("search");
 		if (searchParam) {
 			setSearchTerm(searchParam);
+		}
+		const statusParam = searchParams.get("status");
+		if (statusParam && ["all", "PENDING", "APPROVED", "REJECTED"].includes(statusParam)) {
+			setStatusFilter(statusParam);
 		}
 	}, [searchParams]);
 
@@ -970,27 +974,70 @@ function PaymentsContent() {
 					<div className="lg:col-span-2">
 						{selectedPayment ? (
 							<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-								<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
+								<div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+								<div>
 									<h3 className="text-lg font-medium text-white">
 										Payment Details
 									</h3>
-									<div className="flex items-center space-x-2">
+									<div className="mt-1.5 flex items-center gap-2">
 										{(() => {
 											const statusColor = getStatusColor(selectedPayment.status);
 											return (
 												<span
-													className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
+													className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusColor.bg} ${statusColor.text} ${statusColor.border}`}
 												>
 													{selectedPayment.status}
 												</span>
 											);
 										})()}
-										<span className="px-2 py-1 bg-blue-500/20 text-blue-200 text-xs font-medium rounded-full border border-blue-400/20">
-											{selectedPayment.reference ||
-												selectedPayment.id}
-										</span>
 									</div>
 								</div>
+								<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
+									ID: {selectedPayment.id.substring(0, 8)}
+								</span>
+							</div>
+
+							{/* Action Bar */}
+							<div className="p-4 border-b border-gray-700/30">
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{selectedPayment.status === "PENDING" && (
+											<>
+												<button
+													onClick={() => setShowApprovalModal(true)}
+													disabled={processing}
+													className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs disabled:opacity-50"
+													title="Approve this payment"
+												>
+													<CheckCircleIcon className="h-3 w-3 mr-1" />
+													Approve Payment
+												</button>
+												<button
+													onClick={() => setShowRejectionModal(true)}
+													disabled={processing}
+													className="flex items-center px-3 py-1.5 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors text-xs disabled:opacity-50"
+													title="Reject this payment"
+												>
+													<XCircleIcon className="h-3 w-3 mr-1" />
+													Reject Payment
+												</button>
+											</>
+										)}
+										{selectedPayment.loan.application.id && (
+											<Link
+												href={`/dashboard/loans?search=${selectedPayment.loan.application.id}`}
+												className="flex items-center px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-xs"
+												title="View the active loan"
+											>
+												<CreditCardIcon className="h-3 w-3 mr-1" />
+												View Active Loan
+											</Link>
+										)}
+									</div>
+								</div>
+							</div>
 
 								<div className="p-6">
 									{/* Summary Cards */}
@@ -1162,43 +1209,6 @@ function PaymentsContent() {
 										</div>
 									</div>
 
-									{/* Action Buttons */}
-									<div className="flex flex-wrap gap-3">
-										{selectedPayment.status === "PENDING" && (
-											<>
-												<button
-													onClick={() =>
-														setShowApprovalModal(true)
-													}
-													disabled={processing}
-													className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
-												>
-													<CheckCircleIcon className="h-5 w-5 mr-2" />
-													Approve Payment
-												</button>
-												<button
-													onClick={() =>
-														setShowRejectionModal(true)
-													}
-													disabled={processing}
-													className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center disabled:opacity-50"
-												>
-													<XCircleIcon className="h-5 w-5 mr-2" />
-													Reject Payment
-												</button>
-											</>
-										)}
-										{selectedPayment.loan.application
-											.id && (
-											<Link
-												href={`/dashboard/loans?search=${selectedPayment.loan.application.id}`}
-												className="px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors flex items-center"
-											>
-												<CreditCardIcon className="h-5 w-5 mr-2" />
-												View Active Loan
-											</Link>
-										)}
-									</div>
 								</div>
 							</div>
 						) : (

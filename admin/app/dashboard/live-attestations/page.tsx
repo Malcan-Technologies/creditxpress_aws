@@ -367,24 +367,66 @@ export default function LiveAttestationsPage() {
 				<div className="lg:col-span-2">
 					{selectedApplication ? (
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-								<h3 className="text-lg font-medium text-white">
-									Attestation Details
-								</h3>
-								<span
-									className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
-										selectedApplication.attestationCompleted
-											? "bg-green-500/20 text-green-300 border-green-400/20"
-											: "bg-amber-500/20 text-amber-300 border-amber-400/20"
-									}`}
-								>
-									{selectedApplication.attestationCompleted ? (
-										<CheckCircleIcon className="h-3 w-3 mr-1" />
-									) : (
-										<ClockIcon className="h-3 w-3 mr-1" />
-									)}
-									{selectedApplication.attestationCompleted ? "Completed" : "Pending"}
+							<div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+								<div>
+									<h3 className="text-lg font-medium text-white">
+										Attestation Details
+									</h3>
+									<div className="mt-1.5 flex items-center gap-2">
+										<span
+											className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${
+												selectedApplication.attestationCompleted
+													? "bg-green-500/20 text-green-300 border-green-400/20"
+													: "bg-amber-500/20 text-amber-300 border-amber-400/20"
+											}`}
+										>
+											{selectedApplication.attestationCompleted ? (
+												<CheckCircleIcon className="h-3.5 w-3.5 mr-1" />
+											) : (
+												<ClockIcon className="h-3.5 w-3.5 mr-1" />
+											)}
+											{selectedApplication.attestationCompleted ? "Completed" : "Pending"}
+										</span>
+									</div>
+								</div>
+								<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
+									ID: {selectedApplication.id.substring(0, 8)}
 								</span>
+							</div>
+
+							{/* Action Bar */}
+							<div className="p-4 border-b border-gray-700/30">
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{!selectedApplication.attestationCompleted ? (
+											<button
+												onClick={() => handleMarkCompleteClick(selectedApplication.id)}
+												disabled={processingId === selectedApplication.id}
+												className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs disabled:opacity-50"
+												title="Mark attestation as complete"
+											>
+												{processingId === selectedApplication.id ? (
+													<>
+														<div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-1"></div>
+														Processing...
+													</>
+												) : (
+													<>
+														<CheckCircleIcon className="h-3 w-3 mr-1" />
+														Mark Complete
+													</>
+												)}
+											</button>
+										) : (
+											<div className="text-green-400 font-medium text-xs flex items-center px-3 py-1.5 bg-green-500/10 rounded-lg border border-green-400/20">
+												<CheckCircleIcon className="h-3 w-3 mr-1" />
+												Attestation Completed
+											</div>
+										)}
+									</div>
+								</div>
 							</div>
 
 							<div className="p-6">
@@ -555,33 +597,6 @@ export default function LiveAttestationsPage() {
 									</div>
 								)}
 
-								{/* Action Buttons */}
-								<div className="flex flex-wrap gap-3">
-									{!selectedApplication.attestationCompleted ? (
-										<button
-											onClick={() => handleMarkCompleteClick(selectedApplication.id)}
-											disabled={processingId === selectedApplication.id}
-											className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center disabled:opacity-50"
-										>
-											{processingId === selectedApplication.id ? (
-												<>
-													<div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
-													Processing...
-												</>
-											) : (
-												<>
-													<CheckCircleIcon className="h-5 w-5 mr-2" />
-													Mark Complete
-												</>
-											)}
-										</button>
-									) : (
-										<div className="text-green-400 font-medium text-sm flex items-center">
-											<CheckCircleIcon className="h-4 w-4 mr-1" />
-											Attestation Completed
-										</div>
-									)}
-								</div>
 							</div>
 						</div>
 					) : (

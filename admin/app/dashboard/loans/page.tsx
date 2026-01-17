@@ -2985,40 +2985,120 @@ function ActiveLoansContent() {
 				<div className="lg:col-span-2">
 					{selectedLoan ? (
 						<div className="bg-gradient-to-br from-gray-800/70 to-gray-900/70 backdrop-blur-md border border-gray-700/30 rounded-xl shadow-lg overflow-hidden">
-							<div className="p-4 border-b border-gray-700/30 flex justify-between items-center">
-								<div className="flex items-center gap-3">
+							<div className="p-4 border-b border-gray-700/30 flex justify-between items-start">
+								<div>
 									<h3 className="text-lg font-medium text-white">
 										Loan Details
 									</h3>
+									<div className="mt-1.5 flex items-center gap-2">
+										{(() => {
+											const statusColor = getLoanStatusColor(selectedLoan.status);
+											const statusLabels: Record<string, string> = {
+												'ACTIVE': 'Active',
+												'PENDING_DISCHARGE': 'Pending Discharge',
+												'PENDING_EARLY_SETTLEMENT': 'Early Settlement',
+												'DISCHARGED': 'Discharged',
+												'DEFAULT': 'Defaulted',
+												'DEFAULT_RISK': 'Default Risk'
+											};
+											return (
+												<span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusColor.bg} ${statusColor.text} border ${statusColor.border}`}>
+													{statusLabels[selectedLoan.status] || selectedLoan.status}
+												</span>
+											);
+										})()}
+									</div>
+								</div>
+								<div className="flex items-center gap-3">
 									<span className="px-2 py-1 bg-gray-500/20 text-gray-300 text-xs font-medium rounded-full border border-gray-400/20">
 										ID: {selectedLoan.id.substring(0, 8)}
 									</span>
 								</div>
-								<div className="flex items-center gap-2">
-									{/* Manual Payment Button - Show for ACTIVE loans */}
-									{selectedLoan.status === "ACTIVE" && (
-										<button
-											onClick={() => handleCreateManualPayment(selectedLoan.id)}
-											className="flex items-center px-3 py-1.5 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors text-xs"
-											title="Create manual payment for this loan"
-										>
-											<CurrencyDollarIcon className="h-3 w-3 mr-1" />
-											Manual Payment
-										</button>
-									)}
-									<button
-										onClick={() => downloadIndividualLoanCSV(selectedLoan)}
-										disabled={refreshing}
-										className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
-										title="Download loan data as CSV"
-									>
-										{refreshing ? (
-											<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
-										) : (
-											<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
+							</div>
+							<div className="p-4 border-b border-gray-700/30">
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
+										{/* View Disbursement - Show if applicationId exists */}
+										{selectedLoan.applicationId && (
+											<Link
+												href={`/dashboard/disbursements?search=${selectedLoan.applicationId}`}
+												className="flex items-center px-3 py-1.5 bg-teal-500/20 text-teal-200 rounded-lg border border-teal-400/20 hover:bg-teal-500/30 transition-colors text-xs"
+												title="View disbursement details"
+											>
+												<BanknotesIcon className="h-3 w-3 mr-1" />
+												View Disbursement
+											</Link>
 										)}
-										Download CSV
-									</button>
+										{/* View Related Payments - Show if there are repayments */}
+										{selectedLoan.repayments && selectedLoan.repayments.length > 0 && (
+											<Link
+												href={`/dashboard/payments?search=${selectedLoan.id}&status=all`}
+												className="flex items-center px-3 py-1.5 bg-amber-500/20 text-amber-200 rounded-lg border border-amber-400/20 hover:bg-amber-500/30 transition-colors text-xs"
+												title="View related payments"
+											>
+												<CreditCardIcon className="h-3 w-3 mr-1" />
+												View Payments
+											</Link>
+										)}
+										{/* Manual Payment Button - Show for ACTIVE loans */}
+										{selectedLoan.status === "ACTIVE" && (
+											<button
+												onClick={() => handleCreateManualPayment(selectedLoan.id)}
+												className="flex items-center px-3 py-1.5 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors text-xs"
+												title="Create manual payment for this loan"
+											>
+												<CurrencyDollarIcon className="h-3 w-3 mr-1" />
+												Manual Payment
+											</button>
+										)}
+										{/* Request Discharge - Show for ACTIVE loans with zero balance */}
+										{selectedLoan.status === "ACTIVE" && selectedLoan.outstandingBalance === 0 && (
+											<button
+												onClick={() => handleDischargeRequest("request")}
+												className="flex items-center px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-xs"
+												title="Request loan discharge"
+											>
+												<CheckCircleIcon className="h-3 w-3 mr-1" />
+												Request Discharge
+											</button>
+										)}
+										{/* Discharge Actions - Show for PENDING_DISCHARGE status */}
+										{selectedLoan.status === "PENDING_DISCHARGE" && (
+											<>
+												<button
+													onClick={() => handleDischargeRequest("approve")}
+													className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+													title="Approve loan discharge"
+												>
+													<CheckCircleIcon className="h-3 w-3 mr-1" />
+													Approve Discharge
+												</button>
+												<button
+													onClick={() => handleDischargeRequest("reject")}
+													className="flex items-center px-3 py-1.5 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors text-xs"
+													title="Reject loan discharge"
+												>
+													<XMarkIcon className="h-3 w-3 mr-1" />
+													Reject Discharge
+												</button>
+											</>
+										)}
+										<button
+											onClick={() => downloadIndividualLoanCSV(selectedLoan)}
+											disabled={refreshing}
+											className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+											title="Download loan data as CSV"
+										>
+											{refreshing ? (
+												<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
+											) : (
+												<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
+											)}
+											Download CSV
+										</button>
+									</div>
 								</div>
 							</div>
 
@@ -4503,63 +4583,6 @@ function ActiveLoansContent() {
 											</div>
 										</div>
 
-										{/* Action Buttons */}
-										<div className="flex flex-wrap gap-3">
-											{selectedLoan.applicationId && (
-												<Link
-													href={`/dashboard/disbursements?search=${selectedLoan.applicationId}`}
-													className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
-												>
-													<BanknotesIcon className="h-5 w-5 mr-2" />
-													View Disbursement
-												</Link>
-											)}
-
-											{/* Discharge Actions */}
-											{selectedLoan.status === "ACTIVE" &&
-												selectedLoan.outstandingBalance ===
-													0 && (
-													<button
-														onClick={() =>
-															handleDischargeRequest(
-																"request"
-															)
-														}
-														className="px-4 py-2 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors flex items-center"
-													>
-														<CheckCircleIcon className="h-5 w-5 mr-2" />
-														Request Discharge
-													</button>
-												)}
-
-											{selectedLoan.status ===
-												"PENDING_DISCHARGE" && (
-												<>
-													<button
-														onClick={() =>
-															handleDischargeRequest(
-																"approve"
-															)
-														}
-														className="px-4 py-2 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors flex items-center"
-													>
-														<CheckCircleIcon className="h-5 w-5 mr-2" />
-														Approve Discharge
-													</button>
-													<button
-														onClick={() =>
-															handleDischargeRequest(
-																"reject"
-															)
-														}
-														className="px-4 py-2 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors flex items-center"
-													>
-														<XMarkIcon className="h-5 w-5 mr-2" />
-														Reject Discharge
-													</button>
-												</>
-											)}
-										</div>
 									</>
 								)}
 
