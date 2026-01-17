@@ -3084,9 +3084,10 @@ function ActiveLoansContent() {
 									</span>
 								</div>
 							</div>
-							<div className="p-4 border-b border-gray-700/30">
+							<div className="p-4 border-b border-gray-700/30 space-y-3">
+								{/* Row 1: View Actions */}
 								<div className="flex items-center gap-3">
-									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</span>
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider w-20">View</span>
 									<div className="h-4 w-px bg-gray-600/50"></div>
 									<div className="flex items-center gap-2 flex-wrap">
 										{/* View Disbursement - Show if applicationId exists */}
@@ -3097,75 +3098,40 @@ function ActiveLoansContent() {
 												title="View disbursement details"
 											>
 												<BanknotesIcon className="h-3 w-3 mr-1" />
-												View Disbursement
+												Disbursement
 											</Link>
 										)}
 										{/* View Related Payments - Show if there are repayments */}
 										{selectedLoan.repayments && selectedLoan.repayments.length > 0 && (
 											<Link
 												href={`/dashboard/payments?search=${selectedLoan.id}&status=all`}
-												className="flex items-center px-3 py-1.5 bg-amber-500/20 text-amber-200 rounded-lg border border-amber-400/20 hover:bg-amber-500/30 transition-colors text-xs"
+												className="flex items-center px-3 py-1.5 bg-teal-500/20 text-teal-200 rounded-lg border border-teal-400/20 hover:bg-teal-500/30 transition-colors text-xs"
 												title="View related payments"
 											>
 												<CreditCardIcon className="h-3 w-3 mr-1" />
-												View Payments
+												Payments
 											</Link>
 										)}
-										{/* Manual Payment Button - Show for ACTIVE loans */}
-										{selectedLoan.status === "ACTIVE" && (
-											<button
-												onClick={() => handleCreateManualPayment(selectedLoan.id)}
-												className="flex items-center px-3 py-1.5 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors text-xs"
-												title="Create manual payment for this loan"
-											>
-												<CurrencyDollarIcon className="h-3 w-3 mr-1" />
-												Manual Payment
-											</button>
-										)}
-										{/* Request Discharge - Show for ACTIVE loans with zero balance */}
-										{selectedLoan.status === "ACTIVE" && selectedLoan.outstandingBalance === 0 && (
-											<button
-												onClick={() => handleDischargeRequest("request")}
-												className="flex items-center px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-xs"
-												title="Request loan discharge"
-											>
-												<CheckCircleIcon className="h-3 w-3 mr-1" />
-												Request Discharge
-											</button>
-										)}
-										{/* Discharge Actions - Show for PENDING_DISCHARGE status */}
-										{selectedLoan.status === "PENDING_DISCHARGE" && (
-											<>
-												<button
-													onClick={() => handleDischargeRequest("approve")}
-													className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
-													title="Approve loan discharge"
-												>
-													<CheckCircleIcon className="h-3 w-3 mr-1" />
-													Approve Discharge
-												</button>
-												<button
-													onClick={() => handleDischargeRequest("reject")}
-													className="flex items-center px-3 py-1.5 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors text-xs"
-													title="Reject loan discharge"
-												>
-													<XMarkIcon className="h-3 w-3 mr-1" />
-													Reject Discharge
-												</button>
-											</>
-										)}
+									</div>
+								</div>
+
+								{/* Row 2: Download Actions */}
+								<div className="flex items-center gap-3">
+									<span className="text-xs font-medium text-gray-400 uppercase tracking-wider w-20">Downloads</span>
+									<div className="h-4 w-px bg-gray-600/50"></div>
+									<div className="flex items-center gap-2 flex-wrap">
 										<button
 											onClick={() => downloadIndividualLoanCSV(selectedLoan)}
 											disabled={refreshing}
-											className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
-											title="Download loan data as CSV"
+											className="flex items-center px-3 py-1.5 bg-emerald-500/20 text-emerald-200 rounded-lg border border-emerald-400/20 hover:bg-emerald-500/30 transition-colors text-xs"
+											title="Download loan audit trail as CSV"
 										>
 											{refreshing ? (
 												<ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
 											) : (
 												<DocumentArrowDownIcon className="h-3 w-3 mr-1" />
 											)}
-											Download CSV
+											Audit Trail (CSV)
 										</button>
 										{/* Lampiran A - Compliance Document */}
 										<button
@@ -3174,10 +3140,63 @@ function ActiveLoansContent() {
 											title="Download Lampiran A (Borrower Account Ledger) - Compliance document under Moneylenders Act 1951"
 										>
 											<ClipboardDocumentCheckIcon className="h-3 w-3 mr-1" />
-											Lampiran A
+											Lampiran A (PDF)
 										</button>
 									</div>
 								</div>
+
+								{/* Row 3: Actions */}
+								{(selectedLoan.status === "ACTIVE" || selectedLoan.status === "PENDING_DISCHARGE") && (
+									<div className="flex items-center gap-3">
+										<span className="text-xs font-medium text-gray-400 uppercase tracking-wider w-20">Actions</span>
+										<div className="h-4 w-px bg-gray-600/50"></div>
+										<div className="flex items-center gap-2 flex-wrap">
+											{/* Manual Payment Button - Show for ACTIVE loans */}
+											{selectedLoan.status === "ACTIVE" && (
+												<button
+													onClick={() => handleCreateManualPayment(selectedLoan.id)}
+													className="flex items-center px-3 py-1.5 bg-purple-500/20 text-purple-200 rounded-lg border border-purple-400/20 hover:bg-purple-500/30 transition-colors text-xs"
+													title="Create manual payment for this loan"
+												>
+													<CurrencyDollarIcon className="h-3 w-3 mr-1" />
+													Manual Payment
+												</button>
+											)}
+											{/* Request Discharge - Show for ACTIVE loans with zero balance */}
+											{selectedLoan.status === "ACTIVE" && selectedLoan.outstandingBalance === 0 && (
+												<button
+													onClick={() => handleDischargeRequest("request")}
+													className="flex items-center px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-xs"
+													title="Request loan discharge"
+												>
+													<CheckCircleIcon className="h-3 w-3 mr-1" />
+													Request Discharge
+												</button>
+											)}
+											{/* Discharge Actions - Show for PENDING_DISCHARGE status */}
+											{selectedLoan.status === "PENDING_DISCHARGE" && (
+												<>
+													<button
+														onClick={() => handleDischargeRequest("approve")}
+														className="flex items-center px-3 py-1.5 bg-green-500/20 text-green-200 rounded-lg border border-green-400/20 hover:bg-green-500/30 transition-colors text-xs"
+														title="Approve loan discharge"
+													>
+														<CheckCircleIcon className="h-3 w-3 mr-1" />
+														Approve Discharge
+													</button>
+													<button
+														onClick={() => handleDischargeRequest("reject")}
+														className="flex items-center px-3 py-1.5 bg-red-500/20 text-red-200 rounded-lg border border-red-400/20 hover:bg-red-500/30 transition-colors text-xs"
+														title="Reject loan discharge"
+													>
+														<XMarkIcon className="h-3 w-3 mr-1" />
+														Reject Discharge
+													</button>
+												</>
+											)}
+										</div>
+									</div>
+								)}
 							</div>
 
 							<div className="p-6">
