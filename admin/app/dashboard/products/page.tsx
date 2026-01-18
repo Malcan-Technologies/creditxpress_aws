@@ -604,7 +604,7 @@ export default function AdminProductsPage() {
 											<div className="font-medium text-white">{product.name}</div>
 											<div className="text-xs text-gray-400">{product.code}</div>
 										</td>
-										<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+										<td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">
 											{formatCurrencyCompact(product.minAmount)} - {formatCurrencyCompact(product.maxAmount)}
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
@@ -671,8 +671,8 @@ export default function AdminProductsPage() {
 												</span>
 											)}
 										</td>
-										<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-											<div className="flex items-center justify-end space-x-2">
+										<td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+											<div className="flex items-center space-x-2">
 												<button
 													onClick={() => handleEdit(product)}
 													className="text-blue-400 hover:text-blue-300 transition-colors"

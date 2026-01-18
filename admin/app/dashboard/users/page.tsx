@@ -22,6 +22,15 @@ import {
 	CreditCardIcon,
 	ArrowPathIcon,
 	BanknotesIcon,
+	HomeIcon,
+	BriefcaseIcon,
+	ShieldCheckIcon,
+	BuildingOfficeIcon,
+	CurrencyDollarIcon,
+	AcademicCapIcon,
+	MapPinIcon,
+	CheckCircleIcon,
+	ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/navigation";
 
@@ -33,40 +42,39 @@ interface User {
 	role: string;
 	createdAt: string;
 	lastLoginAt?: string;
+	icNumber?: string;
+	icType?: string;
+	kycStatus?: boolean;
+	isOnboardingComplete?: boolean;
+	city?: string;
+	state?: string;
 }
 
-interface LoanApplication {
-	id: string;
-	userId: string;
-	status: string;
-	amount?: number;
-	createdAt: string;
-	updatedAt: string;
-	product?: {
-		name?: string;
-	};
-}
-
-interface ActiveLoan {
-	id: string;
-	userId: string;
-	principalAmount: number;
-	totalAmount: number;
-	outstandingBalance: number;
-	interestRate: number;
-	term: number;
-	monthlyPayment: number;
-	nextPaymentDue?: string;
-	status: string;
-	disbursedAt: string;
-	createdAt: string;
-	application?: {
-		id: string;
-		purpose?: string;
-		product?: {
-			name?: string;
-		};
-	};
+interface UserDetails extends User {
+	updatedAt?: string;
+	dateOfBirth?: string;
+	address1?: string;
+	address2?: string;
+	zipCode?: string;
+	country?: string;
+	employmentStatus?: string;
+	employerName?: string;
+	monthlyIncome?: string;
+	serviceLength?: string;
+	occupation?: string;
+	bankName?: string;
+	accountNumber?: string;
+	onboardingStep?: number;
+	phoneVerified?: boolean;
+	idNumber?: string;
+	idType?: string;
+	nationality?: string;
+	race?: string;
+	gender?: string;
+	educationLevel?: string;
+	emergencyContactName?: string;
+	emergencyContactPhone?: string;
+	emergencyContactRelationship?: string;
 }
 
 export default function AdminUsersPage() {
@@ -83,9 +91,8 @@ export default function AdminUsersPage() {
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [selectedUser, setSelectedUser] = useState<User | null>(null);
 	const [viewDialogOpen, setViewDialogOpen] = useState(false);
-	const [userLoans, setUserLoans] = useState<LoanApplication[]>([]);
-	const [userActiveLoans, setUserActiveLoans] = useState<ActiveLoan[]>([]);
-	const [loadingLoans, setLoadingLoans] = useState(false);
+	const [userDetails, setUserDetails] = useState<UserDetails | null>(null);
+	const [loadingDetails, setLoadingDetails] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 
 	// Form states
@@ -352,90 +359,38 @@ export default function AdminUsersPage() {
 		setSelectedUser(null);
 	};
 
-	// Handle viewing user details and applications
+	// Handle viewing user details
 	const handleViewClick = async (user: User) => {
 		setSelectedUser(user);
 		setViewDialogOpen(true);
-		setLoadingLoans(true);
+		setLoadingDetails(true);
 
 		try {
-			// Fetch all applications
-			const applications = await fetchWithAdminTokenRefresh<
-				LoanApplication[]
-			>("/api/admin/applications");
-
-			// Filter applications for this user
-			const userLoans = applications.filter(
-				(app) => app.userId === user.id
+			// Fetch detailed user information
+			const details = await fetchWithAdminTokenRefresh<UserDetails>(
+				`/api/admin/users/${user.id}`
 			);
-			setUserLoans(userLoans);
-
-			// Fetch active loans for this user
-			try {
-				const loansResponse = await fetchWithAdminTokenRefresh<{
-					success?: boolean;
-					data?: ActiveLoan[];
-				}>("/api/admin/loans");
-
-				if (loansResponse.success && loansResponse.data) {
-					const userActiveLoans = loansResponse.data.filter(
-						(loan) => loan.userId === user.id
-					);
-					setUserActiveLoans(userActiveLoans);
-				} else {
-					setUserActiveLoans([]);
-				}
-			} catch (error) {
-				console.error("Error fetching active loans:", error);
-				setUserActiveLoans([]);
-			}
+			setUserDetails(details);
 		} catch (error) {
-			console.error("Error fetching user loans:", error);
-			setUserLoans([]);
-			setUserActiveLoans([]);
+			console.error("Error fetching user details:", error);
+			setUserDetails(null);
 		} finally {
-			setLoadingLoans(false);
+			setLoadingDetails(false);
 		}
 	};
 
 	const handleViewClose = () => {
 		setViewDialogOpen(false);
 		setSelectedUser(null);
-		setUserLoans([]);
-		setUserActiveLoans([]);
+		setUserDetails(null);
 	};
 
-	const handleViewLoanDetails = (loanId: string, status: string) => {
-		// Close dialog
-		setViewDialogOpen(false);
-
-		// Determine which page to navigate to based on loan status
-		if (status === "APPROVED" || status === "DISBURSED") {
-			router.push(`/dashboard/loans?id=${loanId}`);
-		} else {
-			router.push(`/dashboard/applications?id=${loanId}`);
+	// Format IC number for display
+	const formatIC = (ic: string) => {
+		if (ic.length === 12) {
+			return `${ic.slice(0, 6)}-${ic.slice(6, 8)}-${ic.slice(8)}`;
 		}
-	};
-
-	// Helper function for loan status colors
-	const getStatusColor = (status: string): string => {
-		const statusMap: Record<string, string> = {
-			INCOMPLETE: "bg-gray-500/20 text-gray-200 border-gray-400/20",
-			PENDING_APP_FEE: "bg-blue-500/20 text-blue-200 border-blue-400/20",
-			PENDING_KYC:
-				"bg-indigo-500/20 text-indigo-200 border-indigo-400/20",
-			PENDING_APPROVAL:
-				"bg-yellow-500/20 text-yellow-200 border-yellow-400/20",
-			APPROVED: "bg-green-500/20 text-green-200 border-green-400/20",
-			DISBURSED: "bg-purple-500/20 text-purple-200 border-purple-400/20",
-			REJECTED: "bg-red-500/20 text-red-200 border-red-400/20",
-			WITHDRAWN: "bg-gray-500/20 text-gray-200 border-gray-400/20",
-		};
-
-		return (
-			statusMap[status] ||
-			"bg-gray-500/20 text-gray-200 border-gray-400/20"
-		);
+		return ic;
 	};
 
 	// Format currency helper function
@@ -601,13 +556,16 @@ export default function AdminUsersPage() {
 									Contact
 								</th>
 								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+									Status
+								</th>
+								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 									Role
 								</th>
 								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 									Last Login
 								</th>
 								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-									Joined
+									Created
 								</th>
 								<th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
 									Actions
@@ -630,15 +588,17 @@ export default function AdminUsersPage() {
 												</div>
 												<div className="ml-4">
 													<div className="text-sm font-medium text-white">
-														{user.fullName}
+														{user.fullName || "No name"}
 													</div>
-													<div className="text-sm text-gray-400">
-														ID:{" "}
-														{user.id.substring(
-															0,
-															8
+													<div className="text-xs text-gray-400">
+														{user.icNumber ? (
+															<span className="flex items-center">
+																<IdentificationIcon className="h-3 w-3 mr-1" />
+																{formatIC(user.icNumber)}
+															</span>
+														) : (
+															<span>ID: {user.id.substring(0, 8)}...</span>
 														)}
-														...
 													</div>
 												</div>
 											</div>
@@ -646,13 +606,57 @@ export default function AdminUsersPage() {
 										<td className="px-6 py-4 whitespace-nowrap">
 											<div className="text-sm text-gray-300">
 												<div className="flex items-center mb-1">
-													<EnvelopeIcon className="h-4 w-4 text-gray-400 mr-2" />
-													{user.email}
-												</div>
-												<div className="flex items-center">
 													<PhoneIcon className="h-4 w-4 text-gray-400 mr-2" />
 													{user.phoneNumber}
 												</div>
+												{user.email && (
+													<div className="flex items-center text-xs text-gray-400">
+														<EnvelopeIcon className="h-3 w-3 mr-1" />
+														<span className="truncate max-w-[150px]">{user.email}</span>
+													</div>
+												)}
+											</div>
+										</td>
+										<td className="px-6 py-4 whitespace-nowrap">
+											<div className="flex flex-col items-start gap-1">
+												<span
+													className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border w-auto ${
+														user.kycStatus
+															? "bg-green-500/20 text-green-200 border-green-400/20"
+															: "bg-gray-500/20 text-gray-300 border-gray-400/20"
+													}`}
+												>
+													{user.kycStatus ? (
+														<>
+															<CheckCircleIcon className="h-3 w-3 mr-1" />
+															KYC Verified
+														</>
+													) : (
+														<>
+															<ExclamationCircleIcon className="h-3 w-3 mr-1" />
+															No KYC
+														</>
+													)}
+												</span>
+												<span
+													className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border w-auto ${
+														user.isOnboardingComplete
+															? "bg-green-500/20 text-green-200 border-green-400/20"
+															: "bg-amber-500/20 text-amber-200 border-amber-400/20"
+													}`}
+												>
+													{user.isOnboardingComplete ? (
+														<>
+															<CheckCircleIcon className="h-3 w-3 mr-1" />
+															Profile Complete
+														</>
+													) : (
+														<>
+															<ExclamationCircleIcon className="h-3 w-3 mr-1" />
+															Profile Incomplete
+														</>
+													)}
+												</span>
 											</div>
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap">
@@ -672,59 +676,44 @@ export default function AdminUsersPage() {
 											<div className="text-sm text-gray-300">
 												{user.lastLoginAt ? (
 													<div>
-														<div className="flex items-center">
-															<CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
-															{formatDate(
-																user.lastLoginAt
-															)}
+														<div className="text-xs">
+															{formatDate(user.lastLoginAt)}
 														</div>
-														<div className="flex items-center mt-1">
-															<ClockIcon className="h-4 w-4 text-gray-400 mr-2" />
-															<span className="text-xs text-gray-400">
-																{formatTime(
-																	user.lastLoginAt
-																)}
-															</span>
+														<div className="text-xs text-gray-400">
+															{formatTime(user.lastLoginAt)}
 														</div>
 													</div>
 												) : (
-													<span className="text-gray-500 italic">
-														Never logged in
+													<span className="text-gray-500 text-xs italic">
+														Never
 													</span>
 												)}
 											</div>
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="flex items-center text-sm text-gray-300">
-												<CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
+											<div className="text-xs text-gray-300">
 												{formatDate(user.createdAt)}
 											</div>
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap text-sm">
-											<div className="flex items-center space-x-3">
+											<div className="flex items-center space-x-2">
 												<button
-													onClick={() =>
-														handleViewClick(user)
-													}
-													className="text-blue-400 hover:text-blue-300 transition-colors"
+													onClick={() => handleViewClick(user)}
+													className="text-blue-400 hover:text-blue-300 transition-colors p-1.5 rounded-lg hover:bg-blue-500/10"
 													title="View Details"
 												>
 													<EyeIcon className="h-5 w-5" />
 												</button>
 												<button
-													onClick={() =>
-														handleEditClick(user)
-													}
-													className="text-green-400 hover:text-green-300 transition-colors"
+													onClick={() => handleEditClick(user)}
+													className="text-green-400 hover:text-green-300 transition-colors p-1.5 rounded-lg hover:bg-green-500/10"
 													title="Edit User"
 												>
 													<PencilIcon className="h-5 w-5" />
 												</button>
 												<button
-													onClick={() =>
-														handleDeleteClick(user)
-													}
-													className="text-red-400 hover:text-red-300 transition-colors"
+													onClick={() => handleDeleteClick(user)}
+													className="text-red-400 hover:text-red-300 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"
 													title="Delete User"
 												>
 													<TrashIcon className="h-5 w-5" />
@@ -736,7 +725,7 @@ export default function AdminUsersPage() {
 							) : (
 								<tr>
 									<td
-										colSpan={6}
+										colSpan={7}
 										className="px-6 py-12 text-center"
 									>
 										<UserGroupIcon className="mx-auto h-12 w-12 text-gray-500" />
@@ -1043,378 +1032,305 @@ export default function AdminUsersPage() {
 							onClick={handleViewClose}
 						></div>
 
-						<div className="relative bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all w-full max-w-7xl max-h-[90vh] border border-gray-700/30">
-							<div className="px-6 py-4 border-b border-gray-700/30 flex justify-between items-center">
-								<h3 className="text-lg font-medium text-white">
-									User Details
-								</h3>
-								<button
-									onClick={handleViewClose}
-									className="text-gray-400 hover:text-white transition-colors"
-								>
-									<XMarkIcon className="h-6 w-6" />
-								</button>
-							</div>
-
-							<div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-120px)]">
-								<div className="space-y-6">
-									{/* User Information */}
-									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
-										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
-											<IdentificationIcon className="h-6 w-6 text-blue-400 mr-2" />
-											User Information
-										</h4>
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-											<div className="space-y-3">
-												<div>
-													<p className="text-sm font-medium text-gray-400">
-														Name
-													</p>
-													<p className="text-white">
-														{selectedUser.fullName}
-													</p>
-												</div>
-												<div>
-													<p className="text-sm font-medium text-gray-400">
-														Email
-													</p>
-													<p className="text-white">
-														{selectedUser.email}
-													</p>
-												</div>
-											</div>
-											<div className="space-y-3">
-												<div>
-													<p className="text-sm font-medium text-gray-400">
-														Phone
-													</p>
-													<p className="text-white">
-														{
-															selectedUser.phoneNumber
-														}
-													</p>
-												</div>
-												<div>
-													<p className="text-sm font-medium text-gray-400">
-														Role
-													</p>
-													<span
-														className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
-															selectedUser.role === "ADMIN"
-																? "bg-purple-500/20 text-purple-200 border-purple-400/20"
-																: selectedUser.role === "ATTESTOR"
-																? "bg-blue-500/20 text-blue-200 border-blue-400/20"
-																: "bg-green-500/20 text-green-200 border-green-400/20"
-														}`}
-													>
-														{selectedUser.role}
-													</span>
-												</div>
-											</div>
-										</div>
+						<div className="relative bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl text-left shadow-xl transform transition-all w-full max-w-4xl max-h-[90vh] border border-gray-700/30 flex flex-col">
+							{/* Header */}
+							<div className="px-6 py-4 border-b border-gray-700/30 flex justify-between items-center bg-gray-800/50">
+								<div className="flex items-center space-x-4">
+									<div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+										<UserIcon className="h-6 w-6 text-white" />
 									</div>
-
-									{/* Loan Applications */}
-									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
-										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
-											<CreditCardIcon className="h-6 w-6 text-green-400 mr-2" />
-											Loan Applications
-											{userLoans.length > 0 && (
-												<span className="ml-2 bg-green-500/20 text-green-200 text-xs font-medium px-2 py-1 rounded-full border border-green-400/20">
-													{userLoans.length}
-												</span>
-											)}
-										</h4>
-
-										{loadingLoans ? (
-											<div className="flex justify-center py-6">
-												<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
-											</div>
-										) : userLoans.length > 0 ? (
-											<div className="overflow-x-auto">
-												<table className="min-w-full divide-y divide-gray-700/30">
-													<thead className="bg-gray-800/50">
-														<tr>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Application ID
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Product
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Amount
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Status
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Applied Date
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Action
-															</th>
-														</tr>
-													</thead>
-													<tbody className="divide-y divide-gray-700/30">
-														{userLoans.map(
-															(loan) => (
-																<tr
-																	key={
-																		loan.id
-																	}
-																	className="hover:bg-gray-800/30"
-																>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm font-medium text-white">
-																			{loan.id.substring(
-																				0,
-																				8
-																			)}
-																			...
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm text-gray-300">
-																			{loan
-																				.product
-																				?.name ||
-																				"N/A"}
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm text-gray-300">
-																			{formatCurrency(
-																				loan.amount
-																			)}
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<span
-																			className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(
-																				loan.status
-																			)}`}
-																		>
-																			{loan.status.replace(
-																				/_/g,
-																				" "
-																			)}
-																		</span>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap text-sm text-gray-300">
-																		{formatDate(
-																			loan.createdAt
-																		)}
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<button
-																			onClick={() =>
-																				handleViewLoanDetails(
-																					loan.id,
-																					loan.status
-																				)
-																			}
-																			className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-																		>
-																			View
-																			Details
-																		</button>
-																	</td>
-																</tr>
-															)
-														)}
-													</tbody>
-												</table>
-											</div>
-										) : (
-											<div className="text-center py-6 text-gray-400">
-												<CreditCardIcon className="mx-auto h-12 w-12 text-gray-500 mb-2" />
-												<p>
-													No loan applications found
-													for this user.
-												</p>
-											</div>
-										)}
-									</div>
-
-									{/* Active Loans */}
-									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
-										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
-											<BanknotesIcon className="h-6 w-6 text-blue-400 mr-2" />
-											Active Loans
-											{userActiveLoans.length > 0 && (
-												<span className="ml-2 bg-blue-500/20 text-blue-200 text-xs font-medium px-2 py-1 rounded-full border border-blue-400/20">
-													{userActiveLoans.length}
-												</span>
-											)}
-										</h4>
-
-										{loadingLoans ? (
-											<div className="flex justify-center py-6">
-												<div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-400"></div>
-											</div>
-										) : userActiveLoans.length > 0 ? (
-											<div className="overflow-x-auto">
-												<table className="min-w-full divide-y divide-gray-700/30">
-													<thead className="bg-gray-800/50">
-														<tr>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Loan ID
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Product
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Principal
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Outstanding
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Monthly Payment
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Next Payment
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Status
-															</th>
-															<th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-																Action
-															</th>
-														</tr>
-													</thead>
-													<tbody className="divide-y divide-gray-700/30">
-														{userActiveLoans.map(
-															(loan) => (
-																<tr
-																	key={
-																		loan.id
-																	}
-																	className="hover:bg-gray-800/30"
-																>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm font-medium text-white">
-																			{loan.id.substring(
-																				0,
-																				8
-																			)}
-																			...
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm text-gray-300">
-																			{loan
-																				.application
-																				?.product
-																				?.name ||
-																				"N/A"}
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm text-gray-300">
-																			{formatCurrency(
-																				loan.principalAmount
-																			)}
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm text-gray-300">
-																			{formatCurrency(
-																				loan.outstandingBalance
-																			)}
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm text-gray-300">
-																			{formatCurrency(
-																				loan.monthlyPayment
-																			)}
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<div className="text-sm text-gray-300">
-																			{loan.nextPaymentDue
-																				? formatDate(
-																						loan.nextPaymentDue
-																				  )
-																				: "N/A"}
-																		</div>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<span
-																			className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
-																				loan.status ===
-																				"ACTIVE"
-																					? "bg-green-500/20 text-green-200 border-green-400/20"
-																					: getStatusColor(
-																							loan.status
-																					  )
-																			}`}
-																		>
-																			{
-																				loan.status
-																			}
-																		</span>
-																	</td>
-																	<td className="px-3 py-2 whitespace-nowrap">
-																		<button
-																			onClick={() =>
-																				handleViewLoanDetails(
-																					loan.id,
-																					loan.status
-																				)
-																			}
-																			className="text-blue-400 hover:text-blue-300 text-sm font-medium transition-colors"
-																		>
-																			View
-																			Details
-																		</button>
-																	</td>
-																</tr>
-															)
-														)}
-													</tbody>
-												</table>
-											</div>
-										) : (
-											<div className="text-center py-6 text-gray-400">
-												<BanknotesIcon className="mx-auto h-12 w-12 text-gray-500 mb-2" />
-												<p>
-													No active loans found for
-													this user.
-												</p>
-											</div>
-										)}
-									</div>
-
-									{/* Account Information */}
-									<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
-										<h4 className="text-lg font-medium text-white mb-4 flex items-center">
-											<CalendarIcon className="h-6 w-6 text-amber-400 mr-2" />
-											Account Information
-										</h4>
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-											<div>
-												<p className="text-sm font-medium text-gray-400">
-													Account Created
-												</p>
-												<p className="text-white">
-													{formatDate(
-														selectedUser.createdAt
-													)}
-												</p>
-											</div>
-											<div>
-												<p className="text-sm font-medium text-gray-400">
-													Total Applications
-												</p>
-												<p className="text-white">
-													{userLoans.length}
-												</p>
-											</div>
-										</div>
+									<div>
+										<h3 className="text-lg font-semibold text-white">
+											{userDetails?.fullName || selectedUser.fullName || "User Details"}
+										</h3>
+										<p className="text-sm text-gray-400">
+											{selectedUser.phoneNumber}
+										</p>
 									</div>
 								</div>
+								<div className="flex items-center space-x-3">
+									<span
+										className={`inline-flex px-3 py-1 text-xs font-medium rounded-full border ${
+											selectedUser.role === "ADMIN"
+												? "bg-purple-500/20 text-purple-200 border-purple-400/20"
+												: selectedUser.role === "ATTESTOR"
+												? "bg-blue-500/20 text-blue-200 border-blue-400/20"
+												: "bg-green-500/20 text-green-200 border-green-400/20"
+										}`}
+									>
+										{selectedUser.role}
+									</span>
+									<button
+										onClick={handleViewClose}
+										className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-gray-700/50"
+									>
+										<XMarkIcon className="h-6 w-6" />
+									</button>
+								</div>
+							</div>
+
+							<div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">
+								{loadingDetails ? (
+									<div className="flex items-center justify-center py-12">
+										<div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-400"></div>
+										<span className="ml-3 text-gray-400">Loading user details...</span>
+									</div>
+								) : userDetails ? (
+									<div className="space-y-6">
+										{/* Status Badges */}
+										<div className="flex flex-wrap gap-2">
+											<span
+												className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full border ${
+													userDetails.kycStatus
+														? "bg-green-500/20 text-green-200 border-green-400/20"
+														: "bg-gray-500/20 text-gray-300 border-gray-400/20"
+												}`}
+											>
+												{userDetails.kycStatus ? (
+													<><CheckCircleIcon className="h-3.5 w-3.5 mr-1.5" />KYC Verified</>
+												) : (
+													<><ExclamationCircleIcon className="h-3.5 w-3.5 mr-1.5" />No KYC</>
+												)}
+											</span>
+											<span
+												className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full border ${
+													userDetails.isOnboardingComplete
+														? "bg-blue-500/20 text-blue-200 border-blue-400/20"
+														: "bg-amber-500/20 text-amber-200 border-amber-400/20"
+												}`}
+											>
+												{userDetails.isOnboardingComplete ? "Profile Complete" : "Profile Incomplete"}
+											</span>
+											<span
+												className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full border ${
+													userDetails.phoneVerified
+														? "bg-green-500/20 text-green-200 border-green-400/20"
+														: "bg-red-500/20 text-red-200 border-red-400/20"
+												}`}
+											>
+												{userDetails.phoneVerified ? "Phone Verified" : "Phone Unverified"}
+											</span>
+										</div>
+
+										{/* Personal Information */}
+										<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+											<h4 className="text-base font-medium text-white mb-4 flex items-center">
+												<UserIcon className="h-5 w-5 text-blue-400 mr-2" />
+												Personal Information
+											</h4>
+											<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Full Name</p>
+													<p className="text-sm text-white mt-1">{userDetails.fullName || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</p>
+													<p className="text-sm text-white mt-1">{userDetails.email || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date of Birth</p>
+													<p className="text-sm text-white mt-1">
+														{userDetails.dateOfBirth ? formatDate(userDetails.dateOfBirth) : "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</p>
+													<p className="text-sm text-white mt-1">{userDetails.gender || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Race</p>
+													<p className="text-sm text-white mt-1">{userDetails.race || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Education</p>
+													<p className="text-sm text-white mt-1">{userDetails.educationLevel || "—"}</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Identity Information */}
+										<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+											<h4 className="text-base font-medium text-white mb-4 flex items-center">
+												<IdentificationIcon className="h-5 w-5 text-purple-400 mr-2" />
+												Identity Information
+											</h4>
+											<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">IC Number</p>
+													<p className="text-sm text-white mt-1">
+														{userDetails.icNumber ? formatIC(userDetails.icNumber) : "—"}
+													</p>
+													{userDetails.icType && (
+														<p className="text-xs text-blue-400">{userDetails.icType === "IC" ? "Malaysian IC" : "Passport"}</p>
+													)}
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">ID Number (Legacy)</p>
+													<p className="text-sm text-white mt-1">{userDetails.idNumber || "—"}</p>
+													{userDetails.idType && (
+														<p className="text-xs text-gray-400">{userDetails.idType}</p>
+													)}
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nationality</p>
+													<p className="text-sm text-white mt-1">{userDetails.nationality || "—"}</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Address */}
+										<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+											<h4 className="text-base font-medium text-white mb-4 flex items-center">
+												<HomeIcon className="h-5 w-5 text-green-400 mr-2" />
+												Address
+											</h4>
+											<div className="space-y-2">
+												{userDetails.address1 || userDetails.address2 || userDetails.city ? (
+													<>
+														{userDetails.address1 && <p className="text-sm text-white">{userDetails.address1}</p>}
+														{userDetails.address2 && <p className="text-sm text-white">{userDetails.address2}</p>}
+														<p className="text-sm text-white">
+															{[userDetails.city, userDetails.state, userDetails.zipCode].filter(Boolean).join(", ")}
+														</p>
+														{userDetails.country && <p className="text-sm text-gray-400">{userDetails.country}</p>}
+													</>
+												) : (
+													<p className="text-sm text-gray-500 italic">No address provided</p>
+												)}
+											</div>
+										</div>
+
+										{/* Employment Information */}
+										<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+											<h4 className="text-base font-medium text-white mb-4 flex items-center">
+												<BriefcaseIcon className="h-5 w-5 text-amber-400 mr-2" />
+												Employment Information
+											</h4>
+											<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Occupation</p>
+													<p className="text-sm text-white mt-1">{userDetails.occupation || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Employment Status</p>
+													<p className="text-sm text-white mt-1">{userDetails.employmentStatus || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Employer</p>
+													<p className="text-sm text-white mt-1">{userDetails.employerName || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Service Length</p>
+													<p className="text-sm text-white mt-1">
+														{userDetails.serviceLength ? `${userDetails.serviceLength} years` : "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Monthly Income</p>
+													<p className="text-sm text-white mt-1">
+														{userDetails.monthlyIncome ? formatCurrency(Number(userDetails.monthlyIncome)) : "—"}
+													</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Banking Information */}
+										<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+											<h4 className="text-base font-medium text-white mb-4 flex items-center">
+												<BanknotesIcon className="h-5 w-5 text-cyan-400 mr-2" />
+												Banking Information
+											</h4>
+											<div className="grid grid-cols-2 gap-4">
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Bank Name</p>
+													<p className="text-sm text-white mt-1">{userDetails.bankName || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Account Number</p>
+													<p className="text-sm text-white mt-1">
+														{userDetails.accountNumber || "—"}
+													</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Emergency Contact */}
+										<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+											<h4 className="text-base font-medium text-white mb-4 flex items-center">
+												<PhoneIcon className="h-5 w-5 text-red-400 mr-2" />
+												Emergency Contact
+											</h4>
+											<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</p>
+													<p className="text-sm text-white mt-1">{userDetails.emergencyContactName || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Phone</p>
+													<p className="text-sm text-white mt-1">{userDetails.emergencyContactPhone || "—"}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Relationship</p>
+													<p className="text-sm text-white mt-1">{userDetails.emergencyContactRelationship || "—"}</p>
+												</div>
+											</div>
+										</div>
+
+										{/* Account Activity */}
+										<div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4">
+											<h4 className="text-base font-medium text-white mb-4 flex items-center">
+												<CalendarIcon className="h-5 w-5 text-gray-400 mr-2" />
+												Account Activity
+											</h4>
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Created</p>
+													<p className="text-sm text-white mt-1">{formatDate(userDetails.createdAt)}</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Updated</p>
+													<p className="text-sm text-white mt-1">
+														{userDetails.updatedAt ? formatDate(userDetails.updatedAt) : "—"}
+													</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Last Login</p>
+													<p className="text-sm text-white mt-1">
+														{userDetails.lastLoginAt ? formatDate(userDetails.lastLoginAt) : "Never"}
+													</p>
+												</div>
+												<div>
+													<p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Onboarding Step</p>
+													<p className="text-sm text-white mt-1">{userDetails.onboardingStep ?? 0}</p>
+												</div>
+											</div>
+										</div>
+									</div>
+								) : (
+									<div className="text-center py-12 text-gray-400">
+										<ExclamationCircleIcon className="mx-auto h-12 w-12 text-gray-500 mb-3" />
+										<p>Failed to load user details</p>
+									</div>
+								)}
+							</div>
+
+							{/* Footer */}
+							<div className="px-6 py-4 border-t border-gray-700/30 bg-gray-800/50 flex justify-between items-center flex-shrink-0">
+								<button
+									onClick={() => {
+										handleViewClose();
+										router.push(`/dashboard/applications?userId=${selectedUser.id}`);
+									}}
+									className="px-4 py-2 text-sm font-medium text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition-colors border border-blue-500/30"
+								>
+									View Applications →
+								</button>
+								<button
+									onClick={handleViewClose}
+									className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm font-medium"
+								>
+									Close
+								</button>
 							</div>
 						</div>
 					</div>

@@ -2528,6 +2528,12 @@ router.get("/users", authenticateToken, async (req: Request, res: Response) => {
 				role: true,
 				createdAt: true,
 				lastLoginAt: true,
+				icNumber: true,
+				icType: true,
+				kycStatus: true,
+				isOnboardingComplete: true,
+				city: true,
+				state: true,
 			},
 		});
 
@@ -2730,14 +2736,33 @@ router.get(
 					city: true,
 					state: true,
 					zipCode: true,
+					country: true,
 					employmentStatus: true,
 					employerName: true,
 					monthlyIncome: true,
+					serviceLength: true,
+					occupation: true,
 					bankName: true,
 					accountNumber: true,
 					onboardingStep: true,
+					isOnboardingComplete: true,
 					kycStatus: true,
 					lastLoginAt: true,
+					phoneVerified: true,
+					// IC/Passport Information
+					icNumber: true,
+					icType: true,
+					idNumber: true,
+					idType: true,
+					nationality: true,
+					// Demographics
+					race: true,
+					gender: true,
+					educationLevel: true,
+					// Emergency Contact
+					emergencyContactName: true,
+					emergencyContactPhone: true,
+					emergencyContactRelationship: true,
 				},
 			});
 
