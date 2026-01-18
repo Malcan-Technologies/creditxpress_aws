@@ -194,6 +194,7 @@ router.get("/:loanId/lampiran-a", authenticateToken, requireAdmin, async (req: A
               select: {
                 receiptNumber: true,
                 generatedAt: true,
+                metadata: true, // Include metadata to get transactionId for matching
               },
               orderBy: { generatedAt: "desc" },
             },
@@ -243,14 +244,17 @@ router.get("/:loanId/lampiran-a", authenticateToken, requireAdmin, async (req: A
     // Determine overall loan status code for Catatan
     const loanStatusCode = getLoanStatusCode(loan.status, isEarlySettlement, hasDefaultRiskFlag);
 
-    // Build a map of receipt numbers by approximate payment date
-    // Receipts are linked to repayments, so we create a lookup
-    const receiptsByDate = new Map<string, string>();
+    // Build a map of receipt numbers by transaction ID
+    // Receipts store the transactionId in their metadata field, allowing us to match
+    // each wallet transaction to its specific receipt
+    const receiptsByTransactionId = new Map<string, string>();
     loan.repayments.forEach((repayment) => {
       repayment.receipts.forEach((receipt) => {
-        // Use the receipt generated date as key (formatted as date string)
-        const dateKey = receipt.generatedAt.toISOString().split("T")[0];
-        receiptsByDate.set(dateKey, receipt.receiptNumber);
+        // Extract transactionId from receipt metadata
+        const metadata = receipt.metadata as { transactionId?: string } | null;
+        if (metadata?.transactionId) {
+          receiptsByTransactionId.set(metadata.transactionId, receipt.receiptNumber);
+        }
       });
     });
 
@@ -277,12 +281,10 @@ router.get("/:loanId/lampiran-a", authenticateToken, requireAdmin, async (req: A
         // Baki Pinjaman = Balance AFTER this payment
         const balanceAfterPayment = Math.max(0, runningBalance);
         
-        // Try to find a matching receipt by date
-        const txDateKey = transaction.createdAt.toISOString().split("T")[0];
-        const receiptNumber = receiptsByDate.get(txDateKey) || 
-          // Also check processedAt date
-          (transaction.processedAt ? receiptsByDate.get(transaction.processedAt.toISOString().split("T")[0]) : undefined) ||
-          // Try to extract from transaction reference if available
+        // Find the matching receipt by transaction ID
+        // This directly links each wallet transaction to its specific receipt
+        const receiptNumber = receiptsByTransactionId.get(transaction.id) || 
+          // Fallback: Try to extract from transaction reference if available
           (transaction.reference || undefined);
         
         // Determine Catatan status for this specific payment row:
