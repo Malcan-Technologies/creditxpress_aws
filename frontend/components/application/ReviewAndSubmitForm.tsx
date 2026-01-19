@@ -1,4 +1,5 @@
 import { useState, useEffect, Suspense } from "react";
+import { toast } from "sonner";
 import {
 	Box,
 	Button,
@@ -417,6 +418,8 @@ function ReviewAndSubmitFormContent({
 			// Start the new multi-step signing flow
 			onSubmit({ termsAccepted });
 			
+			toast.success("Application submitted successfully!");
+			
 			// Always redirect to loans dashboard with applications tab open
 			router.push("/dashboard/loans?tab=applications");
 		} catch (err) {
@@ -426,6 +429,7 @@ function ReviewAndSubmitFormContent({
 					? err.message
 					: "Failed to submit application. Please try again."
 			);
+			toast.error("Failed to submit application. Please try again.");
 		} finally {
 			setIsLoading(false);
 		}

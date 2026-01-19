@@ -26,6 +26,7 @@ import {
 	EyeSlashIcon,
 	InformationCircleIcon,
 } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 import { fetchWithTokenRefresh, checkAuth, TokenStorage } from "@/lib/authUtils";
 import { validatePhoneNumber } from "@/lib/phoneUtils";
 import EnhancedOTPVerification from "@/components/EnhancedOTPVerification";
@@ -582,7 +583,7 @@ export default function ProfilePage() {
 					newPassword: "",
 					confirmPassword: ""
 				});
-				alert("Password changed successfully!");
+				toast.success("Password changed successfully!");
 			}
 		} catch (error: any) {
 			console.error("Error changing password:", error);
@@ -675,6 +676,8 @@ export default function ProfilePage() {
 		
 		// Refresh profile data
 		fetchProfile();
+		
+		toast.success("Phone number updated successfully!");
 		
 		// Auto-close after success
 		setTimeout(() => {

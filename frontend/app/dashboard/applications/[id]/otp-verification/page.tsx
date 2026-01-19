@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
 import { fetchWithTokenRefresh } from "@/lib/authUtils";
 import {
@@ -721,7 +722,7 @@ export default function OTPVerificationPage() {
                     }
                   } catch (error) {
                     console.error("Error initiating signing:", error);
-                    alert(
+                    toast.error(
                       "Failed to initiate document signing. Please try again."
                     );
                   }

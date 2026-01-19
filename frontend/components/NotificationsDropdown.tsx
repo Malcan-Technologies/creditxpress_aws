@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Bell, Trash2, Check, ExternalLink, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -12,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
@@ -33,7 +33,6 @@ export function NotificationsDropdown() {
 	const [loading, setLoading] = useState(true);
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState(false);
-	const { toast } = useToast();
 	const router = useRouter();
 
 	useEffect(() => {
@@ -83,11 +82,7 @@ export function NotificationsDropdown() {
 					error.message.includes("access token")
 				)
 			) {
-				toast({
-					title: "Error",
-					description: "Failed to fetch notifications",
-					variant: "destructive",
-				});
+				toast.error("Failed to fetch notifications");
 			}
 		} finally {
 			setLoading(false);
@@ -122,11 +117,7 @@ export function NotificationsDropdown() {
 			);
 		} catch (error) {
 			console.error("Error marking as read:", error);
-			toast({
-				title: "Error",
-				description: "Failed to mark notifications as read",
-				variant: "destructive",
-			});
+			toast.error("Failed to mark notifications as read");
 		}
 	};
 
@@ -148,17 +139,10 @@ export function NotificationsDropdown() {
 				setUnreadCount((prev) => Math.max(0, prev - 1));
 			}
 
-			toast({
-				title: "Success",
-				description: "Notification deleted",
-			});
+			toast.success("Notification deleted");
 		} catch (error) {
 			console.error("Error deleting notification:", error);
-			toast({
-				title: "Error",
-				description: "Failed to delete notification",
-				variant: "destructive",
-			});
+			toast.error("Failed to delete notification");
 		}
 	};
 

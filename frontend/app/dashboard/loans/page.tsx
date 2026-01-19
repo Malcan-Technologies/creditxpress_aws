@@ -32,6 +32,7 @@ import {
 	KeyIcon,
 } from "@heroicons/react/24/outline";
 import { Shield } from "lucide-react";
+import { toast } from "sonner";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 import PaymentMethodModal from "@/components/modals/PaymentMethodModal";
 import BankTransferModal from "@/components/modals/BankTransferModal";
@@ -138,6 +139,9 @@ interface Loan {
 	repayments?: Array<{
 		id: string;
 		amount: number;
+
+		principalAmount?: number;
+		interestAmount?: number;
 		status: string;
 		dueDate: string;
 		paidAt: string | null;
@@ -804,7 +808,7 @@ function LoansPageContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading payment slip:', error);
-			alert(error instanceof Error ? error.message : 'Failed to download payment slip');
+			toast.error(error instanceof Error ? error.message : 'Failed to download payment slip');
 		}
 	};
 
@@ -872,7 +876,7 @@ function LoansPageContent() {
 				// Reload data to show updated status
 				await loadLoansAndSummary();
 
-				alert(
+				toast.success(
 					isEarlySettlement
 						? "Early settlement request submitted! Pending admin approval."
 						: "Payment submitted successfully! Your transaction is pending approval."
@@ -880,7 +884,7 @@ function LoansPageContent() {
 			}
 		} catch (error) {
 			console.error("Error submitting bank transfer payment:", error);
-			alert("Failed to submit payment. Please try again.");
+			toast.error("Failed to submit payment. Please try again.");
 		}
 	};
 
@@ -1075,7 +1079,7 @@ function LoansPageContent() {
 			window.URL.revokeObjectURL(url);
 		} catch (error) {
 			console.error('Error downloading receipt:', error);
-			alert('Failed to download receipt. Please try again.');
+			toast.error('Failed to download receipt. Please try again.');
 		}
 	};
 
@@ -1127,7 +1131,7 @@ function LoansPageContent() {
 			
 		} catch (error) {
 			console.error('Error downloading signed agreement:', error);
-			alert(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			toast.error(`Failed to download signed agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -1165,7 +1169,7 @@ function LoansPageContent() {
 
 		} catch (error) {
 			console.error('Error downloading stamped agreement:', error);
-			alert(`Failed to download stamped agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			toast.error(`Failed to download stamped agreement: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -1203,7 +1207,7 @@ function LoansPageContent() {
 
 		} catch (error) {
 			console.error('Error downloading stamp certificate:', error);
-			alert(`Failed to download stamp certificate: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			toast.error(`Failed to download stamp certificate: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	};
 
@@ -1846,7 +1850,7 @@ function LoansPageContent() {
 			setSelectedDeleteApplication(null);
 		} catch (error) {
 			console.error("Error deleting application:", error);
-			alert("Failed to delete application. Please try again.");
+			toast.error("Failed to delete application. Please try again.");
 		} finally {
 			setDeleting(false);
 		}
@@ -1904,13 +1908,13 @@ function LoansPageContent() {
 				setShowLiveCallConfirmationModal(false);
 				setSelectedAttestationApplication(null);
 
-				alert(
+				toast.success(
 					"Live video call request submitted! Our legal team will contact you within 1-2 business days to schedule your appointment."
 				);
 			}
 		} catch (error) {
 			console.error("Error requesting live call:", error);
-			alert("Failed to submit live call request. Please try again.");
+			toast.error("Failed to submit live call request. Please try again.");
 		}
 	};
 
@@ -1977,7 +1981,7 @@ function LoansPageContent() {
 
 		} catch (error) {
 			console.error('Error initiating document signing:', error);
-			alert(`Failed to initiate document signing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			toast.error(`Failed to initiate document signing: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		} finally {
 			setSigningInProgress(false);
 		}
@@ -2012,15 +2016,8 @@ function LoansPageContent() {
 		return { type: 'waiting', message: 'Waiting for other signatories to complete signing' };
 	};
 
-	const handleFreshOfferResponse = async (applicationId: string, action: 'accept' | 'reject') => {
+	const executeFreshOfferAction = async (applicationId: string, action: 'accept' | 'reject') => {
 		try {
-			const actionText = action === 'accept' ? 'accept' : 'reject';
-			const confirmMessage = `Are you sure you want to ${actionText} this fresh offer?`;
-			
-			if (!window.confirm(confirmMessage)) {
-				return;
-			}
-
 			const response = await fetchWithTokenRefresh(
 				`/api/loan-applications/${applicationId}/fresh-offer-response`,
 				{
@@ -2042,12 +2039,29 @@ function LoansPageContent() {
 					? 'Fresh offer accepted! Your application will proceed with the new terms.'
 					: 'Fresh offer rejected. Your application has been restored to the original terms.';
 				
-				alert(message);
+				toast.success(message);
 			}
 		} catch (error) {
 			console.error(`Error ${action}ing fresh offer:`, error);
-			alert(`Failed to ${action} fresh offer. Please try again.`);
+			toast.error(`Failed to ${action} fresh offer. Please try again.`);
 		}
+	};
+
+	const handleFreshOfferResponse = (applicationId: string, action: 'accept' | 'reject') => {
+		const actionText = action === 'accept' ? 'accept' : 'reject';
+		const actionLabel = action === 'accept' ? 'Accept' : 'Reject';
+		
+		toast(`Are you sure you want to ${actionText} this fresh offer?`, {
+			action: {
+				label: actionLabel,
+				onClick: () => executeFreshOfferAction(applicationId, action),
+			},
+			cancel: {
+				label: "Cancel",
+				onClick: () => {},
+			},
+			duration: 10000,
+		});
 	};
 
 	// Handle tab switching with refresh
@@ -2663,8 +2677,10 @@ function LoansPageContent() {
 											// Refresh all data including application history
 											await loadLoansAndSummary();
 											await loadApplications();
+											toast.success("Data refreshed successfully");
 										} catch (error) {
 											console.error("Error refreshing data:", error);
+											toast.error("Failed to refresh data");
 										} finally {
 											setRefreshing(false);
 										}
@@ -3923,7 +3939,7 @@ function LoansPageContent() {
 																}
 															} catch (error) {
 																console.error('Error opening unsigned agreement:', error);
-																alert('Failed to open unsigned agreement');
+																toast.error('Failed to open unsigned agreement');
 															}
 															}}
 															className="inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"

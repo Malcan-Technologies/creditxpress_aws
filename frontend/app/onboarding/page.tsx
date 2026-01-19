@@ -7,6 +7,7 @@ import AddressForm from "../../components/onboarding/AddressForm";
 import EmploymentForm from "../../components/onboarding/EmploymentForm";
 import BankAccountForm from "../../components/onboarding/BankAccountForm";
 import { OnboardingFormData } from "@/types/onboarding";
+import { toast } from "sonner";
 import { checkAuth, fetchWithTokenRefresh } from "@/lib/authUtils";
 import { 
 	UserIcon, 
@@ -262,6 +263,7 @@ function OnboardingPageContent() {
 
 			// Check if onboarding is complete
 			if (response.isOnboardingComplete) {
+				toast.success("Profile setup complete! Welcome to your dashboard.");
 				router.push("/dashboard/profile");
 			} else {
 				// Move to next step

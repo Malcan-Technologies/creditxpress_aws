@@ -17,6 +17,7 @@ import {
 	ChevronUpIcon,
 	ChevronDownIcon,
 } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
 interface WalletData {
@@ -174,7 +175,7 @@ export default function WalletPage() {
 
 	const handleConfirmTransfer = async () => {
 		if (!depositAmount || parseFloat(depositAmount) <= 0) {
-			alert("Please enter a valid amount");
+			toast.warning("Please enter a valid amount");
 			return;
 		}
 
@@ -205,13 +206,13 @@ export default function WalletPage() {
 				setDepositAmount("");
 				setTransferConfirmed(false);
 
-				alert(
+				toast.success(
 					"Deposit request submitted successfully! Your transaction is pending approval."
 				);
 			}
 		} catch (error) {
 			console.error("Error creating deposit:", error);
-			alert("Failed to submit deposit request. Please try again.");
+			toast.error("Failed to submit deposit request. Please try again.");
 		}
 	};
 
@@ -221,17 +222,17 @@ export default function WalletPage() {
 
 	const handleConfirmWithdrawal = async () => {
 		if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
-			alert("Please enter a valid amount");
+			toast.warning("Please enter a valid amount");
 			return;
 		}
 
 		if (!selectedBankAccount) {
-			alert("Please select a bank account");
+			toast.warning("Please select a bank account");
 			return;
 		}
 
 		if (parseFloat(withdrawAmount) > walletData.availableForWithdrawal) {
-			alert("Insufficient funds available for withdrawal");
+			toast.warning("Insufficient funds available for withdrawal");
 			return;
 		}
 
@@ -262,19 +263,19 @@ export default function WalletPage() {
 				setWithdrawAmount("");
 				setSelectedBankAccount("");
 
-				alert(
+				toast.success(
 					"Withdrawal request submitted successfully! Your transaction is pending approval."
 				);
 			}
 		} catch (error) {
 			console.error("Error creating withdrawal:", error);
-			alert("Failed to submit withdrawal request. Please try again.");
+			toast.error("Failed to submit withdrawal request. Please try again.");
 		}
 	};
 
 	const handleAddBankAccount = async () => {
 		if (!newBankName || !newAccountNumber) {
-			alert("Please fill in all bank account details");
+			toast.warning("Please fill in all bank account details");
 			return;
 		}
 
@@ -302,11 +303,11 @@ export default function WalletPage() {
 				setNewAccountNumber("");
 				setShowAddBankModal(false);
 
-				alert("Bank account added successfully!");
+				toast.success("Bank account added successfully!");
 			}
 		} catch (error) {
 			console.error("Error adding bank account:", error);
-			alert("Failed to add bank account. Please try again.");
+			toast.error("Failed to add bank account. Please try again.");
 		}
 	};
 
@@ -316,7 +317,7 @@ export default function WalletPage() {
 
 	const handleEditBankAccount = async () => {
 		if (!newBankName || !newAccountNumber) {
-			alert("Please fill in all bank account details");
+			toast.warning("Please fill in all bank account details");
 			return;
 		}
 
@@ -342,17 +343,17 @@ export default function WalletPage() {
 				setShowManageBankModal(false);
 				setShowAddBankModal(false);
 
-				alert("Bank account updated successfully!");
+				toast.success("Bank account updated successfully!");
 			}
 		} catch (error) {
 			console.error("Error updating bank account:", error);
-			alert("Failed to update bank account. Please try again.");
+			toast.error("Failed to update bank account. Please try again.");
 		}
 	};
 
 	const copyToClipboard = (text: string) => {
 		navigator.clipboard.writeText(text);
-		alert("Copied to clipboard!");
+		toast.success("Copied to clipboard!");
 	};
 
 	if (loading) {

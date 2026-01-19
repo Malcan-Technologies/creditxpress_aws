@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import InfoIcon from "@mui/icons-material/Info";
@@ -133,7 +134,7 @@ export default function AttestationForm({
 			}
 
 			// Success - notify user and trigger callback
-			alert(
+			toast.success(
 				"Live video call request submitted! Our legal team will contact you within 1-2 business days to schedule your appointment."
 			);
 			

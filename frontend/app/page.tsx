@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
+import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import {
@@ -39,7 +40,7 @@ export default function Home() {
 		e.preventDefault();
 		// Reset form
 		setFormData({ email: "", phone: "", message: "" });
-		alert("Thank you for your message. We'll get back to you soon!");
+		toast.success("Thank you for your message. We'll get back to you soon!");
 	};
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

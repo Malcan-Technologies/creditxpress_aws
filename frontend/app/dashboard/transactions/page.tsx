@@ -12,6 +12,7 @@ import {
 	ExclamationTriangleIcon,
 	ArrowPathIcon,
 } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 import { checkAuth, fetchWithTokenRefresh, TokenStorage } from "@/lib/authUtils";
 
 interface Transaction {
@@ -245,8 +246,10 @@ export default function TransactionsPage() {
 										setRefreshing(true);
 										try {
 											await fetchTransactions();
+											toast.success("Transactions refreshed successfully");
 										} catch (error) {
 											console.error("Error refreshing transactions:", error);
+											toast.error("Failed to refresh transactions");
 										} finally {
 											setRefreshing(false);
 										}
