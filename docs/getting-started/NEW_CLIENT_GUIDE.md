@@ -10,17 +10,63 @@ Each new client gets:
 - Dedicated on-premise server (signing services)
 - Customizable frontend (branding, colors, features)
 
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              AWS (Cloud)                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │  Frontend   │  │   Admin     │  │   Backend   │  │   RDS       │    │
+│  │  (Next.js)  │  │  (Next.js)  │  │  (Express)  │  │  (Postgres) │    │
+│  │  ECS/Nginx  │  │  ECS/Nginx  │  │    ECS      │  │             │    │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────────────┘    │
+│         │                │                │                             │
+│         └────────────────┼────────────────┘                             │
+│                          │                                              │
+│                    ┌─────┴─────┐                                        │
+│                    │    ALB    │                                        │
+│                    └─────┬─────┘                                        │
+└──────────────────────────┼──────────────────────────────────────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │ Cloudflare  │
+                    │   (DNS)     │
+                    └──────┬──────┘
+                           │
+┌──────────────────────────┼──────────────────────────────────────────────┐
+│                          │         On-Prem Server                        │
+├──────────────────────────┼──────────────────────────────────────────────┤
+│                    ┌─────┴─────┐                                        │
+│                    │ Cloudflare│                                        │
+│                    │  Tunnel   │                                        │
+│                    └─────┬─────┘                                        │
+│         ┌────────────────┼────────────────┐                             │
+│         │                │                │                             │
+│  ┌──────┴──────┐  ┌──────┴──────┐  ┌──────┴──────┐                     │
+│  │  DocuSeal   │  │  Signing    │  │    MTSA     │                     │
+│  │  (Port 3001)│  │ Orchestrator│  │ (Port 8080) │                     │
+│  │             │  │ (Port 4010) │  │  Trustgate  │                     │
+│  └─────────────┘  └─────────────┘  └─────────────┘                     │
+│                                                                         │
+│  ┌─────────────┐  ┌─────────────┐                                      │
+│  │ DocuSeal DB │  │ Agreements  │                                      │
+│  │  (Postgres) │  │     DB      │                                      │
+│  └─────────────┘  └─────────────┘                                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Time Estimate
 
 | Phase | Duration |
 |-------|----------|
 | Repository Setup | 15 minutes |
 | AWS Infrastructure | 30 minutes |
-| On-Prem Setup | 30 minutes |
+| On-Prem Server Setup | 45 minutes |
 | DNS & SSL | 15 minutes |
 | Initial Deployment | 15 minutes |
-| Database Seed | 5 minutes |
-| **Total** | **~2 hours** |
+| Database Seed & Config | 10 minutes |
+| **Total** | **~2.5 hours** |
 
 ---
 
@@ -270,34 +316,58 @@ The on-prem server hosts the signing infrastructure: DocuSeal, Signing Orchestra
 ### Prerequisites
 
 Before starting:
-- Linux server (Ubuntu 20.04+ recommended) with Docker
+- Linux server (Ubuntu 22.04+ recommended) with at least 4GB RAM
 - SSH access to the server
-- MTSA container tarball from Trustgate
+- MTSA container tarball from Trustgate (stored locally on server)
 - MTSA SOAP credentials from Trustgate
+- Tailscale or Cloudflare Tunnel for secure access
+
+### What Gets Deployed
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| DocuSeal | 3001 | Document signing UI |
+| Signing Orchestrator | 4010 | PKI bridge, coordinates signing |
+| MTSA | 8080 | Trustgate digital signature agent |
+| DocuSeal Postgres | 5433 | DocuSeal database |
+| Agreements Postgres | 5434 | Signed agreement audit trail |
+
+### MTSA Container Image
+
+**Important:** The MTSA Docker image is proprietary from Trustgate and is stored locally on the on-prem server. It is NOT pulled from any registry.
+
+Workflow:
+1. Trustgate provides a `.tar` file (e.g., `mtsa-pilot.tar`)
+2. Transfer the tarball to the on-prem server (via SCP, USB, etc.)
+3. Import it using the provided script
+4. The image stays local - it's never pushed to a registry
 
 ### Option A: First-Time Setup Script (Recommended)
 
 Use the automated first-time setup script for a new server:
 
 ```bash
-# SSH to server
+# 1. Transfer MTSA tarball to server (from your local machine)
+scp /path/to/mtsa-pilot.tar user@onprem-server:/tmp/
+
+# 2. SSH to server
 ssh user@onprem-server
 
-# Clone repository
+# 3. Clone repository
 cd /opt
 sudo git clone git@github.com:clientorg/newclient-platform.git
 cd newclient-platform/on-prem/scripts
 
-# Run first-time setup
-./first-time-setup.sh --mtsa-image /tmp/mtsa-container.tar
+# 4. Run first-time setup
+./first-time-setup.sh --mtsa-image /tmp/mtsa-pilot.tar
 ```
 
 The script will:
 1. Install Docker and dependencies
 2. Create directory structure
-3. Generate environment files
-4. Import MTSA container
-5. Start all services
+3. Import MTSA container from tarball
+4. Generate environment files from `client.json`
+5. Start all services (DocuSeal, Orchestrator, MTSA)
 6. Set up DocuSeal template (optional)
 7. Configure GitHub Actions runner (optional)
 
@@ -324,19 +394,39 @@ If you prefer manual control:
 ```bash
 cd on-prem/scripts
 
-# 1. Import MTSA container
-./import-mtsa-container.sh /path/to/mtsa-container.tar
+# 1. Import MTSA container (REQUIRED - image stored locally only)
+./import-mtsa-container.sh /tmp/mtsa-pilot.tar
 
-# 2. Generate environment files
+# Verify import
+docker images | grep mtsa
+# Should show: mtsa-pilot   latest   ...
+
+# 2. Generate environment files from client.json
 ./generate-env.sh
 
 # 3. Start services
 cd ..
 docker compose -f docker-compose.unified.yml up -d
 
-# 4. Setup DocuSeal template (after getting API token)
+# 4. Verify all services are running
+docker compose -f docker-compose.unified.yml ps
+
+# 5. Setup DocuSeal template (after getting API token from DocuSeal UI)
 export DOCUSEAL_API_TOKEN="<from-docuseal-settings>"
 ./scripts/setup-docuseal-template.sh --update-config
+```
+
+### Verify MTSA is Running
+
+```bash
+# Check container status
+docker ps | grep mtsa
+
+# Check WSDL endpoint (pilot environment)
+curl -sf http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl | head -5
+
+# Check WSDL endpoint (production environment)
+curl -sf http://localhost:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl | head -5
 ```
 
 ### Verify On-Prem Services
@@ -508,66 +598,182 @@ Default admin credentials are set in the seed script.
 
 ---
 
+## Step 13: Configure Company Settings
+
+After deployment, configure the company-specific settings via the Admin Panel.
+
+### Access Admin Panel
+
+1. Go to `https://admin.<client-domain>/login`
+2. Login with the seeded admin credentials
+3. Navigate to **Settings** → **Company Settings**
+
+### Configure Required Fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| Company Name | Legal entity name | OPG Capital Holdings Sdn. Bhd. |
+| Company Address | Full registered address | 123 Jalan Example, KL |
+| Company Reg No | SSM registration | 12345-X |
+| License No | Money lending license | WL/2024/001 |
+| Contact Phone | Support phone | +60123456789 |
+| Contact Email | Support email | support@client.com |
+
+### Configure Signing Settings
+
+These values appear in digitally signed loan agreements:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| Sign URL | DocuSeal/signing service URL | https://sign.client.com |
+| Server Public IP | On-prem server's public IP | 210.186.80.101 |
+
+**How to find the server public IP:**
+```bash
+# On the on-prem server
+curl -4 ifconfig.me
+```
+
+### Save Settings
+
+Click **Save** - a success toast will confirm the settings are saved.
+
+---
+
 ## Post-Deployment Checklist
 
-- [ ] All endpoints accessible
+### AWS Services
+- [ ] All endpoints accessible (app, admin, api)
 - [ ] Admin can login
-- [ ] DocuSeal is accessible at sign.*/s/
-- [ ] Signing orchestrator health check passes
 - [ ] Database migrations applied
 - [ ] Admin user created
 - [ ] WhatsApp notifications working
 - [ ] Email notifications working
 - [ ] File uploads to S3 working
 - [ ] CTOS integration working
-- [ ] MTSA signing working
+
+### On-Prem Services
+- [ ] DocuSeal accessible at `https://sign.<domain>`
+- [ ] Signing orchestrator health check passes
+- [ ] MTSA container running
+- [ ] Cloudflare Tunnel connected
+
+### Admin Configuration
+- [ ] Company settings configured
+- [ ] Sign URL set correctly
+- [ ] Server public IP set
+- [ ] Bank account(s) added
+- [ ] Notification settings reviewed
 
 ---
 
 ## On-Prem CI/CD with GitHub Actions
 
-For automated on-prem deployments without SSH access, set up a self-hosted GitHub runner.
+For automated on-prem deployments, set up a self-hosted GitHub Actions runner on the on-prem server.
+
+### How It Works
+
+```
+┌─────────────────┐         ┌──────────────────┐         ┌─────────────────┐
+│  GitHub Actions │ ◄────── │  Self-Hosted     │ ◄────── │  On-Prem Server │
+│  (cloud)        │  polls  │  Runner Agent    │  runs   │  (your server)  │
+└─────────────────┘         └──────────────────┘  on     └─────────────────┘
+```
+
+- The runner agent runs on your on-prem server and polls GitHub for jobs
+- No inbound connections needed - only outbound HTTPS to GitHub
+- Jobs run locally on the server with full Docker access
 
 ### Install GitHub Actions Runner
 
 On the on-prem server:
 
 ```bash
-cd on-prem/scripts
+# Create runner directory
+mkdir -p ~/actions-runner && cd ~/actions-runner
 
-# Follow the interactive setup
-# Get runner token from: GitHub → Settings → Actions → Runners → New self-hosted runner
+# Download latest runner (check GitHub for current version)
+curl -o actions-runner-linux-x64-2.331.0.tar.gz -L \
+  https://github.com/actions/runner/releases/download/v2.331.0/actions-runner-linux-x64-2.331.0.tar.gz
+
+# Extract
+tar xzf ./actions-runner-linux-x64-2.331.0.tar.gz
+
+# Get registration token from GitHub:
+# Repository → Settings → Actions → Runners → New self-hosted runner
+# Copy the token (expires in ~1 hour)
+
+# Configure runner
+./config.sh --url https://github.com/<org>/<repo> \
+  --token <REGISTRATION_TOKEN> \
+  --labels onprem,signing-server \
+  --name <client>-onprem
+
+# Install as systemd service (runs on boot)
+sudo ./svc.sh install
+sudo ./svc.sh start
+
+# Verify it's running
+sudo ./svc.sh status
 ```
 
-Or refer to the detailed guide: `on-prem/docs/GITHUB_RUNNER_SETUP.md`
+### Verify Runner in GitHub
+
+1. Go to: `https://github.com/<org>/<repo>/settings/actions/runners`
+2. You should see your runner with status "Idle"
 
 ### Add On-Prem Secrets to GitHub
 
 In repository Settings → Secrets and variables → Actions, add:
 
-| Secret | Description |
-|--------|-------------|
-| `DOCUSEAL_API_TOKEN` | DocuSeal API token |
-| `SIGNING_ORCHESTRATOR_API_KEY` | API key for orchestrator |
-| `MTSA_SOAP_USERNAME` | MTSA/Trustgate SOAP username |
-| `MTSA_SOAP_PASSWORD` | MTSA/Trustgate SOAP password |
-| `DOCUSEAL_POSTGRES_PASSWORD` | DocuSeal database password |
-| `AGREEMENTS_DB_PASSWORD` | Signing orchestrator DB password |
+| Secret | Description | Where to Get It |
+|--------|-------------|-----------------|
+| `DOCUSEAL_API_TOKEN` | DocuSeal API token | DocuSeal UI → Settings → API |
+| `SIGNING_ORCHESTRATOR_API_KEY` | API key for orchestrator | Generated during setup |
+| `MTSA_SOAP_USERNAME` | MTSA/Trustgate username | From Trustgate |
+| `MTSA_SOAP_PASSWORD` | MTSA/Trustgate password | From Trustgate |
+| `DOCUSEAL_POSTGRES_PASSWORD` | DocuSeal database password | Your choice |
+| `AGREEMENTS_DB_PASSWORD` | Orchestrator DB password | Your choice |
 
 ### Trigger On-Prem Deployment
 
-Via GitHub UI:
+**Via GitHub UI (Recommended):**
 1. Go to Actions → "Deploy On-Prem Services"
 2. Click "Run workflow"
-3. Select services to deploy
-4. Click "Run workflow"
+3. Select branch (usually `main`)
+4. Choose what to deploy:
+   - `deploy_docuseal` - Deploy DocuSeal
+   - `deploy_orchestrator` - Deploy Signing Orchestrator
+   - `deploy_mtsa` - Deploy MTSA
+   - `generate_env` - Regenerate environment files
+5. Click "Run workflow"
 
-Via GitHub CLI:
+**Via GitHub CLI:**
 ```bash
 gh workflow run deploy-onprem.yml \
   -f deploy_docuseal=true \
-  -f deploy_orchestrator=true
+  -f deploy_orchestrator=true \
+  -f deploy_mtsa=true
 ```
+
+### Safety Features
+
+The on-prem workflow includes:
+- **Manual trigger only** - never runs automatically
+- **Pre-deployment backup** - databases and volumes backed up before changes
+- **Selective deployment** - only deploy what you choose
+- **Health checks** - verifies services after deployment
+
+### Runner vs AWS Workflows
+
+| Workflow | Runner Type | Trigger |
+|----------|-------------|---------|
+| Deploy Backend | `ubuntu-latest` (GitHub-hosted) | Push to main |
+| Deploy Frontend | `ubuntu-latest` (GitHub-hosted) | Push to main |
+| Deploy Admin | `ubuntu-latest` (GitHub-hosted) | Push to main |
+| **Deploy On-Prem** | `[self-hosted, onprem]` | Manual only |
+
+Both runner types work side-by-side without conflict.
 
 ---
 
@@ -653,9 +859,78 @@ aws secretsmanager get-secret-value --secret-id newclient/prod/database-url
 
 ---
 
-## Support Contacts
+## Quick Reference
 
-- AWS Issues: Check CloudWatch logs
-- Cloudflare Issues: Check Cloudflare Dashboard
-- Application Issues: Check ECS logs
-- Signing Issues: Check on-prem logs with `./on-prem/scripts/deploy-all.sh logs`
+### Key URLs After Deployment
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Frontend | `https://app.<domain>` | Customer-facing app |
+| Admin | `https://admin.<domain>` | Admin dashboard |
+| API | `https://api.<domain>` | Backend API |
+| DocuSeal | `https://sign.<domain>` | Document signing |
+| Orchestrator | `https://sign.<domain>/orchestrator` | Signing API |
+
+### Key Commands
+
+```bash
+# AWS - Check ECS service status
+aws ecs describe-services --cluster <client>-cluster --services <client>-backend
+
+# AWS - View backend logs
+aws logs tail /ecs/<client>/backend --follow
+
+# On-Prem - Check all service status
+./on-prem/scripts/deploy-all.sh status
+
+# On-Prem - View logs
+./on-prem/scripts/deploy-all.sh logs
+
+# On-Prem - Restart services
+cd on-prem && docker compose -f docker-compose.unified.yml restart
+
+# GitHub Runner - Check status
+sudo systemctl status actions.runner.*
+```
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `client.json` | Client-specific configuration |
+| `on-prem/.env.docuseal` | DocuSeal environment |
+| `on-prem/.env.orchestrator` | Signing Orchestrator environment |
+| `backend/.env` | Backend local dev environment |
+| `frontend/.env` | Frontend local dev environment |
+
+### Secrets Location
+
+| Secret Type | Location |
+|-------------|----------|
+| AWS Secrets | AWS Secrets Manager (`<client>/prod/*`) |
+| GitHub Secrets | Repository → Settings → Secrets → Actions |
+| On-Prem Secrets | `.env.*` files on server |
+
+---
+
+## Support & Troubleshooting
+
+### AWS Issues
+- Check CloudWatch logs: `/ecs/<client>/*`
+- Check ECS service events in AWS Console
+- Verify secrets exist in Secrets Manager
+
+### On-Prem Issues
+- Check container logs: `docker logs <container-name>`
+- Check Cloudflare Tunnel: `sudo systemctl status cloudflared`
+- Verify MTSA image exists: `docker images | grep mtsa`
+
+### Signing Issues
+- Check orchestrator health: `curl https://sign.<domain>/orchestrator/health`
+- Check MTSA WSDL: `curl http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl`
+- Review agreement logs in orchestrator database
+
+### GitHub Runner Issues
+- Check runner status: `sudo ./svc.sh status` (from actions-runner dir)
+- View runner logs: `journalctl -u actions.runner.* -f`
+- Re-register if needed: `./config.sh remove` then reconfigure
