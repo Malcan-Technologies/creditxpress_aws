@@ -556,7 +556,7 @@ model PaymentReceipt {
   @@map("payment_receipts")
 }
 
-/// Company settings for receipt generation
+/// Company settings for receipt generation and signing configuration
 model CompanySettings {
   id             String   @id @default(cuid())
   companyName    String   @default("Kredit.my")
@@ -572,6 +572,10 @@ model CompanySettings {
   updatedAt      DateTime @updatedAt
   createdBy      String?
   licenseNo      String?
+  
+  // Signing configuration (for digital signature attestation)
+  signUrl        String?  // DocuSeal/signing URL (e.g., https://sign.creditxpress.com.my)
+  serverPublicIp String?  // Server public IP for attestation (e.g., 210.186.80.101)
 
   @@map("company_settings")
 }

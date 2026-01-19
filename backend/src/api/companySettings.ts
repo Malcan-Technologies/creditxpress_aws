@@ -47,6 +47,9 @@ interface CompanySettingsRequest {
   footerNote?: string;
   taxLabel: string;
   companyLogo?: string;
+  // Signing configuration
+  signUrl?: string;
+  serverPublicIp?: string;
 }
 
 /**
@@ -102,6 +105,8 @@ router.post('/', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest
       footerNote,
       taxLabel,
       companyLogo,
+      signUrl,
+      serverPublicIp,
     }: CompanySettingsRequest = req.body;
 
     // Validation
@@ -133,6 +138,8 @@ router.post('/', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest
           footerNote: footerNote || null,
           taxLabel,
           companyLogo: companyLogo || null,
+          signUrl: signUrl || null,
+          serverPublicIp: serverPublicIp || null,
           updatedAt: new Date(),
           // TODO: Add createdBy field when admin user context is available
         },
@@ -150,6 +157,8 @@ router.post('/', authenticateToken, adminOnlyMiddleware, async (req: AuthRequest
           footerNote: footerNote || null,
           taxLabel,
           companyLogo: companyLogo || null,
+          signUrl: signUrl || null,
+          serverPublicIp: serverPublicIp || null,
           isActive: true,
           // TODO: Add createdBy field when admin user context is available
         },

@@ -106,9 +106,34 @@ Replace all values with client-specific settings:
     "company_name": "New Client Company",
     "primary_color": "#2563eb",
     "support_email": "support@newclient.com"
+  },
+  
+  "docuseal": {
+    "template_id": "2",
+    "template_external_id": "newclient-loan-agreement",
+    "company_signing_email": "admin@newclient.com",
+    "witness_email": "legal@newclient.com",
+    "witness_name": "Legal Representative"
+  },
+  
+  "onprem": {
+    "enabled": true,
+    "server_ip": "100.x.x.x",
+    "ssh_user": "admin",
+    "ssh_host": "admin@100.x.x.x",
+    "base_dir": "/home/admin",
+    "mtsa": {
+      "env": "pilot",
+      "container_image": "mtsa-pilot:1.01"
+    },
+    "cloudflare": {
+      "tunnel_name": "newclient-onprem"
+    }
   }
 }
 ```
+
+> **Note:** The `docuseal` and `onprem` sections are used by on-prem setup scripts. AWS deployment workflows use the `aws`, `ecr`, `ecs`, and `rds` sections.
 
 ---
 
@@ -240,38 +265,90 @@ In the forked repository settings:
 
 ## Step 7: Setup On-Prem Server
 
-### SSH to On-Prem Server
+The on-prem server hosts the signing infrastructure: DocuSeal, Signing Orchestrator, and MTSA.
+
+### Prerequisites
+
+Before starting:
+- Linux server (Ubuntu 20.04+ recommended) with Docker
+- SSH access to the server
+- MTSA container tarball from Trustgate
+- MTSA SOAP credentials from Trustgate
+
+### Option A: First-Time Setup Script (Recommended)
+
+Use the automated first-time setup script for a new server:
 
 ```bash
+# SSH to server
 ssh user@onprem-server
-```
 
-### Clone Repository
-
-```bash
+# Clone repository
 cd /opt
 sudo git clone git@github.com:clientorg/newclient-platform.git
-cd newclient-platform/on-prem
+cd newclient-platform/on-prem/scripts
+
+# Run first-time setup
+./first-time-setup.sh --mtsa-image /tmp/mtsa-container.tar
 ```
 
-### Configure Environment
+The script will:
+1. Install Docker and dependencies
+2. Create directory structure
+3. Generate environment files
+4. Import MTSA container
+5. Start all services
+6. Set up DocuSeal template (optional)
+7. Configure GitHub Actions runner (optional)
+
+### Option B: Master Setup Script
+
+For a server with Docker already installed:
 
 ```bash
-cp env.template .env
-vim .env
+cd on-prem/scripts
+
+# Set required secrets
+export SIGNING_ORCHESTRATOR_API_KEY="<from-step-5>"
+export MTSA_SOAP_USERNAME="<from-trustgate>"
+export MTSA_SOAP_PASSWORD="<from-trustgate>"
+
+# Run setup
+./setup-new-client.sh
 ```
 
-Fill in all values, especially:
-- `CLIENT_SLUG=newclient`
-- `SIGN_DOMAIN=sign.newclient.com`
-- `SIGNING_ORCHESTRATOR_API_KEY=` (from step 5)
-- `MTSA_SOAP_USERNAME=` (from MyTrustSigner)
-- `MTSA_SOAP_PASSWORD=`
+### Option C: Manual Setup
 
-### Start Services
+If you prefer manual control:
 
 ```bash
+cd on-prem/scripts
+
+# 1. Import MTSA container
+./import-mtsa-container.sh /path/to/mtsa-container.tar
+
+# 2. Generate environment files
+./generate-env.sh
+
+# 3. Start services
+cd ..
 docker compose -f docker-compose.unified.yml up -d
+
+# 4. Setup DocuSeal template (after getting API token)
+export DOCUSEAL_API_TOKEN="<from-docuseal-settings>"
+./scripts/setup-docuseal-template.sh --update-config
+```
+
+### Verify On-Prem Services
+
+```bash
+# Check all services
+./scripts/deploy-all.sh status
+
+# Expected output:
+# DocuSeal: Healthy
+# Signing Orchestrator: Healthy
+# MTSA: Healthy
 ```
 
 ### Create Cloudflare Tunnel
@@ -447,6 +524,53 @@ Default admin credentials are set in the seed script.
 
 ---
 
+## On-Prem CI/CD with GitHub Actions
+
+For automated on-prem deployments without SSH access, set up a self-hosted GitHub runner.
+
+### Install GitHub Actions Runner
+
+On the on-prem server:
+
+```bash
+cd on-prem/scripts
+
+# Follow the interactive setup
+# Get runner token from: GitHub → Settings → Actions → Runners → New self-hosted runner
+```
+
+Or refer to the detailed guide: `on-prem/docs/GITHUB_RUNNER_SETUP.md`
+
+### Add On-Prem Secrets to GitHub
+
+In repository Settings → Secrets and variables → Actions, add:
+
+| Secret | Description |
+|--------|-------------|
+| `DOCUSEAL_API_TOKEN` | DocuSeal API token |
+| `SIGNING_ORCHESTRATOR_API_KEY` | API key for orchestrator |
+| `MTSA_SOAP_USERNAME` | MTSA/Trustgate SOAP username |
+| `MTSA_SOAP_PASSWORD` | MTSA/Trustgate SOAP password |
+| `DOCUSEAL_POSTGRES_PASSWORD` | DocuSeal database password |
+| `AGREEMENTS_DB_PASSWORD` | Signing orchestrator DB password |
+
+### Trigger On-Prem Deployment
+
+Via GitHub UI:
+1. Go to Actions → "Deploy On-Prem Services"
+2. Click "Run workflow"
+3. Select services to deploy
+4. Click "Run workflow"
+
+Via GitHub CLI:
+```bash
+gh workflow run deploy-onprem.yml \
+  -f deploy_docuseal=true \
+  -f deploy_orchestrator=true
+```
+
+---
+
 ## Syncing Upstream Changes
 
 When the template repository has updates:
@@ -504,9 +628,34 @@ aws secretsmanager get-secret-value --secret-id newclient/prod/database-url
 
 ---
 
+## On-Prem Documentation Reference
+
+| Document | Location | Purpose |
+|----------|----------|---------|
+| Step-by-Step Deployment | `on-prem/docs/STEP_BY_STEP_DEPLOYMENT_GUIDE.md` | Detailed deployment walkthrough |
+| GitHub Runner Setup | `on-prem/docs/GITHUB_RUNNER_SETUP.md` | Self-hosted runner installation |
+| MTSA Integration | `on-prem/docs/MTSA_CONTAINER_INTEGRATION.md` | Trustgate container setup |
+| Cloudflare Tunnel | `on-prem/docs/CLOUDFLARE_TUNNEL_SETUP.md` | Tunnel configuration |
+| Backup System | `on-prem/docs/BACKUP_SYSTEM.md` | Backup and restore procedures |
+
+### On-Prem Scripts Reference
+
+| Script | Purpose |
+|--------|---------|
+| `first-time-setup.sh` | Initial server provisioning |
+| `setup-new-client.sh` | Master orchestration script |
+| `generate-env.sh` | Generate .env from client.json |
+| `import-mtsa-container.sh` | Import Trustgate MTSA container |
+| `setup-docuseal-template.sh` | Configure DocuSeal template |
+| `export-docuseal-template.sh` | Export template for reuse |
+| `deploy-all.sh` | Deploy and manage services |
+| `setup-cloudflare-tunnel.sh` | Configure Cloudflare tunnel |
+
+---
+
 ## Support Contacts
 
 - AWS Issues: Check CloudWatch logs
 - Cloudflare Issues: Check Cloudflare Dashboard
 - Application Issues: Check ECS logs
-- Signing Issues: Check on-prem logs in `/opt/newclient-platform/on-prem/`
+- Signing Issues: Check on-prem logs with `./on-prem/scripts/deploy-all.sh logs`

@@ -86,6 +86,9 @@ interface CompanySettings {
 	isActive?: boolean;
 	createdAt?: string;
 	updatedAt?: string;
+	// Signing configuration
+	signUrl?: string;
+	serverPublicIp?: string;
 }
 
 function SettingsPageContent() {
@@ -129,6 +132,8 @@ function SettingsPageContent() {
 		footerNote: "",
 		taxLabel: "SST 6%",
 		companyLogo: "",
+		signUrl: "",
+		serverPublicIp: "",
 	});
 	const [companySettingsLoading, setCompanySettingsLoading] = useState(false);
 	const [companySettingsSaving, setCompanySettingsSaving] = useState(false);
@@ -223,7 +228,6 @@ function SettingsPageContent() {
 			setCompanySettingsSaving(true);
 			setError(null);
 
-			const backendUrl = process.env.NEXT_PUBLIC_API_URL;
 			const response = await fetchWithAdminTokenRefresh(`/api/admin/company-settings`, {
 				method: "POST",
 				headers: {
@@ -236,13 +240,15 @@ function SettingsPageContent() {
 				if (response.data) {
 					setCompanySettings(response.data);
 				}
-				// Show success message (you might want to add a success state)
+				toast.success("Company settings saved successfully");
 			} else {
 				throw new Error(response.message || "Failed to save company settings");
 			}
 		} catch (err) {
 			console.error("Error saving company settings:", err);
-			setError(err instanceof Error ? err.message : "Failed to save company settings");
+			const errorMessage = err instanceof Error ? err.message : "Failed to save company settings";
+			setError(errorMessage);
+			toast.error(errorMessage);
 		} finally {
 			setCompanySettingsSaving(false);
 		}
@@ -948,6 +954,47 @@ function SettingsPageContent() {
 								className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none"
 								placeholder="Optional footer text for receipts"
 							/>
+						</div>
+
+						{/* Signing Configuration Section */}
+						<div className="pt-4 border-t border-gray-700/30">
+							<h4 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+								<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+								</svg>
+								Digital Signing Configuration
+							</h4>
+							<p className="text-xs text-gray-500 mb-3">
+								These values appear in digitally signed loan agreements for attestation purposes. Do not change unless on-prem server configuration changes.
+							</p>
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+								<div>
+									<label className="block text-xs font-medium text-gray-400 mb-1">
+										Sign URL
+									</label>
+									<input
+										type="text"
+										value={companySettings.signUrl || ""}
+										onChange={(e) => setCompanySettings(prev => ({ ...prev, signUrl: e.target.value }))}
+										className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+										placeholder="https://sign.example.com"
+									/>
+									<p className="text-xs text-gray-600 mt-1">DocuSeal/signing service URL</p>
+								</div>
+								<div>
+									<label className="block text-xs font-medium text-gray-400 mb-1">
+										Server Public IP
+									</label>
+									<input
+										type="text"
+										value={companySettings.serverPublicIp || ""}
+										onChange={(e) => setCompanySettings(prev => ({ ...prev, serverPublicIp: e.target.value }))}
+										className="w-full px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/30 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50"
+										placeholder="210.186.80.101"
+									/>
+									<p className="text-xs text-gray-600 mt-1">Shown in signed documents</p>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>

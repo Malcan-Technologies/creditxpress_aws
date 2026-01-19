@@ -1,10 +1,26 @@
 # Unified On-Prem Docker Compose for Signing Services
 # This file combines DocuSeal, Signing Orchestrator, and MTSA into a single stack
 # 
+# Environment Variables (set in .env or via generate-env.sh):
+#   CLIENT_SLUG              - Client identifier (e.g., creditxpress)
+#   CLIENT_NAME              - Client display name
+#   CLIENT_DOMAIN            - Base domain (e.g., kredit.my)
+#   SIGN_DOMAIN              - Signing subdomain (e.g., sign.kredit.my)
+#   DOCUSEAL_POSTGRES_PASSWORD - DocuSeal database password
+#   AGREEMENTS_DB_PASSWORD   - Signing orchestrator database password
+#   DOCUSEAL_SECRET_KEY_BASE - Rails secret key
+#   DOCUSEAL_WEBHOOK_HMAC_SECRET - Webhook verification secret
+#   DOCUSEAL_API_TOKEN       - DocuSeal API token
+#   SIGNING_ORCHESTRATOR_API_KEY - API key for backend communication
+#   MTSA_ENV                 - MTSA environment (pilot/prod)
+#   MTSA_CONTAINER_IMAGE     - MTSA Docker image (from client.json)
+#   MTSA_SOAP_USERNAME       - MTSA SOAP credentials
+#   MTSA_SOAP_PASSWORD       - MTSA SOAP credentials
+#
 # Usage:
-#   1. Copy .env.template to .env and fill in values
+#   1. Run generate-env.sh to create .env from client.json
 #   2. Run: docker compose -f docker-compose.unified.yml up -d
-#   3. Run cloudflared tunnel separately
+#   3. Cloudflare tunnel runs separately (via systemd)
 
 services:
   # ============================================
@@ -12,7 +28,7 @@ services:
   # ============================================
   docuseal-postgres:
     image: postgres:15-alpine
-    container_name: docuseal-postgres
+    container_name: ${CLIENT_SLUG:-kredit}-docuseal-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: docuseal
@@ -31,7 +47,7 @@ services:
 
   docuseal:
     image: docuseal/docuseal:latest
-    container_name: docuseal-app
+    container_name: ${CLIENT_SLUG:-kredit}-docuseal
     restart: unless-stopped
     depends_on:
       docuseal-postgres:
@@ -67,7 +83,7 @@ services:
   # ============================================
   agreements-postgres:
     image: postgres:15-alpine
-    container_name: agreements-postgres
+    container_name: ${CLIENT_SLUG:-kredit}-agreements-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: agreements_user
@@ -88,7 +104,7 @@ services:
     build:
       context: ./signing-orchestrator
       dockerfile: Dockerfile
-    container_name: signing-orchestrator
+    container_name: ${CLIENT_SLUG:-kredit}-signing-orchestrator
     restart: unless-stopped
     depends_on:
       agreements-postgres:
@@ -131,28 +147,30 @@ services:
       start_period: 60s
 
   # ============================================
-  # MTSA - MyTrustSigner Agent (Tomcat)
+  # MTSA - MyTrustSigner Agent
   # ============================================
+  # Note: MTSA image is provided by Trustgate as a Docker tarball.
+  # Import with: ./scripts/import-mtsa-container.sh /path/to/mtsa.tar
+  # The MTSA_CONTAINER_IMAGE variable is set from client.json onprem.mtsa.container_image
   mtsa:
-    image: tomcat:9-jdk11
-    container_name: mtsa
+    image: ${MTSA_CONTAINER_IMAGE:-mtsa-pilot:latest}
+    container_name: ${CLIENT_SLUG:-kredit}-mtsa
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xmx512m -Xms256m"
       TZ: Asia/Kuala_Lumpur
     volumes:
-      - ./mtsa/webapps:/usr/local/tomcat/webapps:ro
       - mtsa_logs:/usr/local/tomcat/logs
     networks:
       - signing-network
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl || curl -sf http://localhost:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
 
 networks:
   signing-network:

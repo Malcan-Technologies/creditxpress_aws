@@ -1,0 +1,268 @@
+name: Deploy On-Prem Services
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_docuseal:
+        description: 'Deploy DocuSeal'
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      deploy_orchestrator:
+        description: 'Deploy Signing Orchestrator'
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      deploy_mtsa:
+        description: 'Deploy MTSA'
+        default: 'true'
+        type: choice
+        options: ['true', 'false']
+      setup_template:
+        description: 'Setup DocuSeal template (first-time only)'
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+      generate_env:
+        description: 'Regenerate environment files'
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      client_slug: ${{ steps.config.outputs.CLIENT_SLUG }}
+      sign_domain: ${{ steps.config.outputs.SIGN_DOMAIN }}
+      onprem_enabled: ${{ steps.config.outputs.ONPREM_ENABLED }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Load client config
+        id: config
+        run: |
+          echo "CLIENT_SLUG=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
+          echo "SIGN_DOMAIN=$(jq -r '.domains.sign' client.json)" >> $GITHUB_OUTPUT
+          echo "ONPREM_ENABLED=$(jq -r '.onprem.enabled // false' client.json)" >> $GITHUB_OUTPUT
+          
+          # Validate on-prem is enabled
+          ENABLED=$(jq -r '.onprem.enabled // false' client.json)
+          if [ "$ENABLED" != "true" ]; then
+            echo "::warning::On-prem deployment is not enabled in client.json"
+          fi
+          
+      - name: Display configuration
+        run: |
+          echo "Client: ${{ steps.config.outputs.CLIENT_SLUG }}"
+          echo "Sign Domain: ${{ steps.config.outputs.SIGN_DOMAIN }}"
+          echo "On-Prem Enabled: ${{ steps.config.outputs.ONPREM_ENABLED }}"
+
+  deploy:
+    name: Deploy to On-Prem Server
+    needs: validate
+    runs-on: self-hosted
+    if: needs.validate.outputs.onprem_enabled == 'true'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify on-prem environment
+        run: |
+          echo "Verifying on-prem environment..."
+          
+          # Check Docker is available
+          if ! command -v docker &> /dev/null; then
+            echo "::error::Docker is not installed"
+            exit 1
+          fi
+          
+          # Check jq is available
+          if ! command -v jq &> /dev/null; then
+            echo "::error::jq is not installed"
+            exit 1
+          fi
+          
+          echo "Docker version: $(docker --version)"
+          echo "jq version: $(jq --version)"
+          
+      - name: Generate environment files
+        if: ${{ github.event.inputs.generate_env == 'true' }}
+        env:
+          DOCUSEAL_API_TOKEN: ${{ secrets.DOCUSEAL_API_TOKEN }}
+          SIGNING_ORCHESTRATOR_API_KEY: ${{ secrets.SIGNING_ORCHESTRATOR_API_KEY }}
+          MTSA_SOAP_USERNAME: ${{ secrets.MTSA_SOAP_USERNAME }}
+          MTSA_SOAP_PASSWORD: ${{ secrets.MTSA_SOAP_PASSWORD }}
+          DOCUSEAL_POSTGRES_PASSWORD: ${{ secrets.DOCUSEAL_POSTGRES_PASSWORD }}
+          AGREEMENTS_DB_PASSWORD: ${{ secrets.AGREEMENTS_DB_PASSWORD }}
+        run: |
+          cd on-prem/scripts
+          chmod +x generate-env.sh
+          ./generate-env.sh
+
+      - name: Create safety backup
+        run: |
+          echo "Creating pre-deployment backup..."
+          cd on-prem/scripts
+          if [ -f create-safety-backup.sh ]; then
+            chmod +x create-safety-backup.sh
+            ./create-safety-backup.sh
+          else
+            echo "Backup script not found - skipping"
+          fi
+
+      - name: Deploy DocuSeal
+        if: ${{ github.event.inputs.deploy_docuseal == 'true' }}
+        env:
+          DOCUSEAL_POSTGRES_PASSWORD: ${{ secrets.DOCUSEAL_POSTGRES_PASSWORD }}
+        run: |
+          echo "Deploying DocuSeal..."
+          cd on-prem
+          
+          # Check if unified compose exists
+          if [ -f docker-compose.unified.yml ]; then
+            docker compose -f docker-compose.unified.yml up -d docuseal-app docuseal-postgres
+          elif [ -f docuseal/docker-compose.yml ]; then
+            cd docuseal
+            docker compose up -d
+          else
+            echo "::warning::No DocuSeal compose file found"
+          fi
+          
+          # Wait for DocuSeal to be healthy
+          echo "Waiting for DocuSeal to start..."
+          sleep 15
+          
+          # Health check
+          if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+            echo "DocuSeal is healthy"
+          else
+            echo "::warning::DocuSeal health check failed"
+          fi
+
+      - name: Deploy Signing Orchestrator
+        if: ${{ github.event.inputs.deploy_orchestrator == 'true' }}
+        env:
+          SIGNING_ORCHESTRATOR_API_KEY: ${{ secrets.SIGNING_ORCHESTRATOR_API_KEY }}
+          AGREEMENTS_DB_PASSWORD: ${{ secrets.AGREEMENTS_DB_PASSWORD }}
+        run: |
+          echo "Deploying Signing Orchestrator..."
+          cd on-prem
+          
+          # Check if unified compose exists
+          if [ -f docker-compose.unified.yml ]; then
+            docker compose -f docker-compose.unified.yml up -d signing-orchestrator agreements-postgres
+          elif [ -f signing-orchestrator/docker-compose.yml ]; then
+            cd signing-orchestrator
+            docker compose up -d --build
+          else
+            echo "::warning::No Signing Orchestrator compose file found"
+          fi
+          
+          # Wait for orchestrator to be healthy
+          echo "Waiting for Signing Orchestrator to start..."
+          sleep 15
+          
+          # Health check
+          if curl -sf http://localhost:4010/health > /dev/null 2>&1; then
+            echo "Signing Orchestrator is healthy"
+          else
+            echo "::warning::Signing Orchestrator health check failed"
+          fi
+
+      - name: Deploy MTSA
+        if: ${{ github.event.inputs.deploy_mtsa == 'true' }}
+        run: |
+          echo "Deploying MTSA..."
+          cd on-prem
+          
+          # Check if MTSA image exists
+          MTSA_IMAGE=$(jq -r '.onprem.mtsa.container_image // "mtsa-pilot:latest"' ../client.json)
+          
+          if docker images | grep -q "$(echo $MTSA_IMAGE | cut -d: -f1)"; then
+            echo "MTSA image found: $MTSA_IMAGE"
+            
+            if [ -f docker-compose.unified.yml ]; then
+              docker compose -f docker-compose.unified.yml up -d mtsa
+            else
+              echo "::warning::No unified compose file - MTSA may need manual start"
+            fi
+          else
+            echo "::warning::MTSA image not found. Import with: ./scripts/import-mtsa-container.sh"
+          fi
+
+      - name: Setup DocuSeal Template
+        if: ${{ github.event.inputs.setup_template == 'true' }}
+        env:
+          DOCUSEAL_API_TOKEN: ${{ secrets.DOCUSEAL_API_TOKEN }}
+        run: |
+          echo "Setting up DocuSeal template..."
+          cd on-prem/scripts
+          chmod +x setup-docuseal-template.sh
+          ./setup-docuseal-template.sh --update-config
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying deployment..."
+          
+          # Show running containers
+          echo "Running containers:"
+          docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+          
+          echo ""
+          echo "Service health checks:"
+          
+          # DocuSeal
+          echo -n "DocuSeal: "
+          if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+            echo "Healthy"
+          else
+            echo "Unhealthy or not deployed"
+          fi
+          
+          # Signing Orchestrator
+          echo -n "Signing Orchestrator: "
+          if curl -sf http://localhost:4010/health > /dev/null 2>&1; then
+            echo "Healthy"
+          else
+            echo "Unhealthy or not deployed"
+          fi
+          
+          # MTSA
+          echo -n "MTSA: "
+          if curl -sf http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl > /dev/null 2>&1; then
+            echo "Healthy"
+          else
+            echo "Unhealthy or not deployed"
+          fi
+
+      - name: Post-deployment summary
+        run: |
+          SIGN_DOMAIN="${{ needs.validate.outputs.sign_domain }}"
+          
+          echo "=========================================="
+          echo "  Deployment Complete"
+          echo "=========================================="
+          echo ""
+          echo "Service URLs:"
+          echo "  DocuSeal: https://${SIGN_DOMAIN}"
+          echo "  Orchestrator: https://${SIGN_DOMAIN}/orchestrator"
+          echo "  MTSA (internal): http://mtsa:8080"
+          echo ""
+          echo "Verify via:"
+          echo "  ./on-prem/scripts/deploy-all.sh status"
+          echo "=========================================="
+
+  notify-skip:
+    name: On-Prem Disabled
+    needs: validate
+    runs-on: ubuntu-latest
+    if: needs.validate.outputs.onprem_enabled != 'true'
+    steps:
+      - name: Skip notification
+        run: |
+          echo "::warning::On-prem deployment skipped - not enabled in client.json"
+          echo "To enable, set 'onprem.enabled: true' in client.json"

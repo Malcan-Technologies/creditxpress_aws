@@ -198,10 +198,13 @@ class DocuSealService {
       // Return default values if no settings found
       if (!companySettings) {
         return {
-          companyName: 'Kredit.my',
+          companyName: companySigningConfig.defaultCompanyName,
           companyRegNo: 'N/A',
           licenseNo: 'N/A',
-          companyAddress: 'Kuala Lumpur, Malaysia',
+          companyAddress: companySigningConfig.defaultCompanyAddress,
+          // Signing config - fall back to config values
+          signUrl: docusealConfig.baseUrl,
+          serverPublicIp: companySigningConfig.serverPublicIp,
         };
       }
 
@@ -210,15 +213,20 @@ class DocuSealService {
         companyRegNo: companySettings.companyRegNo || 'N/A',
         licenseNo: companySettings.licenseNo || 'N/A',
         companyAddress: companySettings.companyAddress,
+        // Signing config - prefer database values, fall back to config
+        signUrl: companySettings.signUrl || docusealConfig.baseUrl,
+        serverPublicIp: companySettings.serverPublicIp || companySigningConfig.serverPublicIp,
       };
     } catch (error) {
       console.error('Error fetching company settings:', error);
       // Return default values on error
       return {
-        companyName: 'Kredit.my',
+        companyName: companySigningConfig.defaultCompanyName,
         companyRegNo: 'N/A',
         licenseNo: 'N/A',
-        companyAddress: 'Kuala Lumpur, Malaysia',
+        companyAddress: companySigningConfig.defaultCompanyAddress,
+        signUrl: docusealConfig.baseUrl,
+        serverPublicIp: companySigningConfig.serverPublicIp,
       };
     }
   }
@@ -419,7 +427,7 @@ class DocuSealService {
         },
         {
           name: 'ip_address',
-          default_value: 'Digitally generated. IP Address: 210.186.80.101. URL: https://sign.creditxpress.com.my',
+          default_value: `Digitally generated.${companySettings.serverPublicIp ? ` IP Address: ${companySettings.serverPublicIp}.` : ''} URL: ${companySettings.signUrl}`,
           readonly: true
         }
       ];
@@ -434,7 +442,7 @@ class DocuSealService {
         external_id: application?.loan?.id ? `loan_${application.loan.id}` : `application_${applicationId}`, // Use loan ID if available, otherwise application ID
         submitters: [
           {
-            name: 'Kredit.my Sdn Bhd',
+            name: companySettings.companyName,
             email: companySigningConfig.companyEmail,
             role: 'Company',
             fields: companyFields, // Company gets pre-filled data but must sign manually

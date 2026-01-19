@@ -2,15 +2,68 @@
 
 # Unified Deployment Script for DocuSeal + Signing Orchestrator
 # Deploys both systems to on-premises server with proper environment management
+#
+# Configuration is loaded from client.json for easy multi-client support.
+# Can be run locally (with SSH access) or via GitHub Actions (self-hosted runner).
 
 set -e
 
-# Configuration
-REMOTE_HOST="admin-kapital@100.76.8.62"  # Direct Tailscale connection to on-prem server
+# Script directories
+LOCAL_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CLIENT_JSON="$LOCAL_BASE_DIR/../client.json"
+
+# =============================================================================
+# Load configuration from client.json
+# =============================================================================
+load_client_config() {
+    if [ -f "$CLIENT_JSON" ]; then
+        # Check if jq is available
+        if command -v jq &> /dev/null; then
+            CLIENT_SLUG=$(jq -r '.client_slug' "$CLIENT_JSON")
+            CLIENT_NAME=$(jq -r '.client_name' "$CLIENT_JSON")
+            SIGN_DOMAIN=$(jq -r '.domains.sign' "$CLIENT_JSON")
+            
+            # On-prem specific config
+            ONPREM_ENABLED=$(jq -r '.onprem.enabled // false' "$CLIENT_JSON")
+            SERVER_IP=$(jq -r '.onprem.server_ip // ""' "$CLIENT_JSON")
+            SSH_USER=$(jq -r '.onprem.ssh_user // ""' "$CLIENT_JSON")
+            SSH_HOST=$(jq -r '.onprem.ssh_host // ""' "$CLIENT_JSON")
+            REMOTE_BASE_DIR=$(jq -r '.onprem.base_dir // "/home/admin"' "$CLIENT_JSON")
+            
+            # Use ssh_host if available, otherwise construct from user@ip
+            if [ -n "$SSH_HOST" ] && [ "$SSH_HOST" != "null" ]; then
+                REMOTE_HOST="$SSH_HOST"
+            elif [ -n "$SSH_USER" ] && [ -n "$SERVER_IP" ]; then
+                REMOTE_HOST="${SSH_USER}@${SERVER_IP}"
+            fi
+            
+            echo -e "${BLUE}[INFO]${NC} Loaded config for: $CLIENT_NAME ($CLIENT_SLUG)"
+            echo -e "${BLUE}[INFO]${NC} Remote host: $REMOTE_HOST"
+        else
+            echo -e "${YELLOW}[WARN]${NC} jq not found, using fallback configuration"
+            use_fallback_config
+        fi
+    else
+        echo -e "${YELLOW}[WARN]${NC} client.json not found at $CLIENT_JSON, using fallback"
+        use_fallback_config
+    fi
+}
+
+# Fallback configuration for backward compatibility
+use_fallback_config() {
+    REMOTE_HOST="${REMOTE_HOST:-admin-kapital@100.76.8.62}"
+    REMOTE_BASE_DIR="${REMOTE_BASE_DIR:-/home/admin-kapital}"
+    CLIENT_SLUG="creditxpress"
+    CLIENT_NAME="Credit Xpress"
+    SIGN_DOMAIN="sign.creditxpress.com.my"
+}
+
+# Load configuration
+load_client_config
+
+# Legacy variables for backward compatibility
 REMOTE_PORT=""         # Port handled by SSH config
 REMOTE_USER=""         # User handled by SSH config
-REMOTE_BASE_DIR="/home/admin-kapital"
-LOCAL_BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Remote directories (matching your actual on-prem structure)
 REMOTE_DOCUSEAL_DIR="$REMOTE_BASE_DIR/docuseal-onprem"
@@ -651,7 +704,8 @@ EOF
 show_deployment_status() {
     print_section "Deployment Status Overview"
     
-    ssh $REMOTE_HOST << 'EOF'
+    # Pass sign domain to remote script
+    ssh $REMOTE_HOST "SIGN_DOMAIN=$SIGN_DOMAIN" bash << 'EOF'
         echo "🌐 Overall System Status"
         echo "======================="
         
@@ -715,11 +769,11 @@ show_deployment_status() {
         
         echo ""
         echo "🌐 Service URLs:"
-        echo "   DocuSeal Web UI: http://sign.creditxpress.com.my"
-        echo "   DocuSeal Direct: http://sign.creditxpress.com.my:3001"
-        echo "   Orchestrator API: http://sign.creditxpress.com.my:4010"
-        echo "   Orchestrator Health: http://sign.creditxpress.com.my:4010/health"
-        echo "   MTSA Pilot WSDL: http://sign.creditxpress.com.my:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"
+        echo "   DocuSeal Web UI: https://${SIGN_DOMAIN:-sign.kredit.my}"
+        echo "   DocuSeal Direct: https://${SIGN_DOMAIN:-sign.kredit.my}:3001"
+        echo "   Orchestrator API: https://${SIGN_DOMAIN:-sign.kredit.my}/orchestrator"
+        echo "   Orchestrator Health: https://${SIGN_DOMAIN:-sign.kredit.my}/orchestrator/health"
+        echo "   MTSA Pilot WSDL: http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"
 EOF
     
     print_success "Status overview completed"
@@ -880,7 +934,7 @@ deploy_all() {
     echo ""
     echo "📋 Next steps:"
     echo "   1. Configure .env files if needed"
-    echo "   2. Set up DocuSeal webhook URL: http://sign.creditxpress.com.my:4010/webhooks/docuseal"
+    echo "   2. Set up DocuSeal webhook URL: https://${SIGN_DOMAIN}/orchestrator/webhooks/docuseal"
     echo "   3. Test certificate enrollment and revocation in admin panel"
     echo "   4. Test the complete signing workflow"
     echo ""

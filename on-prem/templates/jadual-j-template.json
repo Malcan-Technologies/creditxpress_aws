@@ -1,0 +1,507 @@
+{
+  "id": 2,
+  "archived_at": null,
+  "fields": [
+    {
+      "uuid": "1f06077f-8f31-42d8-b420-2221fbb94a76",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "payment_day",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.175,
+          "y": 0.7093572614252383,
+          "w": 0.1019230769230769,
+          "h": 0.01766879956291845,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 0
+        }
+      ]
+    },
+    {
+      "uuid": "cb1f8e63-a7f6-4202-8f4b-15725a05e5dd",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "first_payment_date",
+      "type": "date",
+      "required": true,
+      "preferences": {
+        "format": "DD/MM/YYYY"
+      },
+      "areas": [
+        {
+          "x": 0.1769230769230769,
+          "y": 0.6854562550059782,
+          "w": 0.1163461538461538,
+          "h": 0.01630661275162892,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 0
+        }
+      ]
+    },
+    {
+      "uuid": "f3062856-18ef-44f2-8c52-7cc517cbca0f",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "loan_term",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.1778846153846154,
+          "y": 0.7335484694765924,
+          "w": 0.1134615384615384,
+          "h": 0.01766304347826086,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 0
+        }
+      ]
+    },
+    {
+      "uuid": "b305935a-9d8e-41a8-8dc1-a2b4fcffb444",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "company_name",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.2307692307692308,
+          "y": 0.1264118309401372,
+          "w": 0.3625,
+          "h": 0.0177189268607543,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 4
+        }
+      ]
+    },
+    {
+      "uuid": "9102d242-e19b-4c4d-b78c-69eaaa66859f",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "company_registration",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4384615384615385,
+          "y": 0.1508152173913044,
+          "w": 0.1557692307692308,
+          "h": 0.01766304347826086,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 4
+        }
+      ]
+    },
+    {
+      "uuid": "d9917ea5-7f97-480c-8183-727ff5aa36b2",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "company_details",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.5576923076923077,
+          "y": 0.3019737820553679,
+          "w": 0.2817307692307692,
+          "h": 0.06852247899153896,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "2543aa04-d66c-4e80-93e8-0ed9975edc4e",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "agreement_date",
+      "type": "date",
+      "required": true,
+      "preferences": {
+        "format": "DD/MM/YYYY"
+      },
+      "areas": [
+        {
+          "x": 0.5586538461538462,
+          "y": 0.2486455478360635,
+          "w": 0.2807692307692308,
+          "h": 0.04163317412178832,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "e3210002-1ccb-43aa-bf31-f9c38ccea0cd",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "borrower_details",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.5567307692307693,
+          "y": 0.3838251853740413,
+          "w": 0.2817307692307692,
+          "h": 0.05465204100257331,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "7992598c-096c-4c95-ae22-42185a5b9ecf",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "principal_text",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.551923076923077,
+          "y": 0.4595895213206705,
+          "w": 0.1471153846153846,
+          "h": 0.01019021739130432,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "4e9495cf-0f22-4f5e-ae1a-2cdba9dda1bd",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "principal_number",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.5980769230769231,
+          "y": 0.4765759449295685,
+          "w": 0.1653846153846154,
+          "h": 0.01084757648443557,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "7f546505-8441-4091-8ae2-312759ff5077",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "interest_text",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.5576923076923077,
+          "y": 0.5428325578430747,
+          "w": 0.09903846153846152,
+          "h": 0.0108695652173913,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "85e865f8-884b-4696-a7d3-8ad5175cfa92",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "interest_number",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.7413461538461539,
+          "y": 0.5414727941020248,
+          "w": 0.03846153846153855,
+          "h": 0.0108695652173913,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "39138120-83ae-4abf-b620-4a6c4f8be97c",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "total_loan",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.5538461538461539,
+          "y": 0.6399706800943336,
+          "w": 0.2846153846153846,
+          "h": 0.04119859250933744,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "5403e61b-27e6-4a7d-b390-d5cda1a25498",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "monthly_installment",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.5538461538461539,
+          "y": 0.5958314742813436,
+          "w": 0.2826923076923077,
+          "h": 0.0377511225915319,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    },
+    {
+      "uuid": "b3947cba-9b4f-413c-a693-3a38ebd97964",
+      "submitter_uuid": "6cc1de4d-df1e-490d-8ac6-781b1fd8177b",
+      "name": "borrower_name",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.2288461538461538,
+          "y": 0.8081418969900287,
+          "w": 0.3567307692307692,
+          "h": 0.01726666939303834,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 3
+        }
+      ]
+    },
+    {
+      "uuid": "a5f51e23-3817-4ad3-9a74-a2f7d7df8467",
+      "submitter_uuid": "6cc1de4d-df1e-490d-8ac6-781b1fd8177b",
+      "name": "borrower_ic",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4317307692307693,
+          "y": 0.8312419469047094,
+          "w": 0.1634615384615384,
+          "h": 0.01834239130434778,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 3
+        }
+      ]
+    },
+    {
+      "uuid": "505dc42e-0b72-4c75-ba0f-20124cf5e656",
+      "submitter_uuid": "6cc1de4d-df1e-490d-8ac6-781b1fd8177b",
+      "name": "",
+      "type": "signature",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.6567307692307692,
+          "y": 0.8063912794192188,
+          "w": 0.005769230769230749,
+          "h": 0.004065267248518856,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 3
+        }
+      ]
+    },
+    {
+      "uuid": "af23725b-2836-4f9a-a098-3a6ee86a51eb",
+      "submitter_uuid": "ff55922e-0e5b-4be2-a92e-32997418e264",
+      "name": "",
+      "type": "signature",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4894230769230768,
+          "y": 0.3519051240867588,
+          "w": 0.004807692307692291,
+          "h": 0.002036031012572381,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 4
+        }
+      ]
+    },
+    {
+      "uuid": "cde307cb-a436-490d-bc1b-37c37b942d6b",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "company_signature",
+      "type": "signature",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.6528846153846154,
+          "y": 0.1256799248771804,
+          "w": 0.004807692307692291,
+          "h": 0.005433628506508678,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 4
+        }
+      ]
+    },
+    {
+      "uuid": "87b953e4-448d-4922-be71-2fc02c1a7071",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "ip_address",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4336538461538462,
+          "y": 0.9812278354674991,
+          "w": 0.5423076923076924,
+          "h": 0.007902599315109504,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 0
+        }
+      ]
+    },
+    {
+      "uuid": "7f52fe8c-9d40-432d-a311-25afd8786ae6",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "ip_address",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4298076923076923,
+          "y": 0.9775010086853114,
+          "w": 0.5423076923076924,
+          "h": 0.007902599315109504,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "uuid": "6772621f-c169-4ad2-927b-6c51dec12545",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "ip_address",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4336538461538462,
+          "y": 0.9798900002123548,
+          "w": 0.5423076923076924,
+          "h": 0.007902599315109504,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 2
+        }
+      ]
+    },
+    {
+      "uuid": "38922411-fe25-444f-848c-25125ee57d03",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "ip_address",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4365384615384615,
+          "y": 0.9775222441655518,
+          "w": 0.5423076923076924,
+          "h": 0.007902599315109504,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 3
+        }
+      ]
+    },
+    {
+      "uuid": "e73ff521-9a3e-4723-9c84-ed578ff353c0",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "ip_address",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4288461538461538,
+          "y": 0.9765135588541335,
+          "w": 0.5423076923076924,
+          "h": 0.007902599315109504,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 4
+        }
+      ]
+    },
+    {
+      "uuid": "4b1767bb-ce70-4ef4-9c18-441214fe0cd9",
+      "submitter_uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a",
+      "name": "ip_address",
+      "type": "text",
+      "required": true,
+      "preferences": {},
+      "areas": [
+        {
+          "x": 0.4326923076923077,
+          "y": 0.9761844089104075,
+          "w": 0.5423076923076924,
+          "h": 0.007902599315109504,
+          "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+          "page": 5
+        }
+      ]
+    }
+  ],
+  "name": "Jadual J (official)",
+  "preferences": {},
+  "schema": [
+    {
+      "attachment_uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+      "name": "Jadual J KPKT"
+    }
+  ],
+  "slug": "uaTcayfUWtGpUi",
+  "source": "native",
+  "submitters": [
+    {
+      "name": "Company",
+      "uuid": "7e3dab12-334c-4187-b9ee-06ef1318ba0a"
+    },
+    {
+      "name": "Borrower",
+      "uuid": "6cc1de4d-df1e-490d-8ac6-781b1fd8177b"
+    },
+    {
+      "name": "Witness",
+      "uuid": "ff55922e-0e5b-4be2-a92e-32997418e264"
+    }
+  ],
+  "created_at": "2025-09-11T14:07:05.999Z",
+  "updated_at": "2025-12-02T03:50:45.145Z",
+  "author_id": 1,
+  "external_id": null,
+  "folder_id": 1,
+  "shared_link": false,
+  "application_key": null,
+  "folder_name": "Default",
+  "author": {
+    "id": 1,
+    "email": "opgcapital3@gmail.com",
+    "first_name": "OPG",
+    "last_name": "Capital"
+  },
+  "documents": [
+    {
+      "id": 766,
+      "uuid": "60aa0765-8095-4693-84d0-a89e49b6e16a",
+      "url": "https://sign.creditxpress.com.my/file/WyI4ODcyZWIyMy0zODg0LTRiZmItYWU5OS1iZDRjYmMwZmY4MTEiLCJibG9iIl0--7fdd40572d7696ab0fc648f121dbd2a7f8c23452268561679866f0a22ad30d0f/Jadual%20J%20KPKT.pdf",
+      "preview_image_url": "https://sign.creditxpress.com.my/file/WyI2ZTRhNzMxOC0xOTJlLTQ3MzMtOGMyMy00YzM3OGI5MDhiMzkiLCJibG9iIl0--20f907ad08fa27995ca5515368a3610d8bbeeb360ab1838134fe283741cb314d/0.png",
+      "filename": "Jadual J KPKT.pdf"
+    }
+  ]
+}

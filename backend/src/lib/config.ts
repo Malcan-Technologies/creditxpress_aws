@@ -152,11 +152,18 @@ export const signingConfig = {
 // ==============================================
 // Company/Witness Signing Configuration
 // Used for DocuSeal submissions with company and witness signatories
+// Reads from AWS Secrets Manager JSON or individual env vars
 // ==============================================
 export const companySigningConfig = {
-  companyEmail: process.env.COMPANY_SIGNING_EMAIL || 'admin@creditxpress.com.my',
-  witnessName: process.env.WITNESS_NAME || 'Legal Representative',
-  witnessEmail: process.env.WITNESS_EMAIL || 'legal@creditxpress.com.my',
+  companyEmail: process.env.COMPANY_SIGNING_EMAIL || docusealSigningCredentials.company_signing_email || 'admin@creditxpress.com.my',
+  witnessName: process.env.WITNESS_NAME || docusealSigningCredentials.witness_name || 'Legal Representative',
+  witnessEmail: process.env.WITNESS_EMAIL || docusealSigningCredentials.witness_email || 'legal@creditxpress.com.my',
+  // Server public IP for digital signature attestation
+  serverPublicIp: process.env.SERVER_PUBLIC_IP || docusealSigningCredentials.server_public_ip || '',
+  // Default company name (fallback when database has no settings)
+  defaultCompanyName: process.env.DEFAULT_COMPANY_NAME || docusealSigningCredentials.default_company_name || 'Kredit.my',
+  // Default company address (fallback when database has no settings)
+  defaultCompanyAddress: process.env.DEFAULT_COMPANY_ADDRESS || docusealSigningCredentials.default_company_address || 'Kuala Lumpur, Malaysia',
 };
 
 // ==============================================

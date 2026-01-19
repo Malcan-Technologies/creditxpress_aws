@@ -908,6 +908,29 @@ async function main() {
 		console.log("Bank accounts table is not empty, skipping default bank account creation");
 	}
 
+	// Check if company settings table is empty
+	const companySettingsCount = await prisma.companySettings.count();
+	if (companySettingsCount === 0) {
+		console.log("Creating default company settings...");
+		
+		// Default company settings with signing configuration
+		await prisma.companySettings.create({
+			data: {
+				companyName: "Kredit.my",
+				companyAddress: "Kuala Lumpur, Malaysia",
+				taxLabel: "SST 6%",
+				isActive: true,
+				// Signing configuration - leave empty for admin to configure
+				signUrl: null,
+				serverPublicIp: null
+			}
+		});
+		
+		console.log("Default company settings created successfully");
+	} else {
+		console.log("Company settings table is not empty, skipping default settings creation");
+	}
+
 	console.log("Seed completed successfully");
 }
 

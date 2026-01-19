@@ -47,9 +47,26 @@
   },
 
   "docuseal": {
-    "template_id": "",
+    "template_id": "2",
+    "template_name": "Jadual J (Official)",
+    "template_external_id": "creditxpress-loan-agreement",
     "company_signing_email": "admin@creditxpress.com.my",
     "witness_email": "legal@creditxpress.com.my",
     "witness_name": "Legal Representative"
+  },
+
+  "onprem": {
+    "enabled": true,
+    "server_ip": "100.76.8.62",
+    "ssh_user": "admin-kapital",
+    "ssh_host": "admin-kapital@100.76.8.62",
+    "base_dir": "/home/admin-kapital",
+    "mtsa": {
+      "env": "pilot",
+      "container_image": "mtsa-pilot:1.01"
+    },
+    "cloudflare": {
+      "tunnel_name": "creditxpress-onprem"
+    }
   }
 }
