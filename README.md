@@ -1,8 +1,8 @@
-# Kredit.my — Fintech Lending Platform
+# Kredit Platform — Fintech Lending Platform
 
-[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org) [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/) [![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/) [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma)](https://www.prisma.io/) [![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazon-aws)](https://aws.amazon.com/ecs/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org) [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://www.typescriptlang.org/) [![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/) [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma)](https://www.prisma.io/) [![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazon-aws)](https://aws.amazon.com/ecs/) [![Cloudflare](https://img.shields.io/badge/Cloudflare-Tunnel-F38020?logo=cloudflare)](https://www.cloudflare.com/)
 
-TypeScript-first lending platform for Malaysia. Consumer/SME loans, KYC, digital signing, repayments, and notifications.
+TypeScript-first lending platform for Malaysia. Consumer/SME loans, KYC, digital signing (PKI), repayments, and notifications.
 
 ---
 
@@ -47,45 +47,63 @@ cd admin && pnpm install && pnpm dev
 ## Architecture
 
 ```
-                    ┌─────────────────────────┐
-                    │       Cloudflare        │
-                    │   DNS + WAF + Tunnel    │
-                    └─────────────────────────┘
-                               │
-       ┌───────────────────────┼───────────────────────┐
-       │                       │                       │
-       ▼                       ▼                       ▼
-  app.domain             api.domain             sign.domain
- admin.domain                                    (Tunnel)
-       │                       │                       │
-       ▼                       ▼                       ▼
-┌────────────────────────────────────┐         ┌──────────────┐
-│           AWS ALB                  │         │   On-Prem    │
-│       (Host-based routing)         │         │    Server    │
-└────────────────────────────────────┘         └──────────────┘
-       │           │           │                      │
-       ▼           ▼           ▼               ┌──────┴──────┐
-  Frontend      Admin      Backend             │             │
-    ECS          ECS         ECS              DocuSeal    MTSA
-                              │               Signing
-                         RDS + S3           Orchestrator
+                         ┌─────────────────────────┐
+                         │       Cloudflare        │
+                         │   DNS + WAF + Tunnel    │
+                         └───────────┬─────────────┘
+                                     │
+         ┌───────────────────────────┼───────────────────────────┐
+         │                           │                           │
+         ▼                           ▼                           ▼
+   app.domain                  api.domain                  sign.domain
+  admin.domain                                           (via Tunnel)
+         │                           │                           │
+         ▼                           ▼                           ▼
+┌────────────────────────────────────────────┐    ┌──────────────────────┐
+│              AWS (Cloud)                   │    │   On-Prem Server     │
+├────────────────────────────────────────────┤    ├──────────────────────┤
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐   │    │  ┌────────────────┐  │
+│  │ Frontend │ │  Admin   │ │ Backend  │   │    │  │    DocuSeal    │  │
+│  │   ECS    │ │   ECS    │ │   ECS    │   │    │  │   (Port 3001)  │  │
+│  └──────────┘ └──────────┘ └────┬─────┘   │    │  └────────────────┘  │
+│                                 │         │    │  ┌────────────────┐  │
+│                          ┌──────┴──────┐  │    │  │   Orchestrator │  │
+│                          │ RDS + S3    │  │    │  │   (Port 4010)  │  │
+│                          └─────────────┘  │    │  └────────────────┘  │
+└────────────────────────────────────────────┘    │  ┌────────────────┐  │
+                                                  │  │     MTSA       │  │
+                                                  │  │   (Port 8080)  │  │
+                                                  │  └────────────────┘  │
+                                                  └──────────────────────┘
 ```
 
-**Cloud (AWS ECS Fargate):** Frontend, Admin, Backend containers + RDS PostgreSQL + S3  
-**On-Premise:** DocuSeal, Signing Orchestrator, MTSA (via Cloudflare Tunnel)
+| Component | Stack | Purpose |
+|-----------|-------|---------|
+| **Frontend** | Next.js + AWS ECS | Customer-facing app |
+| **Admin** | Next.js + AWS ECS | Admin dashboard |
+| **Backend** | Express + AWS ECS | API + business logic |
+| **Database** | PostgreSQL (RDS) | Primary data store |
+| **DocuSeal** | On-prem Docker | Document signing UI |
+| **Orchestrator** | On-prem Docker | PKI signing bridge |
+| **MTSA** | On-prem Docker | Trustgate digital signatures |
+| **Cloudflare** | DNS + Tunnel | Routes traffic, secures on-prem |
 
 ---
 
 ## Project Structure
 
 ```
-├── backend/          # Express API + Prisma
-├── frontend/         # Customer Next.js app (port 3000)
-├── admin/            # Admin Next.js app (port 3002)
-├── on-prem/          # On-premise signing services
-├── infra/            # Terraform for AWS
-├── docs/             # Documentation
-└── scripts/          # Utility scripts
+├── backend/              # Express API + Prisma ORM
+├── frontend/             # Customer Next.js app (port 3000)
+├── admin/                # Admin Next.js app (port 3002)
+├── on-prem/              # On-premise signing services
+│   ├── scripts/          # Setup & deployment scripts
+│   ├── docs/             # On-prem documentation
+│   └── docker-compose.unified.yml
+├── infra/                # Terraform for AWS
+├── docs/                 # Platform documentation
+├── .github/workflows/    # CI/CD pipelines
+└── client.json           # Client-specific configuration
 ```
 
 ---
@@ -94,21 +112,34 @@ cd admin && pnpm install && pnpm dev
 
 | Guide | Description |
 |-------|-------------|
-| [`docs/QUICKSTART_DEV.md`](docs/QUICKSTART_DEV.md) | Local development setup |
-| [`docs/AWS_SETUP_GUIDE.md`](docs/AWS_SETUP_GUIDE.md) | AWS ECS deployment (zero to production) |
-| [`docs/NEW_CLIENT_GUIDE.md`](docs/NEW_CLIENT_GUIDE.md) | New client onboarding |
-| [`docs/THIRD_PARTY_INTEGRATIONS.md`](docs/THIRD_PARTY_INTEGRATIONS.md) | External services setup |
-| [`backend/docs/`](backend/docs/) | Backend-specific docs |
+| [`docs/getting-started/QUICKSTART_DEV.md`](docs/getting-started/QUICKSTART_DEV.md) | Local development setup |
+| [`docs/getting-started/NEW_CLIENT_GUIDE.md`](docs/getting-started/NEW_CLIENT_GUIDE.md) | Full client onboarding (AWS + On-Prem) |
+| [`docs/getting-started/THIRD_PARTY_INTEGRATIONS.md`](docs/getting-started/THIRD_PARTY_INTEGRATIONS.md) | External services (CTOS, WhatsApp, etc.) |
+| [`on-prem/docs/GITHUB_RUNNER_SETUP.md`](on-prem/docs/GITHUB_RUNNER_SETUP.md) | On-prem CI/CD with GitHub Actions |
+| [`on-prem/docs/CLOUDFLARE_TUNNEL_SETUP.md`](on-prem/docs/CLOUDFLARE_TUNNEL_SETUP.md) | Cloudflare Tunnel configuration |
+| [`on-prem/docs/MTSA_CONTAINER_INTEGRATION.md`](on-prem/docs/MTSA_CONTAINER_INTEGRATION.md) | Trustgate MTSA setup |
 
 ---
 
 ## Key Features
 
-- **Lending**: Applications, disbursements, repayments, wallets, late fees
-- **KYC**: CTOS integration, document verification
-- **Digital Signing**: DocuSeal + MTSA PKI signatures
-- **Notifications**: WhatsApp Business + Email (Resend)
-- **Admin**: Dashboard, approvals, analytics, user management
+- **Lending**: Applications, offers, disbursements, repayments, wallets, late fees
+- **KYC**: CTOS eKYC integration, document verification, face matching
+- **Digital Signing**: DocuSeal + MTSA PKI signatures (legally binding)
+- **Notifications**: WhatsApp Business API + Email (Resend)
+- **Admin**: Dashboard, approvals, attestation, settings, user management
+
+## Third-Party Services
+
+| Service | Purpose |
+|---------|---------|
+| **AWS** | ECS Fargate, RDS, S3, Secrets Manager |
+| **Cloudflare** | DNS, WAF, Tunnel (on-prem access) |
+| **CTOS** | eKYC, credit reports |
+| **WhatsApp Business** | OTP, notifications |
+| **DocuSeal** | Document templates, e-signatures |
+| **Trustgate MTSA** | PKI digital signatures |
+| **Resend** | Email notifications |
 
 ---
 
@@ -152,13 +183,24 @@ docker compose -f backend/docker-compose.dev.yml logs -f backend
 
 ## Production Deployment
 
-Deploy to AWS ECS via GitHub Actions:
+### AWS (Cloud Services)
 
 ```bash
-git push origin main  # Triggers CI/CD
+git push origin main  # Triggers CI/CD for backend, frontend, admin
 ```
 
-Manual deploy or first-time setup: See [`docs/AWS_SETUP_GUIDE.md`](docs/AWS_SETUP_GUIDE.md)
+### On-Prem (Signing Services)
+
+Via GitHub Actions UI:
+1. Go to **Actions** → **Deploy On-Prem Services**
+2. Click **Run workflow** → Select services → **Run**
+
+Or via CLI:
+```bash
+gh workflow run deploy-onprem.yml -f deploy_orchestrator=true
+```
+
+> **Note:** On-prem requires a self-hosted GitHub runner. See [`on-prem/docs/GITHUB_RUNNER_SETUP.md`](on-prem/docs/GITHUB_RUNNER_SETUP.md)
 
 ---
 
@@ -171,4 +213,28 @@ Manual deploy or first-time setup: See [`docs/AWS_SETUP_GUIDE.md`](docs/AWS_SETU
 
 ---
 
-Made with Next.js, Node.js, Prisma, and ❤️
+## Configuration
+
+All client-specific settings are in `client.json`:
+
+```json
+{
+  "client_slug": "clientname",
+  "domains": {
+    "app": "app.client.com",
+    "admin": "admin.client.com",
+    "api": "api.client.com",
+    "sign": "sign.client.com"
+  },
+  "onprem": {
+    "enabled": true,
+    "mtsa": { "container_image": "mtsa-pilot:latest" }
+  }
+}
+```
+
+Additional settings (Sign URL, Server IP, Company info) are configured via **Admin Panel → Settings**.
+
+---
+
+Made with Next.js, Express, Prisma, and TypeScript
