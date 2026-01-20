@@ -290,6 +290,8 @@ resource "aws_ecs_task_definition" "backend" {
         { name = "PORT", value = tostring(var.services["backend"].port) },
         { name = "TZ", value = "Asia/Kuala_Lumpur" },
         # URLs
+        { name = "BASE_URL", value = "https://${var.domains.api}" },
+        { name = "BACKEND_URL", value = "https://${var.domains.api}" },
         { name = "FRONTEND_URL", value = "https://${var.domains.app}" },
         { name = "ADMIN_BASE_URL", value = "https://${var.domains.admin}" },
         { name = "ADMIN_URL", value = "https://${var.domains.admin}" },

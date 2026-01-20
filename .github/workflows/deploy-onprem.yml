@@ -35,8 +35,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       client_slug: ${{ steps.config.outputs.CLIENT_SLUG }}
+      client_name: ${{ steps.config.outputs.CLIENT_NAME }}
+      client_domain: ${{ steps.config.outputs.CLIENT_DOMAIN }}
       sign_domain: ${{ steps.config.outputs.SIGN_DOMAIN }}
+      api_domain: ${{ steps.config.outputs.API_DOMAIN }}
+      app_domain: ${{ steps.config.outputs.APP_DOMAIN }}
+      mtsa_env: ${{ steps.config.outputs.MTSA_ENV }}
+      mtsa_image: ${{ steps.config.outputs.MTSA_IMAGE }}
       onprem_enabled: ${{ steps.config.outputs.ONPREM_ENABLED }}
+      runner_label: ${{ steps.config.outputs.RUNNER_LABEL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,9 +51,29 @@ jobs:
       - name: Load client config
         id: config
         run: |
+          # Client identity
           echo "CLIENT_SLUG=$(jq -r '.client_slug' client.json)" >> $GITHUB_OUTPUT
-          echo "SIGN_DOMAIN=$(jq -r '.domains.sign' client.json)" >> $GITHUB_OUTPUT
+          echo "CLIENT_NAME=$(jq -r '.client_name' client.json)" >> $GITHUB_OUTPUT
+          
+          # Domains
+          SIGN_DOMAIN=$(jq -r '.domains.sign' client.json)
+          echo "SIGN_DOMAIN=$SIGN_DOMAIN" >> $GITHUB_OUTPUT
+          echo "API_DOMAIN=$(jq -r '.domains.api' client.json)" >> $GITHUB_OUTPUT
+          echo "APP_DOMAIN=$(jq -r '.domains.app' client.json)" >> $GITHUB_OUTPUT
+          # Extract base domain from sign domain (e.g., sign.andas.com.my -> andas.com.my)
+          CLIENT_DOMAIN=$(echo "$SIGN_DOMAIN" | cut -d. -f2-)
+          echo "CLIENT_DOMAIN=$CLIENT_DOMAIN" >> $GITHUB_OUTPUT
+          
+          # MTSA configuration
+          echo "MTSA_ENV=$(jq -r '.onprem.mtsa.env // "pilot"' client.json)" >> $GITHUB_OUTPUT
+          echo "MTSA_IMAGE=$(jq -r '.onprem.mtsa.container_image // "mtsa-pilot:latest"' client.json)" >> $GITHUB_OUTPUT
+          
+          # On-prem settings
           echo "ONPREM_ENABLED=$(jq -r '.onprem.enabled // false' client.json)" >> $GITHUB_OUTPUT
+          
+          # Build runs-on labels as JSON array for dynamic runner selection
+          RUNNER_LABEL=$(jq -r '.onprem.runner_label // .client_slug' client.json)
+          echo "RUNNER_LABEL=[\"self-hosted\", \"$RUNNER_LABEL\"]" >> $GITHUB_OUTPUT
           
           # Validate on-prem is enabled
           ENABLED=$(jq -r '.onprem.enabled // false' client.json)
@@ -56,14 +83,18 @@ jobs:
           
       - name: Display configuration
         run: |
-          echo "Client: ${{ steps.config.outputs.CLIENT_SLUG }}"
+          echo "Client: ${{ steps.config.outputs.CLIENT_SLUG }} (${{ steps.config.outputs.CLIENT_NAME }})"
+          echo "Client Domain: ${{ steps.config.outputs.CLIENT_DOMAIN }}"
           echo "Sign Domain: ${{ steps.config.outputs.SIGN_DOMAIN }}"
+          echo "API Domain: ${{ steps.config.outputs.API_DOMAIN }}"
+          echo "MTSA: ${{ steps.config.outputs.MTSA_ENV }} (${{ steps.config.outputs.MTSA_IMAGE }})"
           echo "On-Prem Enabled: ${{ steps.config.outputs.ONPREM_ENABLED }}"
+          echo "Runner Label: ${{ steps.config.outputs.RUNNER_LABEL }}"
 
   deploy:
     name: Deploy to On-Prem Server
     needs: validate
-    runs-on: self-hosted
+    runs-on: ${{ fromJSON(needs.validate.outputs.runner_label) }}
     if: needs.validate.outputs.onprem_enabled == 'true'
     
     steps:
@@ -118,13 +149,23 @@ jobs:
         if: ${{ github.event.inputs.deploy_docuseal == 'true' }}
         env:
           DOCUSEAL_POSTGRES_PASSWORD: ${{ secrets.DOCUSEAL_POSTGRES_PASSWORD }}
+          DOCUSEAL_SECRET_KEY_BASE: ${{ secrets.DOCUSEAL_SECRET_KEY_BASE }}
+          DOCUSEAL_API_TOKEN: ${{ secrets.DOCUSEAL_API_TOKEN }}
+          CLIENT_SLUG: ${{ needs.validate.outputs.client_slug }}
+          SIGN_DOMAIN: ${{ needs.validate.outputs.sign_domain }}
         run: |
           echo "Deploying DocuSeal..."
           cd on-prem
           
+          # Generate SECRET_KEY_BASE if not provided
+          if [ -z "$DOCUSEAL_SECRET_KEY_BASE" ]; then
+            export DOCUSEAL_SECRET_KEY_BASE=$(openssl rand -hex 64)
+            echo "Generated DOCUSEAL_SECRET_KEY_BASE"
+          fi
+          
           # Check if unified compose exists
           if [ -f docker-compose.unified.yml ]; then
-            docker compose -f docker-compose.unified.yml up -d docuseal-app docuseal-postgres
+            docker compose -f docker-compose.unified.yml up -d docuseal docuseal-postgres
           elif [ -f docuseal/docker-compose.yml ]; then
             cd docuseal
             docker compose up -d
@@ -134,13 +175,14 @@ jobs:
           
           # Wait for DocuSeal to be healthy
           echo "Waiting for DocuSeal to start..."
-          sleep 15
+          sleep 30
           
-          # Health check
-          if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+          # Health check (DocuSeal runs on port 3001 in unified compose)
+          if curl -sf http://localhost:3001/ > /dev/null 2>&1; then
             echo "DocuSeal is healthy"
           else
-            echo "::warning::DocuSeal health check failed"
+            echo "::warning::DocuSeal health check failed - check docker logs"
+            docker compose -f docker-compose.unified.yml logs docuseal --tail=20
           fi
 
       - name: Deploy Signing Orchestrator
@@ -148,13 +190,30 @@ jobs:
         env:
           SIGNING_ORCHESTRATOR_API_KEY: ${{ secrets.SIGNING_ORCHESTRATOR_API_KEY }}
           AGREEMENTS_DB_PASSWORD: ${{ secrets.AGREEMENTS_DB_PASSWORD }}
+          DOCUSEAL_API_TOKEN: ${{ secrets.DOCUSEAL_API_TOKEN }}
+          DOCUSEAL_POSTGRES_PASSWORD: ${{ secrets.DOCUSEAL_POSTGRES_PASSWORD }}
+          MTSA_SOAP_USERNAME: ${{ secrets.MTSA_SOAP_USERNAME }}
+          MTSA_SOAP_PASSWORD: ${{ secrets.MTSA_SOAP_PASSWORD }}
+          CLIENT_SLUG: ${{ needs.validate.outputs.client_slug }}
+          SIGN_DOMAIN: ${{ needs.validate.outputs.sign_domain }}
+          CLIENT_DOMAIN: ${{ needs.validate.outputs.client_domain }}
+          MTSA_ENV: ${{ needs.validate.outputs.mtsa_env }}
+          MTSA_CONTAINER_IMAGE: ${{ needs.validate.outputs.mtsa_image }}
         run: |
           echo "Deploying Signing Orchestrator..."
           cd on-prem
           
+          # Generate secrets if not provided
+          if [ -z "$DOCUSEAL_WEBHOOK_HMAC_SECRET" ]; then
+            export DOCUSEAL_WEBHOOK_HMAC_SECRET=$(openssl rand -hex 32)
+          fi
+          if [ -z "$DOCUSEAL_SECRET_KEY_BASE" ]; then
+            export DOCUSEAL_SECRET_KEY_BASE=$(openssl rand -hex 64)
+          fi
+          
           # Check if unified compose exists
           if [ -f docker-compose.unified.yml ]; then
-            docker compose -f docker-compose.unified.yml up -d signing-orchestrator agreements-postgres
+            docker compose -f docker-compose.unified.yml up -d signing-orchestrator agreements-postgres --build
           elif [ -f signing-orchestrator/docker-compose.yml ]; then
             cd signing-orchestrator
             docker compose up -d --build
@@ -164,26 +223,30 @@ jobs:
           
           # Wait for orchestrator to be healthy
           echo "Waiting for Signing Orchestrator to start..."
-          sleep 15
+          sleep 30
           
           # Health check
           if curl -sf http://localhost:4010/health > /dev/null 2>&1; then
             echo "Signing Orchestrator is healthy"
           else
-            echo "::warning::Signing Orchestrator health check failed"
+            echo "::warning::Signing Orchestrator health check failed - check docker logs"
+            docker compose -f docker-compose.unified.yml logs signing-orchestrator --tail=20
           fi
 
       - name: Deploy MTSA
         if: ${{ github.event.inputs.deploy_mtsa == 'true' }}
+        env:
+          CLIENT_SLUG: ${{ needs.validate.outputs.client_slug }}
+          MTSA_ENV: ${{ needs.validate.outputs.mtsa_env }}
+          MTSA_CONTAINER_IMAGE: ${{ needs.validate.outputs.mtsa_image }}
         run: |
           echo "Deploying MTSA..."
+          echo "MTSA Image: $MTSA_CONTAINER_IMAGE"
           cd on-prem
           
           # Check if MTSA image exists
-          MTSA_IMAGE=$(jq -r '.onprem.mtsa.container_image // "mtsa-pilot:latest"' ../client.json)
-          
-          if docker images | grep -q "$(echo $MTSA_IMAGE | cut -d: -f1)"; then
-            echo "MTSA image found: $MTSA_IMAGE"
+          if docker images | grep -q "$(echo $MTSA_CONTAINER_IMAGE | cut -d: -f1)"; then
+            echo "MTSA image found: $MTSA_CONTAINER_IMAGE"
             
             if [ -f docker-compose.unified.yml ]; then
               docker compose -f docker-compose.unified.yml up -d mtsa
@@ -191,7 +254,8 @@ jobs:
               echo "::warning::No unified compose file - MTSA may need manual start"
             fi
           else
-            echo "::warning::MTSA image not found. Import with: ./scripts/import-mtsa-container.sh"
+            echo "::warning::MTSA image not found: $MTSA_CONTAINER_IMAGE"
+            echo "Import with: ./scripts/import-mtsa-container.sh /path/to/mtsa.tar"
           fi
 
       - name: Setup DocuSeal Template
@@ -215,9 +279,9 @@ jobs:
           echo ""
           echo "Service health checks:"
           
-          # DocuSeal
+          # DocuSeal (port 3001 in unified compose)
           echo -n "DocuSeal: "
-          if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+          if curl -sf http://localhost:3001/ > /dev/null 2>&1; then
             echo "Healthy"
           else
             echo "Unhealthy or not deployed"

@@ -138,28 +138,82 @@ export class CTOSService {
   }
 
   /**
+   * Get the IV buffer from ciphertext config
+   * Handles both plain 16-char strings and Base64-encoded values
+   */
+  private getIvBuffer(): Buffer {
+    const ciphertext = this.config.ciphertext;
+    
+    // If it's exactly 16 bytes as UTF-8, use directly
+    const directBuffer = Buffer.from(ciphertext, 'utf8');
+    if (directBuffer.length === 16) {
+      return directBuffer;
+    }
+    
+    // Try Base64 decoding
+    try {
+      const decoded = Buffer.from(ciphertext, 'base64');
+      if (decoded.length >= 16) {
+        // Take first 16 bytes for IV
+        return decoded.slice(0, 16);
+      }
+      // If decoded is less than 16 bytes, pad with zeros
+      const padded = Buffer.alloc(16);
+      decoded.copy(padded);
+      console.warn(`CTOS IV decoded to ${decoded.length} bytes, padded to 16`);
+      return padded;
+    } catch {
+      // If Base64 fails, pad the direct buffer
+      const padded = Buffer.alloc(16);
+      directBuffer.copy(padded, 0, 0, Math.min(directBuffer.length, 16));
+      console.warn(`CTOS IV is ${directBuffer.length} bytes, padded to 16`);
+      return padded;
+    }
+  }
+
+  /**
+   * Get the encryption key buffer
+   * Key = (ciphertext + api_key).substring(0, 32) as UTF-8 bytes
+   */
+  private getKeyBuffer(): Buffer {
+    const fullKey = this.config.ciphertext + this.config.apiKey;
+    const keyString = fullKey.substring(0, 32);
+    const keyBuffer = Buffer.from(keyString, 'utf8');
+    
+    if (keyBuffer.length < 32) {
+      // Pad with zeros if needed
+      const padded = Buffer.alloc(32);
+      keyBuffer.copy(padded);
+      console.warn(`CTOS key is ${keyBuffer.length} bytes, padded to 32`);
+      return padded;
+    }
+    
+    return keyBuffer.slice(0, 32);
+  }
+
+  /**
    * Encrypt request body using AES-256-CBC (CTOS Method)
-   * Key = (IV + API_KEY).substring(0, 32)
-   * IV = Base64 decoded ciphertext (first 16 bytes)
+   * Key = (ciphertext + API_KEY).substring(0, 32)
+   * IV = ciphertext (16 bytes, Base64 decoded if needed)
    */
   private encryptRequestBody(body: object): string {
     const bodyJson = JSON.stringify(body);
     
-    // CTOS method: set_key = set_iv + api_key, then take first 32 chars
-    const fullKey = this.config.ciphertext + this.config.apiKey;
-    const keyString = fullKey.substring(0, 32);
-    
     console.log('Body to encrypt:', bodyJson);
-    console.log('Full key (IV + API_KEY):', fullKey.substring(0, 20) + '...');
-    console.log('Final key (32 chars):', keyString);
-    console.log('IV (ciphertext):', this.config.ciphertext);
     
-    // Convert to buffers for crypto
-    const key = Buffer.from(keyString, 'utf8');
-    const iv = Buffer.from(this.config.ciphertext, 'utf8');
+    // Get properly sized key and IV
+    const key = this.getKeyBuffer();
+    const iv = this.getIvBuffer();
     
     console.log('Key buffer length:', key.length);
     console.log('IV buffer length:', iv.length);
+    
+    if (key.length !== 32) {
+      throw new Error(`Invalid CTOS key length: ${key.length} bytes (expected 32). Check CTOS_CIPHERTEXT and CTOS_API_KEY configuration.`);
+    }
+    if (iv.length !== 16) {
+      throw new Error(`Invalid CTOS IV length: ${iv.length} bytes (expected 16). Check CTOS_CIPHERTEXT configuration.`);
+    }
     
     const cipher = crypto.createCipheriv(this.config.cipher, key, iv);
     let encrypted = cipher.update(bodyJson, 'utf8', 'base64');
@@ -175,15 +229,14 @@ export class CTOSService {
    */
   private decryptResponseData(encryptedData: string): any {
     try {
-      // Same key generation as encryption
-      const fullKey = this.config.ciphertext + this.config.apiKey;
-      const keyString = fullKey.substring(0, 32);
-      
       console.log('Decrypting response...');
-      console.log('Using key:', keyString);
       
-      const key = Buffer.from(keyString, 'utf8');
-      const iv = Buffer.from(this.config.ciphertext, 'utf8');
+      // Use same key/IV generation as encryption
+      const key = this.getKeyBuffer();
+      const iv = this.getIvBuffer();
+      
+      console.log('Key buffer length:', key.length);
+      console.log('IV buffer length:', iv.length);
       
       const decipher = crypto.createDecipheriv(this.config.cipher, key, iv);
       let decrypted = decipher.update(encryptedData, 'base64', 'utf8');
@@ -203,6 +256,51 @@ export class CTOSService {
   async createTransaction(params: CreateTransactionRequest): Promise<CreateTransactionResponse> {
     const requestTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
+    // Log all config values for debugging
+    console.log('=== CTOS CONFIG DEBUG ===');
+    console.log('baseUrl:', this.config.baseUrl);
+    console.log('webhookUrl:', this.config.webhookUrl);
+    console.log('apiKey:', this.config.apiKey ? `${this.config.apiKey.substring(0, 8)}...` : 'NOT SET');
+    console.log('packageName:', this.config.packageName);
+    console.log('ciphertext:', this.config.ciphertext);
+    console.log('cipher:', this.config.cipher);
+    console.log('=== END CTOS CONFIG DEBUG ===');
+
+    // Log incoming params
+    console.log('=== CTOS TRANSACTION PARAMS ===');
+    console.log('response_url:', params.response_url);
+    console.log('backend_url:', params.backend_url);
+    console.log('=== END PARAMS ===');
+
+    // Validate URLs before proceeding
+    const targetUrl = `${this.config.baseUrl}/v2/gateway/create-transaction`;
+    console.log('Target CTOS URL:', targetUrl);
+    
+    try {
+      new URL(targetUrl);
+    } catch (urlError) {
+      console.error('Invalid CTOS base URL:', this.config.baseUrl);
+      throw new Error(`Invalid CTOS base URL configured: "${this.config.baseUrl}"`);
+    }
+
+    if (params.response_url) {
+      try {
+        new URL(params.response_url);
+      } catch (urlError) {
+        console.error('Invalid response_url:', params.response_url);
+        throw new Error(`Invalid response_url: "${params.response_url}"`);
+      }
+    }
+
+    if (params.backend_url) {
+      try {
+        new URL(params.backend_url);
+      } catch (urlError) {
+        console.error('Invalid backend_url (webhook):', params.backend_url);
+        throw new Error(`Invalid backend_url (webhook): "${params.backend_url}"`);
+      }
+    }
+
     const requestBody = {
       ref_id: params.ref_id,
       document_name: params.document_name,
@@ -242,8 +340,9 @@ export class CTOSService {
       console.log(JSON.stringify(encryptedPayload, null, 2));
       console.log('=== END ENCRYPTED PAYLOAD ===');
 
+      console.log('Making request to:', targetUrl);
       const response = await axios.post(
-        `${this.config.baseUrl}/v2/gateway/create-transaction`,
+        targetUrl,
         encryptedPayload,
         {
           headers: {
