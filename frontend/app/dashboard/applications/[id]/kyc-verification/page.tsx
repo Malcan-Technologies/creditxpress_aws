@@ -127,7 +127,7 @@ export default function KycVerificationPage() {
 					setUserName((prev) => prev || appData.user!.fullName.split(" ")[0]);
 				}
 
-				// Fetch user's CTOS KYC status instead of KYC images
+				// Fetch user's KYC status
 				const ctosData = await fetchWithTokenRefresh<{
 					success: boolean;
 					hasKycSession: boolean;
@@ -238,7 +238,7 @@ export default function KycVerificationPage() {
 				return;
 			}
 
-			// Start CTOS eKYC process
+			// Start eKYC process
 			const response = await fetchWithTokenRefresh<{ 
 				success: boolean; 
 				kycId: string; 
@@ -273,30 +273,30 @@ export default function KycVerificationPage() {
 				setKycInProgress(true);
 				setKycCompleted(false);
 				
-				// Navigate to CTOS eKYC
+				// Navigate to eKYC portal
 				window.open(response.onboardingUrl, '_blank');
 				
 				// Start lightweight database polling to detect webhook updates
 				startDatabasePolling(response.kycId);
 			} else {
-				throw new Error('Failed to create CTOS eKYC session');
+				throw new Error('Failed to create eKYC session');
 			}
 		} catch (err) {
-			console.error("CTOS KYC start error:", err);
+			console.error("KYC start error:", err);
 			const errorMessage = err instanceof Error ? err.message : "Failed to start KYC verification";
 			
-			// Enhanced error handling for CTOS errors
+			// Enhanced error handling for KYC errors
 			let displayMessage = errorMessage;
 			
 			if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
 				displayMessage = "You already have a KYC verification session in progress. Please refresh the page to see your current status.";
 				// Refresh the page data to get the latest status
 				setTimeout(() => window.location.reload(), 2000);
-			} else if (errorMessage.includes("CTOS eKYC Error:")) {
-				// Extract the specific CTOS error message
-				displayMessage = errorMessage.replace("CTOS eKYC Error: ", "");
-			} else if (errorMessage.includes("CTOS API Error:")) {
-				displayMessage = errorMessage.replace("CTOS API Error: ", "");
+			} else if (errorMessage.includes("eKYC Error:")) {
+				// Extract the specific eKYC error message
+				displayMessage = errorMessage.replace("eKYC Error: ", "");
+			} else if (errorMessage.includes("API Error:")) {
+				displayMessage = errorMessage.replace("API Error: ", "");
 			} else if (errorMessage.includes("Invalid document")) {
 				displayMessage = "Invalid document information. Please check your IC number and full name.";
 			} else if (errorMessage.includes("network") || errorMessage.includes("timeout")) {
@@ -315,7 +315,7 @@ export default function KycVerificationPage() {
 	const startDatabasePolling = (kycSessionId: string) => {
 		const pollDatabase = async () => {
 			try {
-				// Only poll our database, not CTOS API
+				// Only poll our database, not external KYC API
 				const statusResponse = await fetchWithTokenRefresh<{
 					success: boolean;
 					status: string;
@@ -331,7 +331,7 @@ export default function KycVerificationPage() {
 			}
 		};
 
-		// Poll database every 3 seconds (much lighter than CTOS API)
+		// Poll database every 3 seconds (much lighter than external KYC API)
 		const interval = setInterval(pollDatabase, 3000);
 		
 		// Clean up after 30 minutes
@@ -528,7 +528,7 @@ export default function KycVerificationPage() {
 					</div>
 
 					{pollingKycId && ctosOnboardingUrl ? (
-						// Show CTOS process active
+						// Show KYC process active
 						<div className="space-y-6">
 							<div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
 								<div className="flex items-start space-x-4">
@@ -593,7 +593,7 @@ export default function KycVerificationPage() {
 							<span className="ml-3 text-gray-600 font-body">Checking KYC status...</span>
 						</div>
 					) : ctosStatus?.hasKycSession && ctosStatus?.result === 1 ? (
-						// Show approved KYC status from CTOS
+						// Show approved KYC status
 						<div className="space-y-6">
 							<div className="bg-green-50 border border-green-200 rounded-xl p-6">
 								<div className="flex items-start space-x-4">
@@ -604,9 +604,9 @@ export default function KycVerificationPage() {
 										<h3 className="text-lg font-heading font-bold text-green-800 mb-2">
 											KYC Verification Approved
 										</h3>
-										<p className="text-green-700 font-body">
-											Your identity verification has been completed and approved by CTOS. You have already passed the KYC requirements for this application.
-										</p>
+									<p className="text-green-700 font-body">
+										Your identity verification has been completed and approved. You have already passed the KYC requirements for this application.
+									</p>
 									</div>
 								</div>
 							</div>
@@ -624,9 +624,9 @@ export default function KycVerificationPage() {
 									<h4 className="text-lg font-heading font-bold text-gray-700 mb-4">
 										Your Verified Documents
 									</h4>
-									<p className="text-gray-600 font-body mb-4">
-										These are the documents that were verified and approved by CTOS during your KYC process:
-									</p>
+								<p className="text-gray-600 font-body mb-4">
+									These are the documents that were verified and approved during your KYC process:
+								</p>
 									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 										{kycDocuments.map((doc) => (
 											<div key={doc.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
@@ -683,9 +683,9 @@ export default function KycVerificationPage() {
 									<h4 className="text-xl font-heading font-bold text-gray-700 mb-2">
 										KYC Requirements Completed
 									</h4>
-									<p className="text-gray-600 font-body">
-										You have successfully passed all KYC verification requirements. Your identity documents have been processed and approved through our secure CTOS eKYC system.
-									</p>
+								<p className="text-gray-600 font-body">
+									You have successfully passed all KYC verification requirements. Your identity documents have been processed and approved through our secure eKYC system.
+								</p>
 								</div>
 							</div>
 
@@ -711,7 +711,7 @@ export default function KycVerificationPage() {
 							</div>
 						</div>
 					) : ctosStatus?.hasKycSession && ctosStatus?.result === 0 ? (
-						// Show rejected KYC status from CTOS
+						// Show rejected KYC status
 						<div className="space-y-6">
 							<div className="bg-red-50 border border-red-200 rounded-xl p-6">
 								<div className="flex items-start space-x-4">
@@ -751,9 +751,9 @@ export default function KycVerificationPage() {
 							<h3 className="text-2xl font-heading font-bold text-gray-700 mb-4">
 								Identity Verification Required
 							</h3>
-							<p className="text-gray-600 font-body mb-8 max-w-md mx-auto">
-								To proceed with your loan application, we need to verify your identity using our secure CTOS eKYC service. This will open in a new tab where you can scan your MyKad and take a selfie.
-							</p>
+						<p className="text-gray-600 font-body mb-8 max-w-md mx-auto">
+							To proceed with your loan application, we need to verify your identity using our secure eKYC service. This will open in a new tab where you can scan your MyKad and take a selfie.
+						</p>
 							
 							{/* KYC In Progress Display */}
 							{kycInProgress && !kycCompleted && !kycError && (
@@ -764,9 +764,9 @@ export default function KycVerificationPage() {
 										</div>
 										<div className="text-center">
 											<h4 className="text-lg font-semibold text-blue-800 mb-2">KYC Verification in Progress</h4>
-											<p className="text-blue-600 mb-4">
-												Please complete the identity verification process in the CTOS tab. Status will be updated automatically when completed, or click "Check Status" to refresh.
-											</p>
+										<p className="text-blue-600 mb-4">
+											Please complete the identity verification process in the new tab. Status will be updated automatically when completed, or click "Check Status" to refresh.
+										</p>
 											<div className="flex flex-col sm:flex-row gap-3 justify-center">
 												<button
 													onClick={() => window.open(ctosOnboardingUrl!, '_blank')}
@@ -906,7 +906,7 @@ export default function KycVerificationPage() {
 											) : (
 												<>
 													<ShieldCheckIcon className="w-6 h-6 mr-3" />
-													{kycError ? 'Fix Error Above' : 'Start CTOS KYC Verification'}
+													{kycError ? 'Fix Error Above' : 'Start KYC Verification'}
 												</>
 											)}
 										</button>

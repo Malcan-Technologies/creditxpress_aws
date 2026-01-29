@@ -388,36 +388,64 @@ router.post('/webhook', async (req, res) => {
     
     console.log(`✅ Webhook session update completed for ${kycSession.id} - Status: ${newStatus}`);
 
-    // If session is completed, fetch full details to get images
-    if (normalizedData.status === 2) {
-      try {
-        // Refresh session to get image URLs
-        const fullStatus = await truestackService.refreshSessionStatus(webhookPayload.data.session_id);
-        
-        if (fullStatus.images) {
-          // Download images from Truestack CDN and store as base64
-          const images = await truestackService.downloadSessionImages(fullStatus.images);
-          await storeSessionImages(kycSession.id, images);
-        }
-      } catch (imageError) {
-        console.error('Error fetching/storing images from Truestack:', imageError);
-        // Continue - webhook acknowledgment is more important
-      }
+    // Return 200 OK immediately to acknowledge webhook (best practice)
+    res.status(200).json({ success: true, received: true });
 
-      // Update user KYC status if approved
-      if (normalizedData.result === 1) {
-        await prisma.user.update({
-          where: { id: kycSession.userId },
-          data: { kycStatus: true }
-        });
-        console.log(`Updated user ${kycSession.userId} KYC status to approved`);
-      }
+    // Process images and user status update asynchronously (after response sent)
+    if (normalizedData.status === 2) {
+      // Use setImmediate to ensure response is sent first
+      setImmediate(async () => {
+        try {
+          // Fetch full details to get images
+          console.log(`📸 Fetching images for completed session: ${webhookPayload.data.session_id}`);
+          const fullStatus = await truestackService.refreshSessionStatus(webhookPayload.data.session_id);
+          
+          console.log(`📸 Truestack refresh response:`, {
+            hasImages: !!fullStatus.images,
+            frontDocument: !!fullStatus.images?.front_document,
+            backDocument: !!fullStatus.images?.back_document,
+            faceImage: !!fullStatus.images?.face_image,
+            bestFrame: !!fullStatus.images?.best_frame,
+            imagesObject: fullStatus.images
+          });
+          
+          if (fullStatus.images) {
+            // Download images from Truestack CDN and store as base64
+            console.log(`📸 Downloading images from Truestack CDN...`);
+            const images = await truestackService.downloadSessionImages(fullStatus.images);
+            console.log(`📸 Downloaded images:`, {
+              hasFront: !!images.front_document_image,
+              hasBack: !!images.back_document_image,
+              hasFace: !!images.face_image,
+              hasBestFrame: !!images.best_frame
+            });
+            await storeSessionImages(kycSession.id, images);
+            console.log(`📸 Successfully stored images for session ${kycSession.id}`);
+          } else {
+            console.log(`⚠️ No images found in Truestack response for session ${webhookPayload.data.session_id}`);
+          }
+        } catch (imageError) {
+          console.error('Error fetching/storing images from Truestack:', imageError);
+        }
+
+        // Update user KYC status if approved
+        if (normalizedData.result === 1) {
+          try {
+            await prisma.user.update({
+              where: { id: kycSession.userId },
+              data: { kycStatus: true }
+            });
+            console.log(`Updated user ${kycSession.userId} KYC status to approved`);
+          } catch (userUpdateError) {
+            console.error('Error updating user KYC status:', userUpdateError);
+          }
+        }
+        
+        console.log(`✅ Async processing completed for webhook session ${kycSession.id}`);
+      });
     }
 
-    console.log(`Successfully processed Truestack webhook for KYC session ${kycSession.id}`);
-
-    // Return 200 OK to acknowledge webhook
-    return res.status(200).json({ success: true, received: true });
+    return; // Response already sent above
 
   } catch (error) {
     console.error('Error processing Truestack webhook:', error);
@@ -494,6 +522,17 @@ async function storeSessionImages(
     best_frame?: string;
   }
 ): Promise<void> {
+  console.log(`📁 storeSessionImages called for session ${kycSessionId}:`, {
+    hasFront: !!images.front_document_image,
+    hasBack: !!images.back_document_image,
+    hasFace: !!images.face_image,
+    hasBestFrame: !!images.best_frame,
+    frontLength: images.front_document_image?.length,
+    backLength: images.back_document_image?.length,
+    faceLength: images.face_image?.length,
+    bestFrameLength: images.best_frame?.length
+  });
+  
   const documentsToCreate = [];
 
   if (images.front_document_image) {

@@ -1047,33 +1047,44 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
     const hasStoredImages = approvedSession.documents && approvedSession.documents.length >= 3;
     console.log(`Approved session ${approvedSession.id} has ${approvedSession.documents?.length || 0} stored images`);
     
-    if (!hasStoredImages) {
-      console.log(`Fetching images from Truestack for approved session ${approvedSession.id} - no stored images found`);
+    if (!hasStoredImages && approvedSession.ctosOnboardingId) {
+      console.log(`📸 Fetching images from Truestack for approved session ${approvedSession.id} (ctosOnboardingId: ${approvedSession.ctosOnboardingId})`);
       try {
         // Refresh session to get image URLs
         const truestackStatus = await truestackService.refreshSessionStatus(approvedSession.ctosOnboardingId);
 
-        console.log('Truestack response for missing images:', {
+        console.log('📸 Truestack response for missing images:', {
           hasImages: !!truestackStatus.images,
           frontImage: !!truestackStatus.images?.front_document,
           backImage: !!truestackStatus.images?.back_document,
-          faceImage: !!truestackStatus.images?.face_image
+          faceImage: !!truestackStatus.images?.face_image,
+          bestFrame: !!truestackStatus.images?.best_frame,
+          imagesObject: truestackStatus.images
         });
 
         // Download and store images if available
         if (truestackStatus.images) {
+          console.log('📸 Downloading images from Truestack CDN...');
           const images = await truestackService.downloadSessionImages(truestackStatus.images);
+          console.log('📸 Downloaded images:', {
+            hasFront: !!images.front_document_image,
+            hasBack: !!images.back_document_image,
+            hasFace: !!images.face_image,
+            hasBestFrame: !!images.best_frame
+          });
           await storeKycImages(approvedSession.id, images);
-          console.log(`Stored images from Truestack for approved session`);
+          console.log(`📸 Stored images from Truestack for approved session ${approvedSession.id}`);
         } else {
-          console.log('No images found in Truestack response for approved session');
+          console.log('⚠️ No images found in Truestack response for approved session');
         }
       } catch (truestackError) {
         console.error('Error fetching images from Truestack for approved session:', truestackError);
         // Continue with existing documents if Truestack fetch fails
       }
+    } else if (!approvedSession.ctosOnboardingId) {
+      console.log(`⚠️ No ctosOnboardingId for approved session ${approvedSession.id} - cannot fetch images`);
     } else {
-      console.log(`Skipping Truestack API call for approved session ${approvedSession.id} - already has stored images`);
+      console.log(`📸 Skipping Truestack API call for approved session ${approvedSession.id} - already has ${approvedSession.documents?.length} stored images`);
     }
 
     // Re-fetch the session with updated documents
