@@ -257,8 +257,8 @@ export default function KycVerificationPage() {
 		try {
 			setKycError(null); // Clear previous KYC errors
 			
-			// Prevent starting new KYC if user already has approved KYC
-			if ((ctosStatus?.hasKycSession && ctosStatus?.result === 1) || ctosStatus?.isAlreadyApproved) {
+			// Prevent starting new KYC if user already has approved KYC (unless forcing redo)
+			if (!forceRedo && ((ctosStatus?.hasKycSession && ctosStatus?.result === 1) || ctosStatus?.isAlreadyApproved)) {
 				setKycError("You have already completed KYC verification successfully. No further verification is needed.");
 				return;
 			}
@@ -292,12 +292,23 @@ export default function KycVerificationPage() {
 						documentName: application.user.fullName,
 						documentNumber: application.user.icNumber,
 						platform: 'Web',
-						responseUrl: `${window.location.origin}/dashboard/applications/${params.id}/kyc-verification?success=true`
+						responseUrl: `${window.location.origin}/dashboard/applications/${params.id}/kyc-verification?success=true`,
+						forceNewSession: forceRedo
 					}),
 				}
 			);
 
 			if (response.success && response.onboardingUrl) {
+				// If forcing redo, redirect to profile confirmation to start fresh flow
+				if (forceRedo) {
+					// Clear local state
+					setKycDocuments([]);
+					setCtosStatus(null);
+					// Redirect to profile confirmation page
+					router.push(`/dashboard/applications/${params.id}/profile-confirmation`);
+					return;
+				}
+				
 				// Store the onboarding URL and KYC ID
 				setCtosOnboardingUrl(response.onboardingUrl);
 				setPollingKycId(response.kycId);

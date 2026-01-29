@@ -60,7 +60,7 @@ function sha256(buffer: Buffer): string {
 router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
   let kycSession: any = null;
   try {
-    const { applicationId, documentName, documentNumber, platform = 'Web' } = req.body;
+    const { applicationId, documentName, documentNumber, platform = 'Web', forceNewSession = false } = req.body;
     if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
 
     if (!documentName || !documentNumber) {
@@ -75,94 +75,136 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       }
     }
 
-    // Check if user already has an approved KYC session
-    const existingApprovedSession = await db.kycSession.findFirst({
-      where: {
-        OR: [
-          {
-            userId: req.user.userId,
-            ctosOnboardingId: { not: null },
-            ctosResult: 1 // Approved
-          },
-          {
-            userId: { endsWith: req.user.userId },
-            ctosOnboardingId: { not: null },
-            ctosResult: 1 // Approved
-          }
-        ]
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    console.log(`User ${req.user.userId} - Checking for approved KYC sessions:`, {
-      found: !!existingApprovedSession,
-      sessionId: existingApprovedSession?.id,
-      ctosResult: existingApprovedSession?.ctosResult,
-      ctosOnboardingId: existingApprovedSession?.ctosOnboardingId
-    });
-
-    if (existingApprovedSession) {
-      console.log(`User ${req.user.userId} - Prevented creating new KYC session, already has approved session: ${existingApprovedSession.id}`);
-      return res.status(400).json({ 
-        message: "You already have an approved KYC verification. No further verification is needed.",
-        error: "User already has approved KYC session",
-        existingSessionId: existingApprovedSession.id
+    // Check if user already has an approved KYC session (skip if forceNewSession)
+    if (!forceNewSession) {
+      const existingApprovedSession = await db.kycSession.findFirst({
+        where: {
+          OR: [
+            {
+              userId: req.user.userId,
+              ctosOnboardingId: { not: null },
+              ctosResult: 1 // Approved
+            },
+            {
+              userId: { endsWith: req.user.userId },
+              ctosOnboardingId: { not: null },
+              ctosResult: 1 // Approved
+            }
+          ]
+        },
+        orderBy: { createdAt: 'desc' }
       });
-    }
 
-    // Check for existing IN_PROGRESS session within last 24 hours
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const existingInProgressSession = await db.kycSession.findFirst({
-      where: {
-        OR: [
-          {
-            userId: req.user.userId,
-            status: 'IN_PROGRESS',
-            ctosOnboardingId: { not: null },
-            ctosOnboardingUrl: { not: null },
-            createdAt: { gte: twentyFourHoursAgo },
-            OR: [
-              { ctosStatus: 0 },  // Not opened
-              { ctosStatus: 1 }   // Processing
-            ]
-          },
-          {
-            userId: { endsWith: req.user.userId },
-            status: 'IN_PROGRESS',
-            ctosOnboardingId: { not: null },
-            ctosOnboardingUrl: { not: null },
-            createdAt: { gte: twentyFourHoursAgo },
-            OR: [
-              { ctosStatus: 0 },
-              { ctosStatus: 1 }
-            ]
-          }
-        ]
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+      console.log(`User ${req.user.userId} - Checking for approved KYC sessions:`, {
+        found: !!existingApprovedSession,
+        sessionId: existingApprovedSession?.id,
+        ctosResult: existingApprovedSession?.ctosResult,
+        ctosOnboardingId: existingApprovedSession?.ctosOnboardingId
+      });
 
-    if (existingInProgressSession && existingInProgressSession.ctosOnboardingUrl) {
-      console.log(`User ${req.user.userId} - Found existing in-progress session within 24 hours: ${existingInProgressSession.id}`);
+      if (existingApprovedSession) {
+        console.log(`User ${req.user.userId} - Prevented creating new KYC session, already has approved session: ${existingApprovedSession.id}`);
+        return res.status(400).json({ 
+          message: "You already have an approved KYC verification. No further verification is needed.",
+          error: "User already has approved KYC session",
+          existingSessionId: existingApprovedSession.id
+        });
+      }
+
+      // Check for existing IN_PROGRESS session within last 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const existingInProgressSession = await db.kycSession.findFirst({
+        where: {
+          OR: [
+            {
+              userId: req.user.userId,
+              status: 'IN_PROGRESS',
+              ctosOnboardingId: { not: null },
+              ctosOnboardingUrl: { not: null },
+              createdAt: { gte: twentyFourHoursAgo },
+              OR: [
+                { ctosStatus: 0 },  // Not opened
+                { ctosStatus: 1 }   // Processing
+              ]
+            },
+            {
+              userId: { endsWith: req.user.userId },
+              status: 'IN_PROGRESS',
+              ctosOnboardingId: { not: null },
+              ctosOnboardingUrl: { not: null },
+              createdAt: { gte: twentyFourHoursAgo },
+              OR: [
+                { ctosStatus: 0 },
+                { ctosStatus: 1 }
+              ]
+            }
+          ]
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (existingInProgressSession && existingInProgressSession.ctosOnboardingUrl) {
+        console.log(`User ${req.user.userId} - Found existing in-progress session within 24 hours: ${existingInProgressSession.id}`);
+        
+        // Issue new token for existing session
+        const kycToken = jwt.sign(
+          { userId: req.user.userId, kycId: existingInProgressSession.id },
+          kycConfig.jwtSecret,
+          { expiresIn: `${kycConfig.tokenTtlMinutes}m` }
+        );
+
+        return res.status(200).json({
+          success: true,
+          kycId: existingInProgressSession.id,
+          onboardingUrl: existingInProgressSession.ctosOnboardingUrl,
+          onboardingId: existingInProgressSession.ctosOnboardingId,
+          expiredAt: existingInProgressSession.ctosExpiredAt?.toISOString() || null,
+          kycToken,
+          ttlMinutes: kycConfig.tokenTtlMinutes,
+          resumed: true,
+          message: "Resuming existing KYC session"
+        });
+      }
+    } else {
+      console.log(`User ${req.user.userId} - Force new session requested, resetting KYC state`);
       
-      // Issue new token for existing session
-      const kycToken = jwt.sign(
-        { userId: req.user.userId, kycId: existingInProgressSession.id },
-        kycConfig.jwtSecret,
-        { expiresIn: `${kycConfig.tokenTtlMinutes}m` }
-      );
-
-      return res.status(200).json({
-        success: true,
-        kycId: existingInProgressSession.id,
-        onboardingUrl: existingInProgressSession.ctosOnboardingUrl,
-        onboardingId: existingInProgressSession.ctosOnboardingId,
-        expiredAt: existingInProgressSession.ctosExpiredAt?.toISOString() || null,
-        kycToken,
-        ttlMinutes: kycConfig.tokenTtlMinutes,
-        resumed: true,
-        message: "Resuming existing KYC session"
+      // Reset user's kycStatus to false
+      await prisma.user.update({
+        where: { id: req.user.userId },
+        data: { kycStatus: false }
       });
+      console.log(`User ${req.user.userId} - Reset kycStatus to false`);
+
+      // Find all existing KYC sessions for this user
+      const existingSessions = await db.kycSession.findMany({
+        where: {
+          OR: [
+            { userId: req.user.userId },
+            { userId: { endsWith: req.user.userId } }
+          ]
+        },
+        select: { id: true }
+      });
+
+      if (existingSessions.length > 0) {
+        const sessionIds = existingSessions.map((s: { id: string }) => s.id);
+        
+        // Delete all KYC documents from old sessions
+        const deletedDocs = await db.kycDocument.deleteMany({
+          where: { kycSessionId: { in: sessionIds } }
+        });
+        console.log(`User ${req.user.userId} - Deleted ${deletedDocs.count} old KYC documents`);
+
+        // Mark old sessions as superseded (update status to FAILED with note)
+        await db.kycSession.updateMany({
+          where: { id: { in: sessionIds } },
+          data: { 
+            status: 'FAILED',
+            ctosResult: 0 // Mark as rejected/superseded
+          }
+        });
+        console.log(`User ${req.user.userId} - Marked ${sessionIds.length} old sessions as superseded`);
+      }
     }
 
     // Create KYC session
