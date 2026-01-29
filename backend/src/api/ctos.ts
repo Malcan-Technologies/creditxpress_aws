@@ -555,8 +555,8 @@ async function storeSessionImages(
     });
   }
 
-  // Use face_image or best_frame for selfie
-  const selfieImage = images.face_image || images.best_frame;
+  // Use best_frame for selfie (preferred), fall back to face_image
+  const selfieImage = images.best_frame || images.face_image;
   if (selfieImage) {
     documentsToCreate.push({
       kycId: kycSessionId,
