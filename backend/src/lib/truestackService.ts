@@ -205,7 +205,7 @@ export class TruestackService {
 
     try {
       const response = await axios.post(
-        `${this.baseUrl}/v1/kyc/sessions`,
+        `${this.baseUrl}/api/v1/kyc/sessions`,
         requestBody,
         {
           headers: this.getHeaders(),
@@ -242,7 +242,7 @@ export class TruestackService {
   async getSessionStatus(sessionId: string): Promise<SessionStatusResponse> {
     try {
       const response = await axios.get(
-        `${this.baseUrl}/v1/kyc/sessions/${sessionId}`,
+        `${this.baseUrl}/api/v1/kyc/sessions/${sessionId}`,
         {
           headers: this.getHeaders(),
           timeout: 30000
@@ -273,7 +273,7 @@ export class TruestackService {
   async refreshSessionStatus(sessionId: string): Promise<RefreshSessionResponse> {
     try {
       const response = await axios.post(
-        `${this.baseUrl}/v1/kyc/sessions/${sessionId}`,
+        `${this.baseUrl}/api/v1/kyc/sessions/${sessionId}`,
         {}, // Empty body for refresh
         {
           headers: this.getHeaders(),
