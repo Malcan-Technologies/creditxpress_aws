@@ -191,7 +191,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         
         // Delete all KYC documents from old sessions
         const deletedDocs = await db.kycDocument.deleteMany({
-          where: { kycSessionId: { in: sessionIds } }
+          where: { kycId: { in: sessionIds } }
         });
         console.log(`User ${req.user.userId} - Deleted ${deletedDocs.count} old KYC documents`);
 

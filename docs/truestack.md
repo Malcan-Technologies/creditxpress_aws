@@ -1,24 +1,26 @@
+# TrueStack KYC API Documentation
+
 Welcome to the TrueStack KYC API. This guide provides everything you need to integrate identity verification into your application.
 
 ---
 
 ## Table of Contents
 
-1. [Overview](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-2. [Getting Started](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-3. [Authentication](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-4. [End-to-End User Journey](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-5. [API Reference](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-    - [Create KYC Session](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-    - [Get Session Status](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-    - [Refresh Session Status](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-6. [Webhooks](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-7. [Session States & Results](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-8. [Error Handling](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-9. [Rate Limits](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-10. [SDK Examples](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-11. [Best Practices](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
-12. [FAQ](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21)
+1. [Overview](#overview)
+2. [Getting Started](#getting-started)
+3. [Authentication](#authentication)
+4. [End-to-End User Journey](#end-to-end-user-journey)
+5. [API Reference](#api-reference)
+   - [Create KYC Session](#create-kyc-session)
+   - [Get Session Status](#get-session-status)
+   - [Refresh Session Status](#refresh-session-status)
+6. [Webhooks](#webhooks)
+7. [Session States & Results](#session-states--results)
+8. [Error Handling](#error-handling)
+9. [Rate Limits](#rate-limits)
+10. [SDK Examples](#sdk-examples)
+11. [Best Practices](#best-practices)
+12. [FAQ](#faq)
 
 ---
 
@@ -34,7 +36,7 @@ TrueStack KYC provides a simple, secure API for verifying user identities. Our s
 ### Key Features
 
 | Feature | Description |
-| --- | --- |
+|---------|-------------|
 | **Simple Integration** | Single API call to initiate verification |
 | **Real-time Webhooks** | Instant notification when verification completes |
 | **Secure Processing** | Bank-grade encryption and data protection |
@@ -54,18 +56,17 @@ TrueStack KYC provides a simple, secure API for verifying user identities. Our s
 
 ```bash
 # 1. Create a KYC session
-curl -X POST <https://api.truestack.my/v1/kyc/sessions> \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
+curl -X POST https://api.truestack.my/api/v1/kyc/sessions \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
   -d '{
     "document_name": "Ahmad bin Abdullah",
     "document_number": "901234-56-7890",
-    "webhook_url": "<https://yourapp.com/webhooks/kyc>"
+    "webhook_url": "https://yourapp.com/webhooks/kyc"
   }'
 
 # 2. Redirect user to the returned onboarding_url
 # 3. Receive webhook when verification completes
-
 ```
 
 ---
@@ -76,7 +77,6 @@ All API requests require authentication using your API key in the `Authorization
 
 ```
 Authorization: Bearer <your_api_key>
-
 ```
 
 API keys are prefixed with `ts_live_` for production and `ts_test_` for sandbox environments.
@@ -122,45 +122,42 @@ The KYC verification flow involves the following steps:
         │                       │                       │
         │ 8. Update user status │                       │
         │    in your system     │                       │
-
 ```
 
 ### Step-by-Step Process
 
-### Step 1: Create a KYC Session
+#### Step 1: Create a KYC Session
 
 Your backend calls the TrueStack API with the user's document details:
 
-```
-POST /v1/kyc/sessions
+```http
+POST /api/v1/kyc/sessions
 Authorization: Bearer ts_live_abc123...
 
 {
   "document_name": "Ahmad bin Abdullah",
   "document_number": "901234-56-7890",
-  "webhook_url": "<https://yourapp.com/webhooks/kyc>",
+  "webhook_url": "https://yourapp.com/webhooks/kyc",
   "metadata": {
     "user_id": "usr_12345"
   }
 }
-
 ```
 
-### Step 2: Receive Session Details
+#### Step 2: Receive Session Details
 
 The API returns:
 
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "onboarding_url": "<https://verify.truestack.my/onboarding/abc123>",
+  "onboarding_url": "https://verify.truestack.my/onboarding/abc123",
   "expires_at": "2026-01-30T12:00:00.000Z",
   "status": "pending"
 }
-
 ```
 
-### Step 3: Redirect User
+#### Step 3: Redirect User
 
 Redirect your user to the `onboarding_url`. This can be done via:
 
@@ -168,7 +165,7 @@ Redirect your user to the `onboarding_url`. This can be done via:
 - **Mobile WebView**: Open the URL in a WebView or external browser
 - **Mobile App**: Use in-app browser (Safari View Controller / Chrome Custom Tabs)
 
-### Step 4: User Completes Verification
+#### Step 4: User Completes Verification
 
 The user will:
 
@@ -178,42 +175,43 @@ The user will:
 
 The entire process typically takes 2-3 minutes.
 
-### Step 5 & 6: Verification Complete
+#### Step 5 & 6: Verification Complete
 
 Once the verification is complete (approved or rejected):
 
 - **Webhook**: TrueStack sends a POST request to your `webhook_url` with the results
 - **User Redirect**: Depends on your configuration:
-    - **Default**: User is redirected to TrueStack's status page showing the verification result
-    - **Custom redirect_url**: User is redirected to your specified URL with status query parameters
+  - **Default**: User is redirected to TrueStack's status page showing the verification result
+  - **Custom redirect_url**: User is redirected to your specified URL with status query parameters
 
 **Default behavior**: The user sees a branded status page confirming whether their verification was successful. They can then close the window or return to your application.
 
 **Custom redirect_url**: When you provide a `redirect_url`, users are redirected directly to your URL after KYC completion. The URL includes query parameters (`?status=2&result=1`) indicating the outcome. This allows you to show your own branded completion page and seamlessly continue the user's journey in your application.
 
-### Step 7: Handle Webhook
+#### Step 7: Handle Webhook
 
-Your webhook endpoint receives the verification result:
+Your webhook endpoint receives a lightweight notification:
 
 ```json
 {
   "event": "kyc.session.completed",
-  "timestamp": "2026-01-29T10:30:00.000Z",
-  "data": {
-    "session_id": "550e8400-e29b-41d4-a716-446655440000",
-    "status": "completed",
-    "result": "approved",
-    "document_name": "Ahmad bin Abdullah",
-    "document_number": "901234-56-7890",
-    "metadata": {
-      "user_id": "usr_12345"
-    }
-  }
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "ref_id": "CLI_mkxl2qbq_52c0732a",
+  "status": "completed",
+  "result": "approved",
+  "reject_message": null,
+  "document_name": "Ahmad bin Abdullah",
+  "document_number": "901234-56-7890",
+  "metadata": {
+    "user_id": "usr_12345"
+  },
+  "timestamp": "2026-01-29T10:30:00.000Z"
 }
-
 ```
 
-### Step 8: Update Your System
+**Note**: The webhook contains basic session info. To get full OCR data, verification results, and images, call the [Get Session Status](#get-session-status) or [Refresh Session Status](#refresh-session-status) endpoint.
+
+#### Step 8: Update Your System
 
 Use the `session_id` and `metadata` to identify the user and update their verification status in your system.
 
@@ -224,7 +222,7 @@ Use the `session_id` and `metadata` to identify the user and update their verifi
 ### Base URL
 
 | Environment | URL |
-| --- | --- |
+|-------------|-----|
 | **Production** | `https://api.truestack.my` |
 | **Sandbox** | Contact us for sandbox access |
 
@@ -234,48 +232,47 @@ Use the `session_id` and `metadata` to identify the user and update their verifi
 
 Creates a new KYC verification session for an end-user.
 
+```http
+POST /api/v1/kyc/sessions
 ```
-POST /v1/kyc/sessions
 
-```
-
-### Request Headers
+#### Request Headers
 
 | Header | Required | Description |
-| --- | --- | --- |
+|--------|----------|-------------|
 | `Authorization` | Yes | `Bearer <api_key>` |
 | `Content-Type` | Yes | `application/json` |
 
-### Request Body
+#### Request Body
 
 | Field | Type | Required | Description |
-| --- | --- | --- | --- |
+|-------|------|----------|-------------|
 | `document_name` | string | **Yes** | Full name as it appears on the identity document |
 | `document_number` | string | **Yes** | Identity document number (e.g., MyKad number: `901234-56-7890`) |
 | `webhook_url` | string | **Yes** | URL to receive webhook notification when verification completes. Must be a valid HTTPS URL. |
-| `document_type` | string | No | Type of document. Default: `"1"`. See [Document Types](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21). |
-| `platform` | string | No | End-user's platform. Default: `"Web"`. See [Platform Values](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21). |
-| `redirect_url` | string | No | Custom URL to redirect the user after KYC completion. If not provided, users are redirected to TrueStack's default status page. See [Custom Redirect URL](https://www.notion.so/TrueStack-KYC-API-Documentation-2f76d1eef72a8018a0aac92d6699a8e0?pvs=21). |
+| `document_type` | string | No | Type of document. Default: `"1"`. See [Document Types](#document-types). |
+| `platform` | string | No | End-user's platform. Default: `"Web"`. See [Platform Values](#platform-values). |
+| `redirect_url` | string | No | Custom URL to redirect the user after KYC completion. If not provided, users are redirected to TrueStack's default status page. See [Custom Redirect URL](#custom-redirect-url). |
 | `metadata` | object | No | Custom key-value pairs to associate with the session. Returned in webhooks. Max 10 keys, 1KB total. |
 
-### Document Types
+#### Document Types
 
 | Value | Document Type |
-| --- | --- |
+|-------|---------------|
 | `1` | MyKad (Malaysian IC) - Default |
 | `2` | Passport |
 
-### Platform Values
+#### Platform Values
 
 | Value | Description |
-| --- | --- |
+|-------|-------------|
 | `Web` | Desktop or mobile web browser (default) |
 | `iOS` | Native iOS application |
 | `Android` | Native Android application |
 
 **Tip**: For mobile apps using WebView, use `"Web"` and ensure the WebView's user-agent is set correctly.
 
-### Custom Redirect URL
+#### Custom Redirect URL
 
 By default, after completing the KYC verification, users are redirected to a TrueStack-hosted status page that displays the verification result (success/failure).
 
@@ -288,49 +285,46 @@ If you want to handle the user experience yourself, you can provide a `redirect_
 **Query Parameters on Redirect:**
 
 | Parameter | Description |
-| --- | --- |
+|-----------|-------------|
 | `status` | Verification status: `2` (completed) |
 | `result` | Result: `1` (approved) or `0` (rejected) |
 
 **Example redirect:**
-
 ```
-<https://yourapp.com/kyc/complete?status=2&result=1>
-
+https://yourapp.com/kyc/complete?status=2&result=1
 ```
 
 **Important**: When using a custom `redirect_url`, you should still rely on webhooks as the authoritative source for verification results. The query parameters are informational only and should not be trusted for security decisions.
 
-### Example Request
+#### Example Request
 
 **Basic (using TrueStack's default status page):**
 
 ```bash
-curl -X POST <https://api.truestack.my/v1/kyc/sessions> \\
-  -H "Authorization: Bearer ts_live_abc123..." \\
-  -H "Content-Type: application/json" \\
+curl -X POST https://api.truestack.my/api/v1/kyc/sessions \
+  -H "Authorization: Bearer ts_live_abc123..." \
+  -H "Content-Type: application/json" \
   -d '{
     "document_name": "Ahmad bin Abdullah",
     "document_number": "901234-56-7890",
-    "webhook_url": "<https://yourapp.com/webhooks/kyc>",
+    "webhook_url": "https://yourapp.com/webhooks/kyc",
     "metadata": {
       "user_id": "usr_12345"
     }
   }'
-
 ```
 
 **With custom redirect URL:**
 
 ```bash
-curl -X POST <https://api.truestack.my/v1/kyc/sessions> \\
-  -H "Authorization: Bearer ts_live_abc123..." \\
-  -H "Content-Type: application/json" \\
+curl -X POST https://api.truestack.my/api/v1/kyc/sessions \
+  -H "Authorization: Bearer ts_live_abc123..." \
+  -H "Content-Type: application/json" \
   -d '{
     "document_name": "Ahmad bin Abdullah",
     "document_number": "901234-56-7890",
-    "webhook_url": "<https://yourapp.com/webhooks/kyc>",
-    "redirect_url": "<https://yourapp.com/kyc/complete>",
+    "webhook_url": "https://yourapp.com/webhooks/kyc",
+    "redirect_url": "https://yourapp.com/kyc/complete",
     "document_type": "1",
     "platform": "Web",
     "metadata": {
@@ -338,25 +332,23 @@ curl -X POST <https://api.truestack.my/v1/kyc/sessions> \\
       "application_id": "app_67890"
     }
   }'
-
 ```
 
-### Success Response
+#### Success Response
 
 **Status: 201 Created**
 
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "onboarding_url": "<https://verify.truestack.my/onboarding/abc123>",
+  "onboarding_url": "https://verify.truestack.my/onboarding/abc123",
   "expires_at": "2026-01-30T12:00:00.000Z",
   "status": "pending"
 }
-
 ```
 
 | Field | Type | Description |
-| --- | --- | --- |
+|-------|------|-------------|
 | `id` | string (UUID) | Unique session identifier. Store this to track the session. |
 | `onboarding_url` | string | URL to redirect the end-user to complete KYC verification. |
 | `expires_at` | string (ISO 8601) | When the session expires (24 hours from creation). |
@@ -368,26 +360,24 @@ curl -X POST <https://api.truestack.my/v1/kyc/sessions> \\
 
 Retrieves the current status and details of a KYC session.
 
+```http
+GET /api/v1/kyc/sessions/:id
 ```
-GET /v1/kyc/sessions/:id
 
-```
-
-### Path Parameters
+#### Path Parameters
 
 | Parameter | Type | Description |
-| --- | --- | --- |
+|-----------|------|-------------|
 | `id` | string (UUID) | The session ID returned when creating the session |
 
-### Example Request
+#### Example Request
 
 ```bash
-curl -X GET <https://api.truestack.my/v1/kyc/sessions/550e8400-e29b-41d4-a716-446655440000> \\
+curl -X GET https://api.truestack.my/api/v1/kyc/sessions/550e8400-e29b-41d4-a716-446655440000 \
   -H "Authorization: Bearer ts_live_abc123..."
-
 ```
 
-### Success Response
+#### Success Response
 
 **Status: 200 OK**
 
@@ -404,22 +394,37 @@ curl -X GET <https://api.truestack.my/v1/kyc/sessions/550e8400-e29b-41d4-a716-44
   },
   "created_at": "2026-01-28T10:00:00.000Z",
   "updated_at": "2026-01-28T10:05:00.000Z",
-  "ocr_result": {
-    "name": "AHMAD BIN ABDULLAH",
-    "id_number": "901234567890",
-    "address": "123 JALAN EXAMPLE, 50000 KUALA LUMPUR"
+  "document": {
+    "full_name": "AHMAD BIN ABDULLAH",
+    "id_number": "901234-56-7890",
+    "id_number_back": "901234-56-7890-04-01",
+    "address": "123 JALAN EXAMPLE, 50000 KUALA LUMPUR",
+    "gender": "LELAKI",
+    "dob": null,
+    "nationality": null,
+    "religion": null,
+    "race": null
+  },
+  "verification": {
+    "document_valid": true,
+    "name_match": true,
+    "id_match": true,
+    "front_back_match": true,
+    "landmark_valid": true,
+    "face_match": true,
+    "face_match_score": 95,
+    "liveness_passed": true
   },
   "documents": {
-    "front_document": "<https://api.truestack.my/v1/kyc/sessions/.../documents/front_document>",
-    "back_document": "<https://api.truestack.my/v1/kyc/sessions/.../documents/back_document>",
-    "face_image": "<https://api.truestack.my/v1/kyc/sessions/.../documents/face_image>",
-    "best_frame": "<https://api.truestack.my/v1/kyc/sessions/.../documents/best_frame>"
+    "front_document": "https://api.truestack.my/api/v1/kyc/sessions/.../documents/front_document",
+    "back_document": "https://api.truestack.my/api/v1/kyc/sessions/.../documents/back_document",
+    "face_image": "https://api.truestack.my/api/v1/kyc/sessions/.../documents/face_image",
+    "best_frame": "https://api.truestack.my/api/v1/kyc/sessions/.../documents/best_frame"
   }
 }
-
 ```
 
-**Note**: `ocr_result` and `documents` are only included when session status is `completed`.
+**Note**: `document`, `verification`, and `documents` are only included when session status is `completed`.
 
 ---
 
@@ -427,26 +432,24 @@ curl -X GET <https://api.truestack.my/v1/kyc/sessions/550e8400-e29b-41d4-a716-44
 
 Fetches the latest verification status and updates the session. Use this when webhooks are delayed or to verify current status.
 
+```http
+POST /api/v1/kyc/sessions/:id
 ```
-POST /v1/kyc/sessions/:id
 
-```
-
-### Path Parameters
+#### Path Parameters
 
 | Parameter | Type | Description |
-| --- | --- | --- |
+|-----------|------|-------------|
 | `id` | string (UUID) | The session ID returned when creating the session |
 
-### Example Request
+#### Example Request
 
 ```bash
-curl -X POST <https://api.truestack.my/v1/kyc/sessions/550e8400-e29b-41d4-a716-446655440000> \\
+curl -X POST https://api.truestack.my/api/v1/kyc/sessions/550e8400-e29b-41d4-a716-446655440000 \
   -H "Authorization: Bearer ts_live_abc123..."
-
 ```
 
-### Success Response
+#### Success Response
 
 **Status: 200 OK**
 
@@ -460,7 +463,7 @@ When status was refreshed (includes full verification data):
   "result": "approved",
   "reject_message": null,
   "refreshed": true,
-
+  
   "document": {
     "full_name": "AHMAD BIN ABDULLAH",
     "id_number": "901234-56-7890",
@@ -468,7 +471,7 @@ When status was refreshed (includes full verification data):
     "address": "123 JALAN EXAMPLE, 50000 KUALA LUMPUR",
     "gender": "LELAKI"
   },
-
+  
   "verification": {
     "document_valid": true,
     "name_match": true,
@@ -479,34 +482,33 @@ When status was refreshed (includes full verification data):
     "face_match_score": 95,
     "liveness_passed": true
   },
-
+  
   "images": {
-    "front_document": "<https://cdn.truestack.my/kyc/.../front_document.jpg?.>..",
-    "back_document": "<https://cdn.truestack.my/kyc/.../back_document.jpg?.>..",
-    "face_image": "<https://cdn.truestack.my/kyc/.../face_image.jpg?.>..",
-    "best_frame": "<https://cdn.truestack.my/kyc/.../best_frame.jpg?.>.."
+    "front_document": "https://cdn.truestack.my/kyc/.../front_document.jpg?...",
+    "back_document": "https://cdn.truestack.my/kyc/.../back_document.jpg?...",
+    "face_image": "https://cdn.truestack.my/kyc/.../face_image.jpg?...",
+    "best_frame": "https://cdn.truestack.my/kyc/.../best_frame.jpg?..."
   }
 }
-
 ```
 
-### Response Fields
+#### Response Fields
 
 | Field | Description |
-| --- | --- |
+|-------|-------------|
 | `id` | TrueStack session UUID |
 | `ref_id` | Reference ID for this session |
 | `status` | Session status: `pending`, `processing`, `completed`, `expired` |
 | `result` | Verification result: `approved`, `rejected`, or `null` if pending |
 | `reject_message` | Reason for rejection (if applicable) |
 | `refreshed` | Whether status was updated from our verification system |
-| **document** |  |
+| **document** | |
 | `document.full_name` | Full name extracted via OCR |
 | `document.id_number` | ID number from front of document |
 | `document.id_number_back` | ID number from back of document |
 | `document.address` | Address extracted from document |
 | `document.gender` | Gender from document |
-| **verification** |  |
+| **verification** | |
 | `verification.document_valid` | Document passed all verification checks |
 | `verification.name_match` | Name matches what was provided |
 | `verification.id_match` | ID number matches what was provided |
@@ -532,94 +534,118 @@ When a KYC session completes, TrueStack sends a webhook notification to your con
 ### Webhook Events
 
 | Event | Description |
-| --- | --- |
+|-------|-------------|
+| `kyc.session.started` | User opened the verification URL (status: pending) |
+| `kyc.session.processing` | User is actively completing verification (status: processing) |
 | `kyc.session.completed` | Session finished with a final result (approved/rejected) |
 | `kyc.session.expired` | Session expired before user completed verification |
 
+**Note**: You may receive webhooks for each status transition. The `kyc.session.completed` event is the most important one for updating your records.
+
 ### Webhook Payload
 
-```
+Webhooks are **lightweight notifications** that inform you of status changes. They contain enough information to identify the session and its outcome, but do not include full OCR or verification data.
+
+```http
 POST {your_webhook_url}
 Content-Type: application/json
 X-TrueStack-Event: kyc.session.completed
-X-TrueStack-Timestamp: 2026-01-29T15:30:00.000Z
-X-Webhook-Signature: sha256=abc123...
-
 ```
 
 ```json
 {
   "event": "kyc.session.completed",
-  "timestamp": "2026-01-29T15:30:00.000Z",
-  "data": {
-    "session_id": "550e8400-e29b-41d4-a716-446655440000",
-    "ref_id": "CLI_mkxl2qbq_52c0732a",
-    "status": "completed",
-    "result": "approved",
-    "document_name": "Ahmad bin Abdullah",
-    "document_number": "901234-56-7890",
-    "ocr_data": {
-      "name": "AHMAD BIN ABDULLAH",
-      "ic_number": "901234567890",
-      "address": "123 JALAN EXAMPLE, 50000 KUALA LUMPUR",
-      "gender": "LELAKI",
-      "nationality": "WARGANEGARA",
-      "date_of_birth": "1990-12-34"
-    },
-    "face_match_score": 0.95,
-    "liveness_score": 0.98,
-    "metadata": {
-      "user_id": "usr_12345",
-      "application_id": "app_67890"
-    }
-  }
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "ref_id": "CLI_mkxl2qbq_52c0732a",
+  "status": "completed",
+  "result": "approved",
+  "reject_message": null,
+  "document_name": "Ahmad bin Abdullah",
+  "document_number": "901234-56-7890",
+  "metadata": {
+    "user_id": "usr_12345",
+    "application_id": "app_67890"
+  },
+  "timestamp": "2026-01-29T15:30:00.000Z"
 }
-
 ```
 
-### Webhook Security
+| Field | Description |
+|-------|-------------|
+| `event` | Event type (see [Webhook Events](#webhook-events)) |
+| `session_id` | Unique session identifier |
+| `ref_id` | Reference ID for this session |
+| `status` | Session status: `completed`, `expired` |
+| `result` | Verification result: `approved` or `rejected` |
+| `reject_message` | Reason for rejection (if applicable) |
+| `document_name` | Name provided when creating the session |
+| `document_number` | Document number provided when creating the session |
+| `metadata` | Your custom metadata passed when creating the session |
+| `timestamp` | When the webhook was sent (ISO 8601) |
 
-Verify webhook authenticity using the `X-Webhook-Signature` header:
+**Important**: To retrieve full OCR data, verification results, and document images, call the [Get Session Status](#get-session-status) or [Refresh Session Status](#refresh-session-status) endpoint using the `session_id` from the webhook.
 
-```jsx
-const crypto = require('crypto');
+### Webhook Handler Example
 
-function verifyWebhookSignature(payload, signature, apiKey) {
-  const expectedSignature = 'sha256=' + crypto
-    .createHmac('sha256', apiKey)
-    .update(payload)
-    .digest('hex');
-
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
-}
-
+```javascript
 // In your webhook handler
-app.post('/webhooks/kyc', (req, res) => {
-  const signature = req.headers['x-webhook-signature'];
-  const payload = JSON.stringify(req.body);
-
-  if (!verifyWebhookSignature(payload, signature, YOUR_API_KEY)) {
-    return res.status(401).send('Invalid signature');
-  }
-
-  // Process the webhook
-  const { event, data } = req.body;
-  // ...
-
+app.post('/webhooks/kyc', async (req, res) => {
+  // Respond immediately to acknowledge receipt
   res.status(200).send('OK');
+  
+  // Process the webhook asynchronously
+  const { event, session_id, status, result, metadata } = req.body;
+  
+  if (event === 'kyc.session.completed') {
+    // Fetch full verification details from API
+    const sessionDetails = await fetch(
+      `https://api.truestack.my/api/v1/kyc/sessions/${session_id}`,
+      {
+        method: 'POST', // Use POST to refresh and get full data
+        headers: { 'Authorization': `Bearer ${YOUR_API_KEY}` }
+      }
+    ).then(r => r.json());
+    
+    // Now you have full OCR data, verification results, and image URLs
+    const { document, verification, images } = sessionDetails;
+    
+    // Update your database
+    await updateUserVerification(metadata.user_id, {
+      status: result,
+      fullName: document?.full_name,
+      idNumber: document?.id_number,
+      faceMatchScore: verification?.face_match_score,
+    });
+  }
 });
-
 ```
+
+### Expected Response
+
+Your webhook endpoint must return an **HTTP 2xx status code** (e.g., 200, 201, 202) to acknowledge receipt. We only check the status code, not the response body.
+
+| Response | Result |
+|----------|--------|
+| HTTP 200-299 | Success - webhook marked as delivered |
+| HTTP 4xx/5xx | Failed - recorded as delivery failure |
+| Timeout/Error | Failed - recorded as delivery failure |
+
+**Important**: Respond within **5 seconds**. If your processing takes longer, return 200 immediately and process asynchronously.
 
 ### Webhook Best Practices
 
 1. **Respond quickly**: Return a 2xx status within 5 seconds
-2. **Process asynchronously**: Queue webhook data for processing
-3. **Handle duplicates**: Use `session_id` for idempotency
-4. **Retry handling**: We retry failed webhooks up to 3 times with exponential backoff
+2. **Process asynchronously**: Queue webhook data for processing, don't block the response
+3. **Handle duplicates**: Use `session_id` for idempotency - you may receive multiple webhooks for the same session
+4. **Log everything**: Store the raw webhook payload for debugging
+5. **Fetch full details**: Use the session API to retrieve complete OCR and verification data
+
+### Webhook Delivery Notes
+
+- **No automatic retry**: Webhooks are sent once per status change. If your endpoint fails, the webhook is not automatically retried.
+- **Multiple webhooks possible**: You may receive multiple webhooks for the same session as it progresses through states (pending → processing → completed).
+- **Fallback to polling**: If you suspect a missed webhook, use the [Refresh Session Status](#refresh-session-status) endpoint to get the current status.
+- **Timeout**: Your endpoint must respond within 5 seconds or the webhook will be marked as failed.
 
 ---
 
@@ -628,7 +654,7 @@ app.post('/webhooks/kyc', (req, res) => {
 ### Session Status
 
 | Status | Description |
-| --- | --- |
+|--------|-------------|
 | `pending` | Session created, waiting for user to start |
 | `processing` | User has started the KYC process |
 | `completed` | KYC process finished (check `result` for outcome) |
@@ -637,7 +663,7 @@ app.post('/webhooks/kyc', (req, res) => {
 ### Verification Results
 
 | Result | Description |
-| --- | --- |
+|--------|-------------|
 | `approved` | Identity verification successful |
 | `rejected` | Identity verification failed |
 
@@ -646,7 +672,7 @@ app.post('/webhooks/kyc', (req, res) => {
 When `result` is `rejected`, the `reject_message` field indicates why:
 
 | Reason | Description |
-| --- | --- |
+|--------|-------------|
 | `document_invalid` | Document could not be verified as authentic |
 | `face_mismatch` | Selfie does not match ID photo |
 | `liveness_failed` | Liveness detection failed |
@@ -664,13 +690,12 @@ When `result` is `rejected`, the `reject_message` field indicates why:
   "error": "ERROR_CODE",
   "message": "Human-readable error description"
 }
-
 ```
 
 ### HTTP Status Codes
 
 | Status | Error Code | Description |
-| --- | --- | --- |
+|--------|------------|-------------|
 | 400 | `BAD_REQUEST` | Invalid request parameters |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 | 402 | `INSUFFICIENT_CREDITS` | Account has insufficient credits |
@@ -682,34 +707,28 @@ When `result` is `rejected`, the `reject_message` field indicates why:
 ### Common Errors
 
 **Missing required fields:**
-
 ```json
 {
   "error": "BAD_REQUEST",
   "message": "document_name and document_number are required"
 }
-
 ```
 
 **Invalid webhook URL:**
-
 ```json
 {
   "error": "BAD_REQUEST",
   "message": "webhook_url must be a valid HTTPS URL"
 }
-
 ```
 
 **Insufficient credits:**
-
 ```json
 {
   "error": "INSUFFICIENT_CREDITS",
   "message": "Account credit balance exhausted",
   "balance": 0.5
 }
-
 ```
 
 ---
@@ -717,7 +736,7 @@ When `result` is `rejected`, the `reject_message` field indicates why:
 ## Rate Limits
 
 | Limit | Value |
-| --- | --- |
+|-------|-------|
 | Requests per minute | 60 |
 | Concurrent sessions | 100 |
 
@@ -727,7 +746,6 @@ Rate limit headers are included in all responses:
 X-RateLimit-Limit: 60
 X-RateLimit-Remaining: 45
 X-RateLimit-Reset: 1706538000
-
 ```
 
 ---
@@ -736,7 +754,7 @@ X-RateLimit-Reset: 1706538000
 
 ### JavaScript / TypeScript
 
-```tsx
+```typescript
 interface KycSession {
   id: string;
   onboarding_url: string;
@@ -751,7 +769,7 @@ async function createKycSession(
   webhookUrl: string,
   metadata?: Record<string, string>
 ): Promise<KycSession> {
-  const response = await fetch('<https://api.truestack.my/v1/kyc/sessions>', {
+  const response = await fetch('https://api.truestack.my/api/v1/kyc/sessions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -778,13 +796,12 @@ const session = await createKycSession(
   'ts_live_abc123...',
   'Ahmad bin Abdullah',
   '901234-56-7890',
-  '<https://yourapp.com/webhooks/kyc>',
+  'https://yourapp.com/webhooks/kyc',
   { user_id: 'usr_12345' }
 );
 
 // Redirect user
 window.location.href = session.onboarding_url;
-
 ```
 
 ### Python
@@ -801,7 +818,7 @@ def create_kyc_session(
     metadata: Optional[Dict[str, str]] = None
 ) -> dict:
     response = requests.post(
-        '<https://api.truestack.my/v1/kyc/sessions>',
+        'https://api.truestack.my/api/v1/kyc/sessions',
         headers={
             'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json',
@@ -813,7 +830,7 @@ def create_kyc_session(
             'metadata': metadata or {},
         },
     )
-
+    
     response.raise_for_status()
     return response.json()
 
@@ -822,13 +839,12 @@ session = create_kyc_session(
     api_key='ts_live_abc123...',
     document_name='Ahmad bin Abdullah',
     document_number='901234-56-7890',
-    webhook_url='<https://yourapp.com/webhooks/kyc>',
+    webhook_url='https://yourapp.com/webhooks/kyc',
     metadata={'user_id': 'usr_12345'},
 )
 
 onboarding_url = session['onboarding_url']
 # Redirect user to onboarding_url
-
 ```
 
 ### PHP
@@ -843,8 +859,8 @@ function createKycSession(
     string $webhookUrl,
     array $metadata = []
 ): array {
-    $ch = curl_init('<https://api.truestack.my/v1/kyc/sessions>');
-
+    $ch = curl_init('https://api.truestack.my/api/v1/kyc/sessions');
+    
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
@@ -859,15 +875,15 @@ function createKycSession(
             'metadata' => $metadata,
         ]),
     ]);
-
+    
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-
+    
     if ($httpCode !== 201) {
         throw new Exception('Failed to create KYC session');
     }
-
+    
     return json_decode($response, true);
 }
 
@@ -876,13 +892,12 @@ $session = createKycSession(
     'ts_live_abc123...',
     'Ahmad bin Abdullah',
     '901234-56-7890',
-    '<https://yourapp.com/webhooks/kyc>',
+    'https://yourapp.com/webhooks/kyc',
     ['user_id' => 'usr_12345']
 );
 
 header('Location: ' . $session['onboarding_url']);
 exit;
-
 ```
 
 ### Go
@@ -913,25 +928,25 @@ type KycSessionResponse struct {
 
 func CreateKycSession(apiKey string, req KycSessionRequest) (*KycSessionResponse, error) {
     body, _ := json.Marshal(req)
-
+    
     httpReq, _ := http.NewRequest(
         "POST",
-        "<https://api.truestack.my/v1/kyc/sessions>",
+        "https://api.truestack.my/api/v1/kyc/sessions",
         bytes.NewBuffer(body),
     )
-
+    
     httpReq.Header.Set("Authorization", "Bearer "+apiKey)
     httpReq.Header.Set("Content-Type", "application/json")
-
+    
     resp, err := http.DefaultClient.Do(httpReq)
     if err != nil {
         return nil, err
     }
     defer resp.Body.Close()
-
+    
     var session KycSessionResponse
     json.NewDecoder(resp.Body).Decode(&session)
-
+    
     return &session, nil
 }
 
@@ -939,13 +954,12 @@ func main() {
     session, _ := CreateKycSession("ts_live_abc123...", KycSessionRequest{
         DocumentName:   "Ahmad bin Abdullah",
         DocumentNumber: "901234-56-7890",
-        WebhookURL:     "<https://yourapp.com/webhooks/kyc>",
+        WebhookURL:     "https://yourapp.com/webhooks/kyc",
         Metadata:       map[string]string{"user_id": "usr_12345"},
     })
-
-    fmt.Printf("Redirect user to: %s\\n", session.OnboardingURL)
+    
+    fmt.Printf("Redirect user to: %s\n", session.OnboardingURL)
 }
-
 ```
 
 ---
@@ -995,7 +1009,7 @@ A: Currently MyKad (Malaysian IC) and Passports.
 ### Technical
 
 **Q: What if I don't receive a webhook?**
-A: Use the Refresh Session Status endpoint (`POST /v1/kyc/sessions/:id`) to check the current status.
+A: Use the Refresh Session Status endpoint (`POST /api/v1/kyc/sessions/:id`) to check the current status.
 
 **Q: How do I test in development?**
 A: Contact us for sandbox credentials and test identity documents.
@@ -1023,9 +1037,9 @@ A: New sessions will fail with `INSUFFICIENT_CREDITS` error. Contact us for top-
 
 For technical support or questions:
 
-- **Email**: [support@truestack.my](mailto:support@truestack.my)
-- **Documentation**: [https://docs.truestack.my](https://docs.truestack.my/)
-- **Status Page**: [https://status.truestack.my](https://status.truestack.my/)
+- **Email**: support@truestack.my
+- **Documentation**: https://docs.truestack.my
+- **Status Page**: https://status.truestack.my
 
 ---
 
