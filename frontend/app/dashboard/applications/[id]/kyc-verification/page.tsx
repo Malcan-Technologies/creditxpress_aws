@@ -760,29 +760,53 @@ export default function KycVerificationPage() {
 							</div>
 
 							{/* Action Buttons */}
-							<div className="flex flex-col items-center pt-6 border-t border-gray-100 space-y-3">
+							<div className="flex flex-col items-center pt-6 border-t border-gray-100 space-y-4">
 								{kycDocuments.length === 0 && (
 									<p className="text-amber-600 text-sm font-medium">
 										Please refresh your documents above before continuing.
 									</p>
 								)}
-								<button
-									onClick={handleAcceptKyc}
-									disabled={processingAccept || kycDocuments.length === 0}
-									className="flex items-center justify-center px-8 py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 text-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									{processingAccept ? (
-										<>
-											<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-											Accepting...
-										</>
-									) : (
-										<>
-											<CheckCircleIcon className="w-6 h-6 mr-2" />
-											Accept & Continue
-										</>
-									)}
-								</button>
+								<div className="flex flex-col sm:flex-row gap-3">
+									<button
+										onClick={() => handleStartKyc(true)}
+										disabled={startingKyc || processingAccept}
+										className="flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition-all duration-200 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300"
+									>
+										{startingKyc ? (
+											<>
+												<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600 mr-2"></div>
+												Starting...
+											</>
+										) : (
+											<>
+												<svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+												</svg>
+												Restart KYC
+											</>
+										)}
+									</button>
+									<button
+										onClick={handleAcceptKyc}
+										disabled={processingAccept || kycDocuments.length === 0 || startingKyc}
+										className="flex items-center justify-center px-8 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										{processingAccept ? (
+											<>
+												<div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+												Accepting...
+											</>
+										) : (
+											<>
+												<CheckCircleIcon className="w-5 h-5 mr-2" />
+												Accept & Continue
+											</>
+										)}
+									</button>
+								</div>
+								<p className="text-gray-500 text-xs text-center max-w-md">
+									Not satisfied with the verification? You can restart the KYC process to capture new photos.
+								</p>
 							</div>
 						</div>
 					) : ctosStatus?.hasKycSession && ctosStatus?.result === 0 ? (
