@@ -100,7 +100,22 @@ export const resendConfig = {
 };
 
 // ==============================================
-// CTOS eKYC Credentials
+// Truestack KYC Credentials (replaces CTOS eKYC)
+// AWS Secret: {secrets_prefix}/truestack-credentials (or reuse ctos-credentials)
+// JSON keys: api_key, base_url, webhook_url
+// Falls back to CTOS_CREDENTIALS for easy migration without ECS changes
+// ==============================================
+const truestackCredentials = parseJsonCredentials(process.env.TRUESTACK_CREDENTIALS || process.env.CTOS_CREDENTIALS);
+
+export const truestackConfig = {
+  apiKey: process.env.TRUESTACK_API_KEY || truestackCredentials.api_key || '',
+  baseUrl: process.env.TRUESTACK_BASE_URL || truestackCredentials.base_url || 'https://api.truestack.my',
+  webhookUrl: process.env.TRUESTACK_WEBHOOK_URL || truestackCredentials.webhook_url || `${urlConfig.backend}/api/ctos/webhook`,
+};
+
+// ==============================================
+// CTOS eKYC Credentials (DEPRECATED - replaced by Truestack)
+// Keeping for backwards compatibility during migration
 // AWS Secret: {secrets_prefix}/ctos-credentials
 // JSON keys: api_key, package_name, security_key, base_url, webhook_url, ciphertext, cipher
 // ==============================================
@@ -119,7 +134,7 @@ export const ctosConfig = {
 
 // ==============================================
 // KYC Configuration
-// Note: Using CTOS for KYC, not Docker-based services
+// Note: Using Truestack for KYC (previously CTOS)
 // ==============================================
 export const kycConfig = {
   jwtSecret: process.env.KYC_JWT_SECRET || jwtConfig.secret,
@@ -221,7 +236,7 @@ export function logConfigStatus(): void {
   console.log(`  Admin URL: ${urlConfig.admin}`);
   console.log(`  WhatsApp: ${whatsappConfig.accessToken ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  Resend Email: ${resendConfig.apiKey ? '✅ Configured' : '❌ Not configured'}`);
-  console.log(`  CTOS eKYC: ${ctosConfig.apiKey ? '✅ Configured' : '❌ Not configured'}`);
+  console.log(`  Truestack KYC: ${truestackConfig.apiKey ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  DocuSeal: ${docusealConfig.apiToken ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  Signing Orchestrator: ${signingConfig.apiKey ? '✅ Configured' : '❌ Not configured'}`);
   console.log(`  S3 Storage: ${s3Config.isConfigured ? `✅ ${s3Config.bucket}` : '⚠️ Using local storage'}`);

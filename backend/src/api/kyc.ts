@@ -5,8 +5,8 @@ import crypto from "crypto";
 import * as jwt from "jsonwebtoken";
 import { authenticateAndVerifyPhone, authenticateKycOrAuth, AuthRequest, FileAuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
-import { ctosService } from "../lib/ctosService";
-import { kycConfig, urlConfig, ctosConfig } from "../lib/config";
+import { truestackService } from "../lib/truestackService";
+import { kycConfig, urlConfig } from "../lib/config";
 import { uploadToS3Organized, getS3ObjectStream, deleteFromS3, S3_FOLDERS } from "../lib/storage";
 
 const router = Router();
@@ -56,7 +56,7 @@ function sha256(buffer: Buffer): string {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-// Start CTOS eKYC process
+// Start KYC eKYC process (via Truestack - backwards compatible endpoint name)
 router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
   let kycSession: any = null;
   try {
@@ -76,7 +76,6 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
     }
 
     // Check if user already has an approved KYC session
-    // Need to check for sessions where userId might have a prefix (like OPG-Capital, etc.)
     const existingApprovedSession = await db.kycSession.findFirst({
       where: {
         OR: [
@@ -105,7 +104,7 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
     if (existingApprovedSession) {
       console.log(`User ${req.user.userId} - Prevented creating new KYC session, already has approved session: ${existingApprovedSession.id}`);
       return res.status(400).json({ 
-        message: "CTOS API Error: You already have an approved KYC verification. No further verification is needed.",
+        message: "You already have an approved KYC verification. No further verification is needed.",
         error: "User already has approved KYC session",
         existingSessionId: existingApprovedSession.id
       });
@@ -176,102 +175,60 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
     });
 
     try {
-      // Create CTOS transaction
-      console.log('Starting CTOS transaction with params:', {
+      // Create Truestack session
+      console.log('Starting Truestack KYC session with params:', {
         ref_id: kycSession.id,
         document_name: documentName,
         document_number: documentNumber,
-        platform,
-        callback_mode: 2
+        platform
       });
 
       // Build completion URL from centralized config  
       const completionUrl = `${urlConfig.api}/kyc-complete`;
 
-      const ctosResponse = await ctosService.createTransaction({
-        ref_id: kycSession.id, // Use kycSession.id as ref_id
+      const truestackResponse = await truestackService.createSession({
+        ref_id: kycSession.id,
         document_name: documentName,
         document_number: documentNumber,
         platform,
-        response_url: completionUrl, // Use KYC completion page instead of frontend callback
-        backend_url: ctosConfig.webhookUrl,
-        callback_mode: 2, // Detailed callback
-        response_mode: 0, // No queries - should make webhook work without URL parameters
-        document_type: '1' // 1 = NRIC (default for Malaysian users)
+        redirect_url: completionUrl,
+        document_type: '1', // MyKad
+        metadata: {
+          user_id: req.user.userId,
+          application_id: applicationId || ''
+        }
       });
 
-      console.log('CTOS Response received:', ctosResponse);
+      console.log('Truestack Response received:', truestackResponse);
 
-      // Check if CTOS response contains error information (after decryption, errors are at top level)
-      const response = ctosResponse as any;
-      if (response.message === "Failed" || 
-          response.error_code === "103" || 
-          response.description?.includes("Duplicate transaction") ||
-          response.message?.toLowerCase().includes("error")) {
-        
-        console.error('CTOS returned error in response:', ctosResponse);
-        
-        const ctosFailureData = {
-          rawResponse: {
-            message: "Failed", 
-            error_code: response.error_code || "103",
-            description: response.description || response.message || "CTOS transaction failed"
-          },
-          requestedBy: req.user?.userId,
-          adminRequest: false,
-          errorDetails: {
-            timestamp: new Date().toISOString(),
-            originalResponse: JSON.parse(JSON.stringify(ctosResponse))
-          }
-        };
-
-        await db.kycSession.update({ 
-          where: { id: kycSession.id },
-          data: {
-            status: 'FAILED',
-            ctosData: ctosFailureData,
-            completedAt: new Date()
-          }
-        });
-        
-        const description = response.description || response.message || "CTOS transaction failed";
-        return res.status(400).json({ 
-          message: `CTOS eKYC Error: ${description}`,
-          error: `CTOS API Error: ${description}`,
-          kycSessionId: kycSession.id,
-          errorCode: response.error_code || "103"
-        });
-      }
-
-      // Update KYC session with CTOS data
-      // Parse expiry date safely
-      let ctosExpiredAt: Date | null = null;
+      // Update KYC session with Truestack data
+      // Using existing CTOS field names for backwards compatibility
+      let expiresAt: Date | null = null;
       try {
-        if (ctosResponse.expired_at) {
-          ctosExpiredAt = new Date(ctosResponse.expired_at);
-          // Check if date is valid
-          if (isNaN(ctosExpiredAt.getTime())) {
-            console.warn('Invalid CTOS expiry date:', ctosResponse.expired_at);
-            ctosExpiredAt = null;
+        if (truestackResponse.expires_at) {
+          expiresAt = new Date(truestackResponse.expires_at);
+          if (isNaN(expiresAt.getTime())) {
+            console.warn('Invalid Truestack expiry date:', truestackResponse.expires_at);
+            expiresAt = null;
           }
         }
       } catch (dateError) {
-        console.warn('Error parsing CTOS expiry date:', ctosResponse.expired_at, dateError);
-        ctosExpiredAt = null;
+        console.warn('Error parsing Truestack expiry date:', truestackResponse.expires_at, dateError);
+        expiresAt = null;
       }
 
       await db.kycSession.update({
         where: { id: kycSession.id },
         data: {
-          ctosOnboardingId: ctosResponse.onboarding_id,
-          ctosOnboardingUrl: ctosResponse.onboarding_url,
-          ctosExpiredAt,
-          ctosStatus: 0, // Not opened yet
-          ctosData: ctosResponse as any
+          ctosOnboardingId: truestackResponse.id,
+          ctosOnboardingUrl: truestackResponse.onboarding_url,
+          ctosExpiredAt: expiresAt,
+          ctosStatus: 0, // Not opened yet (pending)
+          ctosData: truestackResponse as any
         }
       });
 
-      console.log(`Created CTOS transaction for user ${req.user.userId}, KYC session ${kycSession.id}, onboarding ID: ${ctosResponse.onboarding_id}`);
+      console.log(`Created Truestack KYC session for user ${req.user.userId}, KYC session ${kycSession.id}, Truestack ID: ${truestackResponse.id}`);
 
       // Issue short-lived KYC token
       const kycToken = jwt.sign(
@@ -283,31 +240,26 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       return res.status(201).json({
         success: true,
         kycId: kycSession.id,
-        onboardingUrl: ctosResponse.onboarding_url,
-        onboardingId: ctosResponse.onboarding_id,
-        expiredAt: ctosResponse.expired_at,
+        onboardingUrl: truestackResponse.onboarding_url,
+        onboardingId: truestackResponse.id,
+        expiredAt: truestackResponse.expires_at,
         kycToken,
         ttlMinutes: kycConfig.tokenTtlMinutes
       });
 
-    } catch (ctosError) {
-      // Mark the KYC session as FAILED and store CTOS error details instead of deleting
-      console.error('CTOS transaction failed:', ctosError);
-      const errorMessage = ctosError instanceof Error ? ctosError.message : 'Failed to create CTOS eKYC transaction';
+    } catch (truestackError) {
+      // Mark the KYC session as FAILED
+      console.error('Truestack session creation failed:', truestackError);
+      const errorMessage = truestackError instanceof Error ? truestackError.message : 'Failed to create KYC session';
       
-      // Extract error details from CTOS error message
       let errorCode = "500";
       let description = errorMessage;
       
-      // Parse specific CTOS error codes if available
-      if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
-        errorCode = "103";
-        description = "Duplicate transaction found";
-      } else if (errorMessage.includes("CTOS API Error:")) {
-        description = errorMessage.replace("CTOS API Error: ", "");
+      if (errorMessage.includes("Truestack API Error:")) {
+        description = errorMessage.replace("Truestack API Error: ", "");
       }
       
-      const ctosFailureData = {
+      const failureData = {
         rawResponse: {
           message: "Failed", 
           error_code: errorCode,
@@ -325,13 +277,13 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         where: { id: kycSession.id },
         data: {
           status: 'FAILED',
-          ctosData: ctosFailureData,
+          ctosData: failureData,
           completedAt: new Date()
         }
       });
       
       return res.status(400).json({ 
-        message: `CTOS eKYC Error: ${description}`,
+        message: `KYC Error: ${description}`,
         error: errorMessage,
         kycSessionId: kycSession.id,
         errorCode: errorCode
@@ -339,13 +291,13 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
     }
 
   } catch (error) {
-    console.error('Error starting CTOS eKYC:', error);
+    console.error('Error starting KYC:', error);
     
-    // Mark the KYC session as FAILED and store error details instead of deleting
+    // Mark the KYC session as FAILED
     if (kycSession?.id) {
       try {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
-        const ctosFailureData = {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to start KYC process';
+        const failureData = {
           rawResponse: {
             message: "Failed", 
             error_code: "500",
@@ -363,14 +315,13 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
           where: { id: kycSession.id },
           data: {
             status: 'FAILED',
-            ctosData: ctosFailureData,
+            ctosData: failureData,
             completedAt: new Date()
           }
         });
-        console.log(`Marked KYC session ${kycSession.id} as FAILED due to CTOS error`);
+        console.log(`Marked KYC session ${kycSession.id} as FAILED`);
       } catch (updateError) {
         console.error('Error updating failed KYC session:', updateError);
-        // If update fails, try to delete as fallback
         try {
           await db.kycSession.delete({ where: { id: kycSession.id } });
           console.log(`Deleted failed KYC session ${kycSession.id} after update failure`);
@@ -380,12 +331,10 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
       }
     }
     
-    // Pass through specific CTOS error message
-    const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to start KYC process';
     return res.status(500).json({ 
-      message: 'Failed to create CTOS eKYC session',
-      error: errorMessage,
-      details: errorMessage.includes('CTOS API Error:') ? errorMessage : `CTOS Integration Error: ${errorMessage}`
+      message: 'Failed to create KYC session',
+      error: errorMessage
     });
   }
 });
@@ -656,7 +605,7 @@ router.post("/:kycId/process", authenticateKycOrAuth, async (req: AuthRequest, r
   }
 });
 
-// Poll CTOS status and update session
+// Poll KYC status and update session (via Truestack)
 router.get("/:kycId/ctos-status", authenticateKycOrAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { kycId } = req.params as any;
@@ -665,11 +614,11 @@ router.get("/:kycId/ctos-status", authenticateKycOrAuth, async (req: AuthRequest
     if (session.userId !== req.user?.userId) return res.status(403).json({ message: "Forbidden" });
 
     if (!session.ctosOnboardingId) {
-      return res.status(400).json({ message: "Session not initialized with CTOS" });
+      return res.status(400).json({ message: "Session not initialized with KYC provider" });
     }
 
     try {
-      console.log(`📊 CTOS Status Check for session ${kycId}: current status=${session.status}, ctosStatus=${session.ctosStatus}, ctosResult=${session.ctosResult}`);
+      console.log(`📊 KYC Status Check for session ${kycId}: current status=${session.status}, ctosStatus=${session.ctosStatus}, ctosResult=${session.ctosResult}`);
       
       // If session is already completed (webhook updated it), return DB values
       if (session.status === 'APPROVED' || session.status === 'REJECTED') {
@@ -691,31 +640,36 @@ router.get("/:kycId/ctos-status", authenticateKycOrAuth, async (req: AuthRequest
         });
       }
 
-      // Only call CTOS API if session is still pending
-      console.log(`🔄 Session ${kycId} still pending, checking CTOS API for updates`);
-      const ctosStatus = await ctosService.getStatus({
-        ref_id: session.id,
-        onboarding_id: session.ctosOnboardingId,
-        platform: 'Web',
-        mode: 2 // Detailed mode
-      });
+      // Call Truestack API to refresh status
+      console.log(`🔄 Session ${kycId} still pending, checking Truestack API for updates`);
+      const truestackStatus = await truestackService.refreshSessionStatus(session.ctosOnboardingId);
+      const normalized = truestackService.normalizeStatusResponse(truestackStatus);
 
-      console.log(`📡 CTOS API returned: status=${ctosStatus.status}, result=${ctosStatus.result}`);
+      console.log(`📡 Truestack API returned: status=${normalized.status}, result=${normalized.result}`);
 
       // Update KYC session with latest status
       const updatedSession = await db.kycSession.update({
         where: { id: kycId },
         data: {
-          ctosStatus: ctosStatus.status,
-          ctosResult: ctosStatus.result,
-          ctosData: { ...session.ctosData, ...ctosStatus },
-          // Update KYC status based on CTOS result
-          status: ctosStatus.status === 2 ? // Completed
-            (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
-            ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS',
-          completedAt: ctosStatus.status === 2 ? new Date() : null
+          ctosStatus: normalized.status,
+          ctosResult: normalized.result,
+          ctosData: { ...session.ctosData, ...truestackStatus },
+          status: normalized.status === 2 ? // Completed
+            (normalized.result === 1 ? 'APPROVED' : 'REJECTED') :
+            normalized.status === 3 ? 'FAILED' : 'IN_PROGRESS',
+          completedAt: normalized.status === 2 ? new Date() : null
         }
       });
+
+      // If completed, download and store images
+      if (normalized.status === 2 && truestackStatus.images) {
+        try {
+          const images = await truestackService.downloadSessionImages(truestackStatus.images);
+          await storeKycImages(session.id, images);
+        } catch (imageError) {
+          console.error('Error downloading images from Truestack:', imageError);
+        }
+      }
 
       // Set cache-busting headers
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -726,21 +680,21 @@ router.get("/:kycId/ctos-status", authenticateKycOrAuth, async (req: AuthRequest
         success: true,
         kycId,
         status: updatedSession.status,
-        ctosStatus: ctosStatus.status,
-        ctosResult: ctosStatus.result,
-        details: ctosStatus
+        ctosStatus: normalized.status,
+        ctosResult: normalized.result,
+        details: normalized
       });
 
-    } catch (ctosError) {
-      console.error('Error getting CTOS status:', ctosError);
+    } catch (truestackError) {
+      console.error('Error getting KYC status:', truestackError);
       return res.status(500).json({ 
-        message: 'Failed to get CTOS status',
-        error: ctosError instanceof Error ? ctosError.message : 'Unknown error'
+        message: 'Failed to get KYC status',
+        error: truestackError instanceof Error ? truestackError.message : 'Unknown error'
       });
     }
 
   } catch (err) {
-    console.error('Error checking CTOS status:', err);
+    console.error('Error checking KYC status:', err);
     return res.status(500).json({ message: "Failed to check status" });
   }
 });
@@ -1089,108 +1043,37 @@ router.get('/user-documents', authenticateAndVerifyPhone, async (req: AuthReques
       });
     }
 
-    // Check if we have stored images, if not fetch from CTOS
+    // Check if we have stored images, if not fetch from Truestack
     const hasStoredImages = approvedSession.documents && approvedSession.documents.length >= 3;
     console.log(`Approved session ${approvedSession.id} has ${approvedSession.documents?.length || 0} stored images`);
     
     if (!hasStoredImages) {
-      console.log(`Fetching images from CTOS for approved session ${approvedSession.id} - no stored images found`);
+      console.log(`Fetching images from Truestack for approved session ${approvedSession.id} - no stored images found`);
       try {
-        // Try with OPG-Capital prefix first, fallback to original session id
-        let ctosStatus;
-        try {
-          ctosStatus = await ctosService.getStatus({
-            ref_id: `OPG-Capital${approvedSession.id}`,
-            onboarding_id: approvedSession.ctosOnboardingId,
-            platform: 'Web',
-            mode: 2 // Detail mode
-          });
-        } catch (error) {
-          console.log('Failed with OPG-Capital prefix, trying original session id...');
-          ctosStatus = await ctosService.getStatus({
-            ref_id: approvedSession.id,
-            onboarding_id: approvedSession.ctosOnboardingId,
-            platform: 'Web',
-            mode: 2 // Detail mode
-          });
-        }
+        // Refresh session to get image URLs
+        const truestackStatus = await truestackService.refreshSessionStatus(approvedSession.ctosOnboardingId);
 
-        // Store document images from CTOS response
-        const ctosData = ctosStatus as any;
-        const documentsToUpsert = [];
-
-        // Extract images from step1 and step2
-        const frontImage = ctosData.step1?.front_document_image;
-        const backImage = ctosData.step1?.back_document_image;
-        const faceImage = ctosData.step2?.best_frame;
-
-        console.log('CTOS response for missing images:', {
-          hasStep1: !!ctosData.step1,
-          hasStep2: !!ctosData.step2,
-          frontImage: !!frontImage,
-          backImage: !!backImage,
-          faceImage: !!faceImage
+        console.log('Truestack response for missing images:', {
+          hasImages: !!truestackStatus.images,
+          frontImage: !!truestackStatus.images?.front_document,
+          backImage: !!truestackStatus.images?.back_document,
+          faceImage: !!truestackStatus.images?.face_image
         });
 
-        if (frontImage) {
-          documentsToUpsert.push({
-            kycId: approvedSession.id,
-            type: 'front',
-            storageUrl: `data:image/jpeg;base64,${frontImage}`,
-            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex'),
-            updatedAt: new Date()
-          });
-        }
-
-        if (backImage) {
-          documentsToUpsert.push({
-            kycId: approvedSession.id,
-            type: 'back',
-            storageUrl: `data:image/jpeg;base64,${backImage}`,
-            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex'),
-            updatedAt: new Date()
-          });
-        }
-
-        if (faceImage) {
-          documentsToUpsert.push({
-            kycId: approvedSession.id,
-            type: 'selfie',
-            storageUrl: `data:image/jpeg;base64,${faceImage}`,
-            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex'),
-            updatedAt: new Date()
-          });
-        }
-
-        // Store documents if any found - use upsert to prevent race condition duplicates
-        if (documentsToUpsert.length > 0) {
-          for (const doc of documentsToUpsert) {
-            // Use upsert to avoid race condition between webhook and polling
-            await db.kycDocument.upsert({
-              where: {
-                kycId_type: {
-                  kycId: doc.kycId,
-                  type: doc.type
-                }
-              },
-              update: {
-                storageUrl: doc.storageUrl,
-                hashSha256: doc.hashSha256,
-                updatedAt: new Date()
-              },
-              create: doc
-            });
-          }
-          console.log(`Stored ${documentsToUpsert.length} images from CTOS for approved session`);
+        // Download and store images if available
+        if (truestackStatus.images) {
+          const images = await truestackService.downloadSessionImages(truestackStatus.images);
+          await storeKycImages(approvedSession.id, images);
+          console.log(`Stored images from Truestack for approved session`);
         } else {
-          console.log('No images found in CTOS response for approved session');
+          console.log('No images found in Truestack response for approved session');
         }
-      } catch (ctosError) {
-        console.error('Error fetching images from CTOS for approved session:', ctosError);
-        // Continue with existing documents if CTOS fetch fails
+      } catch (truestackError) {
+        console.error('Error fetching images from Truestack for approved session:', truestackError);
+        // Continue with existing documents if Truestack fetch fails
       }
     } else {
-      console.log(`Skipping CTOS API call for approved session ${approvedSession.id} - already has stored images`);
+      console.log(`Skipping Truestack API call for approved session ${approvedSession.id} - already has stored images`);
     }
 
     // Re-fetch the session with updated documents
@@ -1346,7 +1229,7 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       });
       
       if (storedImages.length >= 3) {
-        console.log(`User ${userId} - Session already approved with ${storedImages.length} stored images, returning without CTOS API call`);
+        console.log(`User ${userId} - Session already approved with ${storedImages.length} stored images, returning without API call`);
         
         // Make sure session status is updated to APPROVED if it's not already
         if (kycSession.status !== 'APPROVED') {
@@ -1377,130 +1260,49 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
           completedAt: kycSession.completedAt || new Date()
         });
       } else {
-        console.log(`User ${userId} - Session approved but only ${storedImages.length} images stored, fetching from CTOS`);
-        // Continue to CTOS API call to fetch missing images
+        console.log(`User ${userId} - Session approved but only ${storedImages.length} images stored, fetching from Truestack`);
+        // Continue to Truestack API call to fetch missing images
       }
     }
 
-    // Only call CTOS API for non-approved sessions
+    // Call Truestack API to get latest status
     try {
-      // Try with OPG-Capital prefix first, fallback to original userId
-      let ctosStatus;
-      console.log(`🔍 CTOS Status Check - User: ${userId}, Session: ${kycSession.id}, OnboardingId: ${kycSession.ctosOnboardingId}`);
+      console.log(`🔍 Truestack Status Check - User: ${userId}, Session: ${kycSession.id}, OnboardingId: ${kycSession.ctosOnboardingId}`);
       
-      try {
-        console.log(`🔍 Trying CTOS with OPG-Capital prefix: OPG-Capital${kycSession.id}`);
-        ctosStatus = await ctosService.getStatus({
-          ref_id: `OPG-Capital${kycSession.id}`,
-          onboarding_id: kycSession.ctosOnboardingId,
-          platform: 'Web',
-          mode: 2 // Detail mode
-        });
-        console.log(`✅ CTOS Response with prefix:`, { status: ctosStatus.status, result: ctosStatus.result });
-      } catch (error) {
-        console.log('❌ Failed with OPG-Capital prefix, trying original session id...');
-        console.log(`🔍 Trying CTOS with original session id: ${kycSession.id}`);
-        ctosStatus = await ctosService.getStatus({
-          ref_id: kycSession.id,
-          onboarding_id: kycSession.ctosOnboardingId,
-          platform: 'Web',
-          mode: 2 // Detail mode
-        });
-        console.log(`✅ CTOS Response with original:`, { status: ctosStatus.status, result: ctosStatus.result });
-      }
+      const truestackStatus = await truestackService.refreshSessionStatus(kycSession.ctosOnboardingId);
+      const normalized = truestackService.normalizeStatusResponse(truestackStatus);
+      
+      console.log(`✅ Truestack Response:`, { status: normalized.status, result: normalized.result });
 
       // Update our session with the latest status
       await db.kycSession.update({
         where: { id: kycSession.id },
         data: {
-          ctosStatus: ctosStatus.status,
-          ctosResult: ctosStatus.result,
-          ctosData: ctosStatus as any,
-          status: ctosStatus.status === 2 ? // Completed
-            (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
-            ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS',
-          completedAt: ctosStatus.status === 2 ? new Date() : null
+          ctosStatus: normalized.status,
+          ctosResult: normalized.result,
+          ctosData: truestackStatus as any,
+          status: normalized.status === 2 ? // Completed
+            (normalized.result === 1 ? 'APPROVED' : 'REJECTED') :
+            normalized.status === 3 ? 'FAILED' : 'IN_PROGRESS',
+          completedAt: normalized.status === 2 ? new Date() : null
         }
       });
 
-      // Store/update document images if available from CTOS response
-      const ctosData = ctosStatus as any;
-      const documentsToUpsert = [];
-
-      // Extract images from step1 and step2 (based on actual CTOS response structure)
-      const frontImage = ctosData.step1?.front_document_image;
-      const backImage = ctosData.step1?.back_document_image;
-      const faceImage = ctosData.step2?.best_frame;
-
-      console.log('CTOS response structure check:', {
-        ctosStatus: ctosStatus.status,
-        ctosResult: ctosStatus.result,
-        hasStep1: !!ctosData.step1,
-        hasStep2: !!ctosData.step2,
-        frontImage: !!frontImage,
-        backImage: !!backImage,
-        faceImage: !!faceImage,
-        hasAnyImage: !!(frontImage || backImage || faceImage),
-        fullResponse: JSON.stringify(ctosData, null, 2)
-      });
-
-      // Store images if available (regardless of current CTOS status if we know user is approved)
-        if (frontImage) {
-          documentsToUpsert.push({
-            kycId: kycSession.id,
-            type: 'front',
-            storageUrl: `data:image/jpeg;base64,${frontImage}`,
-            hashSha256: crypto.createHash('sha256').update(frontImage).digest('hex'),
-            updatedAt: new Date()
-          });
+      // Download and store images if available
+      if (truestackStatus.images) {
+        try {
+          const images = await truestackService.downloadSessionImages(truestackStatus.images);
+          await storeKycImages(kycSession.id, images);
+          console.log(`Stored/updated images for KYC session ${kycSession.id}`);
+        } catch (imageError) {
+          console.error('Error downloading images from Truestack:', imageError);
         }
-
-        if (backImage) {
-          documentsToUpsert.push({
-            kycId: kycSession.id,
-            type: 'back',
-            storageUrl: `data:image/jpeg;base64,${backImage}`,
-            hashSha256: crypto.createHash('sha256').update(backImage).digest('hex'),
-            updatedAt: new Date()
-          });
-        }
-
-        if (faceImage) {
-          documentsToUpsert.push({
-            kycId: kycSession.id,
-            type: 'selfie',
-            storageUrl: `data:image/jpeg;base64,${faceImage}`,
-            hashSha256: crypto.createHash('sha256').update(faceImage).digest('hex'),
-            updatedAt: new Date()
-          });
-        }
-
-      // Upsert documents (create if not exists, update if exists) - prevent race condition duplicates
-      if (documentsToUpsert.length > 0) {
-        for (const doc of documentsToUpsert) {
-          // Use upsert to avoid race condition between webhook and polling
-          await db.kycDocument.upsert({
-            where: {
-              kycId_type: {
-                kycId: doc.kycId,
-                type: doc.type
-              }
-            },
-            update: {
-              storageUrl: doc.storageUrl,
-              hashSha256: doc.hashSha256,
-              updatedAt: new Date()
-            },
-            create: doc
-          });
-        }
-        console.log(`Stored/updated ${documentsToUpsert.length} documents for KYC session ${kycSession.id}`);
       } else {
-        console.log('No images found in CTOS response');
+        console.log('No images found in Truestack response');
       }
 
       // Update user KYC status if approved
-      if (ctosStatus.status === 2 && ctosStatus.result === 1) {
+      if (normalized.status === 2 && normalized.result === 1) {
         await db.user.update({
           where: { id: kycSession.userId },
           data: { kycStatus: true }
@@ -1511,7 +1313,7 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const canResume = kycSession.status === 'IN_PROGRESS' && 
                        kycSession.ctosOnboardingUrl && 
-                       (ctosStatus.status === 0 || ctosStatus.status === 1) &&
+                       (normalized.status === 0 || normalized.status === 1) &&
                        kycSession.createdAt >= twentyFourHoursAgo;
 
       return res.json({
@@ -1519,20 +1321,19 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         hasKycSession: true,
         kycSessionId: kycSession.id,
         status: kycSession.status,
-        ctosStatus: ctosStatus.status,
-        ctosResult: ctosStatus.result,
-        ctosData: ctosStatus,
-        canRetry: ctosStatus.result === 0 || ctosStatus.result === 2, // Can retry if rejected or not available
-        rejectMessage: ctosStatus.result === 0 ? (ctosStatus as any).reject_message : null,
-        isAlreadyApproved: ctosStatus.result === 1 || kycSession.ctosResult === 1, // Already approved if CTOS says so OR if our database says so
+        ctosStatus: normalized.status,
+        ctosResult: normalized.result,
+        ctosData: normalized,
+        canRetry: normalized.result === 0 || normalized.result === 2,
+        rejectMessage: normalized.result === 0 ? normalized.reject_message : null,
+        isAlreadyApproved: normalized.result === 1 || kycSession.ctosResult === 1,
         canResume: canResume,
         resumeUrl: canResume ? kycSession.ctosOnboardingUrl : null
       });
-    } catch (ctosError) {
-      console.error('Error fetching CTOS status:', ctosError);
+    } catch (truestackError) {
+      console.error('Error fetching Truestack status:', truestackError);
       
       // Return the last known status from our database
-      // Check if session is in progress and can be resumed
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const canResume = kycSession.status === 'IN_PROGRESS' && 
                        kycSession.ctosOnboardingUrl && 
@@ -1552,11 +1353,11 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
         isAlreadyApproved: kycSession.ctosResult === 1,
         canResume: canResume,
         resumeUrl: canResume ? kycSession.ctosOnboardingUrl : null,
-        error: 'Could not fetch latest status from CTOS, showing cached data'
+        error: 'Could not fetch latest status from KYC provider, showing cached data'
       });
     }
   } catch (error) {
-    console.error('Error fetching user CTOS status:', error);
+    console.error('Error fetching user KYC status:', error);
     return res.status(500).json({ 
       error: 'Failed to fetch user KYC status',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -1566,6 +1367,74 @@ router.get('/user-ctos-status', authenticateAndVerifyPhone, async (req: AuthRequ
 
 // Export the helper function for use in other API files
 export { userHasAllKycDocuments };
+
+/**
+ * Helper function to store KYC images from Truestack in the database
+ */
+async function storeKycImages(
+  kycSessionId: string, 
+  images: {
+    front_document_image?: string;
+    back_document_image?: string;
+    face_image?: string;
+    best_frame?: string;
+  }
+): Promise<void> {
+  const documentsToCreate = [];
+
+  if (images.front_document_image) {
+    documentsToCreate.push({
+      kycId: kycSessionId,
+      type: 'front',
+      storageUrl: images.front_document_image,
+      hashSha256: crypto.createHash('sha256').update(images.front_document_image).digest('hex'),
+      updatedAt: new Date()
+    });
+  }
+
+  if (images.back_document_image) {
+    documentsToCreate.push({
+      kycId: kycSessionId,
+      type: 'back',
+      storageUrl: images.back_document_image,
+      hashSha256: crypto.createHash('sha256').update(images.back_document_image).digest('hex'),
+      updatedAt: new Date()
+    });
+  }
+
+  // Use face_image or best_frame for selfie
+  const selfieImage = images.face_image || images.best_frame;
+  if (selfieImage) {
+    documentsToCreate.push({
+      kycId: kycSessionId,
+      type: 'selfie',
+      storageUrl: selfieImage,
+      hashSha256: crypto.createHash('sha256').update(selfieImage).digest('hex'),
+      updatedAt: new Date()
+    });
+  }
+
+  // Upsert documents to prevent duplicates
+  if (documentsToCreate.length > 0) {
+    for (const doc of documentsToCreate) {
+      await db.kycDocument.upsert({
+        where: {
+          kycId_type: {
+            kycId: doc.kycId,
+            type: doc.type
+          }
+        },
+        update: {
+          storageUrl: doc.storageUrl,
+          hashSha256: doc.hashSha256,
+          updatedAt: new Date()
+        },
+        create: doc
+      });
+    }
+    console.log(`Stored ${documentsToCreate.length} documents for KYC session ${kycSessionId}`);
+  }
+}
 
 // Lightweight endpoint for database polling - only checks local database status
 router.get('/session-status/:kycSessionId', authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {

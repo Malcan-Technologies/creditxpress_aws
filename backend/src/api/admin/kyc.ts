@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
+import crypto from 'crypto';
 import { authenticateToken, AuthRequest } from '../../middleware/auth';
 import { prisma } from '../../lib/prisma';
-import { ctosService } from '../../lib/ctosService';
-import { urlConfig, ctosConfig } from '../../lib/config';
+import { truestackService } from '../../lib/truestackService';
+import { urlConfig } from '../../lib/config';
 
 const router = Router();
 
@@ -171,7 +172,7 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
   let kycSession: any = null;
   
   try {
-    const { documentName, documentNumber, platform = 'web' } = req.body;
+    const { documentName, documentNumber, platform = 'Web' } = req.body;
 
     if (!documentName || !documentNumber) {
       return res.status(400).json({
@@ -208,7 +209,7 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
       console.log(`Admin user ${req.user?.userId} - Prevented creating new KYC session, already has approved session: ${existingApprovedSession.id}`);
       return res.status(400).json({ 
         success: false,
-        message: "CTOS API Error: You already have an approved KYC verification. No further verification is needed.",
+        message: "You already have an approved KYC verification. No further verification is needed.",
         error: "Admin user already has approved KYC session",
         existingSessionId: existingApprovedSession.id
       });
@@ -227,100 +228,57 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
     });
 
     try {
-      // Create CTOS transaction
-      console.log('Starting CTOS transaction for admin with params:', {
+      // Create Truestack session
+      console.log('Starting Truestack KYC for admin with params:', {
         ref_id: kycSession.id,
         document_name: documentName,
         document_number: documentNumber,
-        platform,
-        callback_mode: 2
+        platform
       });
 
       // Build completion URL from centralized config  
       const completionUrl = `${urlConfig.api}/kyc-complete`;
 
-      const ctosResponse = await ctosService.createTransaction({
-        ref_id: kycSession.id, // Use kycSession.id as ref_id
+      const truestackResponse = await truestackService.createSession({
+        ref_id: kycSession.id,
         document_name: documentName,
         document_number: documentNumber,
         platform,
-        response_url: completionUrl, // Use admin KYC completion page
-        backend_url: ctosConfig.webhookUrl,
-        callback_mode: 2, // Detailed callback
-        response_mode: 0, // No queries - should make webhook work without URL parameters
-        document_type: '1' // 1 = NRIC (default for Malaysian users)
+        redirect_url: completionUrl,
+        document_type: '1', // MyKad
+        metadata: {
+          user_id: req.user?.userId || '',
+          admin_request: 'true'
+        }
       });
 
-      console.log('CTOS Response received for admin:', ctosResponse);
+      console.log('Truestack Response received for admin:', truestackResponse);
 
-      // Check if CTOS response contains error information (after decryption, errors are at top level)
-      const response = ctosResponse as any;
-      if (response.message === "Failed" || 
-          response.error_code === "103" || 
-          response.description?.includes("Duplicate transaction") ||
-          response.message?.toLowerCase().includes("error")) {
-        
-        console.error('CTOS returned error in response:', ctosResponse);
-        
-        const ctosFailureData = {
-          rawResponse: {
-            message: "Failed", 
-            error_code: response.error_code || "103",
-            description: response.description || response.message || "CTOS transaction failed"
-          },
-          requestedBy: req.user?.userId,
-          adminRequest: true,
-          errorDetails: {
-            timestamp: new Date().toISOString(),
-            originalResponse: JSON.parse(JSON.stringify(ctosResponse))
-          }
-        };
-
-        await prisma.kycSession.update({ 
-          where: { id: kycSession.id },
-          data: {
-            status: 'FAILED',
-            ctosData: ctosFailureData,
-            completedAt: new Date()
-          }
-        });
-        
-        const description = response.description || response.message || "CTOS transaction failed";
-        return res.status(400).json({ 
-          message: `CTOS eKYC Error: ${description}`,
-          error: `CTOS API Error: ${description}`,
-          kycSessionId: kycSession.id,
-          errorCode: response.error_code || "103"
-        });
-      }
-
-      // Update KYC session with CTOS data
-      // Parse expiry date safely
-      let ctosExpiredAt: Date | null = null;
+      // Update KYC session with Truestack data
+      let expiresAt: Date | null = null;
       try {
-        if (ctosResponse.expired_at) {
-          ctosExpiredAt = new Date(ctosResponse.expired_at);
-          // Validate the date
-          if (isNaN(ctosExpiredAt.getTime())) {
-            console.warn('Invalid CTOS expired_at date:', ctosResponse.expired_at);
-            ctosExpiredAt = null;
+        if (truestackResponse.expires_at) {
+          expiresAt = new Date(truestackResponse.expires_at);
+          if (isNaN(expiresAt.getTime())) {
+            console.warn('Invalid Truestack expires_at date:', truestackResponse.expires_at);
+            expiresAt = null;
           }
         }
       } catch (parseError) {
-        console.error('Error parsing CTOS expired_at:', parseError);
-        ctosExpiredAt = null;
+        console.error('Error parsing Truestack expires_at:', parseError);
+        expiresAt = null;
       }
 
       const updatedSession = await prisma.kycSession.update({
         where: { id: kycSession.id },
         data: {
-          ctosOnboardingId: ctosResponse.onboarding_id,
-          ctosOnboardingUrl: ctosResponse.onboarding_url,
-          ctosStatus: 0, // Not opened yet (consistent with user KYC)
-          ctosExpiredAt,
+          ctosOnboardingId: truestackResponse.id,
+          ctosOnboardingUrl: truestackResponse.onboarding_url,
+          ctosStatus: 0, // Not opened yet (pending)
+          ctosExpiredAt: expiresAt,
           ctosData: {
             ...kycSession.ctosData,
-            rawResponse: ctosResponse
+            rawResponse: truestackResponse
           }
         }
       });
@@ -336,28 +294,22 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
         kycId: updatedSession.id,
         onboardingUrl: updatedSession.ctosOnboardingUrl,
         onboardingId: updatedSession.ctosOnboardingId,
-        expiredAt: ctosResponse.expired_at,
+        expiredAt: truestackResponse.expires_at,
         message: "KYC session started successfully. Complete the verification using the provided URL."
       });
 
-    } catch (ctosError: any) {
-      // Mark the KYC session as FAILED and store CTOS error details instead of deleting
-      console.error('CTOS Integration Error for admin:', ctosError);
-      const errorMessage = ctosError instanceof Error ? ctosError.message : 'Failed to create CTOS eKYC transaction';
+    } catch (truestackError: any) {
+      console.error('Truestack Integration Error for admin:', truestackError);
+      const errorMessage = truestackError instanceof Error ? truestackError.message : 'Failed to create KYC session';
       
-      // Extract error details from CTOS error message
       let errorCode = "500";
       let description = errorMessage;
       
-      // Parse specific CTOS error codes if available
-      if (errorMessage.includes("Duplicate transaction found") || errorMessage.includes("103")) {
-        errorCode = "103";
-        description = "Duplicate transaction found";
-      } else if (errorMessage.includes("CTOS API Error:")) {
-        description = errorMessage.replace("CTOS API Error: ", "");
+      if (errorMessage.includes("Truestack API Error:")) {
+        description = errorMessage.replace("Truestack API Error: ", "");
       }
       
-      const ctosFailureData = {
+      const failureData = {
         rawResponse: {
           message: "Failed", 
           error_code: errorCode,
@@ -376,14 +328,14 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
           where: { id: kycSession.id },
           data: {
             status: 'FAILED',
-            ctosData: ctosFailureData,
+            ctosData: failureData,
             completedAt: new Date()
           }
         });
       }
       
       return res.status(400).json({ 
-        message: `CTOS eKYC Error: ${description}`,
+        message: `KYC Error: ${description}`,
         error: errorMessage,
         kycSessionId: kycSession?.id,
         errorCode: errorCode
@@ -392,11 +344,10 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
   } catch (error) {
     console.error('Admin KYC start error:', error);
     
-    // Mark the KYC session as FAILED and store error details instead of deleting
     if (kycSession?.id) {
       try {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
-        const ctosFailureData = {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to start KYC process';
+        const failureData = {
           rawResponse: {
             message: "Failed", 
             error_code: "500",
@@ -414,14 +365,13 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
           where: { id: kycSession.id },
           data: {
             status: 'FAILED',
-            ctosData: ctosFailureData,
+            ctosData: failureData,
             completedAt: new Date()
           }
         });
-        console.log(`Marked admin KYC session ${kycSession.id} as FAILED due to CTOS error`);
+        console.log(`Marked admin KYC session ${kycSession.id} as FAILED`);
       } catch (updateError) {
         console.error('Error updating failed admin KYC session:', updateError);
-        // If update fails, try to delete as fallback
         try {
           await prisma.kycSession.delete({ where: { id: kycSession.id } });
           console.log(`Deleted failed admin KYC session ${kycSession.id} after update failure`);
@@ -431,12 +381,10 @@ router.post('/start-ctos', authenticateToken, adminOrAttestorMiddleware, async (
       }
     }
     
-    // Pass through specific CTOS error message
-    const errorMessage = error instanceof Error ? error.message : 'Failed to start CTOS eKYC process';
+    const errorMessage = error instanceof Error ? error.message : 'Failed to start KYC process';
     return res.status(500).json({ 
-      message: 'Failed to create CTOS eKYC session',
-      error: errorMessage,
-      details: errorMessage.includes('CTOS API Error:') ? errorMessage : `CTOS Integration Error: ${errorMessage}`
+      message: 'Failed to create KYC session',
+      error: errorMessage
     });
   }
 });
@@ -540,115 +488,97 @@ router.get('/admin-ctos-status', authenticateToken, adminOrAttestorMiddleware, a
       });
     }
 
-    // Only call CTOS API for non-approved sessions
+    // Call Truestack API to get latest status
     try {
       if (!kycSession.ctosOnboardingId) {
-        throw new Error('No CTOS onboarding ID found');
+        throw new Error('No KYC onboarding ID found');
       }
       
-      console.log(`🔍 Calling CTOS API for admin session ${kycSession.id}`);
+      console.log(`🔍 Calling Truestack API for admin session ${kycSession.id}`);
       
-      // Try with OPG-Capital prefix first, fallback to original session id (CTOS appends prefix)
-      let ctosStatus;
-      try {
-        console.log(`🔍 Trying CTOS with OPG-Capital prefix: OPG-Capital${kycSession.id}`);
-        ctosStatus = await ctosService.getStatus({
-          ref_id: `OPG-Capital${kycSession.id}`,
-          onboarding_id: kycSession.ctosOnboardingId,
-          platform: 'Web',
-          mode: 2 // Detail mode
-        });
-        console.log(`✅ CTOS Response with prefix:`, { status: ctosStatus.status, result: ctosStatus.result });
-      } catch (error) {
-        console.log('❌ Failed with OPG-Capital prefix, trying original session id...');
-        console.log(`🔍 Trying CTOS with original session id: ${kycSession.id}`);
-        ctosStatus = await ctosService.getStatus({
-          ref_id: kycSession.id,
-          onboarding_id: kycSession.ctosOnboardingId,
-          platform: 'Web',
-          mode: 2 // Detail mode
-        });
-        console.log(`✅ CTOS Response with original:`, { status: ctosStatus.status, result: ctosStatus.result });
-      }
+      const truestackStatus = await truestackService.refreshSessionStatus(kycSession.ctosOnboardingId);
+      const normalized = truestackService.normalizeStatusResponse(truestackStatus);
 
-      console.log(`✅ CTOS Response for admin:`, { status: ctosStatus.status, result: ctosStatus.result });
+      console.log(`✅ Truestack Response for admin:`, { status: normalized.status, result: normalized.result });
 
       // Update our session with the latest status
       await prisma.kycSession.update({
         where: { id: kycSession.id },
         data: {
-          ctosStatus: ctosStatus.status,
-          ctosResult: ctosStatus.result,
-          ctosData: ctosStatus as any,
-          status: ctosStatus.status === 2 ? // Completed
-            (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
-            ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS',
-          completedAt: ctosStatus.status === 2 ? new Date() : null
+          ctosStatus: normalized.status,
+          ctosResult: normalized.result,
+          ctosData: truestackStatus as any,
+          status: normalized.status === 2 ? // Completed
+            (normalized.result === 1 ? 'APPROVED' : 'REJECTED') :
+            normalized.status === 3 ? 'FAILED' : 'IN_PROGRESS',
+          completedAt: normalized.status === 2 ? new Date() : null
         }
       });
 
-      // Store/update document images if available from CTOS response (same logic as user endpoint)
-      const ctosData = ctosStatus as any;
-      const documentsToUpsert = [];
+      // Download and store images if available
+      if (truestackStatus.images) {
+        try {
+          const images = await truestackService.downloadSessionImages(truestackStatus.images);
+          const documentsToUpsert = [];
 
-      // Extract images from step1 and step2 (based on actual CTOS response structure)
-      const frontImage = ctosData.front_document_image || ctosData.step1?.front_document_image;
-      const backImage = ctosData.back_document_image || ctosData.step1?.back_document_image;
-      const faceImage = ctosData.face_image || ctosData.step2?.best_frame;
-
-      if (frontImage) {
-        documentsToUpsert.push({
-          kycId: kycSession.id,
-          type: 'front',
-          storageUrl: `data:image/jpeg;base64,${frontImage}`,
-          hashSha256: require('crypto').createHash('sha256').update(frontImage).digest('hex'),
-          updatedAt: new Date()
-        });
-      }
-
-      if (backImage) {
-        documentsToUpsert.push({
-          kycId: kycSession.id,
-          type: 'back', 
-          storageUrl: `data:image/jpeg;base64,${backImage}`,
-          hashSha256: require('crypto').createHash('sha256').update(backImage).digest('hex'),
-          updatedAt: new Date()
-        });
-      }
-
-      if (faceImage) {
-        documentsToUpsert.push({
-          kycId: kycSession.id,
-          type: 'selfie',
-          storageUrl: `data:image/jpeg;base64,${faceImage}`,
-          hashSha256: require('crypto').createHash('sha256').update(faceImage).digest('hex'),
-          updatedAt: new Date()
-        });
-      }
-
-      // Upsert documents to prevent duplicates
-      if (documentsToUpsert.length > 0) {
-        for (const doc of documentsToUpsert) {
-          await prisma.kycDocument.upsert({
-            where: {
-              kycId_type: {
-                kycId: doc.kycId,
-                type: doc.type
-              }
-            },
-            update: {
-              storageUrl: doc.storageUrl,
-              hashSha256: doc.hashSha256,
+          if (images.front_document_image) {
+            documentsToUpsert.push({
+              kycId: kycSession.id,
+              type: 'front',
+              storageUrl: images.front_document_image,
+              hashSha256: crypto.createHash('sha256').update(images.front_document_image).digest('hex'),
               updatedAt: new Date()
-            },
-            create: doc
-          });
+            });
+          }
+
+          if (images.back_document_image) {
+            documentsToUpsert.push({
+              kycId: kycSession.id,
+              type: 'back', 
+              storageUrl: images.back_document_image,
+              hashSha256: crypto.createHash('sha256').update(images.back_document_image).digest('hex'),
+              updatedAt: new Date()
+            });
+          }
+
+          const selfieImage = images.face_image || images.best_frame;
+          if (selfieImage) {
+            documentsToUpsert.push({
+              kycId: kycSession.id,
+              type: 'selfie',
+              storageUrl: selfieImage,
+              hashSha256: crypto.createHash('sha256').update(selfieImage).digest('hex'),
+              updatedAt: new Date()
+            });
+          }
+
+          // Upsert documents to prevent duplicates
+          if (documentsToUpsert.length > 0) {
+            for (const doc of documentsToUpsert) {
+              await prisma.kycDocument.upsert({
+                where: {
+                  kycId_type: {
+                    kycId: doc.kycId,
+                    type: doc.type
+                  }
+                },
+                update: {
+                  storageUrl: doc.storageUrl,
+                  hashSha256: doc.hashSha256,
+                  updatedAt: new Date()
+                },
+                create: doc
+              });
+            }
+            console.log(`📄 Stored ${documentsToUpsert.length} documents for admin KYC session ${kycSession.id}`);
+          }
+        } catch (imageError) {
+          console.error('Error downloading images from Truestack for admin:', imageError);
         }
-        console.log(`📄 Stored ${documentsToUpsert.length} documents for admin KYC session ${kycSession.id}`);
       }
 
       // Update admin user KYC status if approved
-      if (ctosStatus.status === 2 && ctosStatus.result === 1) {
+      if (normalized.status === 2 && normalized.result === 1) {
         await prisma.user.update({
           where: { id: userId },
           data: { kycStatus: true }
@@ -656,23 +586,23 @@ router.get('/admin-ctos-status', authenticateToken, adminOrAttestorMiddleware, a
         console.log(`✅ Updated admin user ${userId} KYC status to approved`);
       }
 
-      const finalStatus = ctosStatus.status === 2 ? 
-        (ctosStatus.result === 1 ? 'APPROVED' : 'REJECTED') :
-        ctosStatus.status === 3 ? 'FAILED' : 'IN_PROGRESS';
+      const finalStatus = normalized.status === 2 ? 
+        (normalized.result === 1 ? 'APPROVED' : 'REJECTED') :
+        normalized.status === 3 ? 'FAILED' : 'IN_PROGRESS';
 
       return res.json({
         success: true,
         hasKycSession: true,
         status: finalStatus,
-        ctosStatus: ctosStatus.status,
-        ctosResult: ctosStatus.result,
+        ctosStatus: normalized.status,
+        ctosResult: normalized.result,
         isAlreadyApproved: finalStatus === 'APPROVED',
         kycSessionId: kycSession.id
       });
 
-    } catch (ctosError) {
-      console.error('CTOS API error for admin:', ctosError);
-      // Return current database status on CTOS error
+    } catch (truestackError) {
+      console.error('Truestack API error for admin:', truestackError);
+      // Return current database status on error
       return res.json({
         success: true,
         hasKycSession: true,
@@ -681,7 +611,7 @@ router.get('/admin-ctos-status', authenticateToken, adminOrAttestorMiddleware, a
         ctosResult: kycSession.ctosResult,
         isAlreadyApproved: kycSession.status === 'APPROVED',
         kycSessionId: kycSession.id,
-        error: 'Failed to get latest status from CTOS, showing database status'
+        error: 'Failed to get latest status from KYC provider, showing database status'
       });
     }
 
