@@ -59,8 +59,10 @@
 | 53 | POST | api.creditxpress.com.my/api/notifications/mark-all-read | Yes | User | Production | Office Hour (9AM - 5PM) | External | N/A | Mark all notifications as read |
 | 54 | GET | api.creditxpress.com.my/api/settings | No | Public | Production | Office Hour (9AM - 5PM) | External | N/A | Get system settings |
 | 55 | GET | api.creditxpress.com.my/api/settings/company | No | Public | Production | Office Hour (9AM - 5PM) | External | N/A | Get company information |
-| 56 | POST | api.creditxpress.com.my/api/ctos/ekyc | Yes | User | Production | Office Hour (9AM - 5PM) | External | N/A | Submit CTOS eKYC request |
-| 57 | GET | api.creditxpress.com.my/api/ctos/status/:sessionId | Yes | User | Production | Office Hour (9AM - 5PM) | External | N/A | Get CTOS verification status |
+| 56 | POST | api.creditxpress.com.my/api/kyc/start-ctos | Yes | User | Production | Office Hour (9AM - 5PM) | External | N/A | Start eKYC verification (TrueStack) |
+| 57 | GET | api.creditxpress.com.my/api/kyc/user-ctos-status | Yes | User | Production | Office Hour (9AM - 5PM) | External | N/A | Get eKYC verification status |
+| 58 | GET | api.creditxpress.com.my/api/kyc/user-documents | Yes | User | Production | Office Hour (9AM - 5PM) | External | N/A | Get verified KYC documents |
+| 59 | POST | api.creditxpress.com.my/api/ctos/webhook | No | Webhook | Production | 24/7 | External | N/A | eKYC webhook receiver (TrueStack) |
 | 58 | POST | api.creditxpress.com.my/api/docuseal/create-submission | Yes | Admin | Production | Office Hour (9AM - 5PM) | External | N/A | Create DocuSeal submission |
 | 59 | GET | api.creditxpress.com.my/api/docuseal/submission/:id | Yes | Admin | Production | Office Hour (9AM - 5PM) | External | N/A | Get submission status |
 | 60 | POST | api.creditxpress.com.my/api/docuseal/webhook | No (HMAC) | Webhook | Production | Office Hour (9AM - 5PM) | External | N/A | DocuSeal webhook receiver |

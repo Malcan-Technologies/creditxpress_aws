@@ -60,7 +60,7 @@ function sha256(buffer: Buffer): string {
 router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, res: Response) => {
   let kycSession: any = null;
   try {
-    const { applicationId, documentName, documentNumber, platform = 'Web', forceNewSession = false } = req.body;
+    const { applicationId, documentName, documentNumber, platform = 'Web', forceNewSession = false, responseUrl } = req.body;
     if (!req.user?.userId) return res.status(401).json({ message: "Unauthorized" });
 
     if (!documentName || !documentNumber) {
@@ -225,8 +225,8 @@ router.post("/start-ctos", authenticateAndVerifyPhone, async (req: AuthRequest, 
         platform
       });
 
-      // Build completion URL from centralized config  
-      const completionUrl = `${urlConfig.api}/kyc-complete`;
+      // Use responseUrl from client if provided, otherwise build from frontend URL
+      const completionUrl = responseUrl || `${urlConfig.frontend}/kyc-complete`;
 
       const truestackResponse = await truestackService.createSession({
         ref_id: kycSession.id,
