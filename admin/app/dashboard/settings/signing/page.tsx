@@ -573,7 +573,36 @@ export default function AdminSigningSettingsPage() {
         setShowPinStep(false);
         setPin('');
         setConfirmPin('');
-        toast.success('Certificate enrolled successfully');
+        // Add self to Internal Signers if not already there (so they appear in the list)
+        let addedToSigners = false;
+        try {
+          const lookupRes = await fetchWithAdminTokenRefresh<{ success: boolean; alreadyExists: boolean }>(
+            `/api/admin/internal-signers/lookup/${currentUser.icNumber.replace(/[\s-]/g, '')}`
+          );
+          if (lookupRes.success && !lookupRes.alreadyExists && currentUser.fullName && currentUser.email) {
+            const signerRole = (currentUser.role === 'ADMIN' || currentUser.role === 'ATTESTOR') ? currentUser.role : 'ATTESTOR';
+            await fetchWithAdminTokenRefresh('/api/admin/internal-signers', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                icNumber: currentUser.icNumber.replace(/[\s-]/g, ''),
+                fullName: currentUser.fullName,
+                email: currentUser.email,
+                phoneNumber: currentUser.phoneNumber || undefined,
+                signerRole,
+              }),
+            });
+            addedToSigners = true;
+            fetchInternalSigners(); // Refresh list so new signer appears
+          }
+        } catch (addErr) {
+          console.warn('Could not auto-add to internal signers:', addErr);
+        }
+        toast.success(
+          addedToSigners
+            ? 'Certificate enrolled successfully. You have been added to Internal Signers.'
+            : 'Certificate enrolled successfully.'
+        );
       } else {
         throw new Error(certificateResponse.message || 'Certificate enrollment failed');
       }
