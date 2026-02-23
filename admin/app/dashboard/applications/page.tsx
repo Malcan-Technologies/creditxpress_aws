@@ -252,6 +252,7 @@ function AdminApplicationsPageContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [signaturesData, setSignaturesData] = useState<any>(null);
   const [loadingSignatures, setLoadingSignatures] = useState(false);
+  const [reconcilingSignatures, setReconcilingSignatures] = useState(false);
   
   // System-wide late fee grace period setting
   const [lateFeeGraceDays, setLateFeeGraceDays] = useState<number>(3);
@@ -1024,11 +1025,18 @@ function AdminApplicationsPageContent() {
     }
   };
 
-  const fetchSignatureStatus = async (applicationId: string) => {
+  const fetchSignatureStatus = async (
+    applicationId: string,
+    options?: { reconcileFirst?: boolean }
+  ) => {
     if (!applicationId) return;
+    const shouldReconcileFirst = options?.reconcileFirst ?? true;
 
     setLoadingSignatures(true);
     try {
+      if (shouldReconcileFirst)
+        await reconcileSignatureStatus(applicationId, false);
+
       const data = await fetchWithAdminTokenRefresh<{
         success: boolean;
         data: any;
@@ -1045,6 +1053,51 @@ function AdminApplicationsPageContent() {
       setSignaturesData(null);
     } finally {
       setLoadingSignatures(false);
+    }
+  };
+
+  const reconcileSignatureStatus = async (
+    applicationId: string,
+    showToast = true
+  ) => {
+    if (!applicationId) return;
+
+    setReconcilingSignatures(true);
+    try {
+      const response = await fetchWithAdminTokenRefresh<{
+        success: boolean;
+        message?: string;
+        data?: {
+          checked: number;
+          updated: number;
+          skipped: number;
+          errors: number;
+        };
+      }>(`/api/admin/applications/${applicationId}/reconcile-signing-status`, {
+        method: "POST",
+      });
+
+      if (!response?.success) {
+        if (showToast)
+          toast.error(response?.message || "Failed to refresh signing status");
+        return;
+      }
+
+      if (showToast) {
+        const updatedCount = response.data?.updated || 0;
+        if (updatedCount > 0) {
+          toast.success(
+            `Signing status refreshed. ${updatedCount} pending signer(s) moved to PKI signing.`
+          );
+        } else {
+          toast.success("Signing status is already up to date.");
+        }
+      }
+    } catch (error) {
+      console.error("Error reconciling signature status:", error);
+      if (showToast) toast.error("Failed to refresh signing status");
+    } finally {
+      setReconcilingSignatures(false);
     }
   };
 
@@ -3909,10 +3962,30 @@ function AdminApplicationsPageContent() {
                     ) : signaturesData ? (
                       <div>
                         <div className="mb-6">
-                          <h4 className="text-white font-medium mb-4 flex items-center">
-                            <PencilSquareIcon className="h-5 w-5 mr-2 text-purple-400" />
-                            Document Signature Status
-                          </h4>
+                          <div className="mb-4 flex items-center justify-between">
+                            <h4 className="text-white font-medium flex items-center">
+                              <PencilSquareIcon className="h-5 w-5 mr-2 text-purple-400" />
+                              Document Signature Status
+                            </h4>
+                            <button
+                              onClick={async () => {
+                                if (!selectedApplication?.id) return;
+                                await reconcileSignatureStatus(selectedApplication.id, true);
+                                await fetchSignatureStatus(selectedApplication.id, {
+                                  reconcileFirst: false,
+                                });
+                              }}
+                              disabled={reconcilingSignatures || loadingSignatures}
+                              className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-gray-700 text-gray-100 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <ArrowPathIcon
+                                className={`h-3.5 w-3.5 mr-1.5 ${
+                                  reconcilingSignatures ? "animate-spin" : ""
+                                }`}
+                              />
+                              Refresh signing status
+                            </button>
+                          </div>
                           <div className="bg-gray-800/30 rounded-lg border border-gray-700/30 p-4 mb-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                               <div>

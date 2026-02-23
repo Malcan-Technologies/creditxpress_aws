@@ -162,9 +162,23 @@ export class SigningService {
    */
   private async getOrCreatePKISession(multiSignatoryData: any, signingContext: any, correlationId: string): Promise<any> {
     const log = createCorrelatedLogger(correlationId);
+    const pkiSessionModel = (prisma as any).pKISession;
     
-    // For now, create a simple in-memory session
-    // In production, this would be stored in database
+    const existingSession = pkiSessionModel
+      ? await pkiSessionModel.findFirst({
+          where: { submissionId: multiSignatoryData.submissionId },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+
+    if (existingSession?.sessionData) {
+      log.info('Using existing PKI session', {
+        sessionId: existingSession.sessionId,
+        submissionId: existingSession.submissionId,
+      });
+      return existingSession.sessionData;
+    }
+
     const session = {
       id: `pki_${multiSignatoryData.submissionId}_${Date.now()}`,
       submissionId: multiSignatoryData.submissionId,
@@ -174,12 +188,32 @@ export class SigningService {
       signingContext,
       status: 'initiated',
       createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       originalPdfUrl: multiSignatoryData.originalPdfUrl
     };
+
+    if (pkiSessionModel) {
+      await pkiSessionModel.create({
+        data: {
+          sessionId: session.id,
+          submissionId: session.submissionId,
+          templateId: multiSignatoryData.template?.id?.toString() || null,
+          status: session.status,
+          currentSignatory: session.currentSubmitter,
+          allSignatories: session.allSubmitters,
+          signingOrder: Array.isArray(signingContext?.signingOrder) ? signingContext.signingOrder : [],
+          currentSignatoryIndex: signingContext?.currentSignatoryIndex || 0,
+          totalSignatories: signingContext?.totalSignatories || 1,
+          currentPdfUrl: null,
+          originalPdfUrl: session.originalPdfUrl || null,
+          sessionData: session,
+          expiresAt: session.expiresAt,
+          createdAt: session.createdAt,
+        },
+      });
+    }
     
     log.info('Created PKI session', { sessionId: session.id, submissionId: session.submissionId });
-    
-    // TODO: Store in persistent storage (database/redis)
     return session;
   }
   
@@ -187,18 +221,26 @@ export class SigningService {
    * Get PKI session by ID
    */
   private async getPKISession(sessionId: string, correlationId: string): Promise<any> {
-    // TODO: Retrieve from persistent storage
-    // For now, return mock session
+    const pkiSessionModel = (prisma as any).pKISession;
+    if (!pkiSessionModel) return null;
+
+    const sessionRecord = await pkiSessionModel.findUnique({
+      where: { sessionId },
+    });
+
+    if (!sessionRecord) return null;
+    if (sessionRecord.sessionData) return sessionRecord.sessionData;
+
+    // Fallback for legacy rows without serialized payload.
     return {
-      id: sessionId,
-      submissionId: 'mock_submission',
-      currentSubmitter: {
-        userId: 'mock_user',
-        fullName: 'Mock User',
-        email: 'mock@example.com',
-        role: 'Borrower',
-        signatureFields: []
-      }
+      id: sessionRecord.sessionId,
+      submissionId: sessionRecord.submissionId,
+      currentSubmitter: sessionRecord.currentSignatory,
+      allSubmitters: sessionRecord.allSignatories,
+      status: sessionRecord.status,
+      originalPdfUrl: sessionRecord.originalPdfUrl,
+      createdAt: sessionRecord.createdAt,
+      expiresAt: sessionRecord.expiresAt,
     };
   }
   
@@ -208,8 +250,26 @@ export class SigningService {
   private async updatePKISessionStatus(sessionId: string, status: string, correlationId: string): Promise<void> {
     const log = createCorrelatedLogger(correlationId);
     log.info('Updating PKI session status', { sessionId, status });
-    
-    // TODO: Update in persistent storage
+
+    const pkiSessionModel = (prisma as any).pKISession;
+    if (!pkiSessionModel) return;
+
+    const existing = await pkiSessionModel.findUnique({
+      where: { sessionId },
+    });
+    if (!existing) return;
+
+    const sessionData = existing.sessionData || {};
+    await pkiSessionModel.update({
+      where: { sessionId },
+      data: {
+        status,
+        sessionData: {
+          ...(sessionData as Record<string, any>),
+          status,
+        },
+      },
+    });
   }
   
   /**

@@ -12361,6 +12361,152 @@ router.get('/applications/:applicationId/signatures', authenticateToken, async (
 });
 
 /**
+ * POST /api/admin/applications/:applicationId/reconcile-signing-status
+ * Reconcile stale signatory statuses using live DocuSeal submitter state.
+ */
+router.post(
+	'/applications/:applicationId/reconcile-signing-status',
+	authenticateToken,
+	requireAdminOrAttestor as unknown as RequestHandler,
+	async (req: AuthRequest, res: Response) => {
+		try {
+			const { applicationId } = req.params;
+
+			if (!applicationId) {
+				return res.status(400).json({
+					success: false,
+					message: 'Application ID is required'
+				});
+			}
+
+			const application = await prisma.loanApplication.findUnique({
+				where: { id: applicationId },
+				include: {
+					loan: {
+						include: {
+							signatories: true
+						}
+					}
+				}
+			});
+
+			if (!application || !application.loan) {
+				return res.status(404).json({
+					success: false,
+					message: 'Application or loan not found'
+				});
+			}
+
+			const pendingSignatories = application.loan.signatories.filter(
+				(signatory) => signatory.status === 'PENDING' && !!signatory.docusealSubmitterId
+			);
+
+			const summary = {
+				checked: 0,
+				updated: 0,
+				skipped: 0,
+				errors: 0
+			};
+			const details: Array<{
+				signatoryId: string;
+				signatoryType: string;
+				submitterId?: string;
+				action: 'updated' | 'skipped' | 'error';
+				reason: string;
+			}> = [];
+
+			for (const signatory of pendingSignatories) {
+				const submitterId = signatory.docusealSubmitterId!;
+				summary.checked += 1;
+
+				try {
+					const submitterResponse = await fetch(`${docusealConfig.apiUrl}/api/submitters/${submitterId}`, {
+						headers: {
+							'X-Auth-Token': docusealConfig.apiToken,
+							'Accept': 'application/json'
+						}
+					});
+
+					if (!submitterResponse.ok) {
+						summary.errors += 1;
+						details.push({
+							signatoryId: signatory.id,
+							signatoryType: signatory.signatoryType,
+							submitterId,
+							action: 'error',
+							reason: `DocuSeal submitter fetch failed with status ${submitterResponse.status}`
+						});
+						continue;
+					}
+
+					const submitterData = await submitterResponse.json();
+					const submitterStatus = submitterData?.status;
+
+					if (submitterStatus !== 'completed') {
+						summary.skipped += 1;
+						details.push({
+							signatoryId: signatory.id,
+							signatoryType: signatory.signatoryType,
+							submitterId,
+							action: 'skipped',
+							reason: `Submitter status is ${submitterStatus || 'unknown'}`
+						});
+						continue;
+					}
+
+					await prisma.loanSignatory.update({
+						where: { id: signatory.id },
+						data: {
+							status: 'PENDING_PKI_SIGNING',
+							signingUrl: null,
+							signingSlug: null,
+							slug: null,
+							updatedAt: new Date()
+						}
+					});
+
+					summary.updated += 1;
+					details.push({
+						signatoryId: signatory.id,
+						signatoryType: signatory.signatoryType,
+						submitterId,
+						action: 'updated',
+						reason: 'DocuSeal submitter was completed; moved to PENDING_PKI_SIGNING'
+					});
+				} catch (error) {
+					summary.errors += 1;
+					details.push({
+						signatoryId: signatory.id,
+						signatoryType: signatory.signatoryType,
+						submitterId,
+						action: 'error',
+						reason: error instanceof Error ? error.message : 'Unknown reconciliation error'
+					});
+				}
+			}
+
+			return res.json({
+				success: true,
+				message: 'Signing status reconciliation completed',
+				data: {
+					applicationId,
+					loanId: application.loan.id,
+					...summary,
+					details
+				}
+			});
+		} catch (error: any) {
+			console.error('Error reconciling signing status:', error);
+			return res.status(500).json({
+				success: false,
+				message: 'Failed to reconcile signing status',
+				error: error.message
+			});
+		}
+	}
+);
+
+/**
  * @swagger
  * /api/admin/applications/pin-sign:
  *   post:

@@ -1045,19 +1045,44 @@ router.get('/pki/session/:sessionId', verifyApiKey, async (req, res) => {
     }
     
     log.info('Getting PKI session status', { sessionId });
-    
-    // TODO: Implement session retrieval from persistent storage
-    // For now, return mock data
+
+    const pkiSessionModel = (prisma as any).pKISession;
+    if (!pkiSessionModel) {
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'PKI session model is not available',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+
+    const sessionRecord = await pkiSessionModel.findUnique({
+      where: { sessionId },
+    });
+
+    if (!sessionRecord) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'PKI session not found',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+
     const session = {
-      id: sessionId,
-      status: 'awaiting_otp',
-      submissionId: 'mock_submission',
-      currentSignatory: {
-        role: 'Borrower',
-        email: 'borrower@example.com'
-      },
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+      id: sessionRecord.sessionId,
+      status: sessionRecord.status,
+      submissionId: sessionRecord.submissionId,
+      templateId: sessionRecord.templateId,
+      currentSignatory: sessionRecord.currentSignatory,
+      allSignatories: sessionRecord.allSignatories,
+      signingOrder: sessionRecord.signingOrder || [],
+      currentSignatoryIndex: sessionRecord.currentSignatoryIndex,
+      totalSignatories: sessionRecord.totalSignatories,
+      createdAt: sessionRecord.createdAt,
+      updatedAt: sessionRecord.updatedAt,
+      expiresAt: sessionRecord.expiresAt,
+      sessionData: sessionRecord.sessionData,
     };
     
     res.status(200).json({
@@ -1075,6 +1100,83 @@ router.get('/pki/session/:sessionId', verifyApiKey, async (req, res) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Session status check failed',
+      correlationId: req.correlationId,
+    });
+  }
+});
+
+/**
+ * PKI Session Status by submission
+ * GET /api/pki/session/by-submission/:submissionId
+ */
+router.get('/pki/session/by-submission/:submissionId', verifyApiKey, async (req, res) => {
+  const log = createCorrelatedLogger(req.correlationId!);
+
+  try {
+    const { submissionId } = req.params;
+
+    if (!submissionId) {
+      res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing submissionId parameter',
+      });
+      return;
+    }
+
+    const pkiSessionModel = (prisma as any).pKISession;
+    if (!pkiSessionModel) {
+      res.status(500).json({
+        error: 'Internal Server Error',
+        message: 'PKI session model is not available',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+
+    log.info('Getting PKI session status by submission', { submissionId });
+
+    const sessionRecord = await pkiSessionModel.findFirst({
+      where: { submissionId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!sessionRecord) {
+      res.status(404).json({
+        error: 'Not Found',
+        message: 'No PKI session found for submission',
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Session status retrieved',
+      data: {
+        id: sessionRecord.sessionId,
+        status: sessionRecord.status,
+        submissionId: sessionRecord.submissionId,
+        templateId: sessionRecord.templateId,
+        currentSignatory: sessionRecord.currentSignatory,
+        allSignatories: sessionRecord.allSignatories,
+        signingOrder: sessionRecord.signingOrder || [],
+        currentSignatoryIndex: sessionRecord.currentSignatoryIndex,
+        totalSignatories: sessionRecord.totalSignatories,
+        createdAt: sessionRecord.createdAt,
+        updatedAt: sessionRecord.updatedAt,
+        expiresAt: sessionRecord.expiresAt,
+        sessionData: sessionRecord.sessionData,
+      },
+      correlationId: req.correlationId,
+    });
+  } catch (error) {
+    log.error('PKI session status by submission check failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'PKI session status by submission check failed',
       correlationId: req.correlationId,
     });
   }

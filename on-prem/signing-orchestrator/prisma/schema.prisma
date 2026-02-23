@@ -166,3 +166,28 @@ model AgreementTemplate {
   @@index([isActive])
   @@map("agreement_templates")
 }
+
+/// PKI signing session tracking for resume/re-entry flows
+model PKISession {
+  id                    String   @id @default(cuid())
+  sessionId             String   @unique
+  submissionId          String
+  templateId            String?
+  status                String   @default("in_progress")
+  currentSignatory      Json?
+  allSignatories        Json?
+  signingOrder          String[] @default([])
+  currentSignatoryIndex Int      @default(0)
+  totalSignatories      Int      @default(1)
+  currentPdfUrl         String?
+  originalPdfUrl        String?
+  sessionData           Json?
+  expiresAt             DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([submissionId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("pki_sessions")
+}

@@ -446,7 +446,7 @@ class DocuSealService {
             email: companySigningConfig.companyEmail,
             role: 'Company',
             fields: companyFields, // Company gets pre-filled data but must sign manually
-            completed_redirect_url: `${urlConfig.admin}/pki-signing?application=${applicationId}&signatory=COMPANY`
+            completed_redirect_url: `${urlConfig.admin}/pki-signing-entry?application=${applicationId}&signatory=COMPANY`
             // Note: completed: true removed - company must sign manually
           },
           {
@@ -472,7 +472,7 @@ class DocuSealService {
             name: companySigningConfig.witnessName,
             email: companySigningConfig.witnessEmail,
             role: 'Witness',
-            completed_redirect_url: `${urlConfig.admin}/pki-signing?application=${applicationId}&signatory=WITNESS`
+            completed_redirect_url: `${urlConfig.admin}/pki-signing-entry?application=${applicationId}&signatory=WITNESS`
             // No fields array - witness signs but doesn't need pre-filled data
           }
         ],
@@ -1386,6 +1386,7 @@ class DocuSealService {
           (signatory.status === 'PENDING' && (signatory.signingSlug || signatory.signingUrl)) ||
           signatory.status === 'PENDING_PKI_SIGNING'
         );
+        const shouldExposeDocuSealUrl = signatory.status === 'PENDING';
         
         console.log(`📋 Signatory ${signatory.signatoryType}: status=${signatory.status}, canSign=${canSign}, hasSigningUrl=${!!(signatory.signingSlug || signatory.signingUrl)}`);
         
@@ -1397,7 +1398,9 @@ class DocuSealService {
           role: signatory.role,
           status: signatory.status,
           signedAt: signatory.signedAt,
-          signingUrl: this.generateSigningUrl(signatory.signingSlug || signatory.signingUrl),
+          signingUrl: shouldExposeDocuSealUrl
+            ? this.generateSigningUrl(signatory.signingSlug || signatory.signingUrl)
+            : null,
           canSign
         };
       });

@@ -394,13 +394,33 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
     const submitter = await submissionResponse.json();
     const submissionId = submitter.submission_id;
     const submitterRole = submitter.role;
+    const submitterStatus = submitter.status;
 
     if (!submissionId) {
-      console.warn('No submission ID found in submitter data');
+      console.warn('No submission ID found in submitter data', {
+        submitterId,
+        submitterRole,
+        submitterStatus
+      });
       return;
     }
 
-    console.log('📋 Found submission ID from submitter', { submitterId, submissionId, role: submitterRole });
+    console.log('📋 Found submission ID from submitter', {
+      submitterId,
+      submissionId,
+      role: submitterRole,
+      status: submitterStatus
+    });
+
+    if (submitterStatus !== 'completed') {
+      console.warn('Skipping PKI transition because DocuSeal submitter is not completed', {
+        submitterId,
+        submissionId,
+        submitterRole,
+        submitterStatus
+      });
+      return;
+    }
 
     // Find the loan by DocuSeal submission ID
     const loan = await prisma.loan.findFirst({
@@ -426,7 +446,10 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
         data: { status: 'PENDING_PKI_SIGNING' }
       });
       
-      console.log(`✅ Application ${loan.application.id} status updated to PENDING_PKI_SIGNING (borrower completed DocuSeal)`);
+      console.log(`✅ Application ${loan.application.id} status updated to PENDING_PKI_SIGNING (borrower completed DocuSeal)`, {
+        submissionId,
+        submitterId
+      });
     } else {
       console.log(`⏭️ Skipping application status update for ${submitterRole} - only borrower signing triggers application PENDING_PKI_SIGNING`);
     }
@@ -444,21 +467,49 @@ async function handleFormCompletedForPKI(payload: any): Promise<void> {
         const updatedSignatory = await prisma.loanSignatory.updateMany({
           where: {
             loanId: loan.id,
-            signatoryType: signatoryType
+            signatoryType: signatoryType,
+            status: {
+              not: 'SIGNED'
+            }
           },
           data: {
             status: 'PENDING_PKI_SIGNING',
+            signingUrl: null,
+            signingSlug: null,
+            slug: null,
             updatedAt: new Date()
           }
         });
-        
-        console.log(`✅ Updated ${updatedSignatory.count} signatory record(s) to PENDING_PKI_SIGNING for ${signatoryType} (${submitterRole} completed DocuSeal)`);
+
+        if (updatedSignatory.count === 0) {
+          console.warn('No signatory rows moved to PENDING_PKI_SIGNING (already signed or missing row)', {
+            loanId: loan.id,
+            submissionId,
+            submitterId,
+            submitterRole,
+            signatoryType
+          });
+        } else {
+          console.log(`✅ Updated ${updatedSignatory.count} signatory record(s) to PENDING_PKI_SIGNING for ${signatoryType} (${submitterRole} completed DocuSeal)`, {
+            loanId: loan.id,
+            submissionId,
+            clearedSigningUrl: true
+          });
+        }
       } catch (signatoryError) {
-        console.error(`❌ Failed to update signatory status for ${signatoryType} (${submitterRole}):`, signatoryError);
+        console.error(`❌ Failed to update signatory status for ${signatoryType} (${submitterRole}):`, signatoryError, {
+          loanId: loan.id,
+          submissionId,
+          submitterId
+        });
         // Don't throw - continue with other processing
       }
     } else {
-      console.warn(`Unknown submitter role for signatory mapping: ${submitterRole}`);
+      console.warn(`Unknown submitter role for signatory mapping: ${submitterRole}`, {
+        submitterId,
+        submissionId,
+        availableRoles: ['Borrower', 'Company', 'Witness']
+      });
     }
     
   } catch (error) {

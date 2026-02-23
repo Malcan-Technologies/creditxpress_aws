@@ -3,6 +3,7 @@ import { verifyDocuSealWebhook, rawBodyMiddleware } from '../middleware/auth';
 import { createCorrelatedLogger } from '../utils/logger';
 import { DocuSealWebhookPayload } from '../types';
 import { SigningService } from '../services/SigningService';
+import { prisma } from '../utils/database';
 
 // PKI-specific interfaces
 interface PKISession {
@@ -408,17 +409,88 @@ async function requestPKISigningOTP(userId: string, email: string, correlationId
   }
 }
 
-/**
- * Save PKI session (in-memory for now, will be moved to database)
- */
-const pkiSessions = new Map<string, PKISession>();
+function mapRecordToPKISession(record: any): PKISession {
+  const now = new Date();
+  return {
+    id: record.sessionId,
+    submissionId: record.submissionId,
+    templateId: record.templateId || 'unknown',
+    currentSignatory: (record.currentSignatory as PKISession['currentSignatory']) || {
+      uuid: '',
+      userId: '',
+      fullName: '',
+      email: '',
+      role: '',
+      certificateStatus: 'checking',
+      otpRequested: false,
+      signatureCoordinates: [],
+      status: 'intercepted',
+    },
+    allSignatories: (record.allSignatories as PKISession['allSignatories']) || [],
+    signingOrder: record.signingOrder || [],
+    currentSignatoryIndex: record.currentSignatoryIndex ?? 0,
+    totalSignatories: record.totalSignatories ?? 1,
+    currentPdfUrl: record.currentPdfUrl || '',
+    originalPdfUrl: record.originalPdfUrl || '',
+    submissionStatus: (record.status as PKISession['submissionStatus']) || 'in_progress',
+    createdAt: record.createdAt || now,
+    expiresAt: record.expiresAt || now,
+  };
+}
+
+const fallbackPKISessions = new Map<string, PKISession>();
 
 async function savePKISession(session: PKISession): Promise<void> {
-  pkiSessions.set(session.id, session);
+  const pkiSessionModel = (prisma as any).pKISession;
+  if (!pkiSessionModel) {
+    fallbackPKISessions.set(session.id, session);
+    return;
+  }
+
+  await pkiSessionModel.upsert({
+    where: { sessionId: session.id },
+    update: {
+      submissionId: session.submissionId,
+      templateId: session.templateId,
+      status: session.submissionStatus,
+      currentSignatory: session.currentSignatory as any,
+      allSignatories: session.allSignatories as any,
+      signingOrder: session.signingOrder,
+      currentSignatoryIndex: session.currentSignatoryIndex,
+      totalSignatories: session.totalSignatories,
+      currentPdfUrl: session.currentPdfUrl || null,
+      originalPdfUrl: session.originalPdfUrl || null,
+      sessionData: session as any,
+      expiresAt: session.expiresAt,
+    },
+    create: {
+      sessionId: session.id,
+      submissionId: session.submissionId,
+      templateId: session.templateId,
+      status: session.submissionStatus,
+      currentSignatory: session.currentSignatory as any,
+      allSignatories: session.allSignatories as any,
+      signingOrder: session.signingOrder,
+      currentSignatoryIndex: session.currentSignatoryIndex,
+      totalSignatories: session.totalSignatories,
+      currentPdfUrl: session.currentPdfUrl || null,
+      originalPdfUrl: session.originalPdfUrl || null,
+      sessionData: session as any,
+      expiresAt: session.expiresAt,
+      createdAt: session.createdAt,
+    },
+  });
 }
 
 async function getPKISession(sessionId: string): Promise<PKISession | null> {
-  return pkiSessions.get(sessionId) || null;
+  const pkiSessionModel = (prisma as any).pKISession;
+  if (!pkiSessionModel) return fallbackPKISessions.get(sessionId) || null;
+
+  const record = await pkiSessionModel.findUnique({
+    where: { sessionId },
+  });
+  if (!record) return null;
+  return mapRecordToPKISession(record);
 }
 
 /**
