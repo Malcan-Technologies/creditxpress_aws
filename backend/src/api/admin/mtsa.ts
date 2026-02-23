@@ -1,8 +1,31 @@
 import { Router, Response } from 'express';
 import { authenticateToken, AuthRequest } from '../../middleware/auth';
 import { signingConfig } from '../../lib/config';
+import { getS3ObjectStream } from '../../lib/storage';
 
 const router = Router();
+
+/** Convert KYC image URL/key to base64 (data:, S3 key, or HTTP URL). */
+async function imageUrlOrKeyToBase64(urlOrKey: string): Promise<string> {
+  if (urlOrKey.startsWith('data:image/') || urlOrKey.startsWith('data:')) {
+    const commaIndex = urlOrKey.indexOf(',');
+    if (commaIndex !== -1) return urlOrKey.substring(commaIndex + 1);
+  }
+  if (/^[A-Za-z0-9+/=]+$/.test(urlOrKey) && urlOrKey.length > 100) {
+    return urlOrKey; // Already raw base64
+  }
+  if (urlOrKey.startsWith('http://') || urlOrKey.startsWith('https://')) {
+    const response = await fetch(urlOrKey);
+    if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
+    return Buffer.from(await response.arrayBuffer()).toString('base64');
+  }
+  const { stream } = await getS3ObjectStream(urlOrKey);
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString('base64');
+}
 
 // Import permissions system
 import { requireAdminOrAttestor } from '../../lib/permissions';
@@ -495,22 +518,12 @@ router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware
       verificationData
     });
 
-    // Helper function to extract base64 data from data URL
-    const extractBase64Data = (dataUrl: string): string => {
-      if (dataUrl.startsWith('data:')) {
-        const commaIndex = dataUrl.indexOf(',');
-        if (commaIndex !== -1) {
-          return dataUrl.substring(commaIndex + 1);
-        }
-      }
-      // If not a data URL, assume it's already base64 data
-      return dataUrl;
-    };
-
-    // Extract base64 data from URLs (remove data:image/jpeg;base64, prefix)
-    const nricFrontBase64 = extractBase64Data(nricFrontUrl);
-    const nricBackBase64 = extractBase64Data(nricBackUrl);
-    const selfieImageBase64 = extractBase64Data(selfieImageUrl);
+    // Convert KYC image URLs/keys to base64 (handles data:, S3 keys, HTTP URLs)
+    const [nricFrontBase64, nricBackBase64, selfieImageBase64] = await Promise.all([
+      imageUrlOrKeyToBase64(nricFrontUrl),
+      imageUrlOrKeyToBase64(nricBackUrl),
+      imageUrlOrKeyToBase64(selfieImageUrl),
+    ]);
 
     console.log('Base64 data extracted:', {
       nricFrontLength: nricFrontBase64.length,
@@ -694,18 +707,6 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
       adminUserId: req.user?.userId 
     });
 
-    // Helper function to extract base64 data from data URL
-    const extractBase64Data = (dataUrl: string): string => {
-      if (dataUrl.startsWith('data:')) {
-        const commaIndex = dataUrl.indexOf(',');
-        if (commaIndex !== -1) {
-          return dataUrl.substring(commaIndex + 1);
-        }
-      }
-      // If not a data URL, assume it's already base64 data
-      return dataUrl;
-    };
-
     // Prepare revocation data
     const revocationData: any = {
       userId,
@@ -724,12 +725,14 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
       adminUserId: req.user?.userId
     };
 
-    // Add appropriate images based on idType
+    // Add appropriate images based on idType (convert URLs/keys to base64)
     if (idType === 'N') {
-      revocationData.nricFront = extractBase64Data(nricFrontUrl);
-      revocationData.nricBack = extractBase64Data(nricBackUrl);
+      [revocationData.nricFront, revocationData.nricBack] = await Promise.all([
+        imageUrlOrKeyToBase64(nricFrontUrl!),
+        imageUrlOrKeyToBase64(nricBackUrl!),
+      ]);
     } else if (idType === 'P') {
-      revocationData.passportImage = extractBase64Data(passportImageUrl);
+      revocationData.passportImage = await imageUrlOrKeyToBase64(passportImageUrl!);
     }
 
     console.log('Revocation data prepared:', {

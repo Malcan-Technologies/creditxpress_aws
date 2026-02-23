@@ -2,8 +2,43 @@ import { Router } from 'express';
 import { authenticateAndVerifyPhone, AuthRequest } from '../middleware/auth';
 import { Response } from 'express';
 import { signingConfig } from '../lib/config';
+import { getS3ObjectStream } from '../lib/storage';
 
 const router = Router();
+
+/**
+ * Convert KYC image URL/key to base64.
+ * Handles: data: URLs (extract), S3 keys (fetch from S3), HTTP URLs (fetch).
+ */
+async function imageUrlOrKeyToBase64(urlOrKey: string): Promise<string> {
+  // data:image/...;base64,xxx
+  if (urlOrKey.startsWith('data:image/') || urlOrKey.startsWith('data:')) {
+    const commaIndex = urlOrKey.indexOf(',');
+    if (commaIndex !== -1) {
+      return urlOrKey.substring(commaIndex + 1);
+    }
+  }
+  // Already raw base64 (e.g. from alternate flow)
+  if (/^[A-Za-z0-9+/=]+$/.test(urlOrKey) && urlOrKey.length > 100) {
+    return urlOrKey;
+  }
+  // HTTP/HTTPS URL - fetch and convert
+  if (urlOrKey.startsWith('http://') || urlOrKey.startsWith('https://')) {
+    const response = await fetch(urlOrKey);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return buffer.toString('base64');
+  }
+  // S3 key - fetch from S3 and convert
+  const { stream } = await getS3ObjectStream(urlOrKey);
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString('base64');
+}
 
 /**
  * @swagger
@@ -371,22 +406,12 @@ router.post('/request-certificate', authenticateAndVerifyPhone, async (req: Auth
       hasSelfie: !!selfieImageUrl
     });
 
-    // Helper function to extract base64 data from data URL
-    const extractBase64Data = (dataUrl: string): string => {
-      if (dataUrl.startsWith('data:')) {
-        const commaIndex = dataUrl.indexOf(',');
-        if (commaIndex !== -1) {
-          return dataUrl.substring(commaIndex + 1);
-        }
-      }
-      // If not a data URL, assume it's already base64 data
-      return dataUrl;
-    };
-
-    // Extract base64 data from URLs (remove data:image/jpeg;base64, prefix)
-    const nricFrontBase64 = extractBase64Data(nricFrontUrl);
-    const nricBackBase64 = extractBase64Data(nricBackUrl);
-    const selfieImageBase64 = extractBase64Data(selfieImageUrl);
+    // Convert KYC image URLs/keys to base64 (handles data: URLs, S3 keys, HTTP URLs)
+    const [nricFrontBase64, nricBackBase64, selfieImageBase64] = await Promise.all([
+      imageUrlOrKeyToBase64(nricFrontUrl),
+      imageUrlOrKeyToBase64(nricBackUrl),
+      imageUrlOrKeyToBase64(selfieImageUrl),
+    ]);
 
     console.log('Base64 data extracted:', {
       nricFrontLength: nricFrontBase64.length,
