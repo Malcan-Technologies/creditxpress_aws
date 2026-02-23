@@ -27,6 +27,11 @@ async function imageUrlOrKeyToBase64(urlOrKey: string): Promise<string> {
   return Buffer.concat(chunks).toString('base64');
 }
 
+/** Normalize UserID per MTSA spec: 12-digit NRIC without dashes/spaces */
+function normalizeUserId(userId: string): string {
+  return String(userId || '').replace(/[\s-]/g, '');
+}
+
 // Import permissions system
 import { requireAdminOrAttestor } from '../../lib/permissions';
 
@@ -69,10 +74,11 @@ router.get('/cert-info/:userId', authenticateToken, adminOrAttestorMiddleware, a
       });
     }
 
-    console.log('Admin getting certificate info for user:', { userId, adminUserId: req.user?.userId });
+    const normalizedUserId = normalizeUserId(userId);
+    console.log('Admin getting certificate info for user:', { userId: normalizedUserId, adminUserId: req.user?.userId });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${signingConfig.url}/api/cert/${userId}`, {
+    const response = await fetch(`${signingConfig.url}/api/cert/${normalizedUserId}`, {
       method: 'GET',
       headers: {
         'X-API-Key': signingConfig.apiKey,
@@ -349,8 +355,9 @@ router.post('/request-otp', authenticateToken, adminOrAttestorMiddleware, async 
       });
     }
 
+    const normalizedUserId = normalizeUserId(userId);
     console.log('Admin requesting OTP for user:', { 
-      userId, 
+      userId: normalizedUserId, 
       usage, 
       emailAddress,
       adminUserId: req.user?.userId 
@@ -364,7 +371,7 @@ router.post('/request-otp', authenticateToken, adminOrAttestorMiddleware, async 
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userId,
+        userId: normalizedUserId,
         usage,
         emailAddress,
         requestedBy: 'admin',
@@ -506,8 +513,9 @@ router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware
       });
     }
 
+    const normalizedUserId = normalizeUserId(userId);
     console.log('Admin requesting certificate enrollment for user:', { 
-      userId, 
+      userId: normalizedUserId, 
       fullName, 
       emailAddress,
       userType,
@@ -539,7 +547,7 @@ router.post('/request-certificate', authenticateToken, adminOrAttestorMiddleware
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userId,
+        userId: normalizedUserId,
         fullName,
         emailAddress,
         mobileNo,
@@ -698,8 +706,9 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
       });
     }
 
+    const normalizedUserId = normalizeUserId(userId);
     console.log('Admin revoking certificate for user:', { 
-      userId, 
+      userId: normalizedUserId, 
       certSerialNo, 
       revokeReason, 
       revokeBy, 
@@ -709,7 +718,7 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
 
     // Prepare revocation data
     const revocationData: any = {
-      userId,
+      userId: normalizedUserId,
       certSerialNo,
       revokeReason,
       revokeBy,
@@ -736,7 +745,7 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
     }
 
     console.log('Revocation data prepared:', {
-      userId,
+      userId: normalizedUserId,
       certSerialNo,
       revokeReason,
       revokeBy,
@@ -760,7 +769,7 @@ router.post('/revoke-certificate', authenticateToken, adminOrAttestorMiddleware,
     const data = await response.json();
     
     console.log('Certificate revocation response:', { 
-      userId, 
+      userId: normalizedUserId, 
       certSerialNo,
       statusCode: data.data?.statusCode,
       success: data.success,

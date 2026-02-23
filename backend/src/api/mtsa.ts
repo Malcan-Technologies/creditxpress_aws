@@ -40,6 +40,11 @@ async function imageUrlOrKeyToBase64(urlOrKey: string): Promise<string> {
   return Buffer.concat(chunks).toString('base64');
 }
 
+/** Normalize UserID per MTSA spec: 12-digit NRIC without dashes/spaces */
+function normalizeUserId(userId: string): string {
+  return String(userId || '').replace(/[\s-]/g, '');
+}
+
 /**
  * @swagger
  * tags:
@@ -81,10 +86,11 @@ router.get('/cert-info/:userId', authenticateAndVerifyPhone, async (req: AuthReq
       });
     }
 
-    console.log('Getting certificate info for user:', { userId });
+    const normalizedUserId = normalizeUserId(userId);
+    console.log('Getting certificate info for user:', { userId: normalizedUserId });
 
     // Make request to signing orchestrator
-    const response = await fetch(`${signingConfig.url}/api/cert/${userId}`, {
+    const response = await fetch(`${signingConfig.url}/api/cert/${normalizedUserId}`, {
       method: 'GET',
       headers: {
         'X-API-Key': signingConfig.apiKey,
@@ -176,7 +182,10 @@ router.post('/request-otp', authenticateAndVerifyPhone, async (req: AuthRequest,
       });
     }
 
-    console.log('Requesting OTP for user:', { userId, usage, hasEmail: !!emailAddress });
+    // MTSA expects UserID without dashes/spaces (12-digit NRIC format)
+    const normalizedUserId = normalizeUserId(userId);
+
+    console.log('Requesting OTP for user:', { userId: normalizedUserId, usage, hasEmail: !!emailAddress });
 
     // Make request to signing orchestrator
     const response = await fetch(`${signingConfig.url}/api/otp`, {
@@ -186,7 +195,7 @@ router.post('/request-otp', authenticateAndVerifyPhone, async (req: AuthRequest,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userId,
+        userId: normalizedUserId,
         usage,
         emailAddress,
       }),
@@ -397,8 +406,11 @@ router.post('/request-certificate', authenticateAndVerifyPhone, async (req: Auth
       });
     }
 
+    // MTSA expects UserID without dashes/spaces (12-digit NRIC format) - must match OTP request
+    const normalizedUserId = normalizeUserId(userId);
+
     console.log('Requesting certificate enrollment for user:', { 
-      userId, 
+      userId: normalizedUserId, 
       fullName, 
       emailAddress,
       hasNricFront: !!nricFrontUrl,
@@ -427,7 +439,7 @@ router.post('/request-certificate', authenticateAndVerifyPhone, async (req: Auth
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userId,
+        userId: normalizedUserId,
         fullName,
         emailAddress,
         mobileNo,
