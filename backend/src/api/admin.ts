@@ -12548,9 +12548,10 @@ router.post(
 		try {
 			const { applicationId, pin, signatoryType } = req.body;
 			const userRole = req.user?.role;
+			const normalizedSignatoryType = String(signatoryType || "").trim().toUpperCase();
 
 			// Validate required fields
-			if (!applicationId || !pin || !signatoryType) {
+			if (!applicationId || !pin || !normalizedSignatoryType) {
 				return res.status(400).json({
 					success: false,
 					message: "Missing required fields"
@@ -12565,8 +12566,16 @@ router.post(
 				});
 			}
 
+			// Borrower must sign in borrower portal. Admin PIN signing is company/witness only.
+			if (!["COMPANY", "WITNESS"].includes(normalizedSignatoryType)) {
+				return res.status(400).json({
+					success: false,
+					message: "Only company and witness can sign in admin portal"
+				});
+			}
+
 			// ATTESTOR users can only sign as WITNESS
-			if (userRole === "ATTESTOR" && signatoryType !== "WITNESS") {
+			if (userRole === "ATTESTOR" && normalizedSignatoryType !== "WITNESS") {
 				return res.status(403).json({
 					success: false,
 					message: "ATTESTOR users can only sign as witness"
@@ -12593,9 +12602,6 @@ router.post(
 			}
 
 		// Find the signatory by type (since we don't have signatoryId anymore)
-		// Convert signatoryType to uppercase to match database values
-		const normalizedSignatoryType = signatoryType.toUpperCase();
-		
 		console.log(`Looking for signatory with type: ${normalizedSignatoryType} for loan: ${application.loan.id}`);
 		
 		const signatory = await prisma.loanSignatory.findFirst({
@@ -12656,8 +12662,8 @@ router.post(
 			// Use admin user's IC number and name for signing
 			const userInfo = {
 				userId: adminIcNumber, // Admin user's IC number for MTSA
-				fullName: adminUser.fullName || `${signatoryType} Representative`,
-				vpsUserId: `${signatoryType}_${application.loan.id}` // Unique identifier for database
+				fullName: adminUser.fullName || `${normalizedSignatoryType} Representative`,
+				vpsUserId: `${normalizedSignatoryType}_${application.loan.id}` // Unique identifier for database
 			};
 
 			try {
@@ -12781,7 +12787,7 @@ router.post(
 			// Add audit trail entry for loan status update after all signatures completed
 			try {
 				const finalSignerName = adminUser?.fullName || 'Unknown Admin';
-				const roleDisplayName = signatoryType === 'COMPANY' ? 'Company' : 'Witness';
+				const roleDisplayName = normalizedSignatoryType === 'COMPANY' ? 'Company' : 'Witness';
 				await prisma.loanApplicationHistory.create({
 					data: {
 						applicationId: applicationId,
@@ -12794,7 +12800,7 @@ router.post(
 							loanId: application.loan.id,
 							completedAt: new Date().toISOString(),
 							allSignatoriesCount: allSignatories.length,
-							finalSignatoryType: signatoryType,
+							finalSignatoryType: normalizedSignatoryType,
 							finalSignerName: finalSignerName,
 							finalSignerUserId: req.user?.userId,
 							docusealSubmissionId: application.loan.docusealSubmissionId
@@ -12866,7 +12872,7 @@ router.post(
 
 		return res.json({
 			success: true,
-			message: `Document signed successfully as ${signatoryType}`,
+			message: `Document signed successfully as ${normalizedSignatoryType}`,
 			allSigned,
 			newStatus: allSigned ? "PENDING_STAMPING" : application.status
 		});

@@ -26,7 +26,8 @@ function AdminPKISigningContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const applicationId = searchParams.get('application');
-  const signatoryType = searchParams.get('signatory') as 'COMPANY' | 'WITNESS';
+  const signatoryType = searchParams.get('signatory')?.trim().toUpperCase() as 'COMPANY' | 'WITNESS' | undefined;
+  const isSupportedSignatory = signatoryType === 'COMPANY' || signatoryType === 'WITNESS';
 
   const [pkiSession, setPkiSession] = useState<PKISession | null>(null);
   const [pin, setPin] = useState('');
@@ -39,11 +40,19 @@ function AdminPKISigningContent() {
 
   // Initialize PKI session
   useEffect(() => {
-    if (!applicationId || !signatoryType || hasInitialized.current) return;
+    if (hasInitialized.current) return;
+
+    if (!applicationId || !isSupportedSignatory) {
+      setError('Invalid signing context. Only company and witness can sign in admin portal.');
+      setStep('error');
+      setLoading(false);
+      hasInitialized.current = true;
+      return;
+    }
     
     hasInitialized.current = true;
     initializePKISession();
-  }, [applicationId, signatoryType]);
+  }, [applicationId, isSupportedSignatory]);
 
   const initializePKISession = async () => {
     try {
@@ -64,7 +73,7 @@ function AdminPKISigningContent() {
           pinRequested: true
         },
         submissionStatus: 'in_progress',
-        signatoryType
+        signatoryType: signatoryType as 'COMPANY' | 'WITNESS'
       });
 
       setStep('pin_input');
@@ -78,7 +87,7 @@ function AdminPKISigningContent() {
   };
 
   const handlePinSubmit = async () => {
-    if (!pin || pin.length !== 8 || !pkiSession) return;
+    if (!pin || pin.length !== 8 || !pkiSession || !isSupportedSignatory) return;
 
     setSubmitting(true);
     setError('');

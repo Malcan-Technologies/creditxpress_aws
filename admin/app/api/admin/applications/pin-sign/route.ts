@@ -15,11 +15,19 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { applicationId, pin, signatoryType } = body;
+    const normalizedSignatoryType = String(signatoryType || "").trim().toUpperCase();
 
     // Validate required fields
-    if (!applicationId || !pin || !signatoryType) {
+    if (!applicationId || !pin || !normalizedSignatoryType) {
       return NextResponse.json(
         { success: false, message: 'Missing required fields: applicationId, pin, signatoryType' },
+        { status: 400 }
+      );
+    }
+
+    if (!["COMPANY", "WITNESS"].includes(normalizedSignatoryType)) {
+      return NextResponse.json(
+        { success: false, message: 'Only company and witness can sign in admin portal' },
         { status: 400 }
       );
     }
@@ -35,7 +43,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         applicationId,
         pin,
-        signatoryType
+        signatoryType: normalizedSignatoryType
       }),
     });
     

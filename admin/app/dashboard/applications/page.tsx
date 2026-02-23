@@ -4083,15 +4083,17 @@ function AdminApplicationsPageContent() {
                                   </div>
                                   <div className="ml-4">
                                     {signature.canSign ? (
-                                      // Hide company signing button for ATTESTOR users
-                                      userRole === "ATTESTOR" &&
-                                      signature.type === "COMPANY" ? (
+                                      signature.type === "USER" ? (
+                                        <span className="text-gray-500 text-xs">
+                                          Borrower signs in borrower portal
+                                        </span>
+                                      ) : userRole === "ATTESTOR" &&
+                                        signature.type === "COMPANY" ? (
                                         <span className="text-gray-500 text-xs">
                                           Admin access required
                                         </span>
                                       ) : signature.status === "PENDING" &&
                                         signature.signingUrl ? (
-                                        // PENDING status: Complete DocuSeal (for all signatory types)
                                         <a
                                           href={signature.signingUrl}
                                           target="_blank"
@@ -4103,28 +4105,15 @@ function AdminApplicationsPageContent() {
                                         </a>
                                       ) : signature.status ===
                                         "PENDING_PKI_SIGNING" ? (
-                                        // PENDING_PKI_SIGNING status: Sign with PKI/PIN
-                                        signature.type === "USER" ? (
-                                          // For USER signatures, redirect to PKI signing page
-                                          <a
-                                            href={`/pki-signing?submissionId=${signaturesData?.docusealSubmissionId}&applicationId=${selectedApplication?.id}`}
-                                            className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                                          >
-                                            <PencilSquareIcon className="h-3 w-3 mr-1" />
-                                            Complete Signing
-                                          </a>
-                                        ) : (
-                                          // For COMPANY and WITNESS signatures, redirect to PKI signing page
-                                          <a
-                                            href={`/pki-signing?application=${
-                                              selectedApplication?.id
-                                            }&signatory=${signature.type.toLowerCase()}`}
-                                            className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
-                                          >
-                                            <PencilSquareIcon className="h-3 w-3 mr-1" />
-                                            Complete Signing
-                                          </a>
-                                        )
+                                        <a
+                                          href={`/pki-signing?application=${
+                                            selectedApplication?.id
+                                          }&signatory=${signature.type.toLowerCase()}`}
+                                          className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                                        >
+                                          <PencilSquareIcon className="h-3 w-3 mr-1" />
+                                          Complete Signing
+                                        </a>
                                       ) : (
                                         <span className="text-gray-500 text-xs">
                                           No action available
