@@ -309,14 +309,15 @@ export default function AdminSigningSettingsPage() {
             isExternalCert: false
           });
         } else {
-          // External certificate (or unknown) - user needs to enroll as internal
+          // Certificate format unclear (no EMP- in SERIALNUMBER) - could be internal with different format
+          // Show verify-type step so user can try PIN; if it works = internal, if not = external
           setCertificateStatus({
             hasValidCert: true,
-            message: 'You have an external (borrower) certificate. To sign as an internal user, you need to enroll for an internal certificate with PIN authentication.',
+            message: 'A valid certificate was found. Verify your 8-digit PIN to confirm it is an internal signing certificate.',
             certificateData: response.data,
-            nextStep: 'kyc',
+            nextStep: 'verify-type',
             isInternalCert: false,
-            isExternalCert: true
+            isExternalCert: undefined
           });
         }
       } else {
