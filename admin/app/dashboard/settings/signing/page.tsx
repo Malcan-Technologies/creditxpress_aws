@@ -42,7 +42,10 @@ import {
   KeyRound,
   Loader2,
   Users,
+  HelpCircle,
 } from 'lucide-react';
+
+import { Tooltip } from '@/components/ui/tooltip';
 
 // Types
 interface AdminUser {
@@ -81,7 +84,7 @@ interface OrganisationInfo {
   orgName: string;
   orgUserDesignation: string;
   orgUserRegistrationNo: string;
-  orgUserRegistrationType: 'P' | 'E';
+  orgUserRegistrationType: 'PAS' | 'IDC';
   orgAddress: string;
   orgAddressCity: string;
   orgAddressState: string;
@@ -161,7 +164,7 @@ export default function AdminSigningSettingsPage() {
     orgName: '',
     orgUserDesignation: '',
     orgUserRegistrationNo: '',
-    orgUserRegistrationType: 'E',
+    orgUserRegistrationType: 'IDC',
     orgAddress: '',
     orgAddressCity: '',
     orgAddressState: '',
@@ -977,7 +980,7 @@ export default function AdminSigningSettingsPage() {
       <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Digital Signing Settings</h1>
+          <h1 className="text-3xl font-heading font-medium text-white mb-2">Digital Signing Settings</h1>
           <p className="text-gray-400">Manage your digital certificate and internal signers</p>
         </div>
 
@@ -1435,33 +1438,48 @@ export default function AdminSigningSettingsPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Your Designation *</Label>
+                        <div className="flex items-center gap-1">
+                          <Label>Your Designation *</Label>
+                          <Tooltip content="Your role or title in the organisation. This can be your organisational role (e.g., Director, Manager) or your regulated professional designation (e.g., Doctor, Lawyer).">
+                            <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                          </Tooltip>
+                        </div>
                         <Input
                           value={organisationInfo.orgUserDesignation}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserDesignation: e.target.value})}
-                          placeholder="e.g., Director, Manager"
+                          placeholder="e.g., Director, Manager, Doctor"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Registration Number *</Label>
+                        <div className="flex items-center gap-1">
+                          <Label>User Registration No *</Label>
+                          <Tooltip content="Your registration number within the organisation. This can be your professional registration number (e.g., for regulated professions like doctors, lawyers), your employee/staff ID, or your IC number.">
+                            <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                          </Tooltip>
+                        </div>
                         <Input
                           value={organisationInfo.orgUserRegistrationNo}
                           onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserRegistrationNo: e.target.value})}
-                          placeholder="Professional/Employee ID"
+                          placeholder="e.g., Staff ID, Professional Reg No, or IC Number"
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label>Registration Type *</Label>
+                        <div className="flex items-center gap-1">
+                          <Label>User ID Type *</Label>
+                          <Tooltip content="The type of identifier used for your User Registration No. Select 'MyKad' if using your IC number or employee ID, or 'Passport' if using a passport-based identifier.">
+                            <HelpCircle className="h-4 w-4 text-gray-400 cursor-help" />
+                          </Tooltip>
+                        </div>
                         <select
                           value={organisationInfo.orgUserRegistrationType}
-                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserRegistrationType: e.target.value as 'P' | 'E'})}
+                          onChange={(e) => setOrganisationInfo({...organisationInfo, orgUserRegistrationType: e.target.value as 'PAS' | 'IDC'})}
                           className="w-full h-9 rounded-md border border-gray-600 bg-gray-700 px-3 text-sm text-white"
                         >
-                          <option value="E">Employee ID</option>
-                          <option value="P">Professional Registration</option>
+                          <option value="IDC">MyKad (National ID Card)</option>
+                          <option value="PAS">Passport</option>
                         </select>
                       </div>
                     </div>
