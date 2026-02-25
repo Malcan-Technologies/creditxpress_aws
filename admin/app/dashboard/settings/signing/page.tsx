@@ -290,36 +290,16 @@ export default function AdminSigningSettingsPage() {
       );
       
       if (response.success && response.data?.certStatus === 'Valid') {
-        // Check if it's an internal certificate by looking for EMP- in the subject SERIALNUMBER
-        // Internal certs have: SERIALNUMBER=EMP-00001
-        // External certs have: SERIALNUMBER=<IC_NUMBER>
-        const subject = response.data.subject || '';
-        const serialNumberMatch = subject.match(/SERIALNUMBER=([^,]+)/);
-        const certSerialNumber = serialNumberMatch ? serialNumberMatch[1] : '';
-        const isInternalCert = certSerialNumber.startsWith('EMP-');
-        
-        if (isInternalCert) {
-          // Internal certificate detected - go straight to complete state with management options
-          setCertificateStatus({
-            hasValidCert: true,
-            message: 'You have a valid internal signing certificate.',
-            certificateData: response.data,
-            nextStep: 'complete',
-            isInternalCert: true,
-            isExternalCert: false
-          });
-        } else {
-          // Certificate format unclear (no EMP- in SERIALNUMBER) - could be internal with different format
-          // Show verify-type step so user can try PIN; if it works = internal, if not = external
-          setCertificateStatus({
-            hasValidCert: true,
-            message: 'A valid certificate was found. Verify your 8-digit PIN to confirm it is an internal signing certificate.',
-            certificateData: response.data,
-            nextStep: 'verify-type',
-            isInternalCert: false,
-            isExternalCert: undefined
-          });
-        }
+        // PIN format is the same for all internal certs regardless of SERIALNUMBER format
+        // Always show verify-type so user can verify PIN; if it works = internal, if not = external
+        setCertificateStatus({
+          hasValidCert: true,
+          message: 'A valid certificate was found. Verify your 8-digit PIN to confirm it is an internal signing certificate.',
+          certificateData: response.data,
+          nextStep: 'verify-type',
+          isInternalCert: false,
+          isExternalCert: undefined
+        });
       } else {
         try {
           const kycStatusResponse = await fetchWithAdminTokenRefresh<{ success: boolean; isAlreadyApproved?: boolean }>('/api/admin/kyc/status');
