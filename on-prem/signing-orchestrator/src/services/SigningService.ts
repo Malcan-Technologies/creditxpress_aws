@@ -730,7 +730,7 @@ export class SigningService {
   /**
    * Request OTP for digital signing
    */
-  async requestSigningOTP(userId: string, emailAddress: string, correlationId: string): Promise<boolean> {
+  async requestSigningOTP(userId: string, _emailAddress: string, correlationId: string): Promise<boolean> {
     const log = createCorrelatedLogger(correlationId);
     
     try {
@@ -739,7 +739,6 @@ export class SigningService {
       const result = await mtsaClient.requestEmailOTP({
         UserID: userId,
         OTPUsage: 'DS',
-        EmailAddress: emailAddress,
       }, correlationId);
       
       const success = result.statusCode === '000';

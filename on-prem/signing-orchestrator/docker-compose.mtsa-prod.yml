@@ -33,7 +33,7 @@ services:
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-50}
       
       # MyTrustSigner Agent Configuration
-      - MTSA_ENV=${MTSA_ENV:-pilot}
+      - MTSA_ENV=${MTSA_ENV:-prod}
       - MTSA_WSDL_PILOT=${MTSA_WSDL_PILOT:-http://mtsa-pilot:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl}
       - MTSA_WSDL_PROD=${MTSA_WSDL_PROD:-http://mtsa-prod:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl}
       - MTSA_SOAP_USERNAME=${MTSA_SOAP_USERNAME}
@@ -95,7 +95,7 @@ services:
     depends_on:
       agreements-postgres:
         condition: service_healthy
-      mtsa-pilot:
+      mtsa-prod:
         condition: service_healthy
     
     healthcheck:
@@ -140,14 +140,14 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # MTSA Pilot Service (Production)
-  mtsa-pilot:
+  # MTSA Production Service
+  mtsa-prod:
     build:
-      context: ../mtsa
+      context: ../production
       dockerfile: Dockerfile
-    container_name: mtsa-pilot-prod
+    container_name: mtsa-prod
     ports:
-      - "8080:8080"
+      - "${MTSA_PROD_HOST_PORT:-8082}:8080"
     environment:
       - TZ=Asia/Kuala_Lumpur
       # Java DNS caching settings - prevent stale DNS entries
@@ -169,7 +169,7 @@ services:
       - mtsa-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/MTSAPilot/MyTrustSignerAgentWSAPv2?wsdl"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/MTSA/MyTrustSignerAgentWSAPv2?wsdl"]
       interval: 30s
       timeout: 10s
       retries: 3

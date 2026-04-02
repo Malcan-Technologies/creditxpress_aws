@@ -257,6 +257,8 @@ function PKISigningContent() {
         ) as any;
         
         
+        const certStatus = String(certCheckData.data?.certStatus || '').toLowerCase();
+
         // Create PKI session with real data (but don't send OTP yet)
         const pkiSession: PKISession = {
           id: `pki_${Date.now()}`,
@@ -267,7 +269,7 @@ function PKISigningContent() {
             email: userEmail,
             userId: userId,
             status: 'cert_checked',
-            certificateStatus: certCheckData.success && certCheckData.data?.certStatus === 'ACTIVE' ? 'valid' : 'pending',
+            certificateStatus: certCheckData.success && certStatus === 'valid' ? 'valid' : 'pending',
             otpRequested: false
           },
           submissionStatus: 'in_progress'

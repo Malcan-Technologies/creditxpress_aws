@@ -3,19 +3,24 @@ name: Deploy On-Prem Services
 on:
   workflow_dispatch:
     inputs:
+      enable_onprem_changes:
+        description: 'Explicitly allow GitHub Actions to change on-prem services'
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
       deploy_docuseal:
         description: 'Deploy DocuSeal'
-        default: 'true'
+        default: 'false'
         type: choice
         options: ['true', 'false']
       deploy_orchestrator:
         description: 'Deploy Signing Orchestrator'
-        default: 'true'
+        default: 'false'
         type: choice
         options: ['true', 'false']
       deploy_mtsa:
         description: 'Deploy MTSA'
-        default: 'true'
+        default: 'false'
         type: choice
         options: ['true', 'false']
       setup_template:
@@ -95,7 +100,7 @@ jobs:
     name: Deploy to On-Prem Server
     needs: validate
     runs-on: ${{ fromJSON(needs.validate.outputs.runner_label) }}
-    if: needs.validate.outputs.onprem_enabled == 'true'
+    if: needs.validate.outputs.onprem_enabled == 'true' && github.event.inputs.enable_onprem_changes == 'true'
     
     steps:
       - name: Checkout
@@ -319,6 +324,21 @@ jobs:
           echo "Verify via:"
           echo "  ./on-prem/scripts/deploy-all.sh status"
           echo "=========================================="
+
+  manual-only:
+    name: On-Prem Deploy Locked
+    needs: validate
+    runs-on: ubuntu-latest
+    if: needs.validate.outputs.onprem_enabled == 'true' && github.event.inputs.enable_onprem_changes != 'true'
+    steps:
+      - name: Skip on-prem deployment
+        run: |
+          echo "::warning::On-prem deployment via GitHub Actions is disabled by default."
+          echo "No on-prem services were changed."
+          echo "Use your manual SSH/script process for now."
+          echo ""
+          echo "If you intentionally want GitHub Actions to modify on-prem later,"
+          echo "re-run this workflow with 'enable_onprem_changes=true' and select the specific services."
 
   notify-skip:
     name: On-Prem Disabled

@@ -157,7 +157,7 @@ export default function Footer() {
 									Company registration no: 202101043135 (1443435-P)
 								</p>
 								<p className="text-sm">
-									Business address: 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang
+									Business address: C-10-7, KL Trillion, No 338 Jalan Tun Razak 50400 Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur.
 								</p>
 								<p className="text-sm font-semibold">
 									Disclaimer: "Please borrow responsibly. Loans are subject to approval and terms."

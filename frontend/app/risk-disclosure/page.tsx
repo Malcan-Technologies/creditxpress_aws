@@ -33,7 +33,7 @@ export default function RiskDisclosure() {
 						<div className="mb-8 p-6 bg-purple-primary/5 rounded-xl border border-purple-primary/20">
 							<p className="mb-2"><strong>Operator:</strong> OPG Capital Holdings Sdn Bhd (202101043135)</p>
 							<p className="mb-2"><strong>KPKT Licence:</strong> WL3337/07/01-11/020227</p>
-							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia</p>
+							<p className="mb-2"><strong>Registered Address:</strong> C-10-7, KL Trillion, No 338 Jalan Tun Razak 50400 Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur.</p>
 							<p className="mb-2"><strong>Email:</strong> opgcapital3@gmail.com</p>
 							<p><strong>Office Hours:</strong> 9:00 AM – 5:00 PM (Mon–Fri)</p>
 						</div>

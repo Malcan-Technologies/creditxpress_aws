@@ -348,12 +348,22 @@ router.post('/otp', verifyApiKey, async (req, res) => {
     }
     
     log.info('Requesting OTP', { userId, usage });
-    
-    const result = await mtsaClient.requestEmailOTP({
+
+    const otpRequestPayload: {
+      UserID: string;
+      OTPUsage: 'DS' | 'NU';
+      EmailAddress?: string;
+    } = {
       UserID: userId,
       OTPUsage: usage,
-      EmailAddress: emailAddress,
-    }, req.correlationId!);
+    };
+
+    // MTSA expects EmailAddress only for enrolment/update OTP flows.
+    if (usage === 'NU' && emailAddress) {
+      otpRequestPayload.EmailAddress = emailAddress;
+    }
+    
+    const result = await mtsaClient.requestEmailOTP(otpRequestPayload, req.correlationId!);
     
     const statusCode = result.return?.statusCode || result.statusCode;
     const message = result.return?.statusMsg || result.message;

@@ -94,6 +94,7 @@ tfplan
 # On-premises deployment files (keep separate from cloud deployments)
 # Note: These files are tracked in git but should not be deployed to cloud servers
 # Use deploy-onprem.sh for on-prem deployments only
+on-prem/production/
 
 # Security audit files - NEVER commit to git
 # These contain sensitive infrastructure information

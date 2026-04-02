@@ -50,7 +50,7 @@ export default function PrivacyPolicy() {
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">1. Company Information & Contact Details</h2>
 							<p className="mb-2"><strong>Legal Entity Name:</strong> OPG Capital Holdings Sdn. Bhd.</p>
 							<p className="mb-2"><strong>Registration Number:</strong> 202101043135</p>
-							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia</p>
+							<p className="mb-2"><strong>Registered Address:</strong> C-10-7, KL Trillion, No 338 Jalan Tun Razak 50400 Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur.</p>
 							<p className="mb-2"><strong>Country of Operation:</strong> Malaysia</p>
 							<p className="mb-2"><strong>Customer Support Email:</strong> hello@creditxpress.com.my</p>
 							<p className="mb-4"><strong>Privacy & Data Protection Contact:</strong> hello@creditxpress.com.my</p>

@@ -38,7 +38,7 @@ export default function TermsOfService() {
 								licensed under the <strong>Ministry of Housing and Local Government (KPKT)</strong> (<strong>Licence No. WL3337/07/01-11/020227</strong>) 
 								and operating under the <strong>Moneylenders Act 1951</strong> and applicable subsidiary regulations in Malaysia.
 							</p>
-							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia.</p>
+							<p className="mb-2"><strong>Registered Address:</strong> C-10-7, KL Trillion, No 338 Jalan Tun Razak 50400 Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur.</p>
 							<p><strong>Contact:</strong> opgcapital3@gmail.com (Office hours: 9:00 AM – 5:00 PM, Mon–Fri)</p>
 						</section>
 

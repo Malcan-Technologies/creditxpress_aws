@@ -6,11 +6,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import ScamNoticePopup from "@/components/ScamNoticePopup";
 import {
 	MdArrowForward,
 	MdCheck,
 	MdEmail,
-	MdPhone,
 	MdLocationOn,
 	MdExpandMore,
 	MdExpandLess,
@@ -101,6 +101,7 @@ export default function Home() {
 	return (
 		<div className="min-h-screen bg-offwhite text-gray-700 font-body w-full">
 			<Navbar bgStyle="bg-transparent" />
+			<ScamNoticePopup />
 
 			{/* Hero Section */}
 			<section className="min-h-screen relative flex items-center bg-gradient-to-br from-[#0A0612] via-[#1A0B2E] to-[#0A0612] w-full">
@@ -633,29 +634,13 @@ export default function Home() {
 							</div>
 						</div>
 									<div className="flex items-start space-x-4">
-										<div className="w-12 h-12 bg-blue-tertiary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-											<MdPhone size={24} className="text-blue-tertiary" />
-							</div>
-										<div>
-											<h4 className="text-lg font-semibold text-gray-700 mb-1">Phone</h4>
-											<a 
-												href="https://wa.me/60164614919?text=I'm%20interested%20in%20CreditXpress%20lending%20products"
-												target="_blank"
-												rel="noopener noreferrer"
-												className="text-blue-tertiary hover:text-purple-primary transition-colors"
-											>
-												+60 16-461 4919 (WhatsApp)
-											</a>
-							</div>
-						</div>
-									<div className="flex items-start space-x-4">
 										<div className="w-12 h-12 bg-green-600/10 rounded-xl flex items-center justify-center flex-shrink-0">
 											<MdLocationOn size={24} className="text-green-600" />
 							</div>
 										<div>
 											<h4 className="text-lg font-semibold text-gray-700 mb-1">Address</h4>
 											<p className="text-gray-600">
-											31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang
+											C-10-7, KL Trillion, No 338 Jalan Tun Razak 50400 Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur.
 							</p>
 						</div>
 							</div>

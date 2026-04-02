@@ -39,7 +39,7 @@ export default function PrivacyNotice() {
 						<section className="mb-8">
 							<h2 className="text-2xl font-heading font-bold text-gray-900 mb-4">1. Data Controller & Contact</h2>
 							<p className="mb-2"><strong>OPG Capital Holdings Sdn Bhd (202101043135)</strong></p>
-							<p className="mb-2"><strong>Registered Address:</strong> 31-10-11, The CEO, Lebuh Nipah 5, 11950, Bayan Lepas, Penang, Malaysia</p>
+							<p className="mb-2"><strong>Registered Address:</strong> C-10-7, KL Trillion, No 338 Jalan Tun Razak 50400 Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur.</p>
 							<p><strong>Email:</strong> hello@creditxpress.com.my (Office hours: 9:00 AM – 5:00 PM, Mon–Fri)</p>
 						</section>
 

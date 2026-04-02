@@ -16,7 +16,7 @@ import {
 	MdWork,
 	MdArticle,
 	MdHelp,
-	MdPhone,
+	MdEmail,
 	MdDashboard,
 	MdCreditCard,
 	MdTrendingUp,
@@ -154,32 +154,7 @@ export default function Navbar({
 							{/* Empty space for centered logo */}
 						</div>
 						<div className="hidden lg:flex items-center space-x-6">
-							<div className="relative group">
-								<a
-									href="https://wa.me/60164614919?text=I'm%20interested%20in%20CreditXpress%20lending%20products"
-									target="_blank"
-									rel="noopener noreferrer"
-									className={`inline-flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
-										isScrolled
-											? "border-gray-400 hover:border-purple-primary text-gray-700 hover:text-purple-primary"
-											: "border-gray-400 hover:border-white text-gray-200 hover:text-white"
-									}`}
-								>
-									<MdPhone size={20} />
-								</a>
-								<div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block">
-									<div className="bg-white text-gray-900 px-4 py-2 rounded-lg shadow-lg text-sm whitespace-nowrap">
-										<div className="absolute left-1/2 -translate-x-1/2 -top-2">
-											<div className="w-4 h-4 bg-white transform rotate-45"></div>
-										</div>
-										Click to WhatsApp us or
-										<br />
-										Call us at +60 16-461 4919
-									</div>
-								</div>
-							</div>
-
-							{isLoggedIn ? (
+								{isLoggedIn ? (
 								<Link
 									href="/dashboard"
 									className="bg-purple-primary text-white hover:bg-purple-700 px-6 py-2 rounded-full transition-colors inline-flex items-center gap-2 font-semibold"
@@ -306,7 +281,7 @@ export default function Navbar({
 										onClick={() => setMobileMenuOpen(false)}
 									>
 										<div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
-											<MdPhone size={20} color="#7C3AED" />
+											<MdEmail size={20} color="#7C3AED" />
 										</div>
 										<div className="text-left">
 											<span className="font-semibold block">Email Us</span>
