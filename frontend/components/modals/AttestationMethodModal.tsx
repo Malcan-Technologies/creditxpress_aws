@@ -56,8 +56,9 @@ export default function AttestationMethodModal({
 					</div> */}
 
 				<div className="space-y-6">
-					{/* Live Video Call */}
+					{/* Live Video Call — first */}
 					<button
+						type="button"
 						onClick={onLiveCallSelect}
 						className="w-full border border-gray-200 rounded-xl p-6 hover:border-gray-300 hover:bg-gray-50 transition-all text-left bg-white shadow-sm hover:shadow-md group"
 					>
@@ -92,7 +93,6 @@ export default function AttestationMethodModal({
 							</div>
 						</div>
 
-						{/* Details Grid */}
 						<div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
 							<div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
 								<div>
@@ -110,7 +110,6 @@ export default function AttestationMethodModal({
 							</div>
 						</div>
 
-						{/* Benefits */}
 						<div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
 							<p className="text-sm text-gray-600 font-body">
 								<strong>Perfect for:</strong> Detailed questions, complex scenarios, or if you prefer personal interaction
@@ -118,19 +117,12 @@ export default function AttestationMethodModal({
 						</div>
 					</button>
 
-					{/* Instant Attestation - Highlighted */}
+					{/* Instant Video Attestation — second */}
 					<button
+						type="button"
 						onClick={onInstantSelect}
 						className="w-full border border-purple-primary bg-purple-50 rounded-xl p-6 hover:border-purple-600 hover:bg-purple-100 transition-all text-left shadow-sm hover:shadow-md relative group"
 					>
-						{/* Recommended Badge */}
-						{/* <div className="absolute -top-3 -right-3">
-							<span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-primary text-white shadow-sm">
-								<SparklesIcon className="h-3 w-3 mr-1" />
-								Recommended
-							</span>
-						</div> */}
-
 						<div className="flex items-center justify-between mb-6">
 							<div className="flex items-center space-x-4">
 								<div className="w-14 h-14 bg-purple-primary rounded-xl flex items-center justify-center">
@@ -162,7 +154,6 @@ export default function AttestationMethodModal({
 							</div>
 						</div>
 
-						{/* Details Grid */}
 						<div className="bg-white rounded-xl p-4 border border-gray-200 mb-4">
 							<div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
 								<div>
@@ -180,7 +171,6 @@ export default function AttestationMethodModal({
 							</div>
 						</div>
 
-						{/* Benefits */}
 						<div className="bg-green-50 rounded-xl p-4 border border-green-200">
 							<div className="flex items-center space-x-2 mb-2">
 								<div className="w-5 h-5 bg-emerald-600 rounded-full flex items-center justify-center">

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PauseIcon from "@mui/icons-material/Pause";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import InfoIcon from "@mui/icons-material/Info";
 import VideoLibraryIcon from "@mui/icons-material/VideoLibrary";
@@ -86,6 +87,8 @@ export default function AttestationForm({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [videoStarted, setVideoStarted] = useState(false);
+	const [attestationVideoPlaying, setAttestationVideoPlaying] = useState(false);
+	const attestationVideoRef = useRef<HTMLVideoElement | null>(null);
 	const [openTooltip, setOpenTooltip] = useState<string | null>(null);
 
 	const fees = calculateFees(application);
@@ -93,6 +96,16 @@ export default function AttestationForm({
 	const handleVideoStart = () => {
 		setVideoStarted(true);
 	};
+
+	const toggleAttestationPlayPause = useCallback(() => {
+		const v = attestationVideoRef.current;
+		if (!v) return;
+		if (v.paused) {
+			void v.play().catch(() => {});
+		} else {
+			v.pause();
+		}
+	}, []);
 
 	const handleVideoComplete = () => {
 		setVideoWatched(true);
@@ -572,11 +585,16 @@ export default function AttestationForm({
 									<div className="space-y-4">
 										<div className="relative aspect-video">
 											<video
-												className="w-full h-full object-cover"
-												controls
+												ref={attestationVideoRef}
+												className="w-full h-full object-cover pointer-events-none"
 												autoPlay
+												playsInline
+												onPlay={() => setAttestationVideoPlaying(true)}
+												onPause={() => setAttestationVideoPlaying(false)}
+												onLoadedData={(e) =>
+													setAttestationVideoPlaying(!e.currentTarget.paused)
+												}
 												onEnded={handleVideoComplete}
-												controlsList="nodownload"
 											>
 												<source
 													src="/videos/attestation.mp4"
@@ -584,8 +602,20 @@ export default function AttestationForm({
 												/>
 												Your browser does not support the video tag.
 											</video>
-											<div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-4">
-												<p className="text-white font-body text-sm">
+											<div className="absolute bottom-0 left-0 right-0 pointer-events-none bg-gradient-to-t from-black/50 to-transparent p-3 sm:p-4 flex items-center gap-3">
+												<button
+													type="button"
+													onClick={toggleAttestationPlayPause}
+													className="pointer-events-auto flex-shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-purple-primary shadow-md transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black/40"
+													aria-label={attestationVideoPlaying ? "Pause video" : "Play video"}
+												>
+													{attestationVideoPlaying ? (
+														<PauseIcon className="h-6 w-6" />
+													) : (
+														<PlayArrowIcon className="h-6 w-6" />
+													)}
+												</button>
+												<p className="text-white font-body text-sm min-w-0">
 													Please watch the complete video to continue
 												</p>
 											</div>

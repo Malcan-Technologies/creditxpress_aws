@@ -2,7 +2,8 @@ import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { logger } from './logger';
 import DefaultLetterDocument, { DefaultLetterData } from './defaultLetterTemplate';
-import { uploadToS3Organized, getS3ObjectStream, S3_FOLDERS } from './storage';
+import { uploadToS3Organized, getS3ObjectStream, getS3ObjectMetadata, S3_FOLDERS } from './storage';
+import { prisma } from './prisma';
 
 interface DefaultRiskLetterData {
 	borrowerName: string;
@@ -195,24 +196,41 @@ export function getPDFLetterPath(s3Key: string): string {
 }
 
 /**
- * List all PDF letters for a loan
- * NOTE: Since we now store in S3, this function queries the database for letters
- * associated with the loan instead of scanning the filesystem.
- * PDF letters are tracked through late fee records or need separate tracking.
+ * List manual PDF letters for a loan (tracked in loan_default_logs).
  */
-export async function listPDFLettersForLoan(_loanId: string): Promise<Array<{
+export async function listPDFLettersForLoan(loanId: string): Promise<Array<{
+	id: string;
 	filename: string;
 	path: string;
 	createdAt: Date;
 	size: number;
 }>> {
 	try {
-		// Since letters are generated and referenced in late fee processing,
-		// we would need to track them in a database table for proper listing.
-		// For now, return empty array - letters can be accessed via late fee records.
-		logger.warn('listPDFLettersForLoan: PDF letters are now stored in S3. Consider tracking them in database.');
-		return [];
+		const logs = await prisma.loanDefaultLog.findMany({
+			where: {
+				loanId,
+				eventType: 'PDF_GENERATED',
+				pdfLetterPath: { not: null },
+			},
+			orderBy: { processedAt: 'desc' },
+		});
 
+		const withSizes = await Promise.all(
+			logs.map(async (log) => {
+				const key = log.pdfLetterPath as string;
+				const meta = await getS3ObjectMetadata(key);
+				const basename = key.split('/').pop() || 'letter.pdf';
+				return {
+					id: log.id,
+					filename: basename,
+					path: key,
+					createdAt: log.processedAt,
+					size: meta?.contentLength ?? 0,
+				};
+			})
+		);
+
+		return withSizes;
 	} catch (error) {
 		logger.error('Error listing PDF letters for loan:', error);
 		return [];

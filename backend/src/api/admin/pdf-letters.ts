@@ -3,6 +3,7 @@ import { requireAdmin } from "../../lib/permissions";
 import { AuthRequest, authenticateToken } from "../../middleware/auth";
 import { logger } from "../../lib/logger";
 import { listPDFLettersForLoan, generateManualDefaultLetter, getPDFLetterBuffer } from "../../lib/pdfGenerator";
+import { emailService } from "../../lib/emailService";
 import { prisma } from "../../lib/prisma";
 
 const router = Router();
@@ -239,7 +240,11 @@ router.get("/:loanId/borrower-info", authenticateToken, requireAdmin, async (req
 router.post("/:loanId/generate-pdf-letter", authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
 	try {
 		const { loanId } = req.params;
-		const { borrowerAddress } = req.body;
+		const { borrowerAddress, sendEmail: sendEmailBody } = req.body as {
+			borrowerAddress?: string;
+			sendEmail?: boolean;
+		};
+		const wantsEmail = sendEmailBody !== false;
 
 		// Get loan with user and product information
 		const loan = await prisma.loan.findUnique({
@@ -247,6 +252,7 @@ router.post("/:loanId/generate-pdf-letter", authenticateToken, requireAdmin, asy
 			include: {
 				user: {
 					select: {
+						email: true,
 						fullName: true,
 						phoneNumber: true,
 						address1: true,
@@ -405,11 +411,51 @@ router.post("/:loanId/generate-pdf-letter", authenticateToken, requireAdmin, asy
 			}
 		});
 
+		let emailSent = false;
+		let emailSkippedReason: string | undefined;
+
+		if (wantsEmail && loan.user.email) {
+			try {
+				const pdfBuffer = await getPDFLetterBuffer(pdfPath);
+				const attachmentFilename =
+					pdfPath.split("/").pop() || `default-notice-${loanId}.pdf`;
+				const emailResult = await emailService.sendDefaultArrearsNoticeEmail({
+					to: loan.user.email,
+					borrowerName: loan.user.fullName || "Valued Customer",
+					loanId,
+					productName: loan.application?.product?.name || "Loan Product",
+					daysOverdue,
+					outstandingAmount,
+					totalLateFees,
+					totalAmountDue: outstandingAmount + totalLateFees,
+					pdfBuffer,
+					attachmentFilename,
+				});
+				emailSent = emailResult.success;
+				if (!emailResult.success) {
+					emailSkippedReason = emailResult.error || "Email not sent";
+					logger.warn(
+						`Default/arrears notice email not sent for loan ${loanId}: ${emailSkippedReason}`
+					);
+				}
+			} catch (emailErr) {
+				emailSkippedReason =
+					emailErr instanceof Error ? emailErr.message : "Email error";
+				logger.warn(`Default/arrears notice email failed for loan ${loanId}:`, emailErr);
+			}
+		} else if (wantsEmail && !loan.user.email) {
+			emailSkippedReason = "borrower_has_no_email";
+		} else if (!wantsEmail) {
+			emailSkippedReason = "skipped_send_email_false";
+		}
+
 		return res.json({
 			success: true,
 			data: {
 				filename: pdfPath.split('/').pop(),
 				path: pdfPath,
+				emailSent,
+				emailSkippedReason,
 			},
 			message: "PDF letter generated successfully",
 		});
@@ -424,9 +470,9 @@ router.post("/:loanId/generate-pdf-letter", authenticateToken, requireAdmin, asy
 
 /**
  * @swagger
- * /api/admin/loans/{loanId}/pdf-letters/{filename}/download:
+ * /api/admin/loans/{loanId}/pdf-letters/{letterId}/download:
  *   get:
- *     summary: Download a PDF letter
+ *     summary: Download a PDF letter by loan default log id
  *     tags: [Admin - PDF Letters]
  *     security:
  *       - bearerAuth: []
@@ -438,11 +484,11 @@ router.post("/:loanId/generate-pdf-letter", authenticateToken, requireAdmin, asy
  *           type: string
  *         description: Loan ID
  *       - in: path
- *         name: filename
+ *         name: letterId
  *         required: true
  *         schema:
  *           type: string
- *         description: PDF filename
+ *         description: Loan default log id (from Generated Letters list)
  *     responses:
  *       200:
  *         description: PDF file
@@ -456,39 +502,36 @@ router.post("/:loanId/generate-pdf-letter", authenticateToken, requireAdmin, asy
  *       500:
  *         description: Internal server error
  */
-router.get("/:loanId/pdf-letters/:filename/download", authenticateToken, requireAdmin, async (req, res) => {
+router.get("/:loanId/pdf-letters/:letterId/download", authenticateToken, requireAdmin, async (req, res) => {
 	try {
-		const { loanId, filename } = req.params;
+		const { loanId, letterId } = req.params;
 
-		// Verify loan exists and filename belongs to this loan
-		const loan = await prisma.loan.findUnique({
-			where: { id: loanId },
+		const log = await prisma.loanDefaultLog.findFirst({
+			where: {
+				id: letterId,
+				loanId,
+				eventType: "PDF_GENERATED",
+				pdfLetterPath: { not: null },
+			},
 		});
 
-		if (!loan) {
+		if (!log?.pdfLetterPath) {
 			return res.status(404).json({
 				success: false,
-				message: "Loan not found",
+				message: "PDF letter not found",
 			});
 		}
 
-		// Verify the file belongs to this loan by checking if filename contains loanId
-		if (!filename.includes(loanId)) {
-			return res.status(403).json({
-				success: false,
-				message: "Access denied",
-			});
-		}
+		const s3Key = log.pdfLetterPath;
+		const downloadName = s3Key.split("/").pop() || "letter.pdf";
+		const buffer = await getPDFLetterBuffer(s3Key);
 
-		// Get PDF buffer
-		const buffer = await getPDFLetterBuffer(filename);
-
-		res.setHeader('Content-Type', 'application/pdf');
-		res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+		res.setHeader("Content-Type", "application/pdf");
+		res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
 		return res.send(buffer);
 	} catch (error) {
 		logger.error("Error downloading PDF letter:", error);
-		if (error instanceof Error && error.message.includes('ENOENT')) {
+		if (error instanceof Error && error.message.includes("ENOENT")) {
 			return res.status(404).json({
 				success: false,
 				message: "File not found",

@@ -25,6 +25,117 @@ class EmailService {
     return this.resend !== null && !!RESEND_API_KEY;
   }
 
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Notice of payment arrears / default — official letter sent with PDF attachment
+   * (same substance as the manual default notice PDF generated in admin).
+   */
+  async sendDefaultArrearsNoticeEmail(options: {
+    to: string;
+    borrowerName: string;
+    loanId: string;
+    productName: string;
+    daysOverdue: number;
+    outstandingAmount: number;
+    totalLateFees: number;
+    totalAmountDue: number;
+    pdfBuffer: Buffer;
+    attachmentFilename: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    if (!this.isEnabled()) {
+      console.warn('Email service is disabled. Skipping default/arrears notice email.');
+      return { success: false, error: 'Email service not configured' };
+    }
+
+    const name = this.escapeHtml(options.borrowerName || 'Valued Customer');
+    const product = this.escapeHtml(options.productName);
+    const loanRef = this.escapeHtml(options.loanId);
+    const os = options.outstandingAmount.toFixed(2);
+    const late = options.totalLateFees.toFixed(2);
+    const total = options.totalAmountDue.toFixed(2);
+
+    const subject = `Important: Notice of default and payment arrears — Loan ${options.loanId}`;
+
+    const htmlContent = `
+      <p>Dear ${name},</p>
+
+      <p>We are writing regarding your loan account with <strong>CreditXpress</strong> for <strong>${product}</strong>. Our records show that your account has <strong>payments in arrears</strong> and this message serves as formal notice of <strong>default status</strong> in line with the formal letter attached to this email (PDF).</p>
+
+      <p><strong>Summary</strong></p>
+      <ul>
+        <li>Loan reference: ${loanRef}</li>
+        <li>Days overdue (approx.): ${options.daysOverdue}</li>
+        <li>Outstanding principal &amp; interest (overdue): RM ${os}</li>
+        <li>Late fees (accrued): RM ${late}</li>
+        <li><strong>Total amount due (rounded for this notice): RM ${total}</strong></li>
+      </ul>
+
+      <p>Please review the attached PDF notice in full. It sets out the position and what you need to do next. If you have already made payment, please allow a short time for our systems to update and contact us with proof of payment if needed.</p>
+
+      <p>If you have questions or wish to discuss repayment options, contact us as soon as possible using the details in the letter.</p>
+
+      <p>Best regards,<br>CreditXpress Team</p>
+
+      <hr>
+      <p style="font-size: 12px; color: #666;">
+        <em>This is an automated message. The attached PDF is the formal notice. Please do not reply to this email unless your enquiry relates to this mailbox; for urgent matters use the contact channels stated in the letter.</em>
+      </p>
+    `;
+
+    const textContent = `
+Dear ${options.borrowerName || 'Valued Customer'},
+
+We are writing regarding your loan account with CreditXpress for ${options.productName}. Our records show that your account has payments in arrears and this message serves as formal notice of default status in line with the formal letter attached (PDF).
+
+Summary:
+- Loan reference: ${options.loanId}
+- Days overdue (approx.): ${options.daysOverdue}
+- Outstanding principal & interest (overdue): RM ${os}
+- Late fees (accrued): RM ${late}
+- Total amount due: RM ${total}
+
+Please review the attached PDF notice in full.
+
+Best regards,
+CreditXpress Team
+
+---
+This is an automated message. The attached PDF is the formal notice.
+    `.trim();
+
+    try {
+      console.log(`📧 Sending default/arrears notice email to ${options.to}`);
+      await this.resend!.emails.send({
+        from: RESEND_FROM_EMAIL,
+        to: options.to,
+        subject,
+        html: htmlContent,
+        text: textContent,
+        attachments: [
+          {
+            filename: options.attachmentFilename,
+            content: options.pdfBuffer,
+          },
+        ],
+      });
+      console.log(`✅ Default/arrears notice email sent to ${options.to}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending default/arrears notice email:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   /**
    * Download signed PDF from signing orchestrator
    */

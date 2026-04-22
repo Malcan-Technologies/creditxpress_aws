@@ -355,6 +355,7 @@ function ActiveLoansContent() {
 	} | null>(null);
 	const [loadingBorrowerInfo, setLoadingBorrowerInfo] = useState(false);
 	const [editedBorrowerAddress, setEditedBorrowerAddress] = useState("");
+	const [emailBorrowerOnPDFGenerate, setEmailBorrowerOnPDFGenerate] = useState(true);
 	const [loadingApplicationHistory, setLoadingApplicationHistory] = useState(false);
 	const [fetchedRepaymentsForLoan, setFetchedRepaymentsForLoan] = useState<
 		string | null
@@ -864,18 +865,32 @@ function ActiveLoansContent() {
 		try {
 			const data = await fetchWithAdminTokenRefresh<{
 				success: boolean;
-				data?: any;
+				data?: {
+					emailSent?: boolean;
+					emailSkippedReason?: string;
+				};
 				message?: string;
 			}>(`/api/admin/loans/${loanId}/generate-pdf-letter`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({ borrowerAddress }),
+				body: JSON.stringify({
+					borrowerAddress,
+					sendEmail: emailBorrowerOnPDFGenerate,
+				}),
 			});
 			
 			if (data.success) {
-				fetchPDFLetters(loanId); // Refresh the list
+				toast.success(data.message || "PDF letter generated");
+				if (data.data?.emailSent) {
+					toast.success("Default/arrears notice emailed to the borrower");
+				} else if (data.data?.emailSkippedReason === "borrower_has_no_email") {
+					toast.warning("PDF saved — borrower has no email on file; letter was not emailed");
+				} else if (data.data?.emailSkippedReason) {
+					toast.warning(`PDF saved — email not sent: ${data.data.emailSkippedReason}`);
+				}
+				fetchPDFLetters(loanId);
 			} else {
 				throw new Error(data.message || "Failed to generate PDF letter");
 			}
@@ -887,14 +902,14 @@ function ActiveLoansContent() {
 		}
 	};
 
-	const downloadPDFLetter = async (loanId: string, filename: string) => {
-		if (!loanId || !filename) return;
+	const downloadPDFLetter = async (loanId: string, letterId: string, displayFilename?: string) => {
+		if (!loanId || !letterId) return;
 		
 		try {
 			// Use fetch directly for binary downloads with proper authentication
 			const token = localStorage.getItem("adminToken");
 			const response = await fetch(
-				`/api/admin/loans/${loanId}/pdf-letters/${filename}/download`,
+				`/api/admin/loans/${loanId}/pdf-letters/${letterId}/download`,
 				{
 					method: 'GET',
 					headers: {
@@ -911,7 +926,9 @@ function ActiveLoansContent() {
 			const url = window.URL.createObjectURL(blob);
 			const link = document.createElement('a');
 			link.href = url;
-			link.download = filename;
+			const cd = response.headers.get("Content-Disposition");
+			const match = cd?.match(/filename="([^"]+)"/);
+			link.download = displayFilename || match?.[1] || "letter.pdf";
 			document.body.appendChild(link);
 			link.click();
 			document.body.removeChild(link);
@@ -6336,6 +6353,16 @@ function ActiveLoansContent() {
 														</p>
 													</div>
 
+													<label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+														<input
+															type="checkbox"
+															checked={emailBorrowerOnPDFGenerate}
+															onChange={(e) => setEmailBorrowerOnPDFGenerate(e.target.checked)}
+															className="rounded border-gray-600 bg-gray-700 text-amber-500 focus:ring-amber-500/50"
+														/>
+														<span>Email the default/arrears notice (PDF) to the borrower’s registered address</span>
+													</label>
+
 													<button
 														onClick={() => generateManualPDFLetter(selectedLoan.id, editedBorrowerAddress)}
 														disabled={generatingPDF || !editedBorrowerAddress.trim()}
@@ -6372,7 +6399,7 @@ function ActiveLoansContent() {
 											) : pdfLetters.length > 0 ? (
 												<div className="divide-y divide-gray-700/30">
 													{pdfLetters.map((letter, index) => (
-														<div key={index} className="p-4 hover:bg-gray-700/20 transition-colors">
+														<div key={letter.id || index} className="p-4 hover:bg-gray-700/20 transition-colors">
 															<div className="flex items-center justify-between">
 																<div className="flex-1">
 																	<div className="flex items-center space-x-3">
@@ -6383,15 +6410,19 @@ function ActiveLoansContent() {
 																			</h6>
 																			<div className="flex items-center space-x-4 text-xs text-gray-400 mt-1">
 																				<span>Created: {new Date(letter.createdAt).toLocaleDateString()}</span>
-																				<span>Size: {(letter.size / 1024).toFixed(1)} KB</span>
+																				{letter.size > 0 ? (
+																					<span>Size: {(letter.size / 1024).toFixed(1)} KB</span>
+																				) : null}
 																			</div>
 																		</div>
 																	</div>
 																</div>
 																<div className="flex items-center space-x-2">
 																	<button
-																		onClick={() => downloadPDFLetter(selectedLoan.id, letter.filename)}
-																		className="px-3 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-sm"
+																		type="button"
+																		disabled={!letter.id}
+																		onClick={() => downloadPDFLetter(selectedLoan.id, letter.id, letter.filename)}
+																		className="px-3 py-1 bg-blue-500/20 text-blue-200 rounded border border-blue-400/20 hover:bg-blue-500/30 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
 																	>
 																		Download
 																	</button>

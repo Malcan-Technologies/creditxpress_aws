@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  props: { params: Promise<{ id: string; filename: string }> }
+  props: { params: Promise<{ id: string; letterId: string }> }
 ) {
   const params = await props.params;
   try {
@@ -17,18 +17,17 @@ export async function GET(
       );
     }
 
-    const { id: loanId, filename } = params;
+    const { id: loanId, letterId } = params;
 
-    if (!loanId || !filename) {
+    if (!loanId || !letterId) {
       return NextResponse.json(
-        { success: false, message: 'Loan ID and filename are required' },
+        { success: false, message: 'Loan ID and letter id are required' },
         { status: 400 }
       );
     }
 
-    // Forward request to backend API
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001';
-    const response = await fetch(`${backendUrl}/api/admin/loans/${loanId}/pdf-letters/${filename}/download`, {
+    const response = await fetch(`${backendUrl}/api/admin/loans/${loanId}/pdf-letters/${letterId}/download`, {
       method: 'GET',
       headers: {
         'Authorization': token,
@@ -43,15 +42,15 @@ export async function GET(
       );
     }
 
-    // Get the PDF buffer
     const pdfBuffer = await response.arrayBuffer();
+    const fromBackend = response.headers.get('Content-Disposition');
+    const contentDisposition = fromBackend || `attachment; filename="letter.pdf"`;
     
-    // Return the PDF with proper headers
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': contentDisposition,
         'Content-Length': pdfBuffer.byteLength.toString(),
       },
     });

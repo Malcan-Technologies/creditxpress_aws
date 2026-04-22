@@ -69,11 +69,46 @@ export default function LiveCallConfirmationModal({
 						</div>
 					</div>
 
-					{/* Comparison Cards */}
+					{/* Comparison Cards — live first (left on md+), instant second (right) */}
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-						{/* Instant Video Option - Recommended */}
+						{/* Live Video Call Option — first / left */}
+						<div className="border border-gray-200 bg-gray-50 rounded-xl p-6 shadow-sm">
+							<div className="flex items-center space-x-3 mb-4">
+								<div className="w-12 h-12 bg-gray-500/10 rounded-xl flex items-center justify-center">
+									<VideoCameraIcon className="h-6 w-6 text-gray-600" />
+								</div>
+								<div>
+									<h4 className="text-lg font-bold text-gray-700 font-heading">
+										Live Video Call
+									</h4>
+									<p className="text-sm text-gray-500 font-semibold font-body">
+										Personal consultation
+									</p>
+								</div>
+							</div>
+
+							<div className="space-y-3">
+								<div className="flex items-center space-x-3">
+									<ClockIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+									<span className="text-sm text-gray-600 font-body">3-5 business days delay</span>
+								</div>
+								<div className="flex items-center space-x-3">
+									<CalendarDaysIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+									<span className="text-sm text-gray-600 font-body">Requires scheduling coordination</span>
+								</div>
+								<div className="flex items-center space-x-3">
+									<ClockIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+									<span className="text-sm text-gray-600 font-body">Business hours only</span>
+								</div>
+								<div className="flex items-center space-x-3">
+									<VideoCameraIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+									<span className="text-sm text-gray-600 font-body">15-30 minute call duration</span>
+								</div>
+							</div>
+						</div>
+
+						{/* Instant Video Option — second / right — Recommended */}
 						<div className="relative border border-purple-200 bg-purple-50 rounded-xl p-6 shadow-sm">
-							{/* Recommended Badge */}
 							<div className="absolute -top-3 -right-3">
 								<span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-primary text-white shadow-sm">
 									<SparklesIcon className="h-3 w-3 mr-1" />
@@ -130,48 +165,21 @@ export default function LiveCallConfirmationModal({
 								</div>
 							</div>
 						</div>
-
-						{/* Live Video Call Option */}
-						<div className="border border-gray-200 bg-gray-50 rounded-xl p-6 shadow-sm">
-							<div className="flex items-center space-x-3 mb-4">
-								<div className="w-12 h-12 bg-gray-500/10 rounded-xl flex items-center justify-center">
-									<VideoCameraIcon className="h-6 w-6 text-gray-600" />
-								</div>
-								<div>
-									<h4 className="text-lg font-bold text-gray-700 font-heading">
-										Live Video Call
-									</h4>
-									<p className="text-sm text-gray-500 font-semibold font-body">
-										Personal consultation
-									</p>
-								</div>
-							</div>
-
-							<div className="space-y-3">
-								<div className="flex items-center space-x-3">
-									<ClockIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-									<span className="text-sm text-gray-600 font-body">3-5 business days delay</span>
-								</div>
-								<div className="flex items-center space-x-3">
-									<CalendarDaysIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-									<span className="text-sm text-gray-600 font-body">Requires scheduling coordination</span>
-								</div>
-								<div className="flex items-center space-x-3">
-									<ClockIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-									<span className="text-sm text-gray-600 font-body">Business hours only</span>
-								</div>
-								<div className="flex items-center space-x-3">
-									<VideoCameraIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-									<span className="text-sm text-gray-600 font-body">15-30 minute call duration</span>
-								</div>
-							</div>
-						</div>
 					</div>
 
-					{/* Action Buttons */}
+					{/* Action Buttons — continue with live first */}
 					<div className="space-y-4">
-						{/* Recommended: Go back to instant */}
 						<button
+							type="button"
+							onClick={onConfirm}
+							className="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-sm hover:shadow-md font-heading text-base lg:text-lg inline-flex items-center justify-center"
+						>
+							<VideoCameraIcon className="h-5 w-5 mr-2" />
+							Continue with Live Video Call
+						</button>
+
+						<button
+							type="button"
 							onClick={onBackToInstant}
 							className="w-full bg-purple-primary hover:bg-purple-600 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-sm hover:shadow-md font-heading text-base lg:text-lg inline-flex items-center justify-center group"
 						>
@@ -180,17 +188,8 @@ export default function LiveCallConfirmationModal({
 							<span className="ml-2 px-2 py-1 bg-white/20 rounded-full text-xs">Recommended</span>
 						</button>
 
-						{/* Confirm live call */}
 						<button
-							onClick={onConfirm}
-							className="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-sm hover:shadow-md font-heading text-base lg:text-lg inline-flex items-center justify-center"
-						>
-							<VideoCameraIcon className="h-5 w-5 mr-2" />
-							Continue with Live Video Call
-						</button>
-
-						{/* Cancel */}
-						<button
+							type="button"
 							onClick={onClose}
 							className="w-full border border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400 font-semibold py-3 px-6 rounded-xl transition-all font-heading text-base"
 						>

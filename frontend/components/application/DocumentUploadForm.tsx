@@ -253,10 +253,7 @@ export default function DocumentUploadForm({
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [productName, setProductName] = useState<string>("");
-	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-	const [confirmDialogType, setConfirmDialogType] = useState<
-		"none" | "incomplete"
-	>("none");
+	const [submitValidationError, setSubmitValidationError] = useState<string | null>(null);
 	const [previousDocuments, setPreviousDocuments] = useState<PreviousDocument[]>([]);
 	const [showPreviousDocsDialog, setShowPreviousDocsDialog] = useState(false);
 	const [selectedDocType, setSelectedDocType] = useState<string>("");
@@ -299,6 +296,15 @@ export default function DocumentUploadForm({
 
 		return null;
 	}, [searchParams, selectedProduct, productCode]);
+
+	useEffect(() => {
+		if (
+			documents.length > 0 &&
+			documents.every((doc) => doc.files && doc.files.length > 0)
+		) {
+			setSubmitValidationError(null);
+		}
+	}, [documents]);
 
 	const fetchPreviousDocuments = async () => {
 		try {
@@ -759,26 +765,23 @@ export default function DocumentUploadForm({
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 
-		// Check document upload status
-		const hasAnyDocuments = documents.some(
-			(doc) => doc.files && doc.files.length > 0
-		);
 		const hasAllDocuments = documents.every(
 			(doc) => doc.files && doc.files.length > 0
 		);
 
-		if (!hasAnyDocuments) {
-			setConfirmDialogType("none");
-			setShowConfirmDialog(true);
-			return;
-		}
-
 		if (!hasAllDocuments) {
-			setConfirmDialogType("incomplete");
-			setShowConfirmDialog(true);
+			const missing = documents
+				.filter((doc) => !doc.files || doc.files.length === 0)
+				.map((d) => d.name);
+			setSubmitValidationError(
+				missing.length > 0
+					? `Please upload all required documents. Still missing: ${missing.join(", ")}.`
+					: "Please upload all required documents before continuing."
+			);
 			return;
 		}
 
+		setSubmitValidationError(null);
 		submitDocuments();
 	};
 
@@ -1053,6 +1056,10 @@ export default function DocumentUploadForm({
 		);
 	}
 
+	const allDocumentsComplete = documents.every(
+		(doc) => doc.files && doc.files.length > 0
+	);
+
 	return (
 		<Box
 			component="form"
@@ -1064,17 +1071,26 @@ export default function DocumentUploadForm({
 				<Typography variant="h6" className="text-gray-900">
 					Document Upload - {productName}
 				</Typography>
-				<span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-					Optional
+				<span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-700/10">
+					Required
 				</span>
 			</div>
 
 			<Typography className="text-gray-600 mb-6">
-				You can upload your documents now or later. Providing documents
-				at this stage will help us process your application faster. All
-				documents must be in JPG, PNG, or PDF format and must not exceed
-				50MB in size.
+				Please upload every document listed below to continue your application.
+				All documents must be in JPG, PNG, or PDF format and must not exceed 50MB
+				in size.
 			</Typography>
+
+			{submitValidationError && (
+				<Alert
+					severity="error"
+					className="mb-4"
+					onClose={() => setSubmitValidationError(null)}
+				>
+					{submitValidationError}
+				</Alert>
+			)}
 
 			<List className="space-y-4">
 				{documents.map((doc) => (
@@ -1332,117 +1348,12 @@ export default function DocumentUploadForm({
 				<Button
 					type="submit"
 					variant="contained"
-					className="bg-indigo-600 hover:bg-indigo-700 text-white"
+					disabled={!allDocumentsComplete}
+					className="bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
 				>
-					{documents.some((doc) => doc.files && doc.files.length > 0)
-						? "Continue"
-						: "Continue Without Uploading"}
+					Continue
 				</Button>
 			</Box>
-
-			<Dialog
-				open={showConfirmDialog}
-				onClose={() => setShowConfirmDialog(false)}
-				maxWidth="sm"
-				fullWidth
-				sx={{
-					"& .MuiDialog-paper": {
-						backgroundColor: "white",
-						border: "1px solid #E5E7EB",
-						borderRadius: "12px",
-						boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-					},
-					"& .MuiBackdrop-root": {
-						backgroundColor: "rgba(0, 0, 0, 0.5)",
-					},
-					"& .MuiDialogTitle-root": {
-						color: "#374151",
-						backgroundColor: "white",
-						fontFamily: "Manrope, sans-serif",
-						fontWeight: "600",
-					},
-					"& .MuiDialogContent-root": {
-						backgroundColor: "white",
-						color: "#374151",
-						fontFamily: "Inter, sans-serif",
-					},
-					"& .MuiDialogActions-root": {
-						backgroundColor: "white",
-						padding: "24px",
-					},
-					"& .MuiTypography-root": {
-						color: "#374151",
-					},
-					"& .MuiButton-outlined": {
-						color: "#374151",
-						backgroundColor: "white",
-						borderColor: "#D1D5DB",
-						"&:hover": {
-							backgroundColor: "#F9FAFB",
-							borderColor: "#9CA3AF",
-						},
-					},
-					"& .MuiButton-contained": {
-						color: "white",
-						backgroundColor: "#7C3AED",
-						"&:hover": {
-							backgroundColor: "#6D28D9",
-							boxShadow: "none",
-						},
-					},
-				}}
-			>
-				<DialogTitle>
-					{confirmDialogType === "none"
-						? "Continue Without Documents?"
-						: "Continue With Incomplete Documents?"}
-				</DialogTitle>
-				<DialogContent>
-					<Typography>
-						{confirmDialogType === "none"
-							? "While document upload is optional, providing complete documentation at this stage will help us process your application faster. You can always upload documents later."
-							: "You haven't uploaded all the requested documents. While you can continue with incomplete documentation, providing all documents at this stage will help us process your application faster. You can always upload the remaining documents later."}
-					</Typography>
-					{confirmDialogType === "incomplete" && (
-						<Box className="mt-4">
-							<Typography variant="subtitle2" className="mb-2">
-								Missing Documents:
-							</Typography>
-							<ul className="list-disc pl-5">
-								{documents
-									.filter(
-										(doc) =>
-											!doc.files || doc.files.length === 0
-									)
-									.map((doc) => (
-										<li key={doc.id} className="text-sm">
-											{doc.name}
-										</li>
-									))}
-							</ul>
-						</Box>
-					)}
-				</DialogContent>
-				<DialogActions>
-					<Button
-						onClick={() => setShowConfirmDialog(false)}
-						variant="outlined"
-					>
-						Go Back
-					</Button>
-					<Button
-						onClick={() => {
-							setShowConfirmDialog(false);
-							submitDocuments();
-						}}
-						variant="contained"
-					>
-						{confirmDialogType === "none"
-							? "Continue Without Documents"
-							: "Continue With Incomplete Documents"}
-					</Button>
-				</DialogActions>
-			</Dialog>
 
 			{/* Previous Documents Selection Dialog */}
 			<Dialog
